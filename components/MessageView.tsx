@@ -594,12 +594,13 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent
   return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</MarkdownBody>;
 }
 
-function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
+export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false }: {
   block: ThinkingContent;
   duration?: number;
   sessionId?: string;
   entryId?: string;
   blockIndex: number;
+  contentOnly?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState<string | null>(null);
@@ -625,6 +626,17 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
       setLoading(false);
     }
   };
+
+  if (contentOnly) {
+    return (
+      <ThinkingContentBody
+        block={block}
+        sessionId={sessionId}
+        entryId={entryId}
+        blockIndex={blockIndex}
+      />
+    );
+  }
 
   return (
     <div
@@ -675,8 +687,44 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
   );
 }
 
+function ThinkingContentBody({ block, sessionId, entryId, blockIndex }: {
+  block: ThinkingContent;
+  sessionId?: string;
+  entryId?: string;
+  blockIndex: number;
+}) {
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(block.deferred === true);
+  const [error, setError] = useState<string | null>(null);
 
-function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number }) {
+  useEffect(() => {
+    let cancelled = false;
+    if (!block.deferred) {
+      setLoading(false);
+      return;
+    }
+    if (!sessionId || !entryId) {
+      setLoading(false);
+      setError("Thinking content unavailable");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    void loadThinkingContent(sessionId, entryId, blockIndex)
+      .then((value) => { if (!cancelled) setContent(value); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [block.deferred, blockIndex, entryId, sessionId]);
+
+  return (
+    <div className="text-xs leading-relaxed text-text-dim">
+      {loading ? "Loading thinking..." : error ?? (block.deferred ? content : block.thinking)}
+    </div>
+  );
+}
+
+export function ToolCallBlock({ block, result, duration, processStyle = false }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; processStyle?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const inputStr = JSON.stringify(block.input, null, 2);
   const isEditTool = isEditToolName(block.toolName);
@@ -692,11 +740,15 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
   return (
     <div
       style={{
-        borderRadius: 7,
+        borderRadius: processStyle ? 4 : 7,
         overflow: "hidden",
         fontSize: 12,
-        border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
-        background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+        border: processStyle
+          ? "1px solid var(--border)"
+          : isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
+        background: processStyle
+          ? "var(--bg-panel)"
+          : isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
       }}
     >
       {/* ── Tool call header ── */}
@@ -717,7 +769,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
           minWidth: 0,
         }}
       >
-        <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        <span style={{ color: processStyle ? "var(--text-muted)" : isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
@@ -742,7 +794,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
             lineHeight: 1.5,
             overflow: "auto",
             background: "var(--bg-subtle)",
-            borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+            borderTop: processStyle ? "1px solid var(--border)" : isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
           }}

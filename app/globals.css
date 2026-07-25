@@ -33,6 +33,15 @@
   --assistant-bg: #ffffff;
   --tool-bg: #f9fafb;
   --bg-subtle: rgba(0,0,0,0.03);
+  --bg-secondary: var(--bg-panel);
+  --bg-card: var(--bg-hover);
+  --accent-blue: var(--accent);
+  --accent-red: #ef4444;
+  --accent-green: #16a34a;
+  --accent-orange: #d97706;
+  --hatch-color: rgba(0,0,0,0.06);
+  --hatch-spacing: 6px;
+  --hatch-width: 1px;
 }
 
 html.dark {
@@ -50,6 +59,13 @@ html.dark {
   --assistant-bg: #1a1a1a;
   --tool-bg: #1f2937;
   --bg-subtle: rgba(255,255,255,0.04);
+  --bg-secondary: var(--bg-panel);
+  --bg-card: var(--bg-hover);
+  --accent-blue: var(--accent);
+  --accent-red: #f87171;
+  --accent-green: #22c55e;
+  --accent-orange: #f59e0b;
+  --hatch-color: rgba(255,255,255,0.08);
 }
 
 /* Theme toggle: circular wipe via View Transitions API.
@@ -107,6 +123,16 @@ body {
 
 pre, code {
   font-family: var(--font-mono);
+}
+
+.process-tab-active {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent var(--hatch-spacing),
+    var(--hatch-color) var(--hatch-spacing),
+    var(--hatch-color) calc(var(--hatch-spacing) + var(--hatch-width))
+  );
 }
 
 /* react-markdown output styles */
