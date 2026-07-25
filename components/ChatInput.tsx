@@ -874,8 +874,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       style={{
         flexShrink: 0,
         background: "transparent",
-        padding: "0 16px 8px",
-        paddingRight: isMobile ? 16 : 52, // desktop: 16px base + 36px for ChatMinimap alignment
+        padding: "0 16px 16px",
+        paddingRight: isMobile ? 16 : 34, // desktop: 16px base + 18px for ChatMinimap alignment
       }}
     >
       {/* Hidden file input */}
@@ -1249,14 +1249,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           })()}
           <div
             className={`chat-input-shell ${isStreaming && (onSteer || onFollowUp) ? "is-streaming" : ""}`}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              if (!target.closest("button, input, select, [role=button]")) textareaRef.current?.focus();
+            }}
             style={{
               display: "flex",
-              gap: 8,
-              alignItems: "center",
-              padding: "10px 10px 10px 14px",
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: 0,
+              padding: 0,
               transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
             } as React.CSSProperties}
           >
+          {isStreaming && <div className="chat-input-streaming-overlay hatch-45" aria-hidden="true" />}
+          <div className="chat-input-editor-row">
           <textarea
             ref={textareaRef}
             value={value}
@@ -1297,12 +1304,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               color: "var(--text)",
               minHeight: 24,
               maxHeight: 200,
+              padding: 0,
               overflow: "auto",
             }}
           />
 
           {isStreaming ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
+            <div className="chat-input-primary-actions" style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
               {onSteer && (
                 <button
                   onClick={() => sendQueued("steer")}
@@ -1351,45 +1359,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </button>
               )}
             </div>
-          ) : (
-            <button
-              onClick={handleSend}
-              disabled={!value.trim() && !attachedImages.length}
-              className="chat-input-send"
-              style={{
-                flexShrink: 0,
-                alignSelf: "flex-end",
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "7px 14px",
-                background: (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
-                border: "none",
-                borderRadius: 8,
-                color: (value.trim() || attachedImages.length) ? "#fff" : "var(--text-dim)",
-                cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-                boxShadow: (value.trim() || attachedImages.length) ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
-                transition: "background 0.15s, box-shadow 0.15s",
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="2" y1="7" x2="11" y2="7" />
-                <polyline points="7.5 3 12 7 7.5 11" />
-              </svg>
-              Send
-            </button>
-          )}
+          ) : null}
           </div>
-        </div>
 
         {/* Bottom bar: left | center (context) | right */}
-        <div style={{
-          marginTop: 8,
+        <div className="chat-input-toolbar" style={{
           display: isMobile ? "grid" : "flex",
           gridTemplateColumns: isMobile ? "minmax(0, 1fr) auto" : undefined,
           alignItems: "center",
-          gap: 6,
+          gap: 4,
         }}>
 
           {/* LEFT: attach + model selector (idle) or steer/followup toggle (streaming) */}
@@ -1830,6 +1808,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             )}
 
+            {!isStreaming && (
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!value.trim() && !attachedImages.length}
+                className="chat-input-send"
+                title="Send message"
+                aria-label="Send message"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
+            )}
+
             {isStreaming && (
               <button
                 onClick={onAbort}
@@ -1943,9 +1937,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
             </div>
           </div>
+        </div>
 
         </div>
       </div>
+    </div>
     </div>
   );
 });

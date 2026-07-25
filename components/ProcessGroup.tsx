@@ -217,9 +217,9 @@ function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId }: {
   sessionId?: string;
 }) {
   return (
-    <div className="space-y-2 pr-2 text-text-dim">
+    <div className="space-y-2 pr-2">
       {blocks.map((block) => block.type === "text" ? (
-        <MarkdownBody key={block.id} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</MarkdownBody>
+        <MarkdownBody key={block.id} cwd={cwd} onOpenFile={onOpenFile} className="!text-text-dim">{block.text}</MarkdownBody>
       ) : (
         <ThinkingBlock
           key={block.id}
@@ -230,6 +230,7 @@ function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId }: {
           contentOnly
           cwd={cwd}
           onOpenFile={onOpenFile}
+          className="!text-text-dim"
         />
       ))}
     </div>

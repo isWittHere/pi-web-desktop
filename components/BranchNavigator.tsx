@@ -287,7 +287,6 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
             background: open ? "var(--bg-selected)" : "none",
             border: "none",
             borderTop: open ? "2px solid var(--accent)" : "2px solid transparent",
-            borderRight: "1px solid var(--border)",
             cursor: "pointer",
             color: open ? "var(--text)" : "var(--text-muted)",
             fontSize: 11,

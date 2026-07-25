@@ -196,10 +196,6 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
 
   return (
     <div className="markdown-code-block">
-      <div className="markdown-code-header">
-        <span className="markdown-code-lang">mermaid</span>
-        {previewButton}
-      </div>
       {body}
     </div>
   );
@@ -208,6 +204,7 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
 function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; headerAction?: ReactNode }) {
   const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   const copy = () => {
     copyText(code).then(() => {
@@ -217,18 +214,64 @@ function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; h
   };
 
   return (
-    <div className="markdown-code-block">
-      <div className="markdown-code-header">
-        <span className="markdown-code-lang">{lang || "text"}</span>
-        <div className="markdown-code-actions">
-          {headerAction}
-          <button
-            onClick={copy}
-            className="markdown-code-action"
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
+    <div
+      className="markdown-code-block"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div style={{
+        position: "absolute",
+        top: 6,
+        right: 8,
+        zIndex: 1,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        opacity: hovered ? 1 : 0,
+        pointerEvents: hovered ? "auto" : "none",
+        transition: "opacity 0.12s",
+      }}>
+        <span style={{
+          color: "var(--text-dim)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          userSelect: "none",
+        }}>{lang || "text"}</span>
+        {headerAction}
+        <button
+          onClick={copy}
+          title={copied ? "Copied" : "Copy"}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 22,
+            height: 22,
+            border: "none",
+            borderRadius: 5,
+            background: "transparent",
+            color: copied ? "var(--accent)" : "var(--text-dim)",
+            cursor: "pointer",
+            fontSize: 10,
+            transition: "color 0.12s",
+          }}
+          onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
+          onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
+        >
+          {copied ? (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          )}
+        </button>
       </div>
       <SyntaxHighlighter
         language={lang || "text"}
@@ -236,10 +279,11 @@ function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; h
         showLineNumbers={false}
         customStyle={{
           margin: 0,
-          padding: "14px 16px",
+          padding: "10px 16px",
           fontSize: 13,
           lineHeight: 1.65,
           borderRadius: 0,
+          border: "none",
           background: "var(--bg-secondary)",
         }}
         codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}

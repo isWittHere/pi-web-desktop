@@ -10,7 +10,7 @@ interface Props {
   messageRefs: RefObject<(HTMLDivElement | null)[]>;
 }
 
-const MINIMAP_WIDTH = 36;
+const MINIMAP_WIDTH = 18;
 
 function getMessagePreview(msg: AgentMessage | Partial<AgentMessage>): string {
   if (msg.role === "user") {
@@ -41,11 +41,14 @@ function getMessagePreview(msg: AgentMessage | Partial<AgentMessage>): string {
   return "";
 }
 
-function getNodeColor(msg: AgentMessage | Partial<AgentMessage>): { bg: string; border: string } {
-  if (msg.role === "user") {
-    return { bg: "rgba(37,99,235,0.18)", border: "rgba(37,99,235,0.7)" };
-  }
-  return { bg: "rgba(107,114,128,0.12)", border: "rgba(107,114,128,0.5)" };
+function getNodeColor(msg: AgentMessage | Partial<AgentMessage>): string {
+  if (msg.role === "user") return "var(--accent)";
+
+  const blocks = (msg as Partial<AssistantMessage>).content ?? [];
+  const hasFailedTool = blocks.some((block) => block.type === "toolCall" && (block as { error?: string }).error);
+  if (hasFailedTool) return "var(--accent-red)";
+  if (blocks.some((block) => block.type === "toolCall")) return "var(--accent-green)";
+  return "var(--text-dim)";
 }
 
 function hasTextContent(msg: AgentMessage | Partial<AgentMessage>): boolean {
@@ -269,10 +272,9 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         width: MINIMAP_WIDTH,
         flexShrink: 0,
         position: "relative",
-        cursor: "default",
+        cursor: "pointer",
         userSelect: "none",
-        borderLeft: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        background: "transparent",
         overflow: "visible",
       }}
     >
@@ -280,13 +282,11 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
       <div
         style={{
           position: "absolute",
-          left: 0,
-          right: 0,
+          left: 1,
+          right: 1,
           top: `${viewportBoxTop}%`,
           height: `${viewportBoxHeight}%`,
-          background: "rgba(100,100,100,0.1)",
-          borderTop: "1px solid rgba(100,100,100,0.2)",
-          borderBottom: "1px solid rgba(100,100,100,0.2)",
+          background: "color-mix(in srgb, var(--text-muted) 14%, transparent)",
           pointerEvents: "none",
           zIndex: 1,
         }}
@@ -307,27 +307,26 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
               position: "absolute",
               top: `${dotTop}%`,
               transform: "translateY(-50%)",
-              left: 0,
-              right: 0,
-              height: "12px",
+              left: 2,
+              right: 2,
+              height: "max(5px, min(46px, " + `${Math.max(node.heightRatio * 100, 0.45)}%` + "))",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              alignItems: "stretch",
+              justifyContent: "stretch",
               cursor: "pointer",
               zIndex: 2,
             }}
           >
-            {/* Dot */}
+            {/* Message extent marker */}
             <div
               style={{
-                width: isUser ? 8 : 6,
-                height: isUser ? 8 : 6,
-                borderRadius: isUser ? 2 : "50%",
-                background: color.bg,
-                border: `1.5px solid ${color.border}`,
-                flexShrink: 0,
-                transition: "transform 0.1s",
-                transform: isNearest ? "scale(1.6)" : "scale(1)",
+                width: "100%",
+                height: "100%",
+                borderRadius: 0,
+                background: color,
+                opacity: isNearest ? 1 : isUser ? 0.92 : 0.72,
+                transition: "opacity 0.1s, filter 0.1s",
+                filter: isNearest ? "brightness(1.2)" : "none",
               }}
             />
 
@@ -336,19 +335,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         );
       })}
 
-      {/* Center line */}
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: 0,
-          bottom: 0,
-          width: 1,
-          background: "var(--border)",
-          transform: "translateX(-50%)",
-          zIndex: 0,
-        }}
-      />
+
 
       {/* Tooltips for all nodes, collision-free positions */}
       {minimapHovered && nodes.map((node, i) => {
@@ -365,10 +352,10 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
               right: "100%",
               marginRight: 6,
               background: "var(--bg)",
-              borderTop: `1px solid ${isNearest ? color.border : "var(--border)"}`,
-              borderRight: `1px solid ${isNearest ? color.border : "var(--border)"}`,
-              borderBottom: `1px solid ${isNearest ? color.border : "var(--border)"}`,
-              borderLeft: `2px solid ${color.border}`,
+              borderTop: `1px solid ${isNearest ? color : "var(--border)"}`,
+              borderRight: `1px solid ${isNearest ? color : "var(--border)"}`,
+              borderBottom: `1px solid ${isNearest ? color : "var(--border)"}`,
+              borderLeft: `2px solid ${color}`,
               borderRadius: 4,
               padding: "2px 7px",
               width: 200,

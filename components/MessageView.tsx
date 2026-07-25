@@ -224,14 +224,12 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               onClick={copyContent}
               title="Copy message"
               style={{
-                display: "flex", alignItems: "center", gap: 4,
-                padding: "3px 8px", height: 22,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 22, height: 22,
                 background: "none", border: "none",
                 borderRadius: 5,
                 color: copied ? "var(--accent)" : "var(--text-dim)",
                 cursor: "pointer",
-                fontSize: 11, fontWeight: 400,
-                whiteSpace: "nowrap",
                 transition: "color 0.12s",
               }}
               onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
@@ -247,7 +245,6 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
               )}
-              {copied ? "Copied" : "Copy"}
             </button>
           </div>
           {(canFork || canNavigate) && (
@@ -262,14 +259,12 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                   onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(content); }}
                   title="Edit from here — branches within this session"
                   style={{
-                    display: "flex", alignItems: "center", gap: 4,
-                    padding: "3px 8px", height: 22,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 22, height: 22,
                     background: "none", border: "none",
                     borderRadius: 5,
                     color: "var(--text-dim)",
                     cursor: "pointer",
-                    fontSize: 11, fontWeight: 400,
-                    whiteSpace: "nowrap",
                     transition: "color 0.12s",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
@@ -279,7 +274,6 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     <polyline points="15 10 20 15 15 20" />
                     <path d="M4 4v7a4 4 0 0 0 4 4h12" />
                   </svg>
-                  Edit from here
                 </button>
               )}
               {canFork && (
@@ -288,14 +282,12 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                   disabled={forking}
                   title={forking ? "Creating new session…" : "New session — creates an independent copy from here"}
                   style={{
-                    display: "flex", alignItems: "center", gap: 4,
-                    padding: "3px 8px", height: 22,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 22, height: 22,
                     background: "none", border: "none",
                     borderRadius: 5,
                     color: forking ? "var(--accent)" : "var(--text-dim)",
                     cursor: forking ? "not-allowed" : "pointer",
-                    fontSize: 11, fontWeight: 400,
-                    whiteSpace: "nowrap",
                     transition: "color 0.12s",
                   }}
                   onMouseEnter={(e) => { if (!forking) e.currentTarget.style.color = "var(--accent)"; }}
@@ -307,7 +299,6 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     <circle cx="6" cy="18" r="3" />
                     <path d="M18 9a9 9 0 0 1-9 9" />
                   </svg>
-                  {forking ? "Creating…" : "New session"}
                 </button>
               )}
             </div>
@@ -458,12 +449,9 @@ function AssistantMessageView({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Model label */}
+      {isStreaming && (
       <div className="chat-assistant-meta">
-        {message.provider && (
-          <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
-        )}
-        {isStreaming && (() => {
+        {(() => {
           let chars = 0;
           for (const b of blocks) {
             if (b.type === "text") chars += (b as TextContent).text?.length ?? 0;
@@ -477,8 +465,9 @@ function AssistantMessageView({
               {est > 0 && (
                 <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text)" }} title="Estimated token count while streaming">
                   <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 11, fontWeight: 400 }}>
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M7 3v14" /><polyline points="3 7 7 3 11 7" />
+                      <path d="M17 21V7" /><polyline points="13 17 17 21 21 17" />
                     </svg>
                     {est}
                   </span>
@@ -496,6 +485,7 @@ function AssistantMessageView({
           );
         })()}
       </div>
+      )}
 
       <div className="chat-assistant-content">
         {blockItems.map(({ block, originalIndex }) => (
@@ -506,9 +496,13 @@ function AssistantMessageView({
       <div style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
-        {message.usage && !isStreaming && (
+        {!isStreaming && (message.provider || message.usage) && (
           <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            {formatUsage(message.usage)}
+            {message.provider && (
+              <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
+            )}
+            {message.provider && message.usage && " · "}
+            {message.usage && formatUsage(message.usage)}
           </div>
         )}
         {textContent && !isStreaming && (
@@ -516,14 +510,12 @@ function AssistantMessageView({
             onClick={copyContent}
             title="Copy message"
             style={{
-              display: "flex", alignItems: "center", gap: 4,
-              padding: "3px 8px", height: 22,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 22, height: 22,
               background: "none", border: "none",
               borderRadius: 5,
               color: copied ? "var(--accent)" : "var(--text-dim)",
               cursor: "pointer",
-              fontSize: 11, fontWeight: 400,
-              whiteSpace: "nowrap",
               opacity: hovered ? 1 : 0,
               pointerEvents: hovered ? "auto" : "none",
               transition: "opacity 0.12s, color 0.12s",
@@ -541,7 +533,6 @@ function AssistantMessageView({
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
               </svg>
             )}
-            {copied ? "Copied" : "Copy"}
           </button>
         )}
         {time && !isStreaming && (
@@ -572,7 +563,7 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent
   return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</MarkdownBody>;
 }
 
-export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false, cwd, onOpenFile }: {
+export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false, cwd, onOpenFile, className }: {
   block: ThinkingContent;
   duration?: number;
   sessionId?: string;
@@ -581,6 +572,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
   contentOnly?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
+  className?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState<string | null>(null);
@@ -616,6 +608,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
         blockIndex={blockIndex}
         cwd={cwd}
         onOpenFile={onOpenFile}
+        className={className}
       />
     );
   }
@@ -643,13 +636,14 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
   );
 }
 
-function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpenFile }: {
+function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpenFile, className }: {
   block: ThinkingContent;
   sessionId?: string;
   entryId?: string;
   blockIndex: number;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
+  className?: string;
 }) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(block.deferred === true);
@@ -679,7 +673,7 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpe
   if (error) return <div className="text-xs text-red-400">{error}</div>;
 
   return (
-    <MarkdownBody cwd={cwd} onOpenFile={onOpenFile}>
+    <MarkdownBody cwd={cwd} onOpenFile={onOpenFile} className={className}>
       {block.deferred ? (content ?? "") : block.thinking}
     </MarkdownBody>
   );
@@ -717,7 +711,9 @@ export function ToolCallBlock({ block, result, duration, processStyle = false }:
         {duration !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
-        <span className={`tool-call-caret ${expanded ? "is-expanded" : ""}`} aria-hidden="true">⌄</span>
+        <span className={`tool-call-caret ${expanded ? "is-expanded" : ""}`} aria-hidden="true">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 2.5 7.5 6 4 9.5" /></svg>
+        </span>
       </button>
 
       {/* ── Expanded: input args ── */}
@@ -732,12 +728,14 @@ export function ToolCallBlock({ block, result, duration, processStyle = false }:
         resultDiff ? (
           <PairedDiffResult
             diff={resultDiff}
+            processStyle={processStyle}
           />
         ) : (
           <PairedResult
             text={resultText ?? ""}
             isEmpty={resultIsEmpty}
             isError={isError}
+            processStyle={processStyle}
           />
         )
       )}
@@ -749,13 +747,14 @@ interface ResultDiff {
   text: string;
 }
 
-function PairedDiffResult({ diff }: {
+function PairedDiffResult({ diff, processStyle = false }: {
   diff: ResultDiff;
+  processStyle?: boolean;
 }) {
   return (
     <div
       style={{
-        borderTop: "1px solid rgba(34,197,94,0.15)",
+        borderTop: processStyle ? "1px solid var(--border)" : "1px solid rgba(34,197,94,0.15)",
         background: "var(--bg)",
       }}
     >
@@ -990,16 +989,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function PairedResult({ text, isEmpty, isError }: {
+function PairedResult({ text, isEmpty, isError, processStyle = false }: {
   text: string;
   isEmpty: boolean;
   isError: boolean;
+  processStyle?: boolean;
 }) {
+  const border = processStyle ? "var(--border)" : isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)";
   return (
     <div
       style={{
-        borderTop: `1px solid ${isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)"}`,
-        background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
+        borderTop: `1px solid ${border}`,
+        background: processStyle ? "var(--bg-subtle)" : isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
       }}
     >
       <pre

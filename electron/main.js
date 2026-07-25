@@ -78,6 +78,19 @@ function createWindow() {
     mainWindow.setTitle(title);
   });
 
+  // Enable DevTools toggle with Ctrl+Shift+I / F12
+  mainWindow.webContents.on("before-input-event", (_event, input) => {
+    if (input.type === "keyDown" && !input.isAutoRepeat) {
+      const isDevToolsKey =
+        (input.key === "F12") ||
+        (input.control && input.shift && input.key === "I") ||
+        (input.control && input.shift && input.key === "i");
+      if (isDevToolsKey) {
+        mainWindow.webContents.toggleDevTools();
+      }
+    }
+  });
+
   mainWindow.loadURL(URL);
 
   mainWindow.on("closed", () => {
@@ -102,8 +115,11 @@ async function bootstrap() {
   createWindow();
 }
 
-// Remove the native Electron menu bar (File, Edit, View, etc.)
-Menu.setApplicationMenu(null);
+// In production, remove the native menu bar for a clean look.
+// In dev mode, keep it so View → Toggle Developer Tools is accessible.
+if (!IS_DEV) {
+  Menu.setApplicationMenu(null);
+}
 
 app.whenReady().then(bootstrap);
 

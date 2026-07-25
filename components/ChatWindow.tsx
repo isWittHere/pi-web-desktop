@@ -51,7 +51,7 @@ function phaseLabel(phase: AgentPhase): string {
   return "Thinking...";
 }
 
-const CHAT_MINIMAP_WIDTH = 36;
+const CHAT_MINIMAP_WIDTH = 18;
 const CHAT_COLUMN_PADDING = 16;
 const CHAT_INPUT_RIGHT_PADDING = CHAT_COLUMN_PADDING + CHAT_MINIMAP_WIDTH;
 
