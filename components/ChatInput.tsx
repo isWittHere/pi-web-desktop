@@ -1248,17 +1248,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             );
           })()}
           <div
+            className={`chat-input-shell ${isStreaming && (onSteer || onFollowUp) ? "is-streaming" : ""}`}
             style={{
               display: "flex",
               gap: 8,
               alignItems: "center",
-              background: "var(--bg)",
-              border: `1px solid ${isStreaming && (onSteer || onFollowUp)
-                ? "rgba(234,179,8,0.4)"
-                : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
-              borderRadius: 14,
               padding: "10px 10px 10px 14px",
-              boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
               transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
             } as React.CSSProperties}
           >
@@ -1292,6 +1287,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 : "Message… Type / for commands, @ for files"
             }
             rows={1}
+            className="chat-input-textarea"
             style={{
               flex: 1,
               background: "none",
@@ -1299,9 +1295,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               outline: "none",
               resize: "none",
               color: "var(--text)",
-              fontSize: 14,
-              lineHeight: 1.6,
-              fontFamily: "inherit",
               minHeight: 24,
               maxHeight: 200,
               overflow: "auto",
@@ -1362,6 +1355,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <button
               onClick={handleSend}
               disabled={!value.trim() && !attachedImages.length}
+              className="chat-input-send"
               style={{
                 flexShrink: 0,
                 alignSelf: "flex-end",

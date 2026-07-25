@@ -226,22 +226,21 @@ function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; h
             onClick={copy}
             className="markdown-code-action"
           >
-            {copied ? "copied" : "copy"}
+            {copied ? "Copied" : "Copy"}
           </button>
         </div>
       </div>
       <SyntaxHighlighter
         language={lang || "text"}
         style={isDark ? vscDarkPlus : vs}
-        showLineNumbers
-        lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal" }}
+        showLineNumbers={false}
         customStyle={{
           margin: 0,
-          padding: "11px 13px",
-          fontSize: 12.5,
-          lineHeight: 1.62,
+          padding: "14px 16px",
+          fontSize: 13,
+          lineHeight: 1.65,
           borderRadius: 0,
-          background: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
+          background: "var(--bg-secondary)",
         }}
         codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
       >

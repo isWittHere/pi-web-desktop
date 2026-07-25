@@ -228,6 +228,8 @@ function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId }: {
           entryId={block.origin.sourceEntryId}
           blockIndex={block.origin.sourceBlockIndex ?? 0}
           contentOnly
+          cwd={cwd}
+          onOpenFile={onOpenFile}
         />
       ))}
     </div>
@@ -250,6 +252,11 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
   const scrollRef = useRef<HTMLDivElement>(null);
   const wasStreamingRef = useRef(false);
   const previousLastStepIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const savedMode = window.localStorage.getItem("pi-process-display-mode");
+    if (savedMode === "timeline" || savedMode === "tabs") setDisplayMode(savedMode);
+  }, []);
 
   useEffect(() => {
     if (isStreaming) {
@@ -331,7 +338,9 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
           <button
             type="button"
             onClick={() => {
-              setDisplayMode((mode) => mode === "timeline" ? "tabs" : "timeline");
+              const nextMode = displayMode === "timeline" ? "tabs" : "timeline";
+              setDisplayMode(nextMode);
+              window.localStorage.setItem("pi-process-display-mode", nextMode);
               setAreaExpanded(true);
             }}
             className="shrink-0 p-1 text-text-dim opacity-0 transition-colors hover:text-text group-hover/summary-row:opacity-100"

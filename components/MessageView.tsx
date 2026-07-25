@@ -172,25 +172,12 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
 
   return (
     <div
-      style={{ marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "flex-end" }}
+      className="chat-user-message"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "85%" }}>
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            background: "var(--user-bg)",
-            border: "1px solid rgba(59,130,246,0.2)",
-            borderRadius: 12,
-            padding: "8px 12px",
-            fontSize: 14,
-            lineHeight: 1.6,
-            color: "var(--text)",
-            wordBreak: "break-word",
-          }}
-        >
+      <div className="chat-user-bubble-wrap">
+        <div className="chat-user-bubble">
           {imageBlocks.length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: content ? 8 : 0 }}>
               {imageBlocks.map((img, i) => {
@@ -467,21 +454,12 @@ function AssistantMessageView({
 
   return (
     <div
-      style={{ marginBottom: 16 }}
+      className="chat-assistant-message"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* Model label */}
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--text-dim)",
-          marginBottom: 4,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
+      <div className="chat-assistant-meta">
         {message.provider && (
           <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
         )}
@@ -519,7 +497,7 @@ function AssistantMessageView({
         })()}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="chat-assistant-content">
         {blockItems.map(({ block, originalIndex }) => (
           <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
         ))}
@@ -594,13 +572,15 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent
   return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</MarkdownBody>;
 }
 
-export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false }: {
+export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false, cwd, onOpenFile }: {
   block: ThinkingContent;
   duration?: number;
   sessionId?: string;
   entryId?: string;
   blockIndex: number;
   contentOnly?: boolean;
+  cwd?: string;
+  onOpenFile?: (filePath: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState<string | null>(null);
@@ -634,52 +614,28 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
         sessionId={sessionId}
         entryId={entryId}
         blockIndex={blockIndex}
+        cwd={cwd}
+        onOpenFile={onOpenFile}
       />
     );
   }
 
   return (
-    <div
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: 6,
-        overflow: "hidden",
-        fontSize: 13,
-      }}
-    >
+    <div className="thinking-block">
       <button
         onClick={() => void toggle()}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          width: "100%",
-          padding: "6px 10px",
-          background: "var(--bg-panel)",
-          border: "none",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-          fontSize: 12,
-          textAlign: "left",
-        }}
+        className="thinking-block-trigger"
+        aria-expanded={expanded}
       >
+        <span className={`thinking-block-caret ${expanded ? "is-expanded" : ""}`} aria-hidden="true">›</span>
+        <span className="thinking-block-icon" aria-hidden="true">✦</span>
         <span>Thinking</span>
         {duration !== undefined && (
           <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
       </button>
       {expanded && (
-        <div
-          style={{
-            padding: "8px 10px",
-            color: error ? "#f87171" : "var(--text-muted)",
-            fontSize: 12,
-            lineHeight: 1.6,
-            whiteSpace: "pre-wrap",
-            background: "var(--bg-panel)",
-            borderTop: "1px solid var(--border)",
-          }}
-        >
+        <div className={`thinking-block-content ${error ? "is-error" : ""}`}>
           {loading ? "Loading thinking..." : error ?? (block.deferred ? content : block.thinking)}
         </div>
       )}
@@ -687,11 +643,13 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
   );
 }
 
-function ThinkingContentBody({ block, sessionId, entryId, blockIndex }: {
+function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpenFile }: {
   block: ThinkingContent;
   sessionId?: string;
   entryId?: string;
   blockIndex: number;
+  cwd?: string;
+  onOpenFile?: (filePath: string) => void;
 }) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(block.deferred === true);
@@ -717,10 +675,13 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex }: {
     return () => { cancelled = true; };
   }, [block.deferred, blockIndex, entryId, sessionId]);
 
+  if (loading) return <div className="text-xs text-text-dim">Loading thinking...</div>;
+  if (error) return <div className="text-xs text-red-400">{error}</div>;
+
   return (
-    <div className="text-xs leading-relaxed text-text-dim">
-      {loading ? "Loading thinking..." : error ?? (block.deferred ? content : block.thinking)}
-    </div>
+    <MarkdownBody cwd={cwd} onOpenFile={onOpenFile}>
+      {block.deferred ? (content ?? "") : block.thinking}
+    </MarkdownBody>
   );
 }
 
@@ -739,66 +700,29 @@ export function ToolCallBlock({ block, result, duration, processStyle = false }:
 
   return (
     <div
-      style={{
-        borderRadius: processStyle ? 4 : 7,
-        overflow: "hidden",
-        fontSize: 12,
-        border: processStyle
-          ? "1px solid var(--border)"
-          : isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
-        background: processStyle
-          ? "var(--bg-panel)"
-          : isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
-      }}
+      className={`tool-call-block ${processStyle ? "is-process" : ""} ${isError ? "is-error" : ""}`}
     >
       {/* ── Tool call header ── */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          width: "100%",
-          padding: "6px 10px",
-          background: "none",
-          border: "none",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-          fontSize: 12,
-          textAlign: "left",
-          minWidth: 0,
-        }}
+        className="tool-call-trigger"
+        aria-expanded={expanded}
       >
-        <span style={{ color: processStyle ? "var(--text-muted)" : isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        <span className="tool-call-name">
           {block.toolName}
         </span>
-        <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+        <span className="tool-call-preview">
           {getToolPreview(block)}
         </span>
         {duration !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
-          <polyline points="2 3.5 5 6.5 8 3.5" />
-        </svg>
+        <span className={`tool-call-caret ${expanded ? "is-expanded" : ""}`} aria-hidden="true">⌄</span>
       </button>
 
       {/* ── Expanded: input args ── */}
       {expanded && !isEditTool && (
-        <pre
-          style={{
-            margin: 0,
-            padding: "8px 10px",
-            color: "var(--text-muted)",
-            fontSize: 12,
-            lineHeight: 1.5,
-            overflow: "auto",
-            background: "var(--bg-subtle)",
-            borderTop: processStyle ? "1px solid var(--border)" : isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-          }}
-        >
+        <pre className="tool-call-input">
           {inputStr}
         </pre>
       )}
