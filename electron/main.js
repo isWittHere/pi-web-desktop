@@ -1,0 +1,131 @@
+"use strict";
+
+const { app, BrowserWindow, dialog, Menu } = require("electron");
+const { spawn } = require("child_process");
+const path = require("path");
+const http = require("http");
+const fs = require("fs");
+
+const PORT = process.env.PORT || 30141;
+const IS_DEV = !app.isPackaged;
+const URL = `http://localhost:${PORT}`;
+
+let mainWindow = null;
+let serverProcess = null;
+
+function waitForServer(timeoutMs = 30000) {
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      http.get(`${URL}/api/home`, (res) => {
+        res.resume();
+        resolve();
+      }).on("error", () => {
+        if (Date.now() - start > timeoutMs) {
+          reject(new Error(`Server did not start within ${timeoutMs}ms`));
+        } else {
+          setTimeout(check, 500);
+        }
+      });
+    };
+    check();
+  });
+}
+
+function startServer() {
+  const pkgDir = path.join(__dirname, "..");
+
+  if (IS_DEV) {
+    const nextBin = require.resolve("next/dist/bin/next", { paths: [pkgDir] });
+    serverProcess = spawn(process.execPath, [nextBin, "dev", "-p", String(PORT), "--turbopack"], {
+      cwd: pkgDir,
+      stdio: "inherit",
+      env: { ...process.env, ELECTRON_RUNNING: "1" },
+    });
+  } else {
+    const nextBin = path.join(pkgDir, "node_modules", "next", "dist", "bin", "next");
+    serverProcess = spawn(process.execPath, [nextBin, "start", "-p", String(PORT)], {
+      cwd: pkgDir,
+      stdio: "inherit",
+      env: { ...process.env, NODE_ENV: "production", ELECTRON_RUNNING: "1" },
+    });
+  }
+
+  serverProcess.on("exit", (code) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.close();
+    }
+  });
+}
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 480,
+    minHeight: 400,
+    title: "Pi Agent Web",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  // Sync the renderer's document.title to the native window title,
+  // so the workspace name (set by AppShell) appears in the title bar.
+  mainWindow.webContents.on("page-title-updated", (_event, title) => {
+    mainWindow.setTitle(title);
+  });
+
+  mainWindow.loadURL(URL);
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+}
+
+async function bootstrap() {
+  try {
+    await waitForServer(2000);
+  } catch {
+    startServer();
+    try {
+      await waitForServer(60000);
+    } catch (err) {
+      dialog.showErrorBox("Startup Error", `Failed to start Pi Web: ${err.message}`);
+      app.quit();
+      return;
+    }
+  }
+
+  createWindow();
+}
+
+// Remove the native Electron menu bar (File, Edit, View, etc.)
+Menu.setApplicationMenu(null);
+
+app.whenReady().then(bootstrap);
+
+app.on("window-all-closed", () => {
+  if (serverProcess) {
+    serverProcess.kill();
+    serverProcess = null;
+  }
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
+
+app.on("activate", () => {
+  if (mainWindow === null) {
+    createWindow();
+  }
+});
+
+app.on("before-quit", () => {
+  if (serverProcess) {
+    serverProcess.kill();
+    serverProcess = null;
+  }
+});
