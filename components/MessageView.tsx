@@ -6,6 +6,15 @@ import { copyText } from "@/lib/clipboard";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { isEmptyThinkingBlock } from "@/lib/message-display";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
+import { ArrowBendDownRightIcon } from "@phosphor-icons/react/ArrowBendDownRight";
+import { ArrowDownIcon } from "@phosphor-icons/react/ArrowDown";
+import { ArrowUpIcon } from "@phosphor-icons/react/ArrowUp";
+import { ArrowsDownUpIcon } from "@phosphor-icons/react/ArrowsDownUp";
+import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
+import { CheckIcon } from "@phosphor-icons/react/Check";
+import { CopyIcon } from "@phosphor-icons/react/Copy";
+import { DatabaseIcon } from "@phosphor-icons/react/Database";
+import { GitForkIcon } from "@phosphor-icons/react/GitFork";
 import type {
   AgentMessage,
   UserMessage,
@@ -236,14 +245,9 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
             >
               {copied ? (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <CheckIcon size={11} />
               ) : (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
+                <CopyIcon size={11} />
               )}
             </button>
           </div>
@@ -270,10 +274,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                   onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 10 20 15 15 20" />
-                    <path d="M4 4v7a4 4 0 0 0 4 4h12" />
-                  </svg>
+                  <ArrowBendDownRightIcon size={11} />
                 </button>
               )}
               {canFork && (
@@ -293,12 +294,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                   onMouseEnter={(e) => { if (!forking) e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { if (!forking) e.currentTarget.style.color = "var(--text-dim)"; }}
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="6" y1="3" x2="6" y2="15" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
-                  </svg>
+                  <GitForkIcon size={11} />
                 </button>
               )}
             </div>
@@ -471,10 +467,7 @@ function AssistantMessageView({
               {est > 0 && (
                 <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text)" }} title="Estimated token count while streaming">
                   <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 11, fontWeight: 400 }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M7 3v14" /><polyline points="3 7 7 3 11 7" />
-                      <path d="M17 21V7" /><polyline points="13 17 17 21 21 17" />
-                    </svg>
+                    <ArrowsDownUpIcon size={11} />
                     {est}
                   </span>
                   {tps !== null && (() => {
@@ -509,29 +502,19 @@ function AssistantMessageView({
             )}
             {message.usage && message.usage.input > 0 && (
               <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="19" x2="12" y2="5"/>
-                  <polyline points="5 12 12 5 19 12"/>
-                </svg>
+                <ArrowUpIcon size={10} />
                 {fmtToken(message.usage.input)}
               </span>
             )}
             {message.usage && message.usage.output > 0 && (
               <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <polyline points="19 12 12 19 5 12"/>
-                </svg>
+                <ArrowDownIcon size={10} />
                 {fmtToken(message.usage.output)}
               </span>
             )}
             {message.usage && message.usage.cacheRead > 0 && (
               <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                </svg>
+                <DatabaseIcon size={10} />
                 {fmtToken(message.usage.cacheRead)}
               </span>
             )}
@@ -558,16 +541,7 @@ function AssistantMessageView({
             onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
             onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
           >
-            {copied ? (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            ) : (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-            )}
+            {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
           </button>
         )}
         {time && !isStreaming && (
@@ -747,7 +721,7 @@ export function ToolCallBlock({ block, result, duration, processStyle = false }:
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
         <span className={`tool-call-caret ${expanded ? "is-expanded" : ""}`} aria-hidden="true">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 2.5 7.5 6 4 9.5" /></svg>
+          <CaretRightIcon size={12} />
         </span>
       </button>
 

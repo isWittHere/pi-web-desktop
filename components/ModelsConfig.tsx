@@ -619,7 +619,7 @@ function ModelDetail({
               gap: 5,
             }}
           >
-            {testState.phase === "success" && <CheckIcon size={11} weight="bold" />}
+            {testState.phase === "success" && <CheckIcon size={11} />}
             {testState.phase === "testing" ? "Testing…" : testState.phase === "success" ? "OK" : "Test"}
           </button>
           <button onClick={onDelete}
@@ -1056,7 +1056,7 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
               display: "flex", alignItems: "center", gap: 5,
             }}
           >
-            {savedOk && <CheckIcon size={12} weight="bold" />}
+            {savedOk && <CheckIcon size={12} />}
             {savedOk ? "Saved" : saving ? "Saving…" : "Save"}
           </button>
         </div>
@@ -1603,7 +1603,6 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
             {savedOk && (
               <CheckIcon
                 size={14}
-                weight="bold"
                 style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s ease forwards", flexShrink: 0 }}
               />
             )}

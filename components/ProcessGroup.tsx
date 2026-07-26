@@ -5,6 +5,16 @@ import { MarkdownBody } from "./MarkdownBody";
 import { MessageView, ThinkingBlock, ToolCallBlock } from "./MessageView";
 import type { ProcessContentBlock } from "@/lib/process-content";
 import type { ThinkingContent, ToolCallContent } from "@/lib/types";
+import { BrainIcon } from "@phosphor-icons/react/Brain";
+import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
+import { ColumnsIcon } from "@phosphor-icons/react/Columns";
+import { ImageIcon } from "@phosphor-icons/react/Image";
+import { ListBulletsIcon } from "@phosphor-icons/react/ListBullets";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/MagnifyingGlass";
+import { PencilSimpleLineIcon } from "@phosphor-icons/react/PencilSimpleLine";
+import { RowsIcon } from "@phosphor-icons/react/Rows";
+import { TerminalIcon } from "@phosphor-icons/react/Terminal";
+import { ToolboxIcon } from "@phosphor-icons/react/Toolbox";
 
 interface ProcessGroupProps {
   blocks: ProcessContentBlock[];
@@ -77,91 +87,23 @@ function formatCustomLabel(customType: string): string {
 }
 
 function Caret({ expanded }: { expanded: boolean }) {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`shrink-0 transition-all duration-150 ${expanded ? "rotate-90" : ""}`}
-    >
-      <polyline points="4 2.5 7.5 6 4 9.5" />
-    </svg>
-  );
+  return <CaretRightIcon size={12} className={`shrink-0 transition-all duration-150 ${expanded ? "rotate-90" : ""}`} />;
 }
 
 function StepIcon({ step }: { step: Step }) {
-  if (step.kind === "thinking") {
-    return (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 10.5h5.5a3 3 0 0 0 0-6H8A3.5 3.5 0 0 0 1.5 6.3 3 3 0 0 0 3 10.5Z" />
-        <circle cx="4.3" cy="7.5" r=".55" fill="currentColor" stroke="none" />
-        <circle cx="6.7" cy="7.5" r=".55" fill="currentColor" stroke="none" />
-        <circle cx="9.1" cy="7.5" r=".55" fill="currentColor" stroke="none" />
-      </svg>
-    );
-  }
-  if (step.kind === "image") {
-    return (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="1.5" y="2" width="11" height="10" rx="1.5" />
-        <circle cx="9.5" cy="5" r="1" />
-        <path d="m2.5 10 3-3 2 2 1.4-1.4L11.5 10" />
-      </svg>
-    );
-  }
-  if (step.kind === "custom") {
-    return (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-        <path d="M2 3.5h10M2 7h7M2 10.5h8" />
-      </svg>
-    );
-  }
+  if (step.kind === "thinking") return <BrainIcon size={14} />;
+  if (step.kind === "image") return <ImageIcon size={14} />;
+  if (step.kind === "custom") return <ListBulletsIcon size={14} />;
 
   const name = step.block.toolName.toLowerCase();
-  if (/read|fetch|search|grep|find|list/.test(name)) {
-    return (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-        <circle cx="6" cy="6" r="3.5" /><path d="m8.7 8.7 3 3" />
-      </svg>
-    );
-  }
-  if (/write|edit|patch|move|copy|delete/.test(name)) {
-    return (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M8.5 2.2 11.8 5.5 5 12H1.8V8.8Z" /><path d="m7.4 3.3 3.3 3.3" />
-      </svg>
-    );
-  }
-  if (/terminal|bash|command|exec|shell/.test(name)) {
-    return (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="1.5" y="2.5" width="11" height="9" rx="1.5" /><path d="m4 5 2 2-2 2M7.5 9h2.5" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8.3 1.8 9 3.5l1.8.4-.9 1.6 1 1.5-1.6.8-.1 1.8-1.8.2-1.2 1.4-1.4-1.1-1.8.5-.5-1.8-1.5-1 .8-1.7-.3-1.8 1.8-.3L4.3 2.5 5.8 3.3Z" />
-      <circle cx="6.2" cy="6.5" r="1.6" />
-    </svg>
-  );
+  if (/read|fetch|search|grep|find|list/.test(name)) return <MagnifyingGlassIcon size={14} />;
+  if (/write|edit|patch|move|copy|delete/.test(name)) return <PencilSimpleLineIcon size={14} />;
+  if (/terminal|bash|command|exec|shell/.test(name)) return <TerminalIcon size={14} />;
+  return <ToolboxIcon size={14} />;
 }
 
 function DisplayModeIcon({ mode }: { mode: "timeline" | "tabs" }) {
-  return mode === "timeline" ? (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-      <path d="M2 3.5h10M2 7h10M2 10.5h10" />
-    </svg>
-  ) : (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
-      <rect x="1.5" y="2" width="3" height="10" rx=".7" /><rect x="5.5" y="2" width="3" height="10" rx=".7" /><rect x="9.5" y="2" width="3" height="10" rx=".7" />
-    </svg>
-  );
+  return mode === "timeline" ? <RowsIcon size={14} /> : <ColumnsIcon size={14} />;
 }
 
 function imageSource(block: Extract<ProcessContentBlock, { type: "image" }>): string | undefined {

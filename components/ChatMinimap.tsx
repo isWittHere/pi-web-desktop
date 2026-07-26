@@ -66,6 +66,17 @@ function getNodeColor(msg: AgentMessage | Partial<AgentMessage>): string {
   return "var(--text-dim)";
 }
 
+// Higher-priority navigation landmarks stay visible when message extents touch.
+function getNodeLayer(msg: AgentMessage | Partial<AgentMessage>): number {
+  if (msg.role === "user") return 6;
+
+  const blocks = (msg as Partial<AssistantMessage>).content ?? [];
+  if (blocks.some((block) => block.type === "toolCall" && (block as { error?: string }).error)) return 5;
+  if (blocks.some((block) => block.type === "text" && Boolean((block as TextContent).text?.trim()))) return 4;
+  if (blocks.some((block) => block.type === "toolCall")) return 3;
+  return 2;
+}
+
 function hasTextContent(msg: AgentMessage | Partial<AgentMessage>): boolean {
   if (msg.role === "user") return true;
   if (msg.role === "assistant") {
@@ -236,6 +247,12 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
   // Keep collision calculations in screen pixels. Each message remains an
   // independent marker; dense markers move to another lane rather than merge.
   useEffect(() => {
+    // The minimap is not mounted until scrolling is needed. Re-run when it
+    // becomes visible so the ref exists before measuring its height.
+    if (!visible) {
+      setMinimapHeightPx(0);
+      return;
+    }
     const el = containerRef.current;
     if (!el) return;
     const updateHeight = () => setMinimapHeightPx(el.clientHeight);
@@ -243,7 +260,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
     observer.observe(el);
     updateHeight();
     return () => observer.disconnect();
-  }, []);
+  }, [visible]);
 
   const displayNodes = useMemo(() => {
     if (minimapHeightPx <= 0) return [];
@@ -307,7 +324,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         setMouseYRatio((e.clientY - rect.top) / rect.height);
       }}
       style={{
-        width: MINIMAP_WIDTH,
+        width: minimapWidth,
         flexShrink: 0,
         position: "relative",
         cursor: "pointer",
@@ -330,83 +347,74 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         }}
       />
 
-      {/* Message nodes */}
-      {nodes.map((node) => {
+      {/* Message nodes: each message keeps its own lane and display layer. */}
+      {displayNodes.map((node) => {
         const color = getNodeColor(node.msg);
-        const isNearest = minimapHovered && nearestIndex === node.index;
+        const isNearest = minimapHovered && hoveredNode?.index === node.index;
         const isUser = node.msg.role === "user";
-        const dotTop = node.topRatio * 100;
+        const markerHeight = Math.max(MIN_MARKER_HEIGHT, Math.min(46, node.heightRatio * minimapHeightPx));
+        const left = LANE_PADDING + node.lane * (LANE_WIDTH + LANE_GAP);
 
         return (
           <div
             key={node.index}
-
             style={{
               position: "absolute",
-              top: `${dotTop}%`,
+              top: node.displayTopPx,
               transform: "translateY(-50%)",
-              left: 2,
-              right: 2,
-              height: "max(5px, min(46px, " + `${Math.max(node.heightRatio * 100, 0.45)}%` + "))",
+              left,
+              width: LANE_WIDTH,
+              height: markerHeight,
               display: "flex",
               alignItems: "stretch",
-              justifyContent: "stretch",
               cursor: "pointer",
-              zIndex: 2,
+              zIndex: getNodeLayer(node.msg),
             }}
           >
-            {/* Message extent marker */}
             <div
               style={{
                 width: "100%",
                 height: "100%",
-                borderRadius: 0,
+                borderRadius: 1,
                 background: color,
                 opacity: isNearest ? 1 : isUser ? 0.92 : 0.72,
                 transition: "opacity 0.1s, filter 0.1s",
                 filter: isNearest ? "brightness(1.2)" : "none",
               }}
             />
-
-
           </div>
         );
       })}
 
-
-
-      {/* Tooltips for all nodes, collision-free positions */}
-      {minimapHovered && nodes.map((node, i) => {
-        const preview = getMessagePreview(node.msg);
-        const color = getNodeColor(node.msg);
-        const isNearest = nearestIndex === node.index;
-        if (!preview || tooltipPositions.length === 0) return null;
+      {/* A single nearby preview avoids tooltip collisions in dense sessions. */}
+      {minimapHovered && hoveredNode && (() => {
+        const preview = getMessagePreview(hoveredNode.msg);
+        if (!preview) return null;
+        const color = getNodeColor(hoveredNode.msg);
+        const tooltipTop = Math.max(0, Math.min(minimapHeightPx - 22, hoveredNode.displayTopPx - 11));
         return (
           <div
-            key={node.index}
             style={{
               position: "absolute",
-              top: tooltipPositions[i],
+              top: tooltipTop,
               right: "100%",
               marginRight: 6,
               background: "var(--bg)",
-              borderTop: `1px solid ${isNearest ? color : "var(--border)"}`,
-              borderRight: `1px solid ${isNearest ? color : "var(--border)"}`,
-              borderBottom: `1px solid ${isNearest ? color : "var(--border)"}`,
+              borderTop: `1px solid ${color}`,
+              borderRight: `1px solid ${color}`,
+              borderBottom: `1px solid ${color}`,
               borderLeft: `2px solid ${color}`,
               borderRadius: 4,
               padding: "2px 7px",
               width: 200,
               zIndex: 100,
               pointerEvents: "none",
-              opacity: isNearest ? 1 : 0.45,
-              transition: "top 0.1s, opacity 0.1s",
             }}
           >
             <div
               style={{
                 fontSize: 11,
-                color: isNearest ? "var(--text)" : "var(--text-muted)",
+                color: "var(--text)",
                 lineHeight: 1.4,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -417,7 +425,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
             </div>
           </div>
         );
-      })}
+      })()}
     </div>
   );
 }
