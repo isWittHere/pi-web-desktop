@@ -380,6 +380,10 @@ pre, code {
   border-radius: 6px !important;
   font-size: inherit !important;
 }
+/* Reset border-radius on model dropdown panel buttons */
+.chat-input-model-dropdown button {
+  border-radius: 0 !important;
+}
 .chat-input-toolbar-actions {
   gap: 2px;
 }
@@ -412,6 +416,11 @@ pre, code {
     min-height: 24px !important;
   }
 }
+
+.model-row:hover .model-star {
+  opacity: 1 !important;
+}
+
 @media (max-width: 640px) {
   .chat-input-editor-row {
     padding-left: 12px;
@@ -505,7 +514,7 @@ pre, code {
   overflow-wrap: anywhere;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 2px;
   padding: 1px 5px;
   color: var(--accent-blue);
   font-family: var(--font-mono);

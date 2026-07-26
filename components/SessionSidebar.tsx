@@ -752,14 +752,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         <AnimatedDropdown open={dropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden" }}>
           <div style={{ maxHeight: "min(50vh, 380px)", overflowY: "auto" }}>
             {visibleProjects.map((project) => (
-              <button key={project} onClick={() => { setSelectedCwd(project); setProjectFilter(""); setCustomPathOpen(false); setCustomPathValue(""); setCustomPathError(null); setDropdownOpen(false); }} title={project} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "var(--bg)", border: "none", borderBottom: "1px solid var(--border)", color: project === selectedProject ? "var(--text)" : "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11, fontFamily: "var(--font-mono)" }}>
+              <button key={project} onClick={() => { setSelectedCwd(project); setProjectFilter(""); setCustomPathOpen(false); setCustomPathValue(""); setCustomPathError(null); setDropdownOpen(false); }} title={project} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "var(--bg)", border: "none", color: project === selectedProject ? "var(--text)" : "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11, fontFamily: "var(--font-mono)" }}>
                 {project === selectedProject ? <Check size={10} color="var(--accent)" weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" /> : <span style={{ width: 10, flexShrink: 0 }} />}
                 <PathLabel text={displayCwd(project, homeDir)} style={{ flex: 1 }} />
               </button>
             ))}
             {visibleProjects.length === 0 && <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{projectFilter.trim() ? t("noMatchingProjects") : t("noProjectsYet")}</div>}
           </div>
-          <button onClick={(e) => { e.stopPropagation(); handleDefaultCwd(); }} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "none", border: "none", borderTop: "1px solid var(--border)", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11 }}>
+          <button onClick={(e) => { e.stopPropagation(); handleDefaultCwd(); }} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11 }}>
             <span>{t("useDefaultDirectory")}</span>
           </button>
           {!customPathOpen ? (
@@ -1054,7 +1054,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       padding: "8px 10px",
                       background: "var(--bg)",
                       border: "none",
-                      borderBottom: "1px solid var(--border)",
                       color: project === selectedProject ? "var(--text)" : "var(--text-muted)",
                       cursor: "pointer",
                       textAlign: "left",
@@ -1090,7 +1089,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                     padding: "8px 10px",
                     background: "none",
                     border: "none",
-                    borderTop: visibleProjects.length > 0 ? "1px solid var(--border)" : "none",
+                    borderTop: "none",
                     color: "var(--text-muted)",
                     cursor: "pointer",
                     textAlign: "left",

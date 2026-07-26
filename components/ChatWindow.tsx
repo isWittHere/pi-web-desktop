@@ -160,6 +160,15 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     setShowChatBottomFade(remaining > 1);
   }, [scrollContainerRef]);
 
+  const scrollToBottomAfterProcessExpansion = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      container.scrollTop = container.scrollHeight;
+      updateChatFades();
+    });
+  }, [scrollContainerRef, updateChatFades]);
+
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -286,7 +295,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       modelNames={modelNames}
       modelList={modelList}
       onModelChange={handleModelChange}
-      onCompact={session || isNew ? handleCompact : undefined}
+      onCompact={session ? handleCompact : undefined}
       onAbortCompaction={handleAbortCompaction}
       isCompacting={isCompacting}
       compactError={compactError}
@@ -653,6 +662,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                       <ProcessGroup
                         blocks={processBlocks}
                         isStreaming={false}
+                        defaultExpanded={!finalAnswerMessage}
+                        onAutoExpanded={finalAnswerMessage ? undefined : scrollToBottomAfterProcessExpansion}
                         cwd={messageCwd}
                         onOpenFile={onOpenFile}
                         sessionId={session?.id ?? sessionIdRef.current ?? undefined}

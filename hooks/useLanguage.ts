@@ -407,6 +407,9 @@ const translations = {
     noOutput: "(no output)",
     extension: "extension",
     assistant: "assistant",
+    favorites: "Favorites",
+    favorite: "Favorite",
+    unfavorite: "Unfavorite",
   },
   "zh-CN": {
     settings: "设置",
@@ -810,6 +813,9 @@ const translations = {
     noOutput: "（无输出）",
     extension: "扩展",
     assistant: "助手",
+    favorites: "收藏",
+    favorite: "收藏",
+    unfavorite: "取消收藏",
   },
 } as const;
 

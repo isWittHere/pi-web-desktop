@@ -22,6 +22,7 @@ interface ProcessGroupProps {
   blocks: ProcessContentBlock[];
   isStreaming: boolean;
   defaultExpanded?: boolean;
+  onAutoExpanded?: () => void;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   sessionId?: string;
@@ -224,7 +225,7 @@ function stepHasContent(step: Step): boolean {
   return true;
 }
 
-export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd, onOpenFile, sessionId }: ProcessGroupProps) {
+export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onAutoExpanded, cwd, onOpenFile, sessionId }: ProcessGroupProps) {
   const { language } = useLanguage();
   const labels = processLabels[language];
   const steps = useMemo(() => buildProcessSteps(blocks, labels), [blocks, labels]);
@@ -237,6 +238,7 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
   const scrollRef = useRef<HTMLDivElement>(null);
   const wasStreamingRef = useRef(false);
   const hasUserSelectedTabRef = useRef(false);
+  const hasAppliedDefaultExpansionRef = useRef(false);
 
 
 
@@ -252,6 +254,15 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
     wasStreamingRef.current = false;
     return () => window.clearTimeout(timer);
   }, [isStreaming]);
+
+  useEffect(() => {
+    if (defaultExpanded && !isStreaming && !hasAppliedDefaultExpansionRef.current && steps.length > 0) {
+      const latest = steps[steps.length - 1];
+      hasAppliedDefaultExpansionRef.current = true;
+      setStepStates({ [latest.id]: true });
+      window.requestAnimationFrame(() => onAutoExpanded?.());
+    }
+  }, [defaultExpanded, isStreaming, onAutoExpanded, steps]);
 
   useEffect(() => {
     if (steps.length === 0) return;

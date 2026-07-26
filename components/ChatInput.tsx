@@ -15,6 +15,8 @@ import { ArrowClockwiseIcon } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowElbowDownRightIcon } from "@phosphor-icons/react/ArrowElbowDownRight";
 import { ArrowUpIcon } from "@phosphor-icons/react/ArrowUp";
 import { ArrowsInIcon } from "@phosphor-icons/react/ArrowsIn";
+import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
+import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/Check";
 import { CpuIcon } from "@phosphor-icons/react/Cpu";
 import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
@@ -23,6 +25,7 @@ import { PlusIcon } from "@phosphor-icons/react/Plus";
 import { SpeakerHighIcon } from "@phosphor-icons/react/SpeakerHigh";
 import { SpeakerSlashIcon } from "@phosphor-icons/react/SpeakerSlash";
 import { SquareIcon } from "@phosphor-icons/react/Square";
+import { StarIcon } from "@phosphor-icons/react/Star";
 import { WrenchIcon } from "@phosphor-icons/react/Wrench";
 import { XIcon } from "@phosphor-icons/react/X";
 
@@ -238,6 +241,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("pi-favorite-models");
+      return stored ? new Set<string>(JSON.parse(stored)) : new Set<string>();
+    } catch { return new Set<string>(); }
+  });
+  const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
@@ -354,6 +364,24 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     );
     setAttachedImages((prev) => [...prev, ...newImages]);
   }, [isStreaming]);
+
+  const toggleFavorite = useCallback((provider: string, modelId: string) => {
+    setFavorites((prev) => {
+      const key = `${provider}:${modelId}`;
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      localStorage.setItem("pi-favorite-models", JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
+  const toggleProviderExpand = useCallback((provider: string) => {
+    setExpandedProviders((prev) => {
+      const next = new Set(prev);
+      if (next.has(provider)) next.delete(provider); else next.add(provider);
+      return next;
+    });
+  }, []);
 
   const removeImage = useCallback((index: number) => {
     setAttachedImages((prev) => {
@@ -1784,62 +1812,185 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   </button>
                   {modelDropdownOpen && modelDropdownRect && (() => {
                     const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+                    const viewportWidth = window.innerWidth;
                     const bottom = viewportHeight - modelDropdownRect.top + 6;
-                    const maxH = Math.max(120, Math.min(modelDropdownRect.top - 8, viewportHeight * 0.6));
+                    const maxH = Math.min(400, Math.max(120, Math.min(modelDropdownRect.top - 8, viewportHeight * 0.6)));
                     // On mobile, pin to a small left margin and cap width to the
                     // viewport so long model names never push the panel off-screen.
+                    // On desktop, clamp left so the panel stays within the viewport.
+                    const panelMinWidth = modelDropdownRect.width;
+                    const panelMaxWidth = Math.min(360, viewportWidth - 16);
                     const panelPos: React.CSSProperties = isMobile
                       ? { left: 8, right: 8, maxWidth: "calc(100vw - 16px)" }
-                      : { left: modelDropdownRect.left, width: "max-content", minWidth: modelDropdownRect.width };
+                      : {
+                          left: Math.min(modelDropdownRect.left, viewportWidth - panelMaxWidth - 8),
+                          width: "max-content",
+                          minWidth: Math.min(panelMinWidth, panelMaxWidth),
+                          maxWidth: panelMaxWidth,
+                        };
+
+                    // Build favorites list (preserving localStorage insertion order)
+                    const favKeys = [...favorites];
+                    const favModels: ModelOption[] = [];
+                    for (const key of favKeys) {
+                      const [provider, modelId] = key.split(":", 2);
+                      const match = modelOptions.find((o) => o.provider === provider && o.modelId === modelId);
+                      if (match) favModels.push(match);
+                    }
+                    const hasFavs = favModels.length > 0;
+
                     return (
-                      <div ref={modelDropdownPanelRef} style={{
+                      <div ref={modelDropdownPanelRef} className="chat-input-model-dropdown" style={{
                       position: "fixed",
                       bottom,
                       ...panelPos,
-                      zIndex: 500, background: "var(--bg)", border: "1px solid var(--border)",
+                      zIndex: 2000, background: "var(--bg)", border: "1px solid var(--border)",
                       borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
                       overflow: "hidden", maxHeight: maxH, overflowY: "auto",
                       }}>
-                      {modelsByProvider.map((group, gi) => (
+                      {/* Favorites group — at top, always expanded */}
+                      {hasFavs && (
+                        <div>
+                          <div style={{
+                            padding: "6px 12px 4px",
+                            fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
+                            textTransform: "uppercase", letterSpacing: "0.07em",
+                          }}>
+                            {t("favorites")}
+                          </div>
+                          {favModels.map((opt) => {
+                            const isActive = opt.modelId === model?.modelId && opt.provider === model?.provider;
+                            const isFav = favorites.has(`${opt.provider}:${opt.modelId}`);
+                            return (
+                              <div
+                                key={`fav-${opt.provider}:${opt.modelId}`}
+                                className="model-row"
+                                style={{ display: "flex", alignItems: "center", width: "100%" }}
+                              >
+                                <button
+                                  onClick={() => { setModelDropdownOpen(false); if (!isActive || isAutoModelSelection) onModelChange(opt.provider, opt.modelId); }}
+                                  style={{
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    flex: 1, minWidth: 0,
+                                    padding: "7px 12px",
+                                    background: isActive ? "var(--bg-selected)" : "none",
+                                    border: "none",
+                                    color: isActive ? "var(--text)" : "var(--text-muted)",
+                                    cursor: "pointer", fontSize: 12, textAlign: "left",
+                                    fontWeight: isActive ? 600 : 400,
+                                    whiteSpace: "nowrap", overflow: "hidden",
+                                  }}
+                                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                                >
+                                  {isActive
+                                    ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
+                                    : <span style={{ width: 10, flexShrink: 0 }} />}
+                                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
+                                  <span
+                                    onClick={(e) => { e.stopPropagation(); toggleFavorite(opt.provider, opt.modelId); }}
+                                    className="model-star"
+                                    style={{
+                                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                      flexShrink: 0,
+                                      cursor: "pointer",
+                                      color: isFav ? "var(--accent)" : "var(--text-dim)",
+                                      opacity: isFav ? 1 : 0,
+                                      transition: "opacity 0.12s, color 0.12s",
+                                    }}
+                                    onMouseEnter={(e) => { e.stopPropagation(); e.currentTarget.style.color = "var(--accent)"; }}
+                                    onMouseLeave={(e) => { e.stopPropagation(); e.currentTarget.style.color = isFav ? "var(--accent)" : "var(--text-dim)"; }}
+                                    title={isFav ? t("unfavorite") : t("favorite")}
+                                    aria-label={isFav ? t("unfavorite") : t("favorite")}
+                                  >
+                                    <StarIcon size={12} weight={isFav ? "fill" : "regular"} />
+                                  </span>
+                                </button>
+                              </div>
+                            );
+                          })}
+                          <div style={{ borderTop: "1px solid var(--border)" }} />
+                        </div>
+                      )}
+                      {/* Provider groups — clickable headers, default collapsed */}
+                      {modelsByProvider.map((group, gi) => {
+                        const isExpanded = expandedProviders.has(group.provider);
+                        const caret = !isExpanded
+                          ? <CaretRightIcon size={10} color="var(--text-dim)" />
+                          : <CaretDownIcon size={10} color="var(--text-dim)" />;
+                        return (
                         <div key={group.provider}>
-                          {(modelsByProvider.length > 1) && (
-                            <div style={{
-                              padding: "6px 12px 4px",
+                          <button
+                            onClick={() => toggleProviderExpand(group.provider)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 4,
+                              width: "100%", padding: "6px 12px 4px",
+                              background: "none", border: "none",
+                              cursor: "pointer",
                               fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
                               textTransform: "uppercase", letterSpacing: "0.07em",
                               borderTop: gi > 0 ? "1px solid var(--border)" : "none",
-                            }}>
-                              {group.provider}
-                            </div>
-                          )}
-                          {group.options.map((opt) => {
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
+                          >
+                            {caret}
+                            {group.provider}
+                          </button>
+                          {isExpanded && group.options.map((opt) => {
                             const isActive = opt.modelId === model?.modelId && opt.provider === model?.provider;
+                            const isFav = favorites.has(`${opt.provider}:${opt.modelId}`);
                             return (
-                              <button
+                              <div
                                 key={`${opt.provider}:${opt.modelId}`}
-                                onClick={() => { setModelDropdownOpen(false); if (!isActive || isAutoModelSelection) onModelChange(opt.provider, opt.modelId); }}
-                                style={{
-                                  display: "flex", alignItems: "center", gap: 8,
-                                  width: "100%", padding: "7px 12px",
-                                  background: isActive ? "var(--bg-selected)" : "none",
-                                  border: "none",
-                                  color: isActive ? "var(--text)" : "var(--text-muted)",
-                                  cursor: "pointer", fontSize: 12, textAlign: "left",
-                                  fontWeight: isActive ? 600 : 400,
-                                  whiteSpace: "nowrap",
-                                }}
-                                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                                className="model-row"
+                                style={{ display: "flex", alignItems: "center", width: "100%" }}
                               >
-                                {isActive
-                                  ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
-                                  : <span style={{ width: 10, flexShrink: 0 }} />}
-                                {opt.name}
-                              </button>
+                                <button
+                                  onClick={() => { setModelDropdownOpen(false); if (!isActive || isAutoModelSelection) onModelChange(opt.provider, opt.modelId); }}
+                                  style={{
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    flex: 1, minWidth: 0,
+                                    padding: "7px 12px",
+                                    background: isActive ? "var(--bg-selected)" : "none",
+                                    border: "none",
+                                    color: isActive ? "var(--text)" : "var(--text-muted)",
+                                    cursor: "pointer", fontSize: 12, textAlign: "left",
+                                    fontWeight: isActive ? 600 : 400,
+                                    whiteSpace: "nowrap", overflow: "hidden",
+                                  }}
+                                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                                >
+                                  {isActive
+                                    ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
+                                    : <span style={{ width: 10, flexShrink: 0 }} />}
+                                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
+                                  <span
+                                    onClick={(e) => { e.stopPropagation(); toggleFavorite(opt.provider, opt.modelId); }}
+                                    className="model-star"
+                                    style={{
+                                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                      flexShrink: 0,
+                                      cursor: "pointer",
+                                      color: isFav ? "var(--accent)" : "var(--text-dim)",
+                                      opacity: isFav ? 1 : 0,
+                                      transition: "opacity 0.12s, color 0.12s",
+                                    }}
+                                    onMouseEnter={(e) => { e.stopPropagation(); e.currentTarget.style.color = "var(--accent)"; }}
+                                    onMouseLeave={(e) => { e.stopPropagation(); e.currentTarget.style.color = isFav ? "var(--accent)" : "var(--text-dim)"; }}
+                                    title={isFav ? t("unfavorite") : t("favorite")}
+                                    aria-label={isFav ? t("unfavorite") : t("favorite")}
+                                  >
+                                    <StarIcon size={12} weight={isFav ? "fill" : "regular"} />
+                                  </span>
+                                </button>
+                              </div>
                             );
                           })}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     );
                   })()}
