@@ -6,10 +6,28 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { useLanguage } from "@/hooks/useLanguage";
 import { useTheme } from "@/hooks/useTheme";
 import { copyText } from "@/lib/clipboard";
 import { resolveLocalFileHref } from "@/lib/file-links";
 import { markdownRehypePlugins, markdownRemarkPlugins } from "@/lib/markdown";
+
+const markdownLabels = {
+  en: {
+    previewAvailableAfterStreaming: "Preview available after streaming",
+    previewMermaidDiagram: "Preview Mermaid diagram",
+    invalidMermaidDiagram: "Invalid Mermaid diagram",
+    renderingMermaidDiagram: "Rendering Mermaid diagram",
+    plainText: "text",
+  },
+  "zh-CN": {
+    previewAvailableAfterStreaming: "流式输出结束后可预览",
+    previewMermaidDiagram: "预览 Mermaid 图表",
+    invalidMermaidDiagram: "无效的 Mermaid 图表",
+    renderingMermaidDiagram: "正在渲染 Mermaid 图表",
+    plainText: "文本",
+  },
+} as const;
 
 interface MarkdownBodyProps {
   children: string;
@@ -123,6 +141,8 @@ function normalizeDisplayMath(markdown: string): string {
 }
 
 function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boolean }) {
+  const { language, t } = useLanguage();
+  const labels = markdownLabels[language];
   const { isDark } = useTheme();
   const [showPreview, setShowPreview] = useState(false);
   const [svg, setSvg] = useState<string | null>(null);
@@ -172,10 +192,10 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
     <button
       onClick={() => setShowPreview((v) => !v)}
       disabled={isStreaming}
-      title={isStreaming ? "Preview available after streaming" : (showPreview ? "Show Mermaid source" : "Preview Mermaid diagram")}
+      title={isStreaming ? labels.previewAvailableAfterStreaming : (showPreview ? t("source") : labels.previewMermaidDiagram)}
       className={["markdown-code-action", showPreview ? "is-active" : ""].filter(Boolean).join(" ")}
     >
-      {showPreview ? "Source" : "Preview"}
+      {showPreview ? t("source") : t("preview")}
     </button>
   );
 
@@ -185,9 +205,9 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
 
   const body =
     failedKey === currentKey ? (
-      <div className="mermaid-block mermaid-block-error">Invalid Mermaid diagram</div>
+      <div className="mermaid-block mermaid-block-error">{labels.invalidMermaidDiagram}</div>
     ) : !svg || renderedKey !== currentKey ? (
-      <div className="mermaid-block mermaid-block-loading" aria-label="Rendering Mermaid diagram" />
+      <div className="mermaid-block mermaid-block-loading" aria-label={labels.renderingMermaidDiagram} />
     ) : (
       <div
         className="mermaid-block"
@@ -203,6 +223,8 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
 }
 
 function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; headerAction?: ReactNode }) {
+  const { language, t } = useLanguage();
+  const labels = markdownLabels[language];
   const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -240,11 +262,11 @@ function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; h
           letterSpacing: "0.06em",
           textTransform: "uppercase",
           userSelect: "none",
-        }}>{lang || "text"}</span>
+        }}>{lang || labels.plainText}</span>
         {headerAction}
         <button
           onClick={copy}
-          title={copied ? "Copied" : "Copy"}
+          title={copied ? t("copied") : t("copy")}
           style={{
             display: "flex",
             alignItems: "center",

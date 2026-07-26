@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkdownBody } from "./MarkdownBody";
 import { MessageView, ThinkingBlock, ToolCallBlock } from "./MessageView";
+import { useLanguage } from "@/hooks/useLanguage";
 import type { ProcessContentBlock } from "@/lib/process-content";
 import type { ThinkingContent, ToolCallContent } from "@/lib/types";
 import { BrainIcon } from "@phosphor-icons/react/Brain";
@@ -31,12 +32,49 @@ type Step =
   | { kind: "custom"; id: string; label: string; block: Extract<ProcessContentBlock, { type: "custom" }> }
   | { kind: "image"; id: string; label: string; block: Extract<ProcessContentBlock, { type: "image" }> };
 
+const processLabels = {
+  en: {
+    thinking: "Thinking",
+    generatedImage: "Generated image",
+    working: "Working...",
+    used: "Used {summary}",
+    tool: "{count} tool",
+    tools: "{count} tools",
+    thought: "{count} thought",
+    thoughts: "{count} thoughts",
+    event: "{count} event",
+    events: "{count} events",
+    tabMode: "Tab mode",
+    timelineMode: "Timeline mode",
+    failed: "failed",
+    processOutput: "Process output",
+  },
+  "zh-CN": {
+    thinking: "思考",
+    generatedImage: "生成的图片",
+    working: "工作中...",
+    used: "使用了 {summary}",
+    tool: "{count} 个工具",
+    tools: "{count} 个工具",
+    thought: "{count} 条思考",
+    thoughts: "{count} 条思考",
+    event: "{count} 个事件",
+    events: "{count} 个事件",
+    tabMode: "标签页模式",
+    timelineMode: "时间线模式",
+    failed: "失败",
+    processOutput: "处理输出",
+  },
+} as const;
+
+type ProcessLabels = { [Key in keyof typeof processLabels.en]: string };
+
 function toolLabel(block: Extract<ProcessContentBlock, { type: "toolCall" }>): string {
   const label = block.input.label;
   return typeof label === "string" && label.trim() ? label : block.toolName;
 }
 
-export function buildProcessSteps(blocks: ProcessContentBlock[]): Step[] {
+export function buildProcessSteps(blocks: ProcessContentBlock[], labels: ProcessLabels = processLabels.en): Step[] {
   const steps: Step[] = [];
   let pending: Array<Extract<ProcessContentBlock, { type: "thinking" | "text" }>> = [];
 
@@ -45,7 +83,7 @@ export function buildProcessSteps(blocks: ProcessContentBlock[]): Step[] {
     steps.push({
       kind: "thinking",
       id: pending.map((block) => block.id).join("+"),
-      label: "Thinking",
+      label: labels.thinking,
       blocks: pending,
     });
     pending = [];
@@ -72,7 +110,7 @@ export function buildProcessSteps(blocks: ProcessContentBlock[]): Step[] {
     if (block.type === "custom") {
       steps.push({ kind: "custom", id: block.id, label: formatCustomLabel(block.customType), block });
     } else if (block.type === "image") {
-      steps.push({ kind: "image", id: block.id, label: "Generated image", block });
+      steps.push({ kind: "image", id: block.id, label: labels.generatedImage, block });
     }
   }
 
@@ -113,11 +151,12 @@ function imageSource(block: Extract<ProcessContentBlock, { type: "image" }>): st
   return `data:${source.media_type ?? "image/png"};base64,${source.data}`;
 }
 
-function StepContent({ step, cwd, onOpenFile, sessionId }: {
+function StepContent({ step, cwd, onOpenFile, sessionId, labels }: {
   step: Step;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   sessionId?: string;
+  labels: ProcessLabels;
 }) {
   if (step.kind === "thinking") {
     return <ProcessNarrative blocks={step.blocks} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
@@ -149,7 +188,7 @@ function StepContent({ step, cwd, onOpenFile, sessionId }: {
   const src = imageSource(step.block);
   // Session images can be data URLs, which Next/Image does not optimize.
   // eslint-disable-next-line @next/next/no-img-element
-  return src ? <img src={src} alt="Process output" className="max-h-72 max-w-full rounded border border-border object-contain" /> : null;
+  return src ? <img src={src} alt={labels.processOutput} className="max-h-72 max-w-full rounded border border-border object-contain" /> : null;
 }
 
 function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId }: {
@@ -185,7 +224,9 @@ function stepHasContent(step: Step): boolean {
 }
 
 export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd, onOpenFile, sessionId }: ProcessGroupProps) {
-  const steps = useMemo(() => buildProcessSteps(blocks), [blocks]);
+  const { language } = useLanguage();
+  const labels = processLabels[language];
+  const steps = useMemo(() => buildProcessSteps(blocks, labels), [blocks, labels]);
   const [areaExpanded, setAreaExpanded] = useState(isStreaming || defaultExpanded);
   const [stepStates, setStepStates] = useState<Record<string, boolean>>({});
   const [displayMode, setDisplayMode] = useState<"timeline" | "tabs">("timeline");
@@ -257,10 +298,10 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
   const thoughtCount = blocks.filter((block) => block.type === "thinking" || block.type === "text").length;
   const customCount = steps.filter((step) => step.kind === "custom").length;
   const summaryParts: string[] = [];
-  if (toolCount) summaryParts.push(`${toolCount} ${toolCount === 1 ? "tool" : "tools"}`);
-  if (thoughtCount) summaryParts.push(`${thoughtCount} ${thoughtCount === 1 ? "thought" : "thoughts"}`);
-  if (customCount) summaryParts.push(`${customCount} ${customCount === 1 ? "event" : "events"}`);
-  const summary = isStreaming ? "Working..." : `Used ${summaryParts.join(" · ")}`;
+  if (toolCount) summaryParts.push((toolCount === 1 ? labels.tool : labels.tools).replace("{count}", String(toolCount)));
+  if (thoughtCount) summaryParts.push((thoughtCount === 1 ? labels.thought : labels.thoughts).replace("{count}", String(thoughtCount)));
+  if (customCount) summaryParts.push((customCount === 1 ? labels.event : labels.events).replace("{count}", String(customCount)));
+  const summary = isStreaming ? labels.working : labels.used.replace("{summary}", summaryParts.join(" · "));
   const singleThinking = steps.length === 1 && steps[0].kind === "thinking" && !isStreaming;
 
   return (
@@ -287,7 +328,7 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
               setAreaExpanded(true);
             }}
             className="shrink-0 p-1 text-text-dim opacity-0 transition-colors hover:text-text group-hover/summary-row:opacity-100"
-            title={displayMode === "timeline" ? "Tab mode" : "Timeline mode"}
+            title={displayMode === "timeline" ? labels.tabMode : labels.timelineMode}
           >
             <DisplayModeIcon mode={displayMode} />
           </button>
@@ -298,7 +339,7 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
         <div className="overflow-hidden">
           {singleThinking ? (
             <div className="mt-2 max-h-[280px] overflow-y-auto pr-2">
-              <StepContent step={steps[0]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />
+              <StepContent step={steps[0]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />
             </div>
           ) : displayMode === "timeline" ? (
             <div className="relative">
@@ -324,7 +365,7 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
                             <span className="shrink-0 text-[11px] tabular-nums text-text-dim">{step.block.duration}s</span>
                           )}
                           {step.kind === "tool" && step.block.status === "error" && (
-                            <span className="shrink-0 text-[11px] text-red-400">failed</span>
+                            <span className="shrink-0 text-[11px] text-red-400">{labels.failed}</span>
                           )}
                           {hasContent && (
                             <span className={`ml-0.5 shrink-0 opacity-0 transition-opacity group-hover/step:opacity-50 ${open ? "rotate-90" : ""}`}>
@@ -334,7 +375,7 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
                         </button>
                         {open && hasContent && (
                           <div className="ml-5 mt-1.5 overflow-hidden">
-                            <StepContent step={step} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />
+                            <StepContent step={step} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />
                           </div>
                         )}
                       </div>
@@ -359,7 +400,7 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
                 ))}
               </div>
               <div ref={scrollRef} className="relative mt-2 max-h-[280px] overflow-y-auto pr-2">
-                {steps[activeTab] && <StepContent step={steps[activeTab]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />}
+                {steps[activeTab] && <StepContent step={steps[activeTab]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />}
               </div>
             </div>
           )}

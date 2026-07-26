@@ -21,6 +21,7 @@ import {
 } from "@phosphor-icons/react";
 import { BranchNavigator } from "./BranchNavigator";
 import { useElectronWindow } from "@/hooks/useElectronWindow";
+import { useLanguage } from "@/hooks/useLanguage";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
@@ -84,6 +85,7 @@ export function AppTitleBar({
   onWorkspaceControlsHostChange,
 }: AppTitleBarProps) {
   const { isElectron, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
+  const { t: translate } = useLanguage();
 
   return (
     <>
@@ -113,8 +115,8 @@ export function AppTitleBar({
         <button
           className="app-no-drag"
           onClick={onSidebarToggle}
-          title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-          aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+          title={sidebarOpen ? translate("hideSidebar") : translate("showSidebar")}
+          aria-label={sidebarOpen ? translate("hideSidebar") : translate("showSidebar")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
@@ -149,8 +151,8 @@ export function AppTitleBar({
               className="app-no-drag"
               onClick={onViewFullHistory}
               disabled={!selectedSession}
-              title={selectedSession ? "View full history" : "Full history is available after the session is saved"}
-              aria-label="View full history"
+              title={selectedSession ? translate("viewFullHistory") : translate("fullHistoryAvailableAfterSave")}
+              aria-label={translate("viewFullHistory")}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -196,8 +198,8 @@ export function AppTitleBar({
               className="app-no-drag"
               ref={systemBtnRef}
               onClick={() => onToggleTopPanel("system")}
-              title="System prompt"
-              aria-label="System prompt"
+              title={translate("systemPrompt")}
+              aria-label={translate("systemPrompt")}
               aria-pressed={activeTopPanel === "system"}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -284,8 +286,8 @@ export function AppTitleBar({
               className="app-no-drag"
               type="button"
               onClick={() => onToggleTopPanel("session")}
-              title={tooltip || "Session info"}
-              aria-label="Session info"
+              title={tooltip || translate("sessionInfo")}
+              aria-label={translate("sessionInfo")}
               aria-pressed={activeTopPanel === "session"}
               style={{
                 marginLeft: "auto",
@@ -342,8 +344,8 @@ export function AppTitleBar({
         <button
           className="app-no-drag"
           onClick={onToggleFilePanel}
-          title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
-          aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}
+          title={rightPanelOpen ? translate("hideFilePanel") : translate("showFilePanel")}
+          aria-label={rightPanelOpen ? translate("hideFilePanel") : translate("showFilePanel")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
@@ -364,8 +366,8 @@ export function AppTitleBar({
             const rect = e.currentTarget.getBoundingClientRect();
             toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
           }}
-          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          title={isDark ? translate("switchToLight") : translate("switchToDark")}
+          aria-label={isDark ? translate("switchToLight") : translate("switchToDark")}
           aria-pressed={isDark}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -384,8 +386,8 @@ export function AppTitleBar({
           className="app-no-drag"
           type="button"
           onClick={onOpenSettings}
-          title="Settings"
-          aria-label="Settings"
+          title={translate("settings")}
+          aria-label={translate("settings")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
@@ -404,8 +406,8 @@ export function AppTitleBar({
             <button
               className="app-no-drag"
               onClick={minimize}
-              title="Minimize"
-              aria-label="Minimize"
+              title={translate("minimize")}
+              aria-label={translate("minimize")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 44, height: "100%", padding: 0,
@@ -421,8 +423,8 @@ export function AppTitleBar({
             <button
               className="app-no-drag"
               onClick={toggleMaximize}
-              title={isMaximized ? "Restore" : "Maximize"}
-              aria-label={isMaximized ? "Restore" : "Maximize"}
+              title={isMaximized ? translate("restore") : translate("maximize")}
+              aria-label={isMaximized ? translate("restore") : translate("maximize")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 44, height: "100%", padding: 0,
@@ -438,8 +440,8 @@ export function AppTitleBar({
             <button
               className="app-no-drag"
               onClick={close}
-              title="Close"
-              aria-label="Close"
+              title={translate("close")}
+              aria-label={translate("close")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 44, height: "100%", padding: 0,
@@ -599,7 +601,7 @@ export function AppTitleBar({
                 };
                 const sessionInfoSection = (
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>Session Info</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("sessionInfoTitle")}</div>
                     <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
                       {sessionRows.map((row) => (
                         <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
@@ -636,7 +638,7 @@ export function AppTitleBar({
                 );
               })() : (
                 <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                  Send a message or run /session to load session info
+                  {translate("sendMessageForSessionInfo")}
                 </div>
               )}
             </div>
