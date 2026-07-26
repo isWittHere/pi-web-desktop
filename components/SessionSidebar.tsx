@@ -1504,7 +1504,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       </div>
 
       {/* Session list */}
-      <div style={{ flex: "0 1 auto", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: "50%" }}>
+      <div style={{ flex: "0 1 auto", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: "min(40%, 360px)" }}>
         {loading && (
           <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
             {t("loading")}

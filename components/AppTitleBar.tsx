@@ -269,15 +269,15 @@ export function AppTitleBar({
 
           const tooltipParts: string[] = [];
           if (t) {
-            tooltipParts.push(`in: ${t.input.toLocaleString()}`);
-            tooltipParts.push(`out: ${t.output.toLocaleString()}`);
-            tooltipParts.push(`cache read: ${t.cacheRead.toLocaleString()}`);
-            tooltipParts.push(`cache write: ${t.cacheWrite.toLocaleString()}`);
-            if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
+            tooltipParts.push(`${translate("sessionInfoInput")}: ${t.input.toLocaleString()}`);
+            tooltipParts.push(`${translate("sessionInfoOutput")}: ${t.output.toLocaleString()}`);
+            tooltipParts.push(`${translate("sessionInfoCacheRead")}: ${t.cacheRead.toLocaleString()}`);
+            tooltipParts.push(`${translate("sessionInfoCacheWrite")}: ${t.cacheWrite.toLocaleString()}`);
+            if (c > 0) tooltipParts.push(`${translate("sessionInfoCost")}: $${c.toFixed(4)}`);
           }
           if (contextUsage?.contextWindow) {
             const pct = contextUsage.percent;
-            tooltipParts.push(`context: ${pct !== null ? pct.toFixed(1) + "%" : "unknown"} of ${contextUsage.contextWindow.toLocaleString()} tokens`);
+            tooltipParts.push(`${translate("sessionInfoContext")}: ${pct !== null ? `${pct.toFixed(1)}%` : "?"} / ${contextUsage.contextWindow.toLocaleString()}`);
           }
           const tooltip = tooltipParts.join("  |  ");
 
@@ -499,7 +499,7 @@ export function AppTitleBar({
             </div>
           )}
           {activeTopPanel === "session" && (
-            <div className="session-info-popover" style={{
+            <div style={{
               background: "var(--bg-panel)",
               borderBottom: "1px solid var(--border)",
               boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
@@ -507,29 +507,29 @@ export function AppTitleBar({
             }}>
               {sessionStats ? (() => {
                 const sessionRows = [
-                  ...(sessionStats.sessionName ? [{ label: "Name", value: sessionStats.sessionName, copyField: null }] : []),
-                  { label: "File", value: sessionStats.sessionFile ?? "In-memory", copyField: "file" as const },
-                  { label: "ID", value: sessionStats.sessionId, copyField: "id" as const },
+                  ...(sessionStats.sessionName ? [{ label: translate("name"), value: sessionStats.sessionName, copyField: null }] : []),
+                  { label: translate("sessionInfoFile"), value: sessionStats.sessionFile ?? translate("sessionInfoInMemory"), copyField: "file" as const },
+                  { label: translate("sessionInfoId"), value: sessionStats.sessionId, copyField: "id" as const },
                 ];
                 const messageRows = [
-                  ["User", sessionStats.userMessages.toLocaleString()],
-                  ["Assistant", sessionStats.assistantMessages.toLocaleString()],
-                  ["Tool Calls", sessionStats.toolCalls.toLocaleString()],
-                  ["Tool Results", sessionStats.toolResults.toLocaleString()],
-                  ["Total", sessionStats.totalMessages.toLocaleString()],
+                  [translate("sessionInfoUser"), sessionStats.userMessages.toLocaleString()],
+                  [translate("sessionInfoAssistant"), sessionStats.assistantMessages.toLocaleString()],
+                  [translate("sessionInfoToolCalls"), sessionStats.toolCalls.toLocaleString()],
+                  [translate("sessionInfoToolResults"), sessionStats.toolResults.toLocaleString()],
+                  [translate("sessionInfoTotal"), sessionStats.totalMessages.toLocaleString()],
                 ];
                 const tokenRows = [
-                  ["Input", sessionStats.tokens.input.toLocaleString()],
-                  ["Output", sessionStats.tokens.output.toLocaleString()],
-                  ...(sessionStats.tokens.cacheRead > 0 ? [["Cache Read", sessionStats.tokens.cacheRead.toLocaleString()]] : []),
-                  ...(sessionStats.tokens.cacheWrite > 0 ? [["Cache Write", sessionStats.tokens.cacheWrite.toLocaleString()]] : []),
-                  ["Total", sessionStats.tokens.total.toLocaleString()],
+                  [translate("sessionInfoInput"), sessionStats.tokens.input.toLocaleString()],
+                  [translate("sessionInfoOutput"), sessionStats.tokens.output.toLocaleString()],
+                  ...(sessionStats.tokens.cacheRead > 0 ? [[translate("sessionInfoCacheRead"), sessionStats.tokens.cacheRead.toLocaleString()]] : []),
+                  ...(sessionStats.tokens.cacheWrite > 0 ? [[translate("sessionInfoCacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString()]] : []),
+                  [translate("sessionInfoTotal"), sessionStats.tokens.total.toLocaleString()],
                 ];
                 const ctx = contextUsage ?? sessionStats.contextUsage;
                 const formatCompact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
                 const extraTokenRows = [
-                  ...(sessionStats.cost > 0 ? [["Cost", `$${sessionStats.cost.toFixed(4)}`]] : []),
-                  ...(ctx?.contextWindow ? [["Context", `${ctx.percent !== null ? `${ctx.percent.toFixed(1)}%` : "?"} / ${formatCompact(ctx.contextWindow)}`]] : []),
+                  ...(sessionStats.cost > 0 ? [[translate("sessionInfoCost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
+                  ...(ctx?.contextWindow ? [[translate("sessionInfoContext"), `${ctx.percent !== null ? `${ctx.percent.toFixed(1)}%` : "?"} / ${formatCompact(ctx.contextWindow)}`]] : []),
                 ];
                 const section = (
                   title: string,
@@ -566,7 +566,7 @@ export function AppTitleBar({
                   return (
                     <button
                       type="button"
-                      title={copied ? "Copied" : `Copy ${field === "file" ? "file path" : "session ID"}`}
+                      title={copied ? translate("copied") : field === "file" ? translate("copyFilePath") : translate("copySessionId")}
                       onClick={() => onCopySessionField(field, value)}
                       style={{
                         alignSelf: "start",
@@ -632,8 +632,8 @@ export function AppTitleBar({
                     fontFamily: "var(--font-mono)",
                   }}>
                     {sessionInfoSection}
-                    {section("Messages", messageRows)}
-                    {section("Tokens", [...tokenRows, ...extraTokenRows], "right", true)}
+                    {section(translate("sessionInfoMessages"), messageRows)}
+                    {section(translate("sessionInfoTokens"), [...tokenRows, ...extraTokenRows], "right", true)}
                   </div>
                 );
               })() : (
