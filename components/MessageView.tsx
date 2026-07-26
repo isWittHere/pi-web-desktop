@@ -303,7 +303,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               )}
             </div>
           )}
-          {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
+          {time && <span style={{ fontSize: 11, color: hovered ? "var(--text-muted)" : "var(--text-dim)", opacity: hovered ? 1 : 0.5, transition: "color 0.15s, opacity 0.15s" }}>{time}</span>}
         </div>
       )}
     </div>
@@ -441,6 +441,12 @@ function AssistantMessageView({
     return () => clearInterval(id);
   }, [isStreaming]);
 
+  const fmtToken = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+    return n.toLocaleString();
+  };
+
   if (blocks.length === 0 && !isStreaming) return null;
 
   return (
@@ -497,12 +503,41 @@ function AssistantMessageView({
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
         {!isStreaming && (message.provider || message.usage) && (
-          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+          <div style={{ fontSize: 11, color: hovered ? "var(--text-muted)" : "var(--text-dim)", opacity: hovered ? 1 : 0.5, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", transition: "color 0.15s, opacity 0.15s" }}>
             {message.provider && (
               <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
             )}
-            {message.provider && message.usage && " · "}
-            {message.usage && formatUsage(message.usage)}
+            {message.usage && message.usage.input > 0 && (
+              <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="19" x2="12" y2="5"/>
+                  <polyline points="5 12 12 5 19 12"/>
+                </svg>
+                {fmtToken(message.usage.input)}
+              </span>
+            )}
+            {message.usage && message.usage.output > 0 && (
+              <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <polyline points="19 12 12 19 5 12"/>
+                </svg>
+                {fmtToken(message.usage.output)}
+              </span>
+            )}
+            {message.usage && message.usage.cacheRead > 0 && (
+              <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                </svg>
+                {fmtToken(message.usage.cacheRead)}
+              </span>
+            )}
+            {message.usage && message.usage.cost?.total > 0 && (
+              <span>${message.usage.cost.total.toFixed(4)}</span>
+            )}
           </div>
         )}
         {textContent && !isStreaming && (
@@ -536,7 +571,7 @@ function AssistantMessageView({
           </button>
         )}
         {time && !isStreaming && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>
+          <span style={{ fontSize: 11, color: hovered ? "var(--text-muted)" : "var(--text-dim)", opacity: hovered ? 1 : 0.5, marginLeft: "auto", transition: "color 0.15s, opacity 0.15s" }}>{time}</span>
         )}
       </div>
     </div>
@@ -1327,17 +1362,4 @@ function getToolPreview(block: ToolCallContent): string {
   return String(first).slice(0, 120);
 }
 
-function formatUsage(usage: {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: { total: number };
-}): string {
-  const parts = [];
-  if (usage.input) parts.push(`${usage.input.toLocaleString()} in`);
-  if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
-  if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString()} cache`);
-  if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
-  return parts.join(" · ");
-}
+

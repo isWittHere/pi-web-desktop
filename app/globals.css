@@ -112,6 +112,21 @@ body {
   height: 100dvh;
 }
 
+/* Frameless app title bar (Electron) — empty space is a drag handle,
+   interactive elements opt out individually. In a regular browser tab
+   the class is a no-op (only -webkit-app-region is honored by Chromium
+   in the Electron shell; browsers ignore it). */
+.app-title-bar {
+  -webkit-app-region: drag;
+}
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+.app-title-drag {
+  -webkit-app-region: drag;
+  min-width: 0;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -937,7 +952,7 @@ span.linenumber {
   }
   .sidebar-container {
     position: fixed !important;
-    top: 0;
+    top: 36px;
     left: 0;
     bottom: 0;
     width: 280px;

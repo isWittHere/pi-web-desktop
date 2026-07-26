@@ -1,10 +1,9 @@
 "use strict";
 
-const { app, BrowserWindow, dialog, Menu } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const http = require("http");
-const fs = require("fs");
 
 const PORT = process.env.PORT || 30141;
 const IS_DEV = !app.isPackaged;
@@ -51,7 +50,7 @@ function startServer() {
     });
   }
 
-  serverProcess.on("exit", (code) => {
+  serverProcess.on("exit", () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.close();
     }
@@ -65,6 +64,8 @@ function createWindow() {
     minWidth: 480,
     minHeight: 400,
     title: "Pi Agent Web",
+    frame: false,
+    backgroundColor: "#1a1a1a",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -91,12 +92,39 @@ function createWindow() {
     }
   });
 
+  const sendMaximizedState = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("window:maximized-changed", mainWindow.isMaximized());
+    }
+  };
+  mainWindow.on("maximize", sendMaximizedState);
+  mainWindow.on("unmaximize", sendMaximizedState);
+
   mainWindow.loadURL(URL);
 
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
 }
+
+ipcMain.on("window:minimize", (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.minimize();
+});
+
+ipcMain.on("window:toggle-maximize", (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) return;
+  if (window.isMaximized()) window.unmaximize();
+  else window.maximize();
+});
+
+ipcMain.on("window:close", (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.close();
+});
+
+ipcMain.handle("window:is-maximized", (event) => {
+  return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false;
+});
 
 async function bootstrap() {
   try {
