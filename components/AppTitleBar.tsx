@@ -51,7 +51,7 @@ interface AppTitleBarProps {
   rightPanelOpen: boolean;
   onToggleFilePanel: () => void;
   onOpenSettings: () => void;
-  workspaceTitle: string | null;
+  sessionTitle: string | null;
   onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
 }
 
@@ -80,7 +80,7 @@ export function AppTitleBar({
   rightPanelOpen,
   onToggleFilePanel,
   onOpenSettings,
-  workspaceTitle,
+  sessionTitle,
   onWorkspaceControlsHostChange,
 }: AppTitleBarProps) {
   const { isElectron, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
@@ -231,7 +231,7 @@ export function AppTitleBar({
             userSelect: "none",
           }}
         >
-          {workspaceTitle && (
+          {sessionTitle && (
             <span
               style={{
                 fontSize: 12,
@@ -242,7 +242,7 @@ export function AppTitleBar({
                 textOverflow: "ellipsis",
               }}
             >
-              {workspaceTitle}
+              {sessionTitle}
             </span>
           )}
         </div>

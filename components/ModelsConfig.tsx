@@ -10,7 +10,7 @@ import {
   PlusIcon,
 } from "@phosphor-icons/react";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useLanguage, type TranslationKey } from "@/hooks/useLanguage";
 // Color icons (have their own fill colors — no background needed)
 import AnthropicIcon from "@lobehub/icons/es/Anthropic/components/Mono";
 import OpenAIIcon from "@lobehub/icons/es/OpenAI/components/Mono";
@@ -160,190 +160,15 @@ type Selection =
 
 const API_OPTIONS = ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"] as const;
 
-const modelTranslations = {
-  en: {
-    hideApiKey: "Hide API key",
-    showApiKey: "Show API key",
-    inheritNone: "— inherit / none —",
-    provider: "Provider",
-    delete: "Delete",
-    providerName: "Provider name",
-    rename: "Rename",
-    baseUrl: "Base URL",
-    apiKey: "API Key",
-    apiKeyHelp: "Prefix with ! to run a shell command, or use an env var name",
-    apiKeyPlaceholder: "ENV_VAR_NAME, !shell-command, or literal key",
-    api: "API",
-    default: "Default",
-    disabled: "Disabled",
-    custom: "Custom",
-    modelSection: "Model",
-    testingModelConnection: "Testing model connection...",
-    connected: "Connected",
-    failed: "Failed",
-    testModelConnection: "Test model connection",
-    testing: "Testing…",
-    test: "Test",
-    ok: "OK",
-    remove: "Remove",
-    idRequired: "ID *",
-    name: "Name",
-    displayName: "Display name",
-    apiOverride: "API override",
-    reasoningThinking: "Reasoning / thinking",
-    imageInput: "Image input",
-    deepSeekThinkingCompat: "DeepSeek thinking compat",
-    thinkingLevelMap: "Thinking level map",
-    clearAll: "clear all",
-    contextWindow: "Context window (tokens)",
-    maxOutputTokens: "Max output tokens",
-    costPerMillionTokens: "Cost (per million tokens)",
-    subscription: "Subscription",
-    notConnected: "not connected",
-    alreadyConnected: "Already connected. You can re-login or disconnect.",
-    connectAccount: "Connect your {provider} account.",
-    openingBrowser: "Opening browser…",
-    completeSignIn: "Complete sign-in in the browser, then copy the redirect URL from the address bar and paste it below.",
-    browserDidNotOpen: "If the browser window did not open,",
-    openLoginPage: "click here to open the login page",
-    enterValue: "Enter value…",
-    openVerificationPage: "Open the verification page and enter this code:",
-    expiresInMinutes: "Expires in {count} minutes.",
-    connectedSuccessfully: "Connected successfully.",
-    reLogin: "Re-login",
-    login: "Login",
-    disconnect: "Disconnect",
-    connectionLost: "Connection lost",
-    verifying: "Verifying…",
-    continuing: "Continuing…",
-    serverError: "Server error {status}",
-    networkError: "Network error",
-    configured: "configured",
-    notConfigured: "not configured",
-    apiKeyStored: "API key is stored. Enter a new key below to replace it, or disconnect to remove it.",
-    enableModels: "Enter your {provider} API key to enable {count} {models}.",
-    model: "model",
-    models: "models",
-    enterNewKey: "Enter new key to replace…",
-    saving: "Saving…",
-    saved: "Saved",
-    removing: "Removing…",
-    searchProviders: "Search providers…",
-    noProvidersMatch: "No providers match",
-    customProvider: "Custom",
-    compatibleProvider: "OpenAI / Anthropic compatible",
-    customEndpointFormat: "Custom endpoint format",
-    subscriptions: "Subscriptions",
-    modelCount: "{count} models",
-    modelsTitle: "Models",
-    loading: "Loading…",
-    newModel: "new model",
-    addModel: "+ model",
-    addProvider: "+ Add provider",
-    selectProviderOrModel: "Select a provider or model",
-    closeModels: "Close models",
-    cancel: "Cancel",
-    submit: "Submit",
-    save: "Save",
-  },
-  "zh-CN": {
-    hideApiKey: "隐藏 API 密钥",
-    showApiKey: "显示 API 密钥",
-    inheritNone: "— 继承 / 无 —",
-    provider: "提供商",
-    delete: "删除",
-    providerName: "提供商名称",
-    rename: "重命名",
-    baseUrl: "基础 URL",
-    apiKey: "API 密钥",
-    apiKeyHelp: "使用 ! 前缀运行 shell 命令，或使用环境变量名称",
-    apiKeyPlaceholder: "环境变量名称、!shell 命令或原始密钥",
-    api: "API",
-    default: "默认",
-    disabled: "已禁用",
-    custom: "自定义",
-    modelSection: "模型",
-    testingModelConnection: "正在测试模型连接...",
-    connected: "已连接",
-    failed: "失败",
-    testModelConnection: "测试模型连接",
-    testing: "测试中…",
-    test: "测试",
-    ok: "正常",
-    remove: "移除",
-    idRequired: "ID *",
-    name: "名称",
-    displayName: "显示名称",
-    apiOverride: "覆盖 API",
-    reasoningThinking: "推理 / 思考",
-    imageInput: "图片输入",
-    deepSeekThinkingCompat: "DeepSeek 思考兼容模式",
-    thinkingLevelMap: "思考级别映射",
-    clearAll: "清除全部",
-    contextWindow: "上下文窗口（令牌）",
-    maxOutputTokens: "最大输出令牌数",
-    costPerMillionTokens: "费用（每百万令牌）",
-    subscription: "订阅",
-    notConnected: "未连接",
-    alreadyConnected: "已连接。你可以重新登录或断开连接。",
-    connectAccount: "连接你的 {provider} 账户。",
-    openingBrowser: "正在打开浏览器…",
-    completeSignIn: "请在浏览器中完成登录，然后复制地址栏中的重定向 URL 并粘贴到下方。",
-    browserDidNotOpen: "如果浏览器窗口未打开，",
-    openLoginPage: "点击此处打开登录页面",
-    enterValue: "输入值…",
-    openVerificationPage: "打开验证页面并输入此代码：",
-    expiresInMinutes: "将在 {count} 分钟后过期。",
-    connectedSuccessfully: "连接成功。",
-    reLogin: "重新登录",
-    login: "登录",
-    disconnect: "断开连接",
-    connectionLost: "连接已断开",
-    verifying: "验证中…",
-    continuing: "正在继续…",
-    serverError: "服务器错误 {status}",
-    networkError: "网络错误",
-    configured: "已配置",
-    notConfigured: "未配置",
-    apiKeyStored: "API 密钥已保存。请在下方输入新密钥以替换它，或断开连接以移除它。",
-    enableModels: "输入你的 {provider} API 密钥以启用 {count} 个{models}。",
-    model: "模型",
-    models: "模型",
-    enterNewKey: "输入新密钥以替换…",
-    saving: "保存中…",
-    saved: "已保存",
-    removing: "移除中…",
-    searchProviders: "搜索提供商…",
-    noProvidersMatch: "没有匹配的提供商",
-    customProvider: "自定义",
-    compatibleProvider: "兼容 OpenAI / Anthropic",
-    customEndpointFormat: "自定义端点格式",
-    subscriptions: "订阅",
-    modelCount: "{count} 个模型",
-    modelsTitle: "模型",
-    loading: "加载中…",
-    newModel: "新模型",
-    addModel: "+ 添加模型",
-    addProvider: "+ 添加提供商",
-    selectProviderOrModel: "选择提供商或模型",
-    closeModels: "关闭模型设置",
-    cancel: "取消",
-    submit: "提交",
-    save: "保存",
-  },
-} as const;
-
-type ModelTranslationKey = keyof typeof modelTranslations.en;
-
 function useModelTranslation() {
-  const { language } = useLanguage();
-  return useCallback((key: ModelTranslationKey, values?: Record<string, string | number>) => {
-    let translation = modelTranslations[language][key] as string;
+  const { t } = useLanguage();
+  return useCallback((key: TranslationKey, values?: Record<string, string | number>) => {
+    let translation: string = t(key);
     for (const [name, value] of Object.entries(values ?? {})) {
       translation = translation.replaceAll(`{${name}}`, String(value));
     }
     return translation;
-  }, [language]);
+  }, [t]);
 }
 
 // ── Form field helpers ────────────────────────────────────────────────────────
@@ -415,8 +240,8 @@ function SecretTextInput({
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? t("hideApiKey") : t("showApiKey")}
-        title={visible ? t("hideApiKey") : t("showApiKey")}
+        aria-label={visible ? t("modelsHideApiKey") : t("modelsShowApiKey")}
+        title={visible ? t("modelsHideApiKey") : t("modelsShowApiKey")}
         style={{
           position: "absolute",
           right: 5,
@@ -449,7 +274,7 @@ function Select({ value, onChange, options, required }: { value: string; onChang
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}
       style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)" }}>
-      {!required && <option value="">{t("inheritNone")}</option>}
+      {!required && <option value="">{t("modelsInheritNone")}</option>}
       {options.map((o) => <option key={o} value={o}>{o}</option>)}
     </select>
   );
@@ -488,14 +313,14 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>{t("provider")}</SectionTitle>
+        <SectionTitle>{t("modelsProvider")}</SectionTitle>
         <button onClick={onDelete}
           style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11 }}>
           {t("delete")}
         </button>
       </div>
 
-      <Field label={t("providerName")}>
+      <Field label={t("modelsProviderName")}>
         <TextInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
         {editingName !== name && editingName.trim() && (
           <button onClick={() => onRename(editingName.trim())}
@@ -505,20 +330,20 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
         )}
       </Field>
 
-      <Field label={t("baseUrl")}>
+      <Field label={t("modelsBaseUrl")}>
         <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
           placeholder="https://api.example.com/v1" mono />
       </Field>
 
-      <Field label={t("apiKey")}>
+      <Field label={t("modelsApiKey")}>
         <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
-          placeholder={t("apiKeyPlaceholder")} mono />
+          placeholder={t("modelsApiKeyPlaceholder")} mono />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          {t("apiKeyHelp")}
+          {t("modelsApiKeyHelp")}
         </span>
       </Field>
 
-      <Field label={t("api")}>
+      <Field label={t("modelsApi")}>
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
       </Field>
     </div>
@@ -623,13 +448,13 @@ function ThinkingLevelMapEditor({
                 onClick={() => setLevel(level, "omit")}
                 style={{ ...btnBase, ...(state === "omit" ? btnActive : {}) }}
               >
-                {t("default")}
+                {t("modelsDefault")}
               </button>
               <button
                 onClick={() => setLevel(level, null)}
                 style={{ ...btnBase, borderLeft: "1px solid var(--border)", ...(state === "null" ? btnActiveDisabled : {}) }}
               >
-                {t("disabled")}
+                {t("modelsDisabled")}
               </button>
             </div>
 
@@ -639,7 +464,7 @@ function ThinkingLevelMapEditor({
                 onClick={() => setLevel(level, strVal || level)}
                 style={{ ...btnBase, ...(state === "string" ? btnActive : {}), borderRight: "1px solid var(--border)", flexShrink: 0 }}
               >
-                {t("custom")}
+                {t("modelsCustom")}
               </button>
               <input
                 value={strVal}
@@ -712,15 +537,15 @@ function ModelDetail({
   };
   const testSummary = (() => {
     if (testState.phase === "idle") return null;
-    if (testState.phase === "testing") return t("testingModelConnection");
+    if (testState.phase === "testing") return t("modelsTestingConnection");
     const meta = [
       testState.latencyMs !== undefined ? `${testState.latencyMs}ms` : null,
       testState.status !== undefined ? `HTTP ${testState.status}` : null,
     ].filter(Boolean);
     if (testState.phase === "success") {
-      return [t("connected"), ...meta, testState.responseText || null].filter(Boolean).join(" · ");
+      return [t("modelsConnected"), ...meta, testState.responseText || null].filter(Boolean).join(" · ");
     }
-    return [t("failed"), ...meta, testState.message].filter(Boolean).join(" · ");
+    return [t("modelsFailed"), ...meta, testState.message].filter(Boolean).join(" · ");
   })();
 
   useEffect(() => {
@@ -766,7 +591,7 @@ function ModelDetail({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>{t("modelSection")}</SectionTitle>
+        <SectionTitle>{t("modelsModelSection")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {testSummary && (
             <span
@@ -794,7 +619,7 @@ function ModelDetail({
           <button
             onClick={handleTest}
             disabled={!model.id.trim() || testState.phase === "testing"}
-            title={t("testModelConnection")}
+            title={t("modelsTestConnection")}
             style={{
               height: 24,
               padding: "0 8px",
@@ -812,46 +637,46 @@ function ModelDetail({
             }}
           >
             {testState.phase === "success" && <CheckIcon size={11} />}
-            {testState.phase === "testing" ? t("testing") : testState.phase === "success" ? t("ok") : t("test")}
+            {testState.phase === "testing" ? t("modelsTesting") : testState.phase === "success" ? t("modelsOk") : t("modelsTest")}
           </button>
           <button onClick={onDelete}
             style={{ height: 24, padding: "0 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11, boxSizing: "border-box" }}>
-            {t("remove")}
+            {t("modelsRemove")}
           </button>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label={t("idRequired")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label={t("name")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("displayName")} /></Field>
+        <Field label={t("modelsIdRequired")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
+        <Field label={t("modelsName")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("modelsDisplayName")} /></Field>
       </div>
 
-      <Field label={t("apiOverride")}>
+      <Field label={t("modelsApiOverride")}>
         <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
       </Field>
 
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-        <Check label={t("reasoningThinking")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
-        <Check label={t("imageInput")} checked={model.input?.includes("image") ?? false}
+        <Check label={t("modelsReasoningThinking")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
+        <Check label={t("modelsImageInput")} checked={model.input?.includes("image") ?? false}
           onChange={(v) => set("input", v ? ["text", "image"] : undefined)} />
       </div>
 
       {model.reasoning && (
         <>
           <Check
-            label={t("deepSeekThinkingCompat")}
+            label={t("modelsDeepSeekCompat")}
             checked={hasDeepseekCompat(model)}
             onChange={(v) => onChange(setDeepseekCompat(model, v))}
           />
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <SectionTitle>{t("thinkingLevelMap")}</SectionTitle>
+              <SectionTitle>{t("modelsThinkingLevelMap")}</SectionTitle>
               {model.thinkingLevelMap && (
                 <button
                   onClick={() => set("thinkingLevelMap", undefined)}
                   style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", cursor: "pointer" }}
                 >
-                  {t("clearAll")}
+                  {t("modelsClearAll")}
                 </button>
               )}
             </div>
@@ -864,18 +689,18 @@ function ModelDetail({
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label={t("contextWindow")}>
+        <Field label={t("modelsContextWindow")}>
           <NumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""}
             onChange={(v) => set("contextWindow", v ? parseInt(v) : undefined)} placeholder="128000" />
         </Field>
-        <Field label={t("maxOutputTokens")}>
+        <Field label={t("modelsMaxOutputTokens")}>
           <NumInput value={model.maxTokens !== undefined ? String(model.maxTokens) : ""}
             onChange={(v) => set("maxTokens", v ? parseInt(v) : undefined)} placeholder="16384" />
         </Field>
       </div>
 
       <div>
-        <SectionTitle>{t("costPerMillionTokens")}</SectionTitle>
+        <SectionTitle>{t("modelsCostPerMillionTokens")}</SectionTitle>
         <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
           {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
             <Field key={k} label={k}>
@@ -962,7 +787,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
     };
     es.onerror = () => {
       es.close();
-      setLoginState((prev) => prev.phase === "success" ? prev : { phase: "error", message: t("connectionLost") });
+      setLoginState((prev) => prev.phase === "success" ? prev : { phase: "error", message: t("modelsConnectionLost") });
     };
   }, [provider.id, onRefresh, t]);
 
@@ -974,7 +799,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
 
   const submitCode = useCallback(async (token: string, code: string) => {
     if (!code.trim()) return;
-    setLoginState({ phase: "progress", message: t("verifying") });
+    setLoginState({ phase: "progress", message: t("modelsVerifying") });
     try {
       const res = await fetch(`/api/auth/login/${encodeURIComponent(provider.id)}`, {
         method: "POST",
@@ -983,18 +808,18 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { error?: string };
-        setLoginState({ phase: "error", message: d.error ?? t("serverError", { status: res.status }) });
+        setLoginState({ phase: "error", message: d.error ?? t("modelsServerError", { status: res.status }) });
         return;
       }
       setInputValue("");
       // Success path: SSE stream will emit "success" and update state
     } catch (e) {
-      setLoginState({ phase: "error", message: e instanceof Error ? e.message : t("networkError") });
+      setLoginState({ phase: "error", message: e instanceof Error ? e.message : t("modelsNetworkError") });
     }
   }, [provider.id, t]);
 
   const submitSelection = useCallback(async (token: string, value: string) => {
-    setLoginState({ phase: "progress", message: t("continuing") });
+    setLoginState({ phase: "progress", message: t("modelsContinuing") });
     try {
       const res = await fetch(`/api/auth/login/${encodeURIComponent(provider.id)}`, {
         method: "POST",
@@ -1003,10 +828,10 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { error?: string };
-        setLoginState({ phase: "error", message: d.error ?? t("serverError", { status: res.status }) });
+        setLoginState({ phase: "error", message: d.error ?? t("modelsServerError", { status: res.status }) });
       }
     } catch (e) {
-      setLoginState({ phase: "error", message: e instanceof Error ? e.message : t("networkError") });
+      setLoginState({ phase: "error", message: e instanceof Error ? e.message : t("modelsNetworkError") });
     }
   }, [provider.id, t]);
 
@@ -1017,11 +842,11 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>{t("subscription")}</SectionTitle>
+        <SectionTitle>{t("modelsSubscription")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "#4ade80" : "var(--border)", display: "inline-block" }} />
           <span style={{ fontSize: 11, color: provider.loggedIn ? "#4ade80" : "var(--text-dim)" }}>
-            {provider.loggedIn ? t("connected") : t("notConnected")}
+            {provider.loggedIn ? t("modelsConnected") : t("modelsNotConnected")}
           </span>
         </div>
       </div>
@@ -1030,11 +855,11 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       <div style={{ minHeight: 48 }}>
         {loginState.phase === "idle" && (
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-            {provider.loggedIn ? t("alreadyConnected") : t("connectAccount", { provider: provider.name })}
+            {provider.loggedIn ? t("modelsAlreadyConnected") : t("modelsConnectAccount", { provider: provider.name })}
           </p>
         )}
         {loginState.phase === "connecting" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("openingBrowser")}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("modelsOpeningBrowser")}</p>
         )}
         {loginState.phase === "select" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1058,14 +883,14 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
               {loginState.phase === "auth"
-                ? t("completeSignIn")
+                ? t("modelsCompleteSignIn")
                 : loginState.message}
             </p>
             {loginState.phase === "auth" && (
               <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-                {t("browserDidNotOpen")}{" "}
+                {t("modelsBrowserDidNotOpen")}{" "}
                 <a href={loginState.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
-                  {t("openLoginPage")}
+                  {t("modelsOpenLoginPage")}
                 </a>
                 .
               </p>
@@ -1076,7 +901,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") submitCode(loginState.token, inputValue); }}
-                placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? t("enterValue"))}
+                placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? t("modelsEnterValue"))}
                 style={{ flex: 1, padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 12, outline: "none", fontFamily: "var(--font-mono)", boxSizing: "border-box" }}
               />
               <button
@@ -1092,7 +917,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
         {loginState.phase === "device_code" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              {t("openVerificationPage")}
+              {t("modelsOpenVerificationPage")}
             </p>
             <div style={{ padding: "8px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
               {loginState.userCode}
@@ -1101,7 +926,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
               <a href={loginState.verificationUri} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
                 {loginState.verificationUri}
               </a>
-              {loginState.expiresInSeconds ? ` ${t("expiresInMinutes", { count: Math.ceil(loginState.expiresInSeconds / 60) })}` : ""}
+              {loginState.expiresInSeconds ? ` ${t("modelsExpiresInMinutes", { count: Math.ceil(loginState.expiresInSeconds / 60) })}` : ""}
             </p>
           </div>
         )}
@@ -1109,7 +934,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{loginState.message}</p>
         )}
         {loginState.phase === "success" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#4ade80" }}>{t("connectedSuccessfully")}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#4ade80" }}>{t("modelsConnectedSuccessfully")}</p>
         )}
         {loginState.phase === "error" && (
           <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{loginState.message}</p>
@@ -1131,14 +956,14 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
               onClick={handleLogin}
               style={{ padding: "5px 14px", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
             >
-              {provider.loggedIn ? t("reLogin") : t("login")}
+              {provider.loggedIn ? t("modelsReLogin") : t("modelsLogin")}
             </button>
             {provider.loggedIn && (
               <button
                 onClick={handleLogout}
                 style={{ padding: "5px 12px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, color: "#ef4444", cursor: "pointer", fontSize: 12 }}
               >
-                {t("disconnect")}
+                {t("modelsDisconnect")}
               </button>
             )}
           </>
@@ -1210,32 +1035,32 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>{t("apiKey")}</SectionTitle>
+        <SectionTitle>{t("modelsApiKey")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "#4ade80" : "var(--border)", display: "inline-block" }} />
           <span style={{ fontSize: 11, color: provider.configured ? "#4ade80" : "var(--text-dim)" }}>
-            {provider.configured ? t("configured") : t("notConfigured")}
+            {provider.configured ? t("modelsConfigured") : t("modelsNotConfigured")}
           </span>
         </div>
       </div>
 
       <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
         {provider.configured
-          ? t("apiKeyStored")
-          : t("enableModels", {
+          ? t("modelsApiKeyStored")
+          : t("modelsEnableModels", {
             provider: provider.displayName,
             count: provider.modelCount,
-            models: provider.modelCount === 1 ? t("model") : t("models"),
+            models: provider.modelCount === 1 ? t("modelsSingular") : t("modelsPlural"),
           })}
       </p>
 
-      <Field label={t("apiKey")}>
+      <Field label={t("modelsApiKey")}>
         <div style={{ display: "flex", gap: 6 }}>
           <SecretTextInput
             value={apiKey}
             onChange={setApiKey}
             onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
-            placeholder={provider.configured ? t("enterNewKey") : "sk-…"}
+            placeholder={provider.configured ? t("modelsEnterNewKey") : "sk-…"}
             style={{ flex: 1 }}
             autoComplete="off"
             spellCheck={false}
@@ -1255,7 +1080,7 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
             }}
           >
             {savedOk && <CheckIcon size={12} />}
-            {savedOk ? t("saved") : saving ? t("saving") : t("save")}
+            {savedOk ? t("modelsSaved") : saving ? t("modelsSaving") : t("modelsSave")}
           </button>
         </div>
       </Field>
@@ -1273,7 +1098,7 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
             cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
           }}
         >
-          {removing ? t("removing") : t("disconnect")}
+          {removing ? t("modelsRemoving") : t("modelsDisconnect")}
         </button>
       )}
     </div>
@@ -1379,7 +1204,7 @@ function AddProviderPicker({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-            placeholder={t("searchProviders")}
+            placeholder={t("modelsSearchProviders")}
             style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
           />
         </div>
@@ -1387,11 +1212,11 @@ function AddProviderPicker({
         {/* Card grid */}
         <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
           {totalCount === 0 ? (
-            <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>{t("noProvidersMatch")}</div>
+            <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>{t("modelsNoProvidersMatch")}</div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: 8 }}>
               {showCustom && (
-                <div style={{ gridColumn: "1 / -1", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("customProvider")}</div>
+                <div style={{ gridColumn: "1 / -1", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("modelsCustom")}</div>
               )}
               {showCustom && (
                 <button
@@ -1401,8 +1226,8 @@ function AddProviderPicker({
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("compatibleProvider")}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("customEndpointFormat")}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("modelsCompatibleProvider")}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("modelsCustomEndpointFormat")}</div>
                   </div>
                   <span style={{ width: 26, height: 26, borderRadius: 5, background: "var(--bg-hover)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <PlusIcon size={13} style={{ color: "var(--text-dim)" }} />
@@ -1411,7 +1236,7 @@ function AddProviderPicker({
               )}
 
               {availableOAuth.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", paddingTop: showCustom ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("subscriptions")}</div>
+                <div style={{ gridColumn: "1 / -1", paddingTop: showCustom ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("modelsSubscriptions")}</div>
               )}
               {availableOAuth.map((p) => (
                 <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
@@ -1428,7 +1253,7 @@ function AddProviderPicker({
               ))}
 
               {availableApiKey.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("apiKey")}</div>
+                <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("modelsApiKey")}</div>
               )}
               {availableApiKey.map((p) => (
                 <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
@@ -1438,7 +1263,7 @@ function AddProviderPicker({
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("modelCount", { count: p.modelCount })}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("modelsCount", { count: p.modelCount })}</div>
                   </div>
                   <ProviderIcon id={p.id} size={28} />
                 </button>
@@ -1662,10 +1487,10 @@ export function ModelsConfig({
         {!embedded && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("modelsTitle")}</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("models")}</span>
               <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>~/.pi/agent/models.json</code>
             </div>
-            <button onClick={onCloseAction} aria-label={t("closeModels")} title={t("closeModels")} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+            <button onClick={onCloseAction} aria-label={t("modelsClose")} title={t("modelsClose")} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
           </div>
         )}
 
@@ -1722,7 +1547,7 @@ export function ModelsConfig({
 
               {/* Custom providers */}
               {loading ? (
-                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("loading")}</div>
+                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("modelsLoading")}</div>
               ) : providers.map(([pName, pData]) => {
                 const isProviderSelected = selection?.type === "provider" && selection.name === pName;
                 const models = pData.models ?? [];
@@ -1753,7 +1578,7 @@ export function ModelsConfig({
                           onMouseLeave={(e) => { if (!isModelSelected) e.currentTarget.style.background = "none"; }}
                         >
                           <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: m.id ? "var(--text-muted)" : "var(--text-dim)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {m.id || t("newModel")}
+                            {m.id || t("modelsNewModel")}
                           </span>
                           {m.reasoning && (
                             <span style={{ fontSize: 9, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
@@ -1769,7 +1594,7 @@ export function ModelsConfig({
                       onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
                     >
-                      <span style={{ fontSize: 11 }}>{t("addModel")}</span>
+                      <span style={{ fontSize: 11 }}>{t("modelsAddModel")}</span>
                     </div>
                   </div>
                 );
@@ -1786,7 +1611,7 @@ export function ModelsConfig({
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
               >
-                {t("addProvider")}
+                {t("modelsAddProvider")}
               </button>
             </div>
           </div>
@@ -1795,7 +1620,7 @@ export function ModelsConfig({
           <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {loading ? null : detailContent ?? (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
-                {t("selectProviderOrModel")}
+                {t("modelsSelectProviderOrModel")}
               </div>
             )}
           </div>
@@ -1827,7 +1652,7 @@ export function ModelsConfig({
                 style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s ease forwards", flexShrink: 0 }}
               />
             )}
-            <span>{savedOk ? t("saved") : saving ? t("saving") : t("save")}</span>
+            <span>{savedOk ? t("modelsSaved") : saving ? t("modelsSaving") : t("modelsSave")}</span>
           </button>
         </div>
       </div>

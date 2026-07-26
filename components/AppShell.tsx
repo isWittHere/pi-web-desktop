@@ -319,7 +319,9 @@ export function AppShell() {
     });
   }, [fileTabs]);
 
-  const workspaceTitle = activeCwd ? (getFileName(activeCwd) || activeCwd) : null;
+  const sessionTitle = selectedSession
+    ? selectedSession.name || selectedSession.firstMessage.slice(0, 50) || selectedSession.id.slice(0, 12)
+    : null;
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
@@ -464,7 +466,7 @@ export function AppShell() {
         rightPanelOpen={rightPanelOpen}
         onToggleFilePanel={() => setRightPanelOpen((v) => !v)}
         onOpenSettings={() => openSettings("models")}
-        workspaceTitle={workspaceTitle}
+        sessionTitle={sessionTitle}
         onWorkspaceControlsHostChange={setWorkspaceControlsHost}
       />
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
