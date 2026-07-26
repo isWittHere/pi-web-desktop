@@ -97,11 +97,11 @@ export function AppTitleBar({
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
-            background: "none", border: "none",
-            color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+            background: sidebarOpen ? "var(--bg-selected)" : "none", border: "none",
+            color: sidebarOpen ? "var(--text)" : "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = sidebarOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = sidebarOpen ? "var(--text)" : "var(--text-muted)"; }}
         >
           {sidebarOpen ? (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -114,51 +114,18 @@ export function AppTitleBar({
           )}
         </button>
 
-        {/* Theme toggle */}
-        <button
-          className="app-no-drag"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-          }}
-          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          aria-pressed={isDark}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 36, height: 36, padding: 0,
-            background: "none", border: "none",
-            color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-        >
-          {isDark ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="5" />
-              <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-              <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
-          )}
-        </button>
-
         <div
           className="app-no-drag"
           ref={onWorkspaceControlsHostChange}
           style={{
-            flex: "0 1 590px",
-            minWidth: 180,
-            maxWidth: 640,
+            flex: "0 1 auto",
+            minWidth: 0,
+            maxWidth: "min(52vw, 560px)",
             height: "100%",
             display: "flex",
             alignItems: "center",
-            padding: "0 8px 0 2px",
+            padding: "0 8px 0 0",
+            overflow: "visible",
           }}
         />
 
@@ -184,13 +151,15 @@ export function AppTitleBar({
                 cursor: selectedSession ? "pointer" : "not-allowed",
                 opacity: selectedSession ? 1 : 0.45,
                 flexShrink: 0,
-                transition: "color 0.12s, opacity 0.1s",
+                transition: "background 0.12s, color 0.12s, opacity 0.1s",
               }}
               onMouseEnter={(e) => {
                 if (!selectedSession) return;
+                e.currentTarget.style.background = "var(--bg-hover)";
                 e.currentTarget.style.color = "var(--text)";
               }}
               onMouseLeave={(e) => {
+                e.currentTarget.style.background = "none";
                 e.currentTarget.style.color = selectedSession ? "var(--text-muted)" : "var(--text-dim)";
               }}
             >
@@ -236,16 +205,15 @@ export function AppTitleBar({
                 width: 36, height: 36, padding: 0,
                 background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
                 border: "none",
-                borderTop: activeTopPanel === "system" ? "2px solid var(--accent)" : "2px solid transparent",
                 cursor: "pointer",
                 color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
                 flexShrink: 0,
-                transition: "color 0.12s, background 0.1s",
+                transition: "background 0.12s, color 0.12s",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)"; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = activeTopPanel === "system" ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)"; }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: systemPrompt ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
                 <line x1="8" y1="13" x2="16" y2="13" />
@@ -272,7 +240,7 @@ export function AppTitleBar({
           {workspaceTitle && (
             <span
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 500,
                 color: "var(--text-muted)",
                 whiteSpace: "nowrap",
@@ -284,6 +252,40 @@ export function AppTitleBar({
             </span>
           )}
         </div>
+
+        {/* Theme toggle */}
+        <button
+          className="app-no-drag"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+          }}
+          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          aria-pressed={isDark}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 36, height: 36, padding: 0,
+            background: "none", border: "none",
+            color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+        >
+          {isDark ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+          )}
+        </button>
 
         {/* Session stats — right-aligned */}
         {showChat && (sessionStats || contextUsage) && (() => {
@@ -325,23 +327,21 @@ export function AppTitleBar({
               aria-pressed={activeTopPanel === "session"}
               style={{
                 marginLeft: "auto",
-                display: "flex", alignItems: "center", gap: 10,
-                paddingLeft: 12,
-                paddingRight: 12,
-                height: "100%",
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "0 10px",
+                height: 36,
                 background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
                 border: "none",
-                borderTop: activeTopPanel === "session" ? "2px solid var(--accent)" : "2px solid transparent",
-                fontSize: 11, color: "var(--text-muted)",
+                fontSize: 12, color: "var(--text-muted)",
                 whiteSpace: "nowrap", cursor: "pointer",
                 fontVariantNumeric: "tabular-nums",
-                transition: "color 0.1s, background 0.1s",
+                transition: "background 0.12s, color 0.12s",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = activeTopPanel === "session" ? "var(--text)" : "var(--text-muted)"; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = activeTopPanel === "session" ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = activeTopPanel === "session" ? "var(--text)" : "var(--text-muted)"; }}
             >
               {isMobile && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
                 </svg>
               )}
@@ -372,7 +372,7 @@ export function AppTitleBar({
                 </span>
               )}
               {!isMobile && costStr && (
-                <span style={{ display: "flex", alignItems: "center", color: "var(--text)", fontWeight: 500 }}>
+                <span style={{ display: "flex", alignItems: "center" }}>
                   {costStr}
                 </span>
               )}
@@ -397,13 +397,12 @@ export function AppTitleBar({
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
-            background: "none", border: "none",
-            borderTop: rightPanelOpen ? "2px solid var(--accent)" : "2px solid transparent",
+            background: rightPanelOpen ? "var(--bg-selected)" : "none", border: "none",
             color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-            cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+            cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = rightPanelOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
@@ -428,7 +427,7 @@ export function AppTitleBar({
               onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "none"; }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <line x1="5" y1="13" x2="19" y2="13" />
               </svg>
             </button>
@@ -448,12 +447,12 @@ export function AppTitleBar({
               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "none"; }}
             >
               {isMaximized ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="5" y="7" width="10" height="10" rx="1" />
                   <path d="M9 5h7a2 2 0 0 1 2 2v7" />
                 </svg>
               ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="4" y="4" width="16" height="16" rx="1" />
                 </svg>
               )}
@@ -473,7 +472,7 @@ export function AppTitleBar({
               onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "#e81123"; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "none"; }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>

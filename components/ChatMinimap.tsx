@@ -8,9 +8,24 @@ interface Props {
   streamingMessage: Partial<AgentMessage> | null;
   scrollContainer: RefObject<HTMLDivElement | null>;
   messageRefs: RefObject<(HTMLDivElement | null)[]>;
+  onWidthChange?: (width: number) => void;
 }
 
 const MINIMAP_WIDTH = 18;
+const LANE_WIDTH = 5;
+const LANE_GAP = 1;
+const LANE_PADDING = 2;
+const MIN_MARKER_HEIGHT = 3;
+const MARKER_GAP = 1;
+
+interface DisplayNode extends NodeInfo {
+  displayTopPx: number;
+  lane: number;
+}
+
+function getMinimapWidth(laneCount: number): number {
+  return Math.max(MINIMAP_WIDTH, LANE_PADDING * 2 + laneCount * LANE_WIDTH + (laneCount - 1) * LANE_GAP);
+}
 
 function getMessagePreview(msg: AgentMessage | Partial<AgentMessage>): string {
   if (msg.role === "user") {
@@ -67,13 +82,14 @@ interface NodeInfo {
   index: number;
 }
 
-export function ChatMinimap({ messages, streamingMessage, scrollContainer, messageRefs }: Props) {
+export function ChatMinimap({ messages, streamingMessage, scrollContainer, messageRefs, onWidthChange }: Props) {
   const [scrollRatio, setScrollRatio] = useState(0);
   const [viewportRatio, setViewportRatio] = useState(1);
   const [visible, setVisible] = useState(false);
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [minimapHovered, setMinimapHovered] = useState(false);
   const [mouseYRatio, setMouseYRatio] = useState<number | null>(null);
+  const [minimapHeightPx, setMinimapHeightPx] = useState(0);
   const draggingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -217,46 +233,68 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
 
 
 
-  // Compute collision-free tooltip positions for all nodes
-  const TOOLTIP_HEIGHT = 22;
-  const TOOLTIP_GAP = 2;
-  const minimapHeightPx = containerRef.current?.clientHeight ?? 600;
+  // Keep collision calculations in screen pixels. Each message remains an
+  // independent marker; dense markers move to another lane rather than merge.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const updateHeight = () => setMinimapHeightPx(el.clientHeight);
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(el);
+    updateHeight();
+    return () => observer.disconnect();
+  }, []);
 
-  const tooltipPositions = useMemo(() => {
-    if (!minimapHovered || nodes.length === 0) return [];
-    // Initial positions: centered on the dot
-    const positions = nodes.map((node) =>
-      Math.round(node.topRatio * minimapHeightPx - TOOLTIP_HEIGHT / 2)
-    );
-    // Iterative push-apart to resolve overlaps (top-to-bottom pass, then bottom-to-top)
-    for (let pass = 0; pass < 10; pass++) {
-      for (let i = 1; i < positions.length; i++) {
-        const minTop = positions[i - 1] + TOOLTIP_HEIGHT + TOOLTIP_GAP;
-        if (positions[i] < minTop) positions[i] = minTop;
+  const displayNodes = useMemo(() => {
+    if (minimapHeightPx <= 0) return [];
+
+    const laneEnds: number[] = [];
+    return nodes.map((node) => {
+      const topPx = node.topRatio * minimapHeightPx;
+      const heightPx = Math.max(MIN_MARKER_HEIGHT, Math.min(46, node.heightRatio * minimapHeightPx));
+      const startPx = Math.max(0, topPx - heightPx / 2);
+      const endPx = Math.min(minimapHeightPx, topPx + heightPx / 2);
+      let lane = laneEnds.findIndex((lastEnd) => startPx >= lastEnd + MARKER_GAP);
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(endPx);
+      } else {
+        laneEnds[lane] = endPx;
       }
-      for (let i = positions.length - 2; i >= 0; i--) {
-        const maxTop = positions[i + 1] - TOOLTIP_HEIGHT - TOOLTIP_GAP;
-        if (positions[i] > maxTop) positions[i] = maxTop;
-      }
-    }
-    // Clamp all to minimap bounds
-    for (let i = 0; i < positions.length; i++) {
-      positions[i] = Math.max(0, Math.min(minimapHeightPx - TOOLTIP_HEIGHT, positions[i]));
-    }
-    return positions;
-  }, [minimapHovered, nodes, minimapHeightPx]);
+      return { ...node, displayTopPx: topPx, lane } satisfies DisplayNode;
+    });
+  }, [nodes, minimapHeightPx]);
+
+  const laneCount = useMemo(
+    () => displayNodes.reduce((count, node) => Math.max(count, node.lane + 1), 1),
+    [displayNodes],
+  );
+  const minimapWidth = getMinimapWidth(laneCount);
+
+  useEffect(() => {
+    onWidthChange?.(visible ? minimapWidth : MINIMAP_WIDTH);
+  }, [minimapWidth, onWidthChange, visible]);
+
+  useEffect(() => () => onWidthChange?.(MINIMAP_WIDTH), [onWidthChange]);
 
   if (!visible) return null;
 
   const viewportBoxTop = scrollRatio * (1 - viewportRatio) * 100;
   const viewportBoxHeight = viewportRatio * 100;
 
-  // Find the node closest to the current mouse position
-  const nearestIndex = mouseYRatio !== null && nodes.length > 0
-    ? nodes.reduce((best, node) => {
-        return Math.abs(node.topRatio - mouseYRatio) < Math.abs(nodes[best].topRatio - mouseYRatio) ? node.index : best;
-      }, 0)
+  // Only one preview is shown: rendering every preview cannot be made
+  // collision-free when a long session has more messages than vertical pixels.
+  const nearestNode = mouseYRatio !== null && displayNodes.length > 0
+    ? displayNodes.reduce((best, node) => (
+        Math.abs(node.displayTopPx / minimapHeightPx - mouseYRatio)
+          < Math.abs(displayNodes[best].displayTopPx / minimapHeightPx - mouseYRatio)
+          ? node.index
+          : best
+      ), 0)
     : null;
+  const hoveredNode = nearestNode === null
+    ? null
+    : displayNodes.find((node) => node.index === nearestNode) ?? null;
 
   return (
     <div
