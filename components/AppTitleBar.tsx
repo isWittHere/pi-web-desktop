@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArrowCounterClockwise,
+  ClockCounterClockwise,
   ArrowDown,
   ArrowUp,
   Check,
@@ -26,6 +26,10 @@ import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
 type SessionCopyField = "file" | "id";
+
+function hasBranches(nodes: SessionTreeNode[]): boolean {
+  return nodes.some((node) => node.children.length > 1 || hasBranches(node.children));
+}
 
 interface AppTitleBarProps {
   topBarRef: React.RefObject<HTMLDivElement | null>;
@@ -86,6 +90,8 @@ export function AppTitleBar({
 }: AppTitleBarProps) {
   const { isElectron, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
   const { t: translate } = useLanguage();
+  const hasSystemPrompt = Boolean(systemPrompt?.trim());
+  const hasBranching = hasBranches(branchTree);
 
   return (
     <>
@@ -147,75 +153,78 @@ export function AppTitleBar({
         {showChat && (
           <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
             {/* Full history */}
-            <button
-              className="app-no-drag"
-              onClick={onViewFullHistory}
-              disabled={!selectedSession}
-              title={selectedSession ? translate("viewFullHistory") : translate("fullHistoryAvailableAfterSave")}
-              aria-label={translate("viewFullHistory")}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 36,
-                height: 36,
-                padding: 0,
-                background: "none",
-                border: "none",
-                color: selectedSession ? "var(--text-muted)" : "var(--text-dim)",
-                cursor: selectedSession ? "pointer" : "not-allowed",
-                opacity: selectedSession ? 1 : 0.45,
-                flexShrink: 0,
-                transition: "background 0.12s, color 0.12s, opacity 0.1s",
-              }}
-              onMouseEnter={(e) => {
-                if (!selectedSession) return;
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = "var(--text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "none";
-                e.currentTarget.style.color = selectedSession ? "var(--text-muted)" : "var(--text-dim)";
-              }}
-            >
-              <ArrowCounterClockwise size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
-            </button>
+            {selectedSession && (
+              <button
+                className="app-no-drag"
+                onClick={onViewFullHistory}
+                title={translate("viewFullHistory")}
+                aria-label={translate("viewFullHistory")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 36,
+                  height: 36,
+                  padding: 0,
+                  background: "none",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = "var(--text)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "none";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }}
+              >
+                <ClockCounterClockwise size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
+              </button>
+            )}
 
             {/* Branch navigator */}
-            <BranchNavigator
-              tree={branchTree}
-              activeLeafId={branchActiveLeafId}
-              onLeafChange={onBranchLeafChange}
-              inline
-              containerRef={topBarRef}
-              open={activeTopPanel === "branches"}
-              onToggle={() => onToggleTopPanel("branches")}
-              hasSession
-            />
+            {hasBranching && (
+              <BranchNavigator
+                tree={branchTree}
+                activeLeafId={branchActiveLeafId}
+                onLeafChange={onBranchLeafChange}
+                inline
+                containerRef={topBarRef}
+                open={activeTopPanel === "branches"}
+                onToggle={() => onToggleTopPanel("branches")}
+                hasSession
+              />
+            )}
 
             {/* System prompt */}
-            <button
-              className="app-no-drag"
-              ref={systemBtnRef}
-              onClick={() => onToggleTopPanel("system")}
-              title={translate("systemPrompt")}
-              aria-label={translate("systemPrompt")}
-              aria-pressed={activeTopPanel === "system"}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 36, height: 36, padding: 0,
-                background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
-                border: "none",
-                cursor: "pointer",
-                color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
-                flexShrink: 0,
-                transition: "background 0.12s, color 0.12s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = activeTopPanel === "system" ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)"; }}
-            >
-              <FileText size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
-            </button>
+            {hasSystemPrompt && (
+              <button
+                className="app-no-drag"
+                ref={systemBtnRef}
+                onClick={() => onToggleTopPanel("system")}
+                title={translate("systemPrompt")}
+                aria-label={translate("systemPrompt")}
+                aria-pressed={activeTopPanel === "system"}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 36, height: 36, padding: 0,
+                  background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
+                  flexShrink: 0,
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = activeTopPanel === "system" ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)"; }}
+              >
+                <FileText size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
+              </button>
+            )}
           </div>
         )}
 
