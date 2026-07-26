@@ -143,11 +143,9 @@ async function bootstrap() {
   createWindow();
 }
 
-// In production, remove the native menu bar for a clean look.
-// In dev mode, keep it so View → Toggle Developer Tools is accessible.
-if (!IS_DEV) {
-  Menu.setApplicationMenu(null);
-}
+// Remove the native menu bar for a clean frameless look.
+// DevTools can still be toggled via Ctrl+Shift+I / F12.
+Menu.setApplicationMenu(null);
 
 app.whenReady().then(bootstrap);
 

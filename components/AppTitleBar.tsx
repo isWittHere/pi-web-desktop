@@ -32,6 +32,7 @@ interface AppTitleBarProps {
   rightPanelOpen: boolean;
   onToggleFilePanel: () => void;
   workspaceTitle: string | null;
+  onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
 }
 
 export function AppTitleBar({
@@ -59,6 +60,7 @@ export function AppTitleBar({
   rightPanelOpen,
   onToggleFilePanel,
   workspaceTitle,
+  onWorkspaceControlsHostChange,
 }: AppTitleBarProps) {
   const { isElectron, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
 
@@ -145,6 +147,20 @@ export function AppTitleBar({
             </svg>
           )}
         </button>
+
+        <div
+          className="app-no-drag"
+          ref={onWorkspaceControlsHostChange}
+          style={{
+            flex: "0 1 590px",
+            minWidth: 180,
+            maxWidth: 640,
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            padding: "0 8px 0 2px",
+          }}
+        />
 
         {showChat && (
           <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>

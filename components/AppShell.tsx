@@ -49,6 +49,7 @@ export function AppShell() {
   }, []);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
+  const [workspaceControlsHost, setWorkspaceControlsHost] = useState<HTMLDivElement | null>(null);
 
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
@@ -353,6 +354,7 @@ export function AppShell() {
         explorerRefreshKey={explorerRefreshKey}
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
+        workspaceControlsHost={workspaceControlsHost}
       />
       <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
         {([
@@ -518,6 +520,7 @@ export function AppShell() {
         rightPanelOpen={rightPanelOpen}
         onToggleFilePanel={() => setRightPanelOpen((v) => !v)}
         workspaceTitle={workspaceTitle}
+        onWorkspaceControlsHostChange={setWorkspaceControlsHost}
       />
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
       {/* Mobile overlay backdrop */}
