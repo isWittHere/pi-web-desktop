@@ -162,15 +162,7 @@ pre, code {
   font-family: var(--font-mono);
 }
 
-.process-tab-active {
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent var(--hatch-spacing),
-    var(--hatch-color) var(--hatch-spacing),
-    var(--hatch-color) calc(var(--hatch-spacing) + var(--hatch-width))
-  );
-}
+
 
 /* Shared conversational surface language. */
 .chat-user-message {

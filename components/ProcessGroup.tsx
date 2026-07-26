@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkdownBody } from "./MarkdownBody";
 import { MessageView, ThinkingBlock, ToolCallBlock } from "./MessageView";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useProcessDisplayMode } from "@/hooks/useProcessDisplayMode";
 import type { ProcessContentBlock } from "@/lib/process-content";
 import type { ThinkingContent, ToolCallContent } from "@/lib/types";
 import { BrainIcon } from "@phosphor-icons/react/Brain";
@@ -229,18 +230,15 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
   const steps = useMemo(() => buildProcessSteps(blocks, labels), [blocks, labels]);
   const [areaExpanded, setAreaExpanded] = useState(isStreaming || defaultExpanded);
   const [stepStates, setStepStates] = useState<Record<string, boolean>>({});
-  const [displayMode, setDisplayMode] = useState<"timeline" | "tabs">("timeline");
+  const { displayMode, setDisplayMode } = useProcessDisplayMode();
   const [activeTab, setActiveTab] = useState(0);
   const [showTopShadow, setShowTopShadow] = useState(false);
   const [showBottomShadow, setShowBottomShadow] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const wasStreamingRef = useRef(false);
-  const previousLastStepIdRef = useRef<string | null>(null);
+  const hasUserSelectedTabRef = useRef(false);
 
-  useEffect(() => {
-    const savedMode = window.localStorage.getItem("pi-process-display-mode");
-    if (savedMode === "timeline" || savedMode === "tabs") setDisplayMode(savedMode);
-  }, []);
+
 
   useEffect(() => {
     if (isStreaming) {
@@ -250,20 +248,20 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
     }
     if (!wasStreamingRef.current) return;
     setStepStates({});
-    setActiveTab(0);
-    previousLastStepIdRef.current = null;
     const timer = window.setTimeout(() => setAreaExpanded(false), 300);
     wasStreamingRef.current = false;
     return () => window.clearTimeout(timer);
   }, [isStreaming]);
 
   useEffect(() => {
-    if (!isStreaming || steps.length === 0) return;
+    if (steps.length === 0) return;
+
     const latest = steps[steps.length - 1];
-    if (previousLastStepIdRef.current === latest.id) return;
-    previousLastStepIdRef.current = latest.id;
-    setActiveTab(steps.length - 1);
-    setStepStates({ [latest.id]: true });
+    setActiveTab((currentTab) => {
+      if (hasUserSelectedTabRef.current && currentTab < steps.length) return currentTab;
+      return steps.length - 1;
+    });
+    if (isStreaming) setStepStates({ [latest.id]: true });
   }, [isStreaming, steps]);
 
   const updateShadows = useCallback(() => {
@@ -279,12 +277,13 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
     const observer = new ResizeObserver(updateShadows);
     element.addEventListener("scroll", updateShadows, { passive: true });
     observer.observe(element);
+    if (element.firstElementChild) observer.observe(element.firstElementChild);
     updateShadows();
     return () => {
       element.removeEventListener("scroll", updateShadows);
       observer.disconnect();
     };
-  }, [areaExpanded, displayMode, updateShadows]);
+  }, [activeTab, areaExpanded, displayMode, isStreaming, stepStates, steps.length, updateShadows]);
 
   useEffect(() => {
     if (!isStreaming || !scrollRef.current) return;
@@ -324,7 +323,6 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
             onClick={() => {
               const nextMode = displayMode === "timeline" ? "tabs" : "timeline";
               setDisplayMode(nextMode);
-              window.localStorage.setItem("pi-process-display-mode", nextMode);
               setAreaExpanded(true);
             }}
             className="shrink-0 p-1 text-text-dim opacity-0 transition-colors hover:text-text group-hover/summary-row:opacity-100"
@@ -338,13 +336,17 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
       {areaExpanded && (
         <div className="overflow-hidden">
           {singleThinking ? (
-            <div className="mt-2 max-h-[280px] overflow-y-auto pr-2">
-              <StepContent step={steps[0]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />
+            <div className="relative mt-2">
+              <div ref={scrollRef} className="max-h-[280px] overflow-y-auto pr-2">
+                <StepContent step={steps[0]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />
+              </div>
+              {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
+              {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
             </div>
           ) : displayMode === "timeline" ? (
             <div className="relative">
-              {showTopShadow && <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
-              {showBottomShadow && <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
+              {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
+              {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
               <div ref={scrollRef} className={isStreaming ? "max-h-[320px] overflow-y-auto" : ""}>
                 <div className="relative ml-5 space-y-2">
                   <div className="absolute -left-3 -top-1.5 h-4 w-2 rounded-bl border-b border-l border-border" />
@@ -391,7 +393,10 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
                   <button
                     key={step.id}
                     type="button"
-                    onClick={() => setActiveTab(index)}
+                    onClick={() => {
+                      hasUserSelectedTabRef.current = true;
+                      setActiveTab(index);
+                    }}
                     className={`process-tab flex items-center gap-1 rounded-sm border px-2 py-0.5 font-mono text-xs transition-colors ${activeTab === index ? "process-tab-active border-border text-accent" : "border-border text-text-dim hover:text-text"}`}
                   >
                     <StepIcon step={step} />
@@ -399,8 +404,12 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, cwd
                   </button>
                 ))}
               </div>
-              <div ref={scrollRef} className="relative mt-2 max-h-[280px] overflow-y-auto pr-2">
-                {steps[activeTab] && <StepContent step={steps[activeTab]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />}
+              <div className="relative mt-2">
+                <div ref={scrollRef} className="max-h-[280px] overflow-y-auto pr-2">
+                  {steps[activeTab] && <StepContent step={steps[activeTab]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />}
+                </div>
+                {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
+                {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
               </div>
             </div>
           )}

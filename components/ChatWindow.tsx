@@ -148,6 +148,34 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     registerAbortHandler(agentRunning ? handleAbort : null);
   }, [agentRunning, handleAbort]);
 
+  // --- Scroll-edge fades ---
+  // Display a fade only when more conversation content exists beyond that edge.
+  const [showChatTopFade, setShowChatTopFade] = useState(false);
+  const [showChatBottomFade, setShowChatBottomFade] = useState(false);
+  const updateChatFades = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const remaining = container.scrollHeight - container.scrollTop - container.clientHeight;
+    setShowChatTopFade(container.scrollTop > 1);
+    setShowChatBottomFade(remaining > 1);
+  }, [scrollContainerRef]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver(updateChatFades);
+    observer.observe(container);
+    if (container.firstElementChild) observer.observe(container.firstElementChild);
+    container.addEventListener("scroll", updateChatFades, { passive: true });
+    updateChatFades();
+
+    return () => {
+      container.removeEventListener("scroll", updateChatFades);
+      observer.disconnect();
+    };
+  }, [messages.length, scrollContainerRef, updateChatFades]);
+
   // --- Lazy-load historical messages ---
   // Only render the last N messages initially. When the user scrolls to the
   // top, load another page while keeping the scroll position stable.
@@ -182,8 +210,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     const container = scrollContainerRef.current;
     if (!container) return;
     container.scrollTop = restoreScrollTop(container.scrollHeight, prevScrollDistanceRef.current);
+    updateChatFades();
     prevScrollDistanceRef.current = null;
-  }, [visibleCount, scrollContainerRef]);
+  }, [visibleCount, scrollContainerRef, updateChatFades]);
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
   const statsKey = sessionStats
@@ -406,8 +435,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             <NoticeShelf notices={notices} floating align="right" />
           </div>
         </div>
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pt-4 [scrollbar-width:none]">
-          <div style={{ padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
+        <div className="relative flex-1 min-h-0 min-w-0">
+          <div ref={scrollContainerRef} className="h-full overflow-y-auto pt-4 [scrollbar-width:none]">
+            <div style={{ padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
             <div style={{ maxWidth: 820, margin: "0 auto" }}>
               <ExtensionStatusBar statuses={extensionStatuses} />
               <ExtensionWidgets widgets={aboveEditorWidgets} />
@@ -663,9 +693,22 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <div style={{ height: scrollContainerRef.current ? scrollContainerRef.current.clientHeight : "80vh" }} />
             )}
 
-            <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} />
+              </div>
             </div>
           </div>
+          {showChatTopFade && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-[var(--bg)] to-transparent"
+            />
+          )}
+          {showChatBottomFade && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-[var(--bg)] to-transparent"
+            />
+          )}
         </div>
         {isMobile ? null : (
           <ChatMinimap
