@@ -1255,7 +1255,15 @@ function AddProviderPicker({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function ModelsConfig({ onClose }: { onClose: () => void }) {
+export function ModelsConfig({
+  embedded = false,
+  onCloseAction,
+  onSavedAction,
+}: {
+  embedded?: boolean;
+  onCloseAction?: () => void;
+  onSavedAction?: () => void;
+}) {
   const isMobile = useIsMobile();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
   const [loading, setLoading] = useState(true);
@@ -1381,13 +1389,17 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       });
       const d = await res.json() as { success?: boolean; error?: string };
       if (!res.ok || d.error) setSaveError(d.error ?? `HTTP ${res.status}`);
-      else { setSavedOk(true); setTimeout(() => setSavedOk(false), 2000); }
+      else {
+        setSavedOk(true);
+        onSavedAction?.();
+        setTimeout(() => setSavedOk(false), 2000);
+      }
     } catch (e) {
       setSaveError(String(e));
     } finally {
       setSaving(false);
     }
-  }, [config]);
+  }, [config, onSavedAction]);
 
   const providers = Object.entries(config.providers ?? {});
   const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
@@ -1437,18 +1449,25 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "78vh", maxHeight: "calc(100dvh - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+    <div
+      style={embedded
+        ? { display: "flex", flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }
+        : { position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => { if (!embedded && e.target === e.currentTarget) onCloseAction?.(); }}
+    >
+      <div style={embedded
+        ? { flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }
+        : { width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "78vh", maxHeight: "calc(100dvh - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
 
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Models</span>
-            <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>~/.pi/agent/models.json</code>
+        {!embedded && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Models</span>
+              <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>~/.pi/agent/models.json</code>
+            </div>
+            <button onClick={onCloseAction} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
-        </div>
+        )}
 
         {/* Body */}
         <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
@@ -1585,9 +1604,11 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         {/* Footer */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
           {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
-          <button onClick={onClose} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
-            Cancel
-          </button>
+          {!embedded && (
+            <button onClick={onCloseAction} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
+              Cancel
+            </button>
+          )}
           <button onClick={handleSave} disabled={saving || savedOk} style={{
             position: "relative",
             padding: "6px 16px",

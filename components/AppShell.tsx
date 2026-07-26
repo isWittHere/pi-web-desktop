@@ -1,16 +1,14 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { ArrowLeft, Cpu, Plug, Stack } from "@phosphor-icons/react";
+import { ArrowLeft } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
-import { ModelsConfig } from "./ModelsConfig";
-import { SkillsConfig } from "./SkillsConfig";
-import { PluginsConfig } from "./PluginsConfig";
+import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -34,10 +32,9 @@ export function AppShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
-  const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("models");
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
-  const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
-  const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   // On mobile the sidebar is an overlay drawer; hide it by default so the chat
@@ -338,6 +335,11 @@ export function AppShell() {
   const showPlaceholder = initialSessionRestored && !showChat;
 
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
+  const settingsCwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
+  const openSettings = useCallback((tab: SettingsTab) => {
+    setSettingsTab(tab);
+    setSettingsOpen(true);
+  }, []);
 
   const sidebarContent = (
     <>
@@ -357,47 +359,7 @@ export function AppShell() {
         onAtMentions={handleAtMentions}
         workspaceControlsHost={workspaceControlsHost}
       />
-      <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
-        {([
-          {
-            label: "Models",
-            onClick: () => setModelsConfigOpen(true),
-            disabled: false,
-            icon: <Cpu size={14} aria-hidden="true" />,
-          },
-          {
-            label: "Skills",
-            onClick: () => setSkillsConfigOpen(true),
-            disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd,
-            icon: <Stack size={14} aria-hidden="true" />,
-          },
-          {
-            label: "Plugins",
-            onClick: () => setPluginsConfigOpen(true),
-            disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd,
-            icon: <Plug size={14} aria-hidden="true" />,
-          },
-        ] as { label: string; onClick: () => void; disabled: boolean; icon: React.ReactNode }[]).map(({ label, onClick, disabled, icon }) => (
-          <button
-            key={label}
-            onClick={onClick}
-            disabled={disabled}
-            title={label}
-            style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              height: 32, padding: 0, background: "none", border: "none",
-              borderRadius: 9, color: "var(--text-muted)", cursor: disabled ? "default" : "pointer",
-              fontSize: 12, opacity: disabled ? 0.35 : 1,
-              transition: "background 0.12s, color 0.12s",
-            }}
-            onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            {icon}
-            {label}
-          </button>
-        ))}
-      </div>
+
     </>
   );
 
@@ -499,6 +461,7 @@ export function AppShell() {
         onCopySessionField={handleCopySessionField}
         rightPanelOpen={rightPanelOpen}
         onToggleFilePanel={() => setRightPanelOpen((v) => !v)}
+        onOpenSettings={() => openSettings("models")}
         workspaceTitle={workspaceTitle}
         onWorkspaceControlsHostChange={setWorkspaceControlsHost}
       />
@@ -619,16 +582,17 @@ export function AppShell() {
         </div>
       </div>
     </div>
-    {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); setModelsRefreshKey((k) => k + 1); }} />}
-    {skillsConfigOpen && (activeCwd ?? selectedSession?.cwd ?? newSessionCwd) && (
-      <SkillsConfig cwd={(activeCwd ?? selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setSkillsConfigOpen(false)} />
-    )}
-    {pluginsConfigOpen && (activeCwd ?? selectedSession?.cwd ?? newSessionCwd) && (
-      <PluginsConfig
-        cwd={(activeCwd ?? selectedSession?.cwd ?? newSessionCwd)!}
+    {settingsOpen && (
+      <SettingsModal
+        initialTab={settingsTab}
+        cwd={settingsCwd}
         sessionId={selectedSession?.id ?? null}
-        onClose={() => setPluginsConfigOpen(false)}
-        onReloaded={() => setSessionKey((k) => k + 1)}
+        onCloseAction={() => {
+          setSettingsOpen(false);
+          setModelsRefreshKey((k) => k + 1);
+        }}
+        onModelsSavedAction={() => setModelsRefreshKey((k) => k + 1)}
+        onSessionReloadedAction={() => setSessionKey((k) => k + 1)}
       />
     )}
     </div>

@@ -9,6 +9,7 @@ import {
   Database,
   FileText,
   Gauge,
+  Gear,
   Info,
   List,
   Minus,
@@ -49,6 +50,7 @@ interface AppTitleBarProps {
   onCopySessionField: (field: SessionCopyField, value: string) => void;
   rightPanelOpen: boolean;
   onToggleFilePanel: () => void;
+  onOpenSettings: () => void;
   workspaceTitle: string | null;
   onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
 }
@@ -77,6 +79,7 @@ export function AppTitleBar({
   onCopySessionField,
   rightPanelOpen,
   onToggleFilePanel,
+  onOpenSettings,
   workspaceTitle,
   onWorkspaceControlsHostChange,
 }: AppTitleBarProps) {
@@ -333,6 +336,27 @@ export function AppTitleBar({
           );
         })()}
 
+
+
+        {/* File panel toggle */}
+        <button
+          className="app-no-drag"
+          onClick={onToggleFilePanel}
+          title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
+          aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 36, height: 36, padding: 0,
+            background: rightPanelOpen ? "var(--bg-selected)" : "none", border: "none",
+            color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
+            cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = rightPanelOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
+        >
+          <SidebarSimple size={16} aria-hidden="true" style={{ transform: "scaleX(-1)" }} />
+        </button>
+
         {/* Theme toggle */}
         <button
           className="app-no-drag"
@@ -355,23 +379,23 @@ export function AppTitleBar({
           {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
         </button>
 
-        {/* File panel toggle */}
+        {/* Settings */}
         <button
           className="app-no-drag"
-          onClick={onToggleFilePanel}
-          title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
-          aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}
+          type="button"
+          onClick={onOpenSettings}
+          title="Settings"
+          aria-label="Settings"
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
-            background: rightPanelOpen ? "var(--bg-selected)" : "none", border: "none",
-            color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-            cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
+            background: "none", border: "none",
+            color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = rightPanelOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
         >
-          <SidebarSimple size={16} aria-hidden="true" style={{ transform: "scaleX(-1)" }} />
+          <Gear size={16} aria-hidden="true" />
         </button>
 
         {/* Window controls (Electron only) */}

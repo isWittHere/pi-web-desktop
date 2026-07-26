@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProp
 import { createPortal } from "react-dom";
 import { ArrowClockwise, CaretDown, CaretRight, Check, Folder, GitBranch, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
 import type { SessionInfo } from "@/lib/types";
+import { useLanguage } from "@/hooks/useLanguage";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 
 declare global {
@@ -73,17 +74,17 @@ function saveUnreadSessionIds(ids: Set<string>): void {
   }
 }
 
-function formatRelativeTime(dateStr: string): string {
+function formatRelativeTime(dateStr: string, t: (key: "justNow" | "minutesAgo" | "hoursAgo" | "daysAgo") => string): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const mins = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
+  if (mins < 1) return t("justNow");
+  if (mins < 60) return t("minutesAgo").replace("{count}", String(mins));
+  if (hours < 24) return t("hoursAgo").replace("{count}", String(hours));
+  if (days < 7) return t("daysAgo").replace("{count}", String(days));
   return date.toLocaleDateString();
 }
 
@@ -327,6 +328,7 @@ function PiAgentTitle() {
 }
 
 export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHost }: Props) {
+  const { t } = useLanguage();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -759,20 +761,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     && !showWorktreeSwitcher
     ? (worktreeState.isGit
         ? {
-            label: "Open repo root",
-            title: "Open the repository root to manage worktrees.",
+            label: t("openRepoRoot"),
+            title: t("openRepoRootDescription"),
           }
         : {
-            label: "Git repo root only",
-            title: "Worktrees are available in Git repository roots.",
+            label: t("gitRepoRootOnly"),
+            title: t("gitRepoRootOnlyDescription"),
           })
     : null;
   const worktreeLoading = Boolean(selectedCwd && worktreeLoadingCwd === selectedCwd);
   const inactiveWorktreeSelector = worktreeGuide
     ?? (worktreeLoading && !showWorktreeSwitcher
       ? {
-          label: "Worktrees...",
-          title: "Checking worktrees for this directory.",
+          label: t("worktreesLoading"),
+          title: t("checkingWorktrees"),
         }
       : null);
 
@@ -784,7 +786,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     ?? null;
   const compactProjectLabel = selectedCwd
     ? pathBaseName(selectedProject ?? selectedCwd)
-    : (initialSessionId && !restoredRef.current ? "" : "Select project…");
+    : (initialSessionId && !restoredRef.current ? "" : `${t("selectProject")}…`);
   const compactWorktreeLabel = currentWt
     ? (currentWt.branch ?? pathBaseName(currentWt.path))
     : inactiveWorktreeSelector?.label;
@@ -794,8 +796,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         <button
           className="app-no-drag app-titlebar-context-control"
           onClick={() => setDropdownOpen((v) => !v)}
-          title={selectedProject ?? selectedCwd ?? "Select project"}
-          aria-label="Select project"
+          title={selectedProject ?? selectedCwd ?? t("selectProject")}
+          aria-label={t("selectProject")}
           aria-expanded={dropdownOpen}
           style={{
             height: 36,
@@ -837,14 +839,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 <PathLabel text={displayCwd(project, homeDir)} style={{ flex: 1 }} />
               </button>
             ))}
-            {visibleProjects.length === 0 && <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{projectFilter.trim() ? "No matching projects" : "No projects yet"}</div>}
+            {visibleProjects.length === 0 && <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{projectFilter.trim() ? t("noMatchingProjects") : t("noProjectsYet")}</div>}
           </div>
           <button onClick={(e) => { e.stopPropagation(); handleDefaultCwd(); }} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "none", border: "none", borderTop: "1px solid var(--border)", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11 }}>
-            <span>Use default directory</span>
+            <span>{t("useDefaultDirectory")}</span>
           </button>
           {!customPathOpen ? (
             <button onClick={(e) => { e.stopPropagation(); void handleCustomPathClick(); }} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11 }}>
-              <span>Custom path…</span>
+              <span>{t("customPath")}</span>
             </button>
           ) : (
             <div style={{ padding: "6px 8px" }}>
@@ -856,13 +858,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   if (e.key === "Enter") { e.preventDefault(); void commitCustomPath(); }
                   if (e.key === "Escape") { setCustomPathOpen(false); setCustomPathValue(""); setCustomPathError(null); }
                 }}
-                placeholder="/path/to/project"
+                placeholder={t("projectPathPlaceholder")}
                 style={{ width: "100%", fontSize: 11, fontFamily: "var(--font-mono)", padding: "5px 8px", border: "1px solid var(--accent)", borderRadius: 5, outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }}
               />
               {customPathError && <div style={{ marginTop: 5, color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>{customPathError}</div>}
               <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
-                <button onClick={() => void commitCustomPath()} disabled={customPathValidating || !customPathValue.trim()} style={{ flex: 1, padding: "4px 0", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: customPathValidating || !customPathValue.trim() ? "not-allowed" : "pointer", opacity: customPathValidating || !customPathValue.trim() ? 0.65 : 1 }}>{customPathValidating ? "Checking…" : "Open"}</button>
-                <button onClick={() => { setCustomPathOpen(false); setCustomPathValue(""); setCustomPathError(null); }} style={{ flex: 1, padding: "4px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                <button onClick={() => void commitCustomPath()} disabled={customPathValidating || !customPathValue.trim()} style={{ flex: 1, padding: "4px 0", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: customPathValidating || !customPathValue.trim() ? "not-allowed" : "pointer", opacity: customPathValidating || !customPathValue.trim() ? 0.65 : 1 }}>{customPathValidating ? t("checking") : t("open")}</button>
+                <button onClick={() => { setCustomPathOpen(false); setCustomPathValue(""); setCustomPathError(null); }} style={{ flex: 1, padding: "4px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer" }}>{t("cancel")}</button>
               </div>
             </div>
           )}
@@ -874,11 +876,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <button
             className="app-no-drag app-titlebar-context-control"
             onClick={() => { if (showWorktreeSwitcher) setWtDropdownOpen((v) => !v); }}
-            aria-label="Switch worktree"
+            aria-label={t("switchWorktree")}
             aria-expanded={showWorktreeSwitcher ? wtDropdownOpen : undefined}
             aria-disabled={!showWorktreeSwitcher}
             tabIndex={showWorktreeSwitcher ? 0 : -1}
-            title={showWorktreeSwitcher && currentWt ? `Switch worktree: ${currentWt.path}` : inactiveWorktreeSelector?.title}
+            title={showWorktreeSwitcher && currentWt ? t("switchWorktreeWithPath").replace("{path}", currentWt.path) : inactiveWorktreeSelector?.title}
             style={{
               height: 36,
               maxWidth: 220,
@@ -1116,7 +1118,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         setDropdownOpen(false);
                       }
                     }}
-                    placeholder="Filter projects…"
+                    placeholder={t("filterProjects")}
                     autoFocus
                     style={{
                       width: "100%",
@@ -1173,7 +1175,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   </button>
                 ))}
                 {visibleProjects.length === 0 && projectFilter.trim() && (
-                  <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>No matching projects</div>
+                  <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("noMatchingProjects")}</div>
                 )}
               </div>
 
@@ -1197,7 +1199,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   }}
                 >
                   <Folder size={10} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
-                  <span>Use default directory</span>
+                  <span>{t("useDefaultDirectory")}</span>
                 </button>
               )}
 
@@ -1223,7 +1225,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   }}
                 >
                   <Plus size={10} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
-                  <span>Custom path…</span>
+                  <span>{t("customPath")}</span>
                 </button>
               ) : (
                 <div style={{ padding: "6px 8px", borderTop: visibleProjects.length > 0 ? "none" : undefined }}>
@@ -1245,7 +1247,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         setCustomPathError(null);
                       }
                     }}
-                    placeholder="/path/to/project"
+                    placeholder={t("projectPathPlaceholder")}
                     style={{
                       width: "100%",
                       fontSize: 11,
@@ -1287,7 +1289,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         opacity: customPathValidating || !customPathValue.trim() ? 0.65 : 1,
                       }}
                     >
-                      {customPathValidating ? "Checking…" : "Open"}
+                      {customPathValidating ? t("checking") : t("open")}
                     </button>
                     <button
                       onClick={() => { setCustomPathOpen(false); setCustomPathValue(""); setCustomPathError(null); }}
@@ -1302,7 +1304,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         cursor: "pointer",
                       }}
                     >
-                      Cancel
+                      {t("cancel")}
                     </button>
                   </div>
                 </div>
@@ -1325,7 +1327,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             <div ref={wtDropdownRef} style={{ position: "relative", marginTop: 6 }}>
               <button
                 onClick={() => setWtDropdownOpen((v) => !v)}
-                title={currentWt ? `Switch worktree: ${currentWt.path}` : "Switch worktree"}
+                title={currentWt ? t("switchWorktreeWithPath").replace("{path}", currentWt.path) : t("switchWorktree")}
                 style={{
                   width: "100%",
                   height: 29,
@@ -1350,7 +1352,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   style={{ flex: 1, fontFamily: "var(--font-mono)", color: "var(--text)" }}
                 />
                 {currentWt?.isMain && (
-                  <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>main</span>
+                  <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("main")}</span>
                 )}
                 {worktreeState.worktrees.length > 1 && (
                   <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>
@@ -1382,14 +1384,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         return (
                           <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "rgba(239,68,68,0.06)" }}>
                             <span style={{ flex: 1, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              Uncommitted changes. Force remove checkout?
+                              {t("uncommittedChanges")}
                             </span>
                             <button
                               onClick={() => void handleRemoveWorktree(wt.path, true)}
                               disabled={wtBusy}
                               style={{ padding: "3px 9px", background: "#ef4444", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
                             >
-                              Force
+                              {t("force")}
                             </button>
                             <button
                               onClick={() => setWtConfirmRemove(null)}

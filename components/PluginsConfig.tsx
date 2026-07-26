@@ -558,13 +558,15 @@ function PackageDetail({
 export function PluginsConfig({
   cwd,
   sessionId,
-  onClose,
-  onReloaded,
+  embedded = false,
+  onCloseAction,
+  onReloadedAction,
 }: {
   cwd: string;
   sessionId: string | null;
-  onClose: () => void;
-  onReloaded?: () => void;
+  embedded?: boolean;
+  onCloseAction?: () => void;
+  onReloadedAction?: () => void;
 }) {
   const isMobile = useIsMobile();
   const [data, setData] = useState<PluginsResponse | null>(null);
@@ -680,7 +682,7 @@ export function PluginsConfig({
     setActionMessage(null);
     try {
       await sendAgentCommand(sessionId, { type: "reload" });
-      onReloaded?.();
+      onReloadedAction?.();
       await loadPlugins();
       setActionMessage("Session reloaded.");
     } catch (err) {
@@ -688,82 +690,32 @@ export function PluginsConfig({
     } finally {
       setBusyKey(null);
     }
-  }, [loadPlugins, onReloaded, sessionId]);
+  }, [loadPlugins, onReloadedAction, sessionId]);
 
   const addBusy = busyKey?.startsWith("install:") ?? false;
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      style={embedded
+        ? { display: "flex", flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }
+        : { position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => { if (!embedded && e.target === e.currentTarget) onCloseAction?.(); }}
     >
       <div
-        style={{
-          width: isMobile ? "calc(100vw - 16px)" : 860,
-          maxWidth: "calc(100vw - 16px)",
-          height: isMobile ? "calc(100dvh - 16px)" : "76vh",
-          maxHeight: "calc(100dvh - 16px)",
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-          borderRadius: 8,
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-          overflow: "hidden",
-        }}
+        style={embedded
+          ? { display: "flex", flex: 1, minWidth: 0, minHeight: 0, flexDirection: "column", overflow: "hidden" }
+          : { width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "76vh", maxHeight: "calc(100dvh - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }
+        }
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 18px",
-            borderBottom: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
-              Plugins
-            </span>
-            <code
-              style={{
-                fontSize: 11,
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {shortenPath(cwd)}
-            </code>
+        {!embedded && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Plugins</span>
+              <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortenPath(cwd)}</code>
+            </div>
+            <button onClick={onCloseAction} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 20,
-              lineHeight: 1,
-              padding: "2px 6px",
-            }}
-          >
-            ×
-          </button>
-        </div>
+        )}
 
         <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
           <div
@@ -993,9 +945,11 @@ export function PluginsConfig({
           <button onClick={() => void loadPlugins()} disabled={loading || busyKey !== null} style={buttonStyle(loading || busyKey !== null)}>
             Refresh
           </button>
-          <button onClick={onClose} style={buttonStyle(false)}>
-            Close
-          </button>
+          {!embedded && (
+            <button onClick={onCloseAction} style={buttonStyle(false)}>
+              Close
+            </button>
+          )}
         </div>
       </div>
     </div>

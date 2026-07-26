@@ -13,6 +13,7 @@ import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAg
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useLanguage, type TranslationKey } from "@/hooks/useLanguage";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import {
   captureScrollDistance,
@@ -38,17 +39,18 @@ interface Props {
   onOpenFile?: (filePath: string) => void;
 }
 
-function phaseLabel(phase: AgentPhase): string {
+function phaseLabel(phase: AgentPhase, t: (key: TranslationKey) => string): string {
   if (phase?.kind === "running_tools") {
-    const names = phase.tools.map((t) => t.name);
-    if (names.length === 0) return "Running tool...";
-    if (names.length === 1) return `Running ${names[0]}...`;
-    if (names.length <= 3) return `Running ${names.join(", ")}...`;
-    return `Running ${names.slice(0, 2).join(", ")} (+${names.length - 2})...`;
+    const names = phase.tools.map((tool) => tool.name);
+    if (names.length === 0) return t("runningTool");
+    const tools = names.length <= 3
+      ? names.join(", ")
+      : `${names.slice(0, 2).join(", ")} (+${names.length - 2})`;
+    return t("runningTools").replace("{tools}", tools);
   }
-  if (phase?.kind === "waiting_model") return "Waiting for model...";
-  if (phase?.kind === "running_command") return "Running command...";
-  return "Thinking...";
+  if (phase?.kind === "waiting_model") return t("waitingForModel");
+  if (phase?.kind === "running_command") return t("runningCommand");
+  return t("thinking");
 }
 
 const CHAT_MINIMAP_WIDTH = 18;
@@ -96,6 +98,7 @@ function withAssistantBlocks(
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile }: Props) {
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
   const isMobile = useIsMobile();
+  const { t } = useLanguage();
 
   // Wrap onAgentEnd to play the completion sound. This is more reliable than
   // wrapping handleAgentEventRef because useAgentSession overwrites that ref
@@ -285,7 +288,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-text-muted">
-        Loading session...
+        {t("loadingSession")}
       </div>
     );
   }
@@ -640,7 +643,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 <>
                   {hasMore && (
                     <div ref={sentinelRef} className="py-3 text-center text-xs text-text-muted">
-                      Scroll up to load earlier messages ({startIndex} hidden)
+                      {t("scrollToLoadEarlierMessages").replace("{count}", String(startIndex))}
                     </div>
                   )}
                   {rendered.slice(startIndex)}
@@ -651,7 +654,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
             {agentRunning && !streamState.streamingMessage && (
               <div className="py-2 text-[13px] text-text-muted">
-                <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase)}</span>
+                <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t)}</span>
               </div>
             )}
 
@@ -824,6 +827,7 @@ function ExtensionDialog({
   request: ExtensionDialogRequest;
   onRespond: (request: ExtensionDialogRequest, response: { value: string } | { confirmed: boolean } | { cancelled: true }) => void;
 }) {
+  const { t } = useLanguage();
   const [value, setValue] = useState(request.method === "editor" ? request.prefill ?? "" : "");
 
   useEffect(() => {
@@ -865,7 +869,7 @@ function ExtensionDialog({
       >
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
           <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 650 }}>{request.title}</div>
-          <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>extension request</div>
+          <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>{t("extensionRequest")}</div>
         </div>
 
         <div style={{ padding: 14 }}>
@@ -956,7 +960,7 @@ function ExtensionDialog({
               cursor: "pointer",
             }}
           >
-            Cancel
+            {t("cancel")}
           </button>
           {request.method === "confirm" ? (
             <button
@@ -970,7 +974,7 @@ function ExtensionDialog({
                 cursor: "pointer",
               }}
             >
-              Confirm
+              {t("confirm")}
             </button>
           ) : request.method !== "select" ? (
             <button
@@ -984,7 +988,7 @@ function ExtensionDialog({
                 cursor: "pointer",
               }}
             >
-              Submit
+              {t("submit")}
             </button>
           ) : null}
         </div>
@@ -1043,6 +1047,7 @@ function ExtensionCustomPanel({
   request: ExtensionCustomRequest;
   onInput: (request: ExtensionCustomRequest, data: string) => void;
 }) {
+  const { t } = useLanguage();
   const panelRef = useRef<HTMLDivElement>(null);
   const displayLines = normalizeCustomPanelLines(request.lines);
 
@@ -1087,7 +1092,7 @@ function ExtensionCustomPanel({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 650 }}>Extension panel</div>
+          <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 650 }}>{t("extensionPanel")}</div>
           <button
             onClick={() => onInput(request, "\x03")}
             style={{
@@ -1100,7 +1105,7 @@ function ExtensionCustomPanel({
               fontSize: 12,
             }}
           >
-            Close
+            {t("close")}
           </button>
         </div>
         <pre

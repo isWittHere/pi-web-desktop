@@ -9,16 +9,17 @@ import {
 } from "@/lib/file-fuzzy";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useLanguage } from "@/hooks/useLanguage";
 import { ArrowBendUpLeftIcon } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowElbowDownRightIcon } from "@phosphor-icons/react/ArrowElbowDownRight";
 import { ArrowUpIcon } from "@phosphor-icons/react/ArrowUp";
 import { ArrowsInIcon } from "@phosphor-icons/react/ArrowsIn";
-import { BrainIcon } from "@phosphor-icons/react/Brain";
 import { CheckIcon } from "@phosphor-icons/react/Check";
 import { CpuIcon } from "@phosphor-icons/react/Cpu";
-import { ImageIcon } from "@phosphor-icons/react/Image";
+import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/PaperPlaneTilt";
+import { PlusIcon } from "@phosphor-icons/react/Plus";
 import { SpeakerHighIcon } from "@phosphor-icons/react/SpeakerHigh";
 import { SpeakerSlashIcon } from "@phosphor-icons/react/SpeakerSlash";
 import { SquareIcon } from "@phosphor-icons/react/Square";
@@ -94,16 +95,7 @@ function compareModelOptions(a: ModelOption, b: ModelOption): number {
 }
 
 const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-const THINKING_LEVEL_DESC: Record<typeof THINKING_LEVELS[number], string> = {
-  auto: "Use pi default",
-  off: "Reasoning off",
-  minimal: "Minimal reasoning",
-  low: "Low reasoning",
-  medium: "Medium reasoning",
-  high: "High reasoning",
-  xhigh: "Extra-high reasoning",
-  max: "Max reasoning",
-};
+
 
 function formatTokenCount(tokens: number): string {
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
@@ -119,22 +111,11 @@ type SlashCommandPaletteItem = SlashCommandInfo | {
 
 type SlashCommandSource = SlashCommandPaletteItem["source"];
 
-const BUILTIN_SLASH_COMMANDS: SlashCommandPaletteItem[] = [
-  { name: "compact", description: "Compress context, optionally with instructions", source: "builtin" },
-  { name: "reload", description: "Reload extensions, skills, prompts, and tools", source: "builtin" },
-  { name: "name", description: "Set the session display name", source: "builtin" },
-  { name: "session", description: "Show session message, token, and cost stats", source: "builtin" },
-  { name: "copy", description: "Copy the last assistant message", source: "builtin" },
-];
+
 
 const SLASH_SOURCES: SlashCommandSource[] = ["builtin", "extension", "prompt", "skill"];
 
-const SLASH_SOURCE_GROUP_LABEL: Record<SlashCommandSource, string> = {
-  builtin: "Built-in",
-  extension: "Extensions",
-  prompt: "Prompts",
-  skill: "Skills",
-};
+
 
 const SLASH_SOURCE_ORDER: Record<SlashCommandSource, number> = {
   builtin: 0,
@@ -215,6 +196,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   cwd,
 }: Props, ref) {
   const isMobile = useIsMobile();
+  const { t } = useLanguage();
+  const thinkingLevelDescriptions: Record<typeof THINKING_LEVELS[number], string> = {
+    auto: t("usePiDefault"),
+    off: t("reasoningOff"),
+    minimal: t("minimalReasoning"),
+    low: t("lowReasoning"),
+    medium: t("mediumReasoning"),
+    high: t("highReasoning"),
+    xhigh: t("extraHighReasoning"),
+    max: t("maxReasoning"),
+  };
+  const builtinSlashCommands: SlashCommandPaletteItem[] = [
+    { name: "compact", description: t("compactCommandDescription"), source: "builtin" },
+    { name: "reload", description: t("reloadCommandDescription"), source: "builtin" },
+    { name: "name", description: t("nameCommandDescription"), source: "builtin" },
+    { name: "session", description: t("sessionCommandDescription"), source: "builtin" },
+    { name: "copy", description: t("copyCommandDescription"), source: "builtin" },
+  ];
+  const slashSourceGroupLabels: Record<SlashCommandSource, string> = {
+    builtin: t("builtIn"),
+    extension: t("extensions"),
+    prompt: t("prompts"),
+    skill: t("commandSkills"),
+  };
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -426,7 +431,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const filteredSlashCommands = (() => {
     if (slashQuery === null) return [];
-    const commands = [...(isStreaming ? [] : BUILTIN_SLASH_COMMANDS), ...(slashCommands ?? [])];
+    const commands = [...(isStreaming ? [] : builtinSlashCommands), ...(slashCommands ?? [])];
     return [...commands]
       .filter((command) => {
         const name = command.name.toLowerCase();
@@ -454,9 +459,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       .filter((group) => group.items.length > 0);
   })();
 
-  const slashCommandCountLabel = filteredSlashCommands.length === 1
-    ? (slashQuery ? "1 match" : "1 command")
-    : `${filteredSlashCommands.length} ${slashQuery ? "matches" : "commands"}`;
+  const slashCommandCountLabel = `${filteredSlashCommands.length} ${t(
+    slashQuery
+      ? (filteredSlashCommands.length === 1 ? "match" : "matches")
+      : (filteredSlashCommands.length === 1 ? "command" : "commands")
+  )}`;
   const hasInputText = Boolean(value.trim());
   const canQueueStreamingMessage = hasInputText && attachedImages.length === 0;
 
@@ -842,11 +849,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const compactSavedTokens = compactResult
     ? Math.max(0, compactResult.tokensBefore - compactResult.estimatedTokensAfter)
     : 0;
-  const compactVerb = compactResult?.reason && compactResult.reason !== "manual"
-    ? `${compactResult.reason[0].toUpperCase()}${compactResult.reason.slice(1)} compacted`
-    : "Compacted";
   const compactResultText = compactResult
-    ? `${compactVerb} ${formatTokenCount(compactResult.tokensBefore)} -> ${formatTokenCount(compactResult.estimatedTokensAfter)} tokens (${formatTokenCount(compactSavedTokens)} saved)`
+    ? `${t("compacted")} ${formatTokenCount(compactResult.tokensBefore)} -> ${formatTokenCount(compactResult.estimatedTokensAfter)} ${t("tokens")} (${formatTokenCount(compactSavedTokens)} ${t("saved")})`
     : null;
   const thinkingDisplayLabel = (() => {
     const lvl = thinkingLevel ?? "auto";
@@ -931,12 +935,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 textTransform: "uppercase",
                 letterSpacing: 0.4,
               }}>
-                Queued · {(queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)}
+                {t("queued")} · {(queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)}
               </span>
               {onRecallQueue && (
                 <button
                   onClick={onRecallQueue}
-                  title="Remove all queued messages and put them back into the input box for editing"
+                  title={t("recallQueuedMessages")}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -961,7 +965,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                 >
                   <ArrowBendUpLeftIcon size={13} />
-                  Recall to input
+                  {t("recallToInput")}
                 </button>
               )}
             </div>
@@ -982,7 +986,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <ArrowClockwiseIcon size={11} style={{ flexShrink: 0 }} />
-            Retrying ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
+            {t("retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
         {compactResultText && (
@@ -1009,6 +1013,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 />
                 <button
                   onClick={() => removeImage(i)}
+                  title={t("removeImage")}
+                  aria-label={t("removeImage")}
                   style={{
                     position: "absolute", top: -4, right: -4,
                     width: 16, height: 16, borderRadius: "50%",
@@ -1054,13 +1060,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   color: "var(--text-dim)",
                 }}
               >
-                <span>{slashCommandsLoading ? "Loading commands..." : `Slash commands · ${slashCommandCountLabel}`}</span>
-                <span style={{ fontFamily: "var(--font-mono)" }}>Tab / Enter</span>
+                <span>{slashCommandsLoading ? t("loadingCommands") : `${t("slashCommands")} · ${slashCommandCountLabel}`}</span>
+                <span style={{ fontFamily: "var(--font-mono)" }}>{t("tabOrEnter")}</span>
               </div>
               <div style={{ maxHeight: "calc(min(56vh, 460px) - 34px)", overflowY: "auto", padding: 10 }}>
                 {!slashCommandsLoading && filteredSlashCommands.length === 0 ? (
                   <div style={{ padding: "2px 2px 4px", fontSize: 12, color: "var(--text-dim)" }}>
-                    No extension, prompt, or skill commands found
+                    {t("noSlashCommands")}
                   </div>
                 ) : (
                   groupedSlashCommands.map((group) => (
@@ -1082,7 +1088,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           textTransform: "uppercase",
                         }}
                       >
-                        <span>{SLASH_SOURCE_GROUP_LABEL[group.source]}</span>
+                        <span>{slashSourceGroupLabels[group.source]}</span>
                         <span style={{ fontFamily: "var(--font-mono)", fontWeight: 500 }}>{group.items.length}</span>
                       </div>
                       <div
@@ -1157,11 +1163,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           )}
           {atMenuOpen && atQuery !== null && (() => {
             const indexLoading = fileIndexLoading && (!fileIndex || fileIndex.cwd !== cwd);
-            const matchCountLabel = atMatches.length === 1 ? "1 match" : `${atMatches.length} matches`;
+            const matchCountLabel = `${atMatches.length} ${t(atMatches.length === 1 ? "match" : "matches")}`;
             // With a truncated index, local results are provisional — the
             // debounced server search over the full listing replaces them.
             const truncatedHint = fileIndex?.truncated && !serverResultInUse
-              ? (atQuery.query ? " · searching all files…" : " · index truncated")
+              ? (atQuery.query ? ` · ${t("searchingAllFiles")}` : ` · ${t("indexTruncated")}`)
               : "";
             return (
               <div
@@ -1193,15 +1199,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 >
                   <span>
                     {indexLoading
-                      ? "Loading files..."
-                      : `Files · ${matchCountLabel}${truncatedHint}`}
+                      ? t("loadingFiles")
+                      : `${t("files")} · ${matchCountLabel}${truncatedHint}`}
                   </span>
-                  <span style={{ fontFamily: "var(--font-mono)" }}>Tab / Enter</span>
+                  <span style={{ fontFamily: "var(--font-mono)" }}>{t("tabOrEnter")}</span>
                 </div>
                 <div style={{ maxHeight: "calc(min(48vh, 400px) - 34px)", overflowY: "auto", padding: 4 }}>
                   {!indexLoading && atMatches.length === 0 ? (
                     <div style={{ padding: "6px 8px", fontSize: 12, color: "var(--text-dim)" }}>
-                      {needsServerSearch && !serverResultInUse ? "Searching…" : "No matching files"}
+                      {needsServerSearch && !serverResultInUse ? t("searching") : t("noMatchingFiles")}
                     </div>
                   ) : (
                     atMatches.map((entry, index) => {
@@ -1294,9 +1300,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onPaste={handlePaste}
             placeholder={
               isStreaming && (onSteer || onFollowUp)
-                ? "Steer now / queue follow-up..."
-                : isStreaming ? "Agent is running…"
-                : "Message… Type / for commands, @ for files"
+                ? t("steerOrQueueFollowUp")
+                : isStreaming ? t("agentRunning")
+                : t("messageWithCommands")
             }
             rows={1}
             className="chat-input-textarea"
@@ -1320,7 +1326,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => sendQueued("steer")}
                   disabled={!canQueueStreamingMessage}
-                  title={attachedImages.length ? "Image attachments cannot be queued while the agent is running" : "Interrupt the current run and inject this message now"}
+                  title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("injectMessageNow")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
@@ -1334,14 +1340,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                 >
                   <ArrowElbowDownRightIcon size={12} />
-                  Steer
+                  {t("steer")}
                 </button>
               )}
               {onFollowUp && (
                 <button
                   onClick={() => sendQueued("followup")}
                   disabled={!canQueueStreamingMessage}
-                  title={attachedImages.length ? "Image attachments cannot be queued while the agent is running" : "Queue this message after the agent finishes"}
+                  title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("queueMessageAfterFinish")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
@@ -1355,7 +1361,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                 >
                   <ArrowUpIcon size={12} />
-                  Follow-up
+                  {t("followUp")}
                 </button>
               )}
             </div>
@@ -1371,14 +1377,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }}>
 
           {/* LEFT: attach + model selector (idle) or steer/followup toggle (streaming) */}
-          <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
+          <div className="chat-input-toolbar-left" style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
             <button
+              className="chat-input-toolbar-attach"
               onClick={() => fileInputRef.current?.click()}
               disabled={isStreaming}
-              title="Attach image"
+              title={t("attachImage")}
+              aria-label={t("attachImage")}
               style={{
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                width: 32, height: 32, padding: 0,
+                width: 28, height: 28, padding: 0,
                 background: "none", border: "none",
                 borderRadius: 9,
                 color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
@@ -1396,11 +1404,331 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text-muted)";
               }}
             >
-              <ImageIcon size={15} />
+              <PlusIcon size={14} />
             </button>
+            {onSoundToggle !== undefined && (
+              <button
+                className="chat-input-toolbar-sound"
+                onClick={onSoundToggle}
+                title={soundEnabled ? t("disableCompletionSound") : t("enableCompletionSound")}
+                aria-label={soundEnabled ? t("disableCompletionSound") : t("enableCompletionSound")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                  width: 28,
+                  height: 28,
+                  padding: 0,
+                  background: "none",
+                  border: "none",
+                  borderRadius: 9,
+                  color: soundEnabled ? "var(--text-muted)" : "var(--text-dim)",
+                  cursor: "pointer",
+                  opacity: soundEnabled ? 1 : 0.55,
+                  transition: "background 0.12s, color 0.12s, opacity 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = "var(--text)";
+                  e.currentTarget.style.opacity = "1";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "none";
+                  e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
+                  e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
+                }}
+              >
+                {soundEnabled ? <SpeakerHighIcon size={14} /> : <SpeakerSlashIcon size={14} />}
+              </button>
+            )}
+            {!isStreaming && onThinkingLevelChange && (
+              <div ref={thinkingDropdownRef} className="chat-input-toolbar-thinking" style={{ position: "relative" }}>
+                <button
+                  onClick={() => !isStreaming && setThinkingDropdownOpen((v) => !v)}
+                  disabled={isStreaming}
+                  title={t("changeReasoningLevel").replace("{level}", thinkingDisplayLabel)}
+                  aria-label={t("reasoningLevel")}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: isMobile ? "0 5px" : "6px 10px",
+                    width: isMobile ? "auto" : undefined,
+                    height: 28,
+                    background: thinkingDropdownOpen ? "var(--bg-hover)" : "none",
+                    border: "none",
+                    borderRadius: 9,
+                    color: "var(--text-muted)",
+                    cursor: isStreaming ? "not-allowed" : "pointer",
+                    fontSize: 12,
+                    opacity: isStreaming ? 0.5 : 1,
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isStreaming) return;
+                    e.currentTarget.style.background = "var(--bg-hover)";
+                    e.currentTarget.style.color = "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = thinkingDropdownOpen ? "var(--bg-hover)" : "none";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                >
+                  <LightbulbIcon size={14} />
+                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
+                </button>
+                {thinkingDropdownOpen && (
+                  <div style={{
+                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
+                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
+                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+                    overflow: "hidden", minWidth: 180,
+                  }}>
+                    {THINKING_LEVELS.filter((lvl) => {
+                      if (!availableThinkingLevels) return true;
+                      if (lvl === "auto") return true;
+                      return availableThinkingLevels.includes(lvl);
+                    }).map((lvl) => {
+                      const isActive = (thinkingLevel ?? "auto") === lvl;
+                      const desc = thinkingLevelDescriptions[lvl];
+                      const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
+                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
+                      const showOriginal = mappedVal != null && mappedVal !== lvl;
+                      return (
+                        <button
+                          key={lvl}
+                          onClick={() => { setThinkingDropdownOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            width: "100%", padding: "7px 12px",
+                            background: isActive ? "var(--bg-selected)" : "none",
+                            border: "none",
+                            color: isActive ? "var(--text)" : "var(--text-muted)",
+                            cursor: "pointer", fontSize: 12, textAlign: "left",
+                            fontWeight: isActive ? 600 : 400,
+                            whiteSpace: "nowrap",
+                          }}
+                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                        >
+                          {isActive
+                            ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
+                            : <span style={{ width: 10, flexShrink: 0 }} />}
+                          <span style={{ flex: 1 }}>
+                            {displayLabel}
+                            {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>}
+                          </span>
+                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* spacer */}
+          {!isMobile && <div className="chat-input-toolbar-spacer" style={{ flex: 1 }} />} 
+
+          {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
+          <div ref={controlsMenuRef} className="chat-input-toolbar-controls" style={{
+            flex: "0 0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            position: "relative",
+            marginLeft: isMobile ? 0 : "auto",
+          }}>
+            {isMobile && (
+              <button
+                type="button"
+                title={controlsMenuOpen ? undefined : t("moreControls")}
+                aria-label={t("moreControls")}
+                aria-expanded={controlsMenuOpen}
+                aria-hidden={controlsMenuOpen || undefined}
+                tabIndex={controlsMenuOpen ? -1 : undefined}
+                onClick={() => {
+                  setModelDropdownOpen(false);
+                  setControlsMenuOpen(true);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "100%",
+                  height: 28,
+                  padding: "6px 8px",
+                  background: "none",
+                  border: "none",
+                  borderRadius: 9,
+                  color: "var(--text-muted)",
+                  cursor: controlsMenuOpen ? "default" : "pointer",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  visibility: controlsMenuOpen ? "hidden" : "visible",
+                  pointerEvents: controlsMenuOpen ? "none" : "auto",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  if (controlsMenuOpen) return;
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = "var(--text)";
+                }}
+                onMouseLeave={(e) => {
+                  if (controlsMenuOpen) return;
+                  e.currentTarget.style.background = "none";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }}
+              >
+                {t("more")}
+              </button>
+            )}
+            <div className="chat-input-toolbar-actions" style={{
+              display: isMobile ? (controlsMenuOpen ? "flex" : "none") : "flex",
+              alignItems: "center",
+              gap: isMobile ? 1 : 2,
+              ...(isMobile ? {
+                position: "absolute",
+                right: 0,
+                bottom: 0,
+                zIndex: 60,
+                padding: 1,
+                width: "max-content",
+                maxWidth: "calc(100vw - 32px)",
+                flexWrap: "nowrap",
+                justifyContent: "flex-end",
+                border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+                borderRadius: 10,
+                background: "color-mix(in srgb, var(--bg-panel) 92%, var(--bg))",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+                backdropFilter: "blur(10px)",
+              } : null),
+            }}>
+            {!isStreaming && onCompact && (
+              <div className="chat-input-toolbar-compact" style={{ position: "relative" }}>
+                {compactError && (
+                  <div style={{
+                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
+                    background: "#1f2937", color: "#f87171",
+                    fontSize: 11, padding: "4px 8px", borderRadius: 5,
+                    whiteSpace: "nowrap", pointerEvents: "none",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.2)", zIndex: 50,
+                  }}>
+                    {compactError}
+                  </div>
+                )}
+                <button
+                  onClick={isCompacting ? onAbortCompaction : onCompact}
+                  disabled={isStreaming && !isCompacting}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: isMobile ? "0 5px" : "6px 10px",
+                    width: isMobile ? "auto" : undefined,
+                    height: 28,
+                    background: isCompacting ? "rgba(239,68,68,0.08)" : "none",
+                    border: "none",
+                    borderRadius: 9,
+                    color: isCompacting ? "#ef4444" : "var(--text-muted)",
+                    cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
+                    fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isStreaming && !isCompacting) return;
+                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.16)" : "var(--bg-hover)";
+                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.08)" : "none";
+                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text-muted)";
+                  }}
+                  title={isCompacting ? t("stopCompaction") : t("compactContext")}
+                  aria-label={isCompacting ? t("stopCompaction") : t("compactContext")}
+                >
+                  {isCompacting ? (
+                    <><SquareIcon size={14} />{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("compacting")}</span>}</>
+                  ) : (
+                    <><ArrowsInIcon size={14} />{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("compact")}</span>}</>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {!isStreaming && onToolPresetChange && (
+              <div ref={toolDropdownRef} className="chat-input-toolbar-tools" style={{ position: "relative" }}>
+                <button
+                  onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
+                  disabled={isStreaming}
+                  title={t("changeToolPreset").replace("{preset}", toolPresetLabel)}
+                  aria-label={t("toolPreset")}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: isMobile ? "0 5px" : "6px 10px",
+                    width: isMobile ? "auto" : undefined,
+                    height: 28,
+                    background: toolDropdownOpen ? "var(--bg-hover)" : "none",
+                    border: "none",
+                    borderRadius: 9,
+                    color: "var(--text-muted)",
+                    cursor: isStreaming ? "not-allowed" : "pointer",
+                    fontSize: 12,
+                    opacity: isStreaming ? 0.5 : 1,
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isStreaming) return;
+                    e.currentTarget.style.background = "var(--bg-hover)";
+                    e.currentTarget.style.color = "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                >
+                  <WrenchIcon size={14} />
+                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
+                </button>
+                {toolDropdownOpen && (
+                  <div style={{
+                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
+                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
+                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+                    overflow: "hidden", minWidth: 120,
+                  }}>
+                    {TOOL_PRESETS.map((lvl) => {
+                      const preset = TOOL_PRESET_MAP[lvl];
+                      const isActive = (toolPreset ?? "default") === preset;
+                      const desc = lvl === "off" ? t("noToolsReadOnly") : lvl === "default" ? t("fourBuiltInTools") : t("allBuiltInTools");
+                      return (
+                        <button
+                          key={lvl}
+                          onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            width: "100%", padding: "7px 12px",
+                            background: isActive ? "var(--bg-selected)" : "none",
+                            border: "none",
+                            color: isActive ? "var(--text)" : "var(--text-muted)",
+                            cursor: "pointer", fontSize: 12, textAlign: "left",
+                            fontWeight: isActive ? 600 : 400,
+                            whiteSpace: "nowrap",
+                          }}
+                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                        >
+                          {isActive
+                            ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
+                            : <span style={{ width: 10, flexShrink: 0 }} />}
+                          <span style={{ flex: 1 }}>{lvl}</span>
+                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Model selector — visible always, disabled during streaming */}
             {modelOptions.length > 0 && currentName && onModelChange && (
-                <div ref={dropdownRef} style={{ position: "relative", flex: isMobile ? "1 1 auto" : undefined, minWidth: 0 }}>
+                <div ref={dropdownRef} className="chat-input-toolbar-model" style={{ position: "relative", flex: isMobile ? "1 1 auto" : undefined, minWidth: 0 }}>
                   <button
                     onClick={(e) => {
                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -1411,8 +1739,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     style={{
                       display: "flex", alignItems: "center", gap: 6,
                       justifyContent: isMobile ? "flex-start" : undefined,
-                      padding: isMobile ? "8px 10px" : "8px 12px",
-                      height: 32,
+                      padding: isMobile ? "6px 8px" : "6px 10px",
+                      height: 28,
                       width: isMobile ? "100%" : undefined,
                       maxWidth: isMobile ? "100%" : 220,
                       overflow: "hidden",
@@ -1435,7 +1763,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       e.currentTarget.style.color = "var(--text-muted)";
                     }}
                   >
-                    <CpuIcon size={11} />
+                    <CpuIcon size={14} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
                   </button>
                   {modelDropdownOpen && modelDropdownRect && (() => {
@@ -1501,292 +1829,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   })()}
                 </div>
             )}
-          </div>
-
-          {/* spacer */}
-          {!isMobile && <div style={{ flex: 1 }} />}
-
-          {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
-          <div ref={controlsMenuRef} style={{
-            flex: "0 0 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            position: "relative",
-            marginLeft: isMobile ? 0 : "auto",
-          }}>
-            {isMobile && (
-              <button
-                type="button"
-                title={controlsMenuOpen ? undefined : "More controls"}
-                aria-label="More controls"
-                aria-expanded={controlsMenuOpen}
-                aria-hidden={controlsMenuOpen || undefined}
-                tabIndex={controlsMenuOpen ? -1 : undefined}
-                onClick={() => {
-                  setModelDropdownOpen(false);
-                  setControlsMenuOpen(true);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "100%",
-                  height: 32,
-                  padding: "8px 10px",
-                  background: "none",
-                  border: "none",
-                  borderRadius: 9,
-                  color: "var(--text-muted)",
-                  cursor: controlsMenuOpen ? "default" : "pointer",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  visibility: controlsMenuOpen ? "hidden" : "visible",
-                  pointerEvents: controlsMenuOpen ? "none" : "auto",
-                  transition: "background 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  if (controlsMenuOpen) return;
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                }}
-                onMouseLeave={(e) => {
-                  if (controlsMenuOpen) return;
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                }}
-              >
-                More
-              </button>
-            )}
-            <div style={{
-              display: isMobile ? (controlsMenuOpen ? "flex" : "none") : "flex",
-              alignItems: "center",
-              gap: isMobile ? 1 : 2,
-              ...(isMobile ? {
-                position: "absolute",
-                right: 0,
-                bottom: 0,
-                zIndex: 60,
-                padding: 1,
-                width: "max-content",
-                maxWidth: "calc(100vw - 32px)",
-                flexWrap: "nowrap",
-                justifyContent: "flex-end",
-                border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                borderRadius: 10,
-                background: "color-mix(in srgb, var(--bg-panel) 92%, var(--bg))",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
-                backdropFilter: "blur(10px)",
-              } : null),
-            }}>
-            {!isStreaming && onThinkingLevelChange && (
-              <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
-                <button
-                  onClick={() => !isStreaming && setThinkingDropdownOpen((v) => !v)}
-                  disabled={isStreaming}
-                  title={`Change reasoning level: ${thinkingDisplayLabel}`}
-                  aria-label="Change reasoning level"
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "8px 12px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 32,
-                    background: thinkingDropdownOpen ? "var(--bg-hover)" : "none",
-                    border: "none",
-                    borderRadius: 9,
-                    color: "var(--text-muted)",
-                    cursor: isStreaming ? "not-allowed" : "pointer",
-                    fontSize: 12,
-                    opacity: isStreaming ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming) return;
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = thinkingDropdownOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
-                  }}
-                >
-                  <BrainIcon size={11} />
-                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
-                </button>
-                {thinkingDropdownOpen && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                    overflow: "hidden", minWidth: 180,
-                  }}>
-                    {THINKING_LEVELS.filter((lvl) => {
-                      if (!availableThinkingLevels) return true;
-                      if (lvl === "auto") return true;
-                      return availableThinkingLevels.includes(lvl);
-                    }).map((lvl) => {
-                      const isActive = (thinkingLevel ?? "auto") === lvl;
-                      const desc = THINKING_LEVEL_DESC[lvl];
-                      const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
-                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
-                      const showOriginal = mappedVal != null && mappedVal !== lvl;
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => { setThinkingDropdownOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            background: isActive ? "var(--bg-selected)" : "none",
-                            border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
-                            cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
-                            whiteSpace: "nowrap",
-                          }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                        >
-                          {isActive
-                            ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>
-                            {displayLabel}
-                            {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>}
-                          </span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-            {!isStreaming && onToolPresetChange && (
-              <div ref={toolDropdownRef} style={{ position: "relative" }}>
-                <button
-                  onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
-                  disabled={isStreaming}
-                  title={`Change tool preset: ${toolPresetLabel}`}
-                  aria-label="Change tool preset"
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "8px 12px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 32,
-                    background: toolDropdownOpen ? "var(--bg-hover)" : "none",
-                    border: "none",
-                    borderRadius: 9,
-                    color: "var(--text-muted)",
-                    cursor: isStreaming ? "not-allowed" : "pointer",
-                    fontSize: 12,
-                    opacity: isStreaming ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming) return;
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
-                  }}
-                >
-                  <WrenchIcon size={11} />
-                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
-                </button>
-                {toolDropdownOpen && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                    overflow: "hidden", minWidth: 120,
-                  }}>
-                    {TOOL_PRESETS.map((lvl) => {
-                      const preset = TOOL_PRESET_MAP[lvl];
-                      const isActive = (toolPreset ?? "default") === preset;
-                      const desc = lvl === "off" ? "No tools, read-only" : lvl === "default" ? "4 built-in tools" : "All built-in tools";
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            background: isActive ? "var(--bg-selected)" : "none",
-                            border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
-                            cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
-                            whiteSpace: "nowrap",
-                          }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                        >
-                          {isActive
-                            ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>{lvl}</span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!isStreaming && onCompact && (
-              <div style={{ position: "relative" }}>
-                {compactError && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    background: "#1f2937", color: "#f87171",
-                    fontSize: 11, padding: "4px 8px", borderRadius: 5,
-                    whiteSpace: "nowrap", pointerEvents: "none",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.2)", zIndex: 50,
-                  }}>
-                    {compactError}
-                  </div>
-                )}
-                <button
-                  onClick={isCompacting ? onAbortCompaction : onCompact}
-                  disabled={isStreaming && !isCompacting}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "8px 12px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 32,
-                    background: isCompacting ? "rgba(239,68,68,0.08)" : "none",
-                    border: "none",
-                    borderRadius: 9,
-                    color: isCompacting ? "#ef4444" : "var(--text-muted)",
-                    cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
-                    fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming && !isCompacting) return;
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.16)" : "var(--bg-hover)";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.08)" : "none";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text-muted)";
-                  }}
-                  title={isCompacting ? "Stop compaction" : "Compact context"}
-                  aria-label={isCompacting ? "Stop compaction" : "Compact context"}
-                >
-                  {isCompacting ? (
-                    <><SquareIcon size={10} />{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>Compacting…</span>}</>
-                  ) : (
-                    <><ArrowsInIcon size={11} />{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>Compact</span>}</>
-                  )}
-                </button>
-              </div>
-            )}
 
             {!isStreaming && (
               <button
@@ -1794,21 +1836,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 onClick={handleSend}
                 disabled={!value.trim() && !attachedImages.length}
                 className="chat-input-send"
-                title="Send message"
-                aria-label="Send message"
+                title={t("sendMessage")}
+                aria-label={t("sendMessage")}
               >
-                <PaperPlaneTiltIcon size={16} />
+                <PaperPlaneTiltIcon size={14} />
               </button>
             )}
 
             {isStreaming && (
               <button
                 onClick={onAbort}
-                title="Stop agent"
+                title={t("stopAgent")}
+                aria-label={t("stopAgent")}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 14px",
-                  height: 32,
+                  padding: "6px 10px",
+                  height: 28,
                   background: "rgba(239,68,68,0.08)",
                   border: "1px solid rgba(239,68,68,0.3)",
                   borderRadius: 9,
@@ -1821,48 +1864,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
               >
-                <SquareIcon size={10} />
-                Stop
+                <SquareIcon size={14} />
+                {t("stop")}
               </button>
             )}
 
-            {onSoundToggle !== undefined && (
-              <button
-                onClick={onSoundToggle}
-                title={soundEnabled ? "Disable completion sound" : "Enable completion sound"}
-                aria-label={soundEnabled ? "Disable completion sound" : "Enable completion sound"}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                  width: isMobile ? 32 : 32,
-                  height: 32,
-                  padding: 0,
-                  background: "none",
-                  border: "none",
-                  borderRadius: 9,
-                  color: soundEnabled ? "var(--text-muted)" : "var(--text-dim)",
-                  cursor: "pointer",
-                  opacity: soundEnabled ? 1 : 0.55,
-                  transition: "background 0.12s, color 0.12s, opacity 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                  e.currentTarget.style.opacity = "1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
-                  e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
-                }}
-              >
-                {soundEnabled ? <SpeakerHighIcon size={12} /> : <SpeakerSlashIcon size={12} />}
-              </button>
-            )}
             {isMobile && controlsMenuOpen && (
               <button
                 type="button"
-                title="Collapse controls"
-                aria-label="Collapse controls"
+                title={t("collapseControls")}
+                aria-label={t("collapseControls")}
                 aria-expanded={true}
                 onClick={() => {
                   setToolDropdownOpen(false);
@@ -1873,8 +1884,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 36,
-                  height: 32,
+                  width: 32,
+                  height: 28,
                   padding: 0,
                   marginLeft: 0,
                   background: "var(--bg-hover)",

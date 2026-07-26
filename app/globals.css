@@ -367,12 +367,17 @@ pre, code {
   opacity: 1;
 }
 .chat-input-toolbar {
-  min-height: 36px;
+  min-height: 40px;
   padding: 6px;
   border: 0;
+  font-size: 12px;
 }
 .chat-input-toolbar button {
-  border-radius: 4px !important;
+  border-radius: 6px !important;
+  font-size: inherit !important;
+}
+.chat-input-toolbar-actions {
+  gap: 2px;
 }
 .chat-input-send {
   display: inline-flex !important;
@@ -380,9 +385,9 @@ pre, code {
   height: 28px !important;
   align-items: center !important;
   justify-content: center !important;
-  padding: 6px !important;
+  padding: 0 !important;
   border: 0 !important;
-  border-radius: 4px !important;
+  border-radius: 6px !important;
   background: transparent !important;
   color: var(--text-dim) !important;
   box-shadow: none !important;
@@ -410,6 +415,7 @@ pre, code {
   .chat-input-toolbar {
     padding: 6px 12px;
   }
+
   .chat-input-primary-actions {
     gap: 4px !important;
   }
