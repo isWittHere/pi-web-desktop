@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlusIcon } from "@phosphor-icons/react";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useLanguage } from "@/hooks/useLanguage";
 import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
+
+type Translate = ReturnType<typeof useLanguage>["t"];
 
 type PluginScope = PluginPackageInfo["scope"];
 type PluginAction = "install" | "remove" | "update" | "disable" | "enable";
@@ -17,22 +20,22 @@ function packageKey(pkg: Pick<PluginPackageInfo, "source" | "scope">): string {
   return `${pkg.scope}\0${pkg.source}`;
 }
 
-function resourceSummary(pkg: PluginPackageInfo): string {
-  if (pkg.disabled) return "Disabled";
+function resourceSummary(pkg: PluginPackageInfo, t: Translate): string {
+  if (pkg.disabled) return t("disabled");
   const parts = [
-    pkg.counts.extensions ? `${pkg.counts.extensions} ext` : "",
-    pkg.counts.skills ? `${pkg.counts.skills} skills` : "",
-    pkg.counts.prompts ? `${pkg.counts.prompts} prompts` : "",
-    pkg.counts.themes ? `${pkg.counts.themes} themes` : "",
+    pkg.counts.extensions ? t("extensionsCount").replace("{count}", String(pkg.counts.extensions)) : "",
+    pkg.counts.skills ? t("skillsCount").replace("{count}", String(pkg.counts.skills)) : "",
+    pkg.counts.prompts ? t("promptsCount").replace("{count}", String(pkg.counts.prompts)) : "",
+    pkg.counts.themes ? t("themesCount").replace("{count}", String(pkg.counts.themes)) : "",
   ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "No resources";
+  return parts.length ? parts.join(" · ") : t("noResources");
 }
 
-function versionSummary(pkg: PluginPackageInfo): string {
+function versionSummary(pkg: PluginPackageInfo, t: Translate): string {
   const parts = [];
-  if (pkg.version) parts.push(`installed ${pkg.version}`);
-  if (pkg.configuredVersion) parts.push(`configured ${pkg.configuredVersion}`);
-  return parts.length ? parts.join(" · ") : "Unknown";
+  if (pkg.version) parts.push(t("installedVersion").replace("{version}", pkg.version));
+  if (pkg.configuredVersion) parts.push(t("configuredVersion").replace("{version}", pkg.configuredVersion));
+  return parts.length ? parts.join(" · ") : t("unknown");
 }
 
 function installLocation(scope: PluginScope, cwd: string): string {
@@ -61,11 +64,12 @@ function statusColor(status: PluginPackageInfo["status"]): string {
 }
 
 function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
+  const { t } = useLanguage();
   const groups = ([
-    ["extension", "Extensions"],
-    ["skill", "Skills"],
-    ["prompt", "Prompts"],
-    ["theme", "Themes"],
+    ["extension", t("extensions")],
+    ["skill", t("skills")],
+    ["prompt", t("prompts")],
+    ["theme", t("themes")],
   ] as const)
     .map(([kind, label]) => ({
       kind,
@@ -77,7 +81,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
   if (groups.length === 0) {
     return (
       <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-        {pkg.disabled ? "Package disabled" : "No resolved resources"}
+        {pkg.disabled ? t("packageDisabled") : t("noResolvedResources")}
       </div>
     );
   }
@@ -149,6 +153,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
 }
 
 function ScopeTag({ scope }: { scope: PluginScope }) {
+  const { t } = useLanguage();
   return (
     <span
       style={{
@@ -160,7 +165,7 @@ function ScopeTag({ scope }: { scope: PluginScope }) {
         color: scope === "project" ? "rgba(99,102,241,0.85)" : "var(--text-dim)",
       }}
     >
-      {scope}
+      {t(scope)}
     </span>
   );
 }
@@ -236,6 +241,7 @@ function SegmentedScope({
   value: PluginScope;
   onChange: (scope: PluginScope) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div
       style={{
@@ -262,7 +268,7 @@ function SegmentedScope({
               fontSize: 12,
             }}
           >
-            {scope}
+            {t(scope)}
           </button>
         );
       })}
@@ -289,6 +295,7 @@ function AddPluginPanel({
   onScopeChange: (scope: PluginScope) => void;
   onInstall: () => void;
 }) {
+  const { t } = useLanguage();
   const inputRef = useRef<HTMLInputElement>(null);
   const examples = ["npm:@scope/pi-plugin", "git:https://github.com/user/repo", "/absolute/path/to/plugin"];
 
@@ -300,7 +307,7 @@ function AddPluginPanel({
     <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 660, minHeight: "100%" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-          Add Plugin
+          {t("addPluginTitle")}
         </div>
         <div style={{ fontSize: 12, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
           {installLocation(scope, cwd)}
@@ -309,7 +316,7 @@ function AddPluginPanel({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
         <label htmlFor="plugin-source" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-          Source
+          {t("pluginSource")}
         </label>
         <input
           id="plugin-source"
@@ -348,13 +355,13 @@ function AddPluginPanel({
             borderColor: "var(--accent)",
           }}
         >
-          {busy ? "Installing..." : "Install"}
+          {busy ? t("installing") : t("install")}
         </button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-          Examples
+          {t("examples")}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {examples.map((example) => (
@@ -418,6 +425,7 @@ function PackageDetail({
   onAction: (action: PluginAction, pkg: PluginPackageInfo) => void;
   onReloadSession: () => void;
 }) {
+  const { t } = useLanguage();
   const key = packageKey(pkg);
   const busy = busyKey?.endsWith(key) ?? false;
   const reloadBusy = busyKey === "reload";
@@ -431,7 +439,7 @@ function PackageDetail({
             enabled={enabled}
             loading={busy || reloadBusy}
             onToggle={() => onAction(pkg.disabled ? "enable" : "disable", pkg)}
-            label={pkg.disabled ? "Enable package" : "Disable package"}
+            label={pkg.disabled ? t("enablePackage") : t("disablePackage")}
           />
           <ScopeTag scope={pkg.scope} />
           {pkg.disabled ? (
@@ -444,7 +452,7 @@ function PackageDetail({
                 color: "var(--text-dim)",
               }}
             >
-              disabled
+              {t("disabled")}
             </span>
           ) : pkg.filtered && (
             <span
@@ -456,7 +464,7 @@ function PackageDetail({
                 color: "#d97706",
               }}
             >
-              filtered
+              {t("filtered")}
             </span>
           )}
           <span
@@ -479,22 +487,22 @@ function PackageDetail({
             disabled={busy || reloadBusy}
             style={buttonStyle(busy || reloadBusy)}
           >
-            {busyKey === `update:${key}` ? "Updating..." : "Update"}
+            {busyKey === `update:${key}` ? t("updating") : t("update")}
           </button>
           <button
             onClick={onReloadSession}
             disabled={!sessionId || reloadBusy || busy}
             style={buttonStyle(!sessionId || reloadBusy || busy)}
-            title={sessionId ? "Reload current session" : "Open a session to reload"}
+            title={sessionId ? t("reloadCurrentSession") : t("openSessionToReload")}
           >
-            {reloadBusy ? "Reloading..." : "Reload session"}
+            {reloadBusy ? t("reloading") : t("reloadSession")}
           </button>
           <button
             onClick={() => onAction("remove", pkg)}
             disabled={busy || reloadBusy}
             style={buttonStyle(busy || reloadBusy, true)}
           >
-            {busyKey === `remove:${key}` ? "Removing..." : "Remove"}
+            {busyKey === `remove:${key}` ? t("removing") : t("remove")}
           </button>
         </div>
       </div>
@@ -508,17 +516,17 @@ function PackageDetail({
           lineHeight: 1.45,
         }}
       >
-        <div style={{ color: "var(--text-dim)" }}>Status</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("status")}</div>
         <div style={{ color: statusColor(pkg.status), textTransform: "capitalize" }}>{pkg.status}</div>
-        <div style={{ color: "var(--text-dim)" }}>Version</div>
-        <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{versionSummary(pkg)}</div>
-        <div style={{ color: "var(--text-dim)" }}>Package</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("version")}</div>
+        <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{versionSummary(pkg, t)}</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("package")}</div>
         <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
-          {pkg.packageName ?? "Unknown"}
+          {pkg.packageName ?? t("unknown")}
         </div>
-        <div style={{ color: "var(--text-dim)" }}>Resources</div>
-        <div style={{ color: "var(--text-muted)" }}>{resourceSummary(pkg)}</div>
-        <div style={{ color: "var(--text-dim)" }}>Installed path</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("resources")}</div>
+        <div style={{ color: "var(--text-muted)" }}>{resourceSummary(pkg, t)}</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("installedPath")}</div>
         <div
           style={{
             color: pkg.installedPath ? "var(--text-muted)" : "#ef4444",
@@ -526,9 +534,9 @@ function PackageDetail({
             overflowWrap: "anywhere",
           }}
         >
-          {pkg.installedPath ? shortenPath(pkg.installedPath) : "Not found"}
+          {pkg.installedPath ? shortenPath(pkg.installedPath) : t("notFound")}
         </div>
-        <div style={{ color: "var(--text-dim)" }}>Cwd</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("cwd")}</div>
         <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
           {shortenPath(cwd)}
         </div>
@@ -536,7 +544,7 @@ function PackageDetail({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
-          Resolved Resources
+          {t("resolvedResources")}
         </div>
         <ResourceList pkg={pkg} />
       </div>
@@ -569,6 +577,7 @@ export function PluginsConfig({
   onReloadedAction?: () => void;
 }) {
   const isMobile = useIsMobile();
+  const { t } = useLanguage();
   const [data, setData] = useState<PluginsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -630,13 +639,13 @@ export function PluginsConfig({
       if (action === "remove") {
         setSelected(next.packages[0] ? packageKey(next.packages[0]) : null);
         if (next.packages.length === 0) setAddMode(true);
-        setActionMessage("Package removed.");
+        setActionMessage(t("packageRemoved"));
       } else {
         const messages: Record<Exclude<PluginAction, "remove">, string> = {
-          install: "Package installed.",
-          update: "Package updated.",
-          disable: "Package disabled.",
-          enable: "Package enabled.",
+          install: t("packageInstalled"),
+          update: t("packageUpdated"),
+          disable: t("packageDisabledMessage"),
+          enable: t("packageEnabled"),
         };
         setActionMessage(messages[action]);
       }
@@ -645,7 +654,7 @@ export function PluginsConfig({
     } finally {
       setBusyKey(null);
     }
-  }, [cwd]);
+  }, [cwd, t]);
 
   const installPlugin = useCallback(async () => {
     const source = installSource.trim();
@@ -667,13 +676,13 @@ export function PluginsConfig({
       setSelected(installed ? packageKey(installed) : key);
       setAddMode(false);
       setInstallSource("");
-      setActionMessage("Package installed.");
+      setActionMessage(t("packageInstalled"));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyKey(null);
     }
-  }, [cwd, installScope, installSource]);
+  }, [cwd, installScope, installSource, t]);
 
   const reloadSession = useCallback(async () => {
     if (!sessionId) return;
@@ -684,13 +693,13 @@ export function PluginsConfig({
       await sendAgentCommand(sessionId, { type: "reload" });
       onReloadedAction?.();
       await loadPlugins();
-      setActionMessage("Session reloaded.");
+      setActionMessage(t("sessionReloaded"));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyKey(null);
     }
-  }, [loadPlugins, onReloadedAction, sessionId]);
+  }, [loadPlugins, onReloadedAction, sessionId, t]);
 
   const addBusy = busyKey?.startsWith("install:") ?? false;
 
@@ -710,10 +719,10 @@ export function PluginsConfig({
         {!embedded && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Plugins</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("plugins")}</span>
               <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortenPath(cwd)}</code>
             </div>
-            <button onClick={onCloseAction} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+            <button onClick={onCloseAction} title={t("close")} aria-label={t("close")} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
           </div>
         )}
 
@@ -733,7 +742,7 @@ export function PluginsConfig({
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>
-                  Loading...
+                  {t("loading")}
                 </div>
               ) : error ? (
                 <div style={{ padding: "10px 8px", fontSize: 11, color: "#ef4444" }}>
@@ -741,7 +750,7 @@ export function PluginsConfig({
                 </div>
               ) : packages.length === 0 ? (
                 <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--text-dim)" }}>
-                  No plugins configured
+                  {t("noPluginsConfigured")}
                 </div>
               ) : (
                 groupedPackages.map((group) => (
@@ -755,7 +764,7 @@ export function PluginsConfig({
                         textTransform: "uppercase",
                       }}
                     >
-                      {group.scope}
+                      {t(group.scope)}
                     </div>
                     {group.packages.map((pkg) => {
                       const key = packageKey(pkg);
@@ -818,7 +827,7 @@ export function PluginsConfig({
                                 marginTop: 2,
                               }}
                             >
-                              {resourceSummary(pkg)}
+                              {resourceSummary(pkg, t)}
                             </div>
                             {(pkg.version || pkg.configuredVersion) && (
                               <div
@@ -831,7 +840,7 @@ export function PluginsConfig({
                                   marginTop: 2,
                                 }}
                               >
-                                {versionSummary(pkg)}
+                                {versionSummary(pkg, t)}
                               </div>
                             )}
                           </div>
@@ -871,7 +880,7 @@ export function PluginsConfig({
                 }}
               >
                 <PlusIcon size={13} />
-                Add plugin
+                {t("addPlugin")}
               </button>
             </div>
           </div>
@@ -911,7 +920,7 @@ export function PluginsConfig({
                   fontSize: 13,
                 }}
               >
-                Select a package
+                {t("selectPackage")}
               </div>
             )}
           </div>
@@ -934,20 +943,28 @@ export function PluginsConfig({
                 title={data.diagnostics.map((d) => `${d.type}: ${d.source ? `${d.source}: ` : ""}${d.message}`).join("\n")}
                 style={{ color: data.diagnostics.some((d) => d.type === "error") ? "#ef4444" : "#d97706" }}
               >
-                {data.diagnostics.length} diagnostic{data.diagnostics.length === 1 ? "" : "s"}
+                {t("diagnosticsCount")
+                  .replace("{count}", String(data.diagnostics.length))
+                  .replace("{suffix}", data.diagnostics.length === 1 ? "" : "s")}
               </span>
             ) : (
               <span>
-                {data ? `${data.totals.extensions} ext · ${data.totals.skills} skills · ${data.totals.prompts} prompts · ${data.totals.themes} themes` : ""}
+                {data
+                  ? t("pluginResourceTotals")
+                    .replace("{extensions}", String(data.totals.extensions))
+                    .replace("{skills}", String(data.totals.skills))
+                    .replace("{prompts}", String(data.totals.prompts))
+                    .replace("{themes}", String(data.totals.themes))
+                  : ""}
               </span>
             )}
           </div>
           <button onClick={() => void loadPlugins()} disabled={loading || busyKey !== null} style={buttonStyle(loading || busyKey !== null)}>
-            Refresh
+            {t("refresh")}
           </button>
           {!embedded && (
             <button onClick={onCloseAction} style={buttonStyle(false)}>
-              Close
+              {t("close")}
             </button>
           )}
         </div>

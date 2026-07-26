@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Cpu, Plug, Stack, X } from "@phosphor-icons/react";
+import { Cpu, Monitor, Plug, Stack, X } from "@phosphor-icons/react";
+import { DisplayConfig } from "./DisplayConfig";
 import { ModelsConfig } from "./ModelsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useLanguage, type TranslationKey } from "@/hooks/useLanguage";
 
-export type SettingsTab = "models" | "skills" | "plugins";
+export type SettingsTab = "display" | "models" | "skills" | "plugins";
 
 interface SettingsModalProps {
   initialTab?: SettingsTab;
@@ -18,10 +20,11 @@ interface SettingsModalProps {
   onSessionReloadedAction: () => void;
 }
 
-const tabs: { id: SettingsTab; label: string; Icon: typeof Cpu }[] = [
-  { id: "models", label: "Models", Icon: Cpu },
-  { id: "skills", label: "Skills", Icon: Stack },
-  { id: "plugins", label: "Plugins", Icon: Plug },
+const tabs: { id: SettingsTab; labelKey: TranslationKey; Icon: typeof Cpu }[] = [
+  { id: "display", labelKey: "display", Icon: Monitor },
+  { id: "models", labelKey: "models", Icon: Cpu },
+  { id: "skills", labelKey: "skills", Icon: Stack },
+  { id: "plugins", labelKey: "plugins", Icon: Plug },
 ];
 
 export function SettingsModal({
@@ -33,8 +36,9 @@ export function SettingsModal({
   onSessionReloadedAction,
 }: SettingsModalProps) {
   const isMobile = useIsMobile();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    initialTab === "models" || cwd ? initialTab : "models",
+    initialTab === "skills" || initialTab === "plugins" ? (cwd ? initialTab : "display") : initialTab,
   );
 
   return (
@@ -55,7 +59,7 @@ export function SettingsModal({
       <section
         role="dialog"
         aria-modal="true"
-        aria-label="Settings"
+        aria-label={t("settings")}
         style={{
           width: isMobile ? "calc(100vw - 16px)" : 1000,
           maxWidth: "calc(100vw - 16px)",
@@ -81,7 +85,7 @@ export function SettingsModal({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Settings</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("settings")}</span>
             {activeTab === "models" ? (
               <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 ~/.pi/agent/models.json
@@ -95,8 +99,8 @@ export function SettingsModal({
           <button
             type="button"
             onClick={onCloseAction}
-            title="Close settings"
-            aria-label="Close settings"
+            title={t("closeSettings")}
+            aria-label={t("closeSettings")}
             style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 4, display: "flex" }}
           >
             <X size={18} aria-hidden="true" />
@@ -105,7 +109,7 @@ export function SettingsModal({
 
         <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: "hidden" }}>
           <nav
-            aria-label="Settings sections"
+            aria-label={t("settingsSections")}
             style={{
               display: "flex",
               flexDirection: isMobile ? "row" : "column",
@@ -118,8 +122,8 @@ export function SettingsModal({
               borderBottom: isMobile ? "1px solid var(--border)" : "none",
             }}
           >
-            {tabs.map(({ id, label, Icon }) => {
-              const disabled = id !== "models" && !cwd;
+            {tabs.map(({ id, labelKey, Icon }) => {
+              const disabled = (id === "skills" || id === "plugins") && !cwd;
               const active = activeTab === id;
               return (
                 <button
@@ -160,12 +164,15 @@ export function SettingsModal({
                   }}
                 >
                   <Icon size={16} aria-hidden="true" />
-                  <span>{label}</span>
+                  <span>{t(labelKey)}</span>
                 </button>
               );
             })}
           </nav>
 
+          <div style={{ display: activeTab === "display" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>
+            <DisplayConfig />
+          </div>
           <div style={{ display: activeTab === "models" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>
             <ModelsConfig embedded onSavedAction={onModelsSavedAction} />
           </div>

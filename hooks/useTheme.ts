@@ -2,7 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 
-type Theme = "light" | "dark";
+export type Theme = "light" | "dark";
 
 const listeners = new Set<() => void>();
 
@@ -27,21 +27,25 @@ type ToggleOrigin = { x: number; y: number };
 export function useTheme() {
   const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
+  const setTheme = useCallback((next: Theme) => {
+    if (next === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    try {
+      localStorage.setItem("pi-theme", next);
+    } catch {
+      // ignore storage errors (private mode, quota, etc.)
+    }
+    listeners.forEach((cb) => cb());
+  }, []);
+
   const toggleTheme = useCallback((origin?: ToggleOrigin) => {
     const next: Theme = getSnapshot() === "dark" ? "light" : "dark";
 
     const apply = () => {
-      if (next === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-      try {
-        localStorage.setItem("pi-theme", next);
-      } catch {
-        // ignore storage errors (private mode, quota, etc.)
-      }
-      listeners.forEach((cb) => cb());
+      setTheme(next);
     };
 
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -79,7 +83,7 @@ export function useTheme() {
       .catch(() => {
         // transition cancelled — ignore
       });
-  }, []);
+  }, [setTheme]);
 
-  return { theme, toggleTheme, isDark: theme === "dark" };
+  return { theme, setTheme, toggleTheme, isDark: theme === "dark" };
 }

@@ -91,6 +91,18 @@ html.dark {
   box-sizing: border-box;
 }
 
+/* Catppuccin file icons use Latte in light mode and Mocha in dark mode.
+   The URLs are supplied per icon by components/FileIcons.tsx. */
+.catppuccin-file-icon {
+  display: block;
+  flex: 0 0 auto;
+  background: var(--catppuccin-icon-light) center / contain no-repeat;
+}
+
+html.dark .catppuccin-file-icon {
+  background-image: var(--catppuccin-icon-dark);
+}
+
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

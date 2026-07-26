@@ -11,6 +11,7 @@ import { TabBar, type Tab } from "./TabBar";
 import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
 import { useTheme } from "@/hooks/useTheme";
+
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
@@ -25,6 +26,7 @@ export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isDark, toggleTheme } = useTheme();
+
   const isMobile = useIsMobile();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   // When user clicks +, we only store the cwd — no fake session id

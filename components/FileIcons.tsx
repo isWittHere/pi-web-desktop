@@ -1,175 +1,192 @@
-// Flat monochrome file & folder icons — all use currentColor / var(--text-dim)
-
-import {
-  BracketsCurly,
-  Code,
-  Database,
-  File,
-  FileCode,
-  FileDoc,
-  FileHtml,
-  FileJs,
-  FilePdf,
-  FilePy,
-  FileRs,
-  FileText,
-  Folder,
-  FolderOpen,
-  Gear,
-  GitBranch,
-  Key,
-  Lock,
-  Terminal,
-} from "@phosphor-icons/react";
+import type { CSSProperties, ReactNode } from "react";
 
 interface IconProps {
   size?: number;
 }
 
-const DIM = "var(--text-dim)";
+const ICON_ROOT = "/catppuccin-icons";
 
-function iconStyle(size: number) {
-  return { size, color: DIM, weight: "regular" as const, style: { display: "block", flexShrink: 0 } };
+type IconStyle = CSSProperties & {
+  "--catppuccin-icon-light": string;
+  "--catppuccin-icon-dark": string;
+};
+
+function iconPath(flavor: "latte" | "mocha", icon: string) {
+  return `url(${ICON_ROOT}/${flavor}/${icon}.svg)`;
 }
 
-// ── Folder ────────────────────────────────────────────────────────────────
+function CatppuccinIcon({ icon, size = 14 }: IconProps & { icon: string }) {
+  const style: IconStyle = {
+    "--catppuccin-icon-light": iconPath("latte", icon),
+    "--catppuccin-icon-dark": iconPath("mocha", icon),
+    width: size,
+    height: size,
+  };
 
-export function FolderIcon({ size = 14, open = false }: IconProps & { open?: boolean }) {
-  const props = iconStyle(size);
-  return open ? <FolderOpen {...props} /> : <Folder {...props} />;
+  return <span className="catppuccin-file-icon" style={style} aria-hidden="true" />;
 }
 
-// ── Generic file (fallback) ────────────────────────────────────────────────
+const FOLDER_ICONS: Record<string, string> = {
+  ".github": "github",
+  ".git": "git",
+  ".vscode": "vscode",
+  ".next": "next",
+  ".nuxt": "nuxt",
+  ".storybook": "storybook",
+  ".turbo": "turbo",
+  ".yarn": "yarn",
+  ".husky": "husky",
+  ".cursor": "cursor",
+  "api": "api",
+  "app": "app",
+  "assets": "assets",
+  "components": "components",
+  "config": "config",
+  "docs": "docs",
+  "examples": "examples",
+  "hooks": "hooks",
+  "lib": "lib",
+  "node_modules": "node",
+  "pages": "routes",
+  "public": "public",
+  "scripts": "scripts",
+  "src": "src",
+  "styles": "styles",
+  "test": "tests",
+  "tests": "tests",
+  "__tests__": "tests",
+  "types": "types",
+  "utils": "utils",
+};
 
+/** Returns the Catppuccin folder icon for a directory, including its open state. */
+export function FolderIcon({ size = 14, open = false, name }: IconProps & { open?: boolean; name?: string }) {
+  const folderIcon = name ? FOLDER_ICONS[name.toLowerCase()] : undefined;
+  const icon = folderIcon ? `folder_${folderIcon}${open ? "_open" : ""}` : `_${open ? "folder_open" : "folder"}`;
+  return <CatppuccinIcon icon={icon} size={size} />;
+}
+
+/** Generic Catppuccin document icon used when no file association matches. */
 export function GenericFileIcon({ size = 14 }: IconProps) {
-  return <File {...iconStyle(size)} />;
+  return <CatppuccinIcon icon="_file" size={size} />;
 }
 
-// ── Specific icons ────────────────────────────────────────────────────────
-
-export function TypeScriptIcon({ size = 14 }: IconProps) {
-  return <FileCode {...iconStyle(size)} />;
-}
-export function TypeScriptReactIcon({ size = 14 }: IconProps) {
-  return <FileCode {...iconStyle(size)} />;
-}
-export function JavaScriptIcon({ size = 14 }: IconProps) {
-  return <FileJs {...iconStyle(size)} />;
-}
-export function JavaScriptReactIcon({ size = 14 }: IconProps) {
-  return <FileJs {...iconStyle(size)} />;
-}
-export function PythonIcon({ size = 14 }: IconProps) {
-  return <FilePy {...iconStyle(size)} />;
-}
-export function JsonIcon({ size = 14 }: IconProps) {
-  return <BracketsCurly {...iconStyle(size)} />;
-}
-export function CssIcon({ size = 14 }: IconProps) {
-  return <FileCode {...iconStyle(size)} />;
-}
-export function ScssIcon({ size = 14 }: IconProps) {
-  return <FileCode {...iconStyle(size)} />;
-}
-export function HtmlIcon({ size = 14 }: IconProps) {
-  return <FileHtml {...iconStyle(size)} />;
-}
-export function MarkdownIcon({ size = 14 }: IconProps) {
-  return <FileText {...iconStyle(size)} />;
-}
-export function YamlIcon({ size = 14 }: IconProps) {
-  return <FileCode {...iconStyle(size)} />;
-}
-export function TomlIcon({ size = 14 }: IconProps) {
-  return <FileCode {...iconStyle(size)} />;
-}
-export function ShellIcon({ size = 14 }: IconProps) {
-  return <Terminal {...iconStyle(size)} />;
-}
-export function RustIcon({ size = 14 }: IconProps) {
-  return <FileRs {...iconStyle(size)} />;
-}
-export function GoIcon({ size = 14 }: IconProps) {
-  return <FileCode {...iconStyle(size)} />;
-}
-export function SqlIcon({ size = 14 }: IconProps) {
-  return <Database {...iconStyle(size)} />;
-}
-export function GraphqlIcon({ size = 14 }: IconProps) {
-  return <Code {...iconStyle(size)} />;
-}
-export function TerraformIcon({ size = 14 }: IconProps) {
-  return <FileCode {...iconStyle(size)} />;
-}
-export function DockerfileIcon({ size = 14 }: IconProps) {
-  return <FileCode {...iconStyle(size)} />;
-}
-export function EnvIcon({ size = 14 }: IconProps) {
-  return <Key {...iconStyle(size)} />;
-}
-export function GitIcon({ size = 14 }: IconProps) {
-  return <GitBranch {...iconStyle(size)} />;
-}
-export function LockFileIcon({ size = 14 }: IconProps) {
-  return <Lock {...iconStyle(size)} />;
-}
-export function DocFileIcon({ size = 14 }: IconProps) {
-  return <FileDoc {...iconStyle(size)} />;
-}
-export function PdfFileIcon({ size = 14 }: IconProps) {
-  return <FilePdf {...iconStyle(size)} />;
-}
-export function ConfigIcon({ size = 14 }: IconProps) {
-  return <Gear {...iconStyle(size)} />;
+function FileIcon({ icon, size = 14 }: IconProps & { icon: string }) {
+  return <CatppuccinIcon icon={icon} size={size} />;
 }
 
-// ── Main resolver ─────────────────────────────────────────────────────────
+const EXACT_FILE_ICONS: Record<string, string> = {
+  ".babelrc": "babel",
+  ".dockerignore": "docker-ignore",
+  ".env": "env",
+  ".eslintignore": "eslint-ignore",
+  ".eslintrc": "eslint",
+  ".gitattributes": "git",
+  ".gitignore": "git",
+  ".gitmodules": "git",
+  ".npmignore": "npm-ignore",
+  ".prettierignore": "prettier-ignore",
+  ".prettierrc": "prettier",
+  ".yarnrc": "yarn",
+  "bun.lock": "bun-lock",
+  "bun.lockb": "bun-lock",
+  "cargo.lock": "cargo-lock",
+  "cargo.toml": "cargo",
+  "codeowners": "codeowners",
+  "docker-compose.yaml": "docker-compose",
+  "docker-compose.yml": "docker-compose",
+  "dockerfile": "docker",
+  "eslint.config.js": "eslint",
+  "eslint.config.mjs": "eslint",
+  "eslint.config.ts": "eslint",
+  "next.config.js": "next",
+  "next.config.mjs": "next",
+  "next.config.ts": "next",
+  "package-lock.json": "npm-lock",
+  "package.json": "package-json",
+  "pnpm-lock.yaml": "pnpm-lock",
+  "pnpm-workspace.yaml": "pnpm",
+  "prettier.config.js": "prettier",
+  "prettier.config.mjs": "prettier",
+  "prettier.config.ts": "prettier",
+  "tailwind.config.js": "tailwind",
+  "tailwind.config.ts": "tailwind",
+  "tsconfig.json": "typescript-config",
+  "vite.config.js": "vite",
+  "vite.config.mjs": "vite",
+  "vite.config.ts": "vite",
+  "vitest.config.ts": "vitest",
+  "yarn.lock": "yarn-lock",
+};
 
-export function getFileIcon(name: string, size = 14): React.ReactNode {
+const EXTENSION_ICONS: Record<string, string> = {
+  "astro": "astro",
+  "bash": "bash",
+  "c": "c",
+  "cpp": "cpp",
+  "css": "css",
+  "csv": "csv",
+  "cjs": "javascript",
+  "cts": "typescript",
+  "dockerfile": "docker",
+  "env": "env",
+  "go": "go",
+  "gql": "graphql",
+  "graphql": "graphql",
+  "hcl": "terraform",
+  "htm": "html",
+  "html": "html",
+  "ini": "config",
+  "java": "java",
+  "js": "javascript",
+  "json": "json",
+  "jsonc": "json",
+  "jsonl": "json",
+  "jsx": "javascript-react",
+  "less": "less",
+  "lua": "lua",
+  "md": "markdown",
+  "mdx": "markdown-mdx",
+  "mjs": "javascript",
+  "mts": "typescript",
+  "pdf": "pdf",
+  "php": "php",
+  "py": "python",
+  "rs": "rust",
+  "sass": "sass",
+  "scss": "sass",
+  "sh": "bash",
+  "sql": "database",
+  "svg": "svg",
+  "svelte": "svelte",
+  "tf": "terraform",
+  "toml": "toml",
+  "ts": "typescript",
+  "tsx": "typescript-react",
+  "txt": "text",
+  "vue": "vue",
+  "xml": "xml",
+  "yaml": "yaml",
+  "yml": "yaml",
+  "zsh": "bash",
+};
+
+/**
+ * Resolves a filename to its Catppuccin icon. The resolver is intentionally
+ * shared by the file tree, @-mention completion, and opened-file tabs.
+ */
+export function getFileIcon(name: string, size = 14): ReactNode {
   const lower = name.toLowerCase();
-  const ext = lower.split(".").pop() ?? "";
+  const exactIcon = EXACT_FILE_ICONS[lower];
+  if (exactIcon) return <FileIcon icon={exactIcon} size={size} />;
 
-  if (lower === "dockerfile" || lower.startsWith("dockerfile.")) return <DockerfileIcon size={size} />;
-  if (lower === ".env" || lower.startsWith(".env.")) return <EnvIcon size={size} />;
-  if (lower === ".gitignore" || lower === ".gitattributes" || lower === ".gitmodules") return <GitIcon size={size} />;
-  if (lower === "package-lock.json" || lower === "yarn.lock" || lower === "bun.lock" || lower === "pnpm-lock.yaml" || lower === "cargo.lock") return <LockFileIcon size={size} />;
-  if (lower.endsWith(".config.ts") || lower.endsWith(".config.js") || lower.endsWith(".config.mjs") || lower.endsWith(".config.cjs")) return <ConfigIcon size={size} />;
-  if ([".eslintrc", ".eslintrc.js", ".eslintrc.json", ".eslintrc.yml", "eslint.config.mjs", "eslint.config.js"].includes(lower)) return <ConfigIcon size={size} />;
-
-  switch (ext) {
-    case "ts":      return <TypeScriptIcon size={size} />;
-    case "tsx":     return <TypeScriptReactIcon size={size} />;
-    case "js":
-    case "mjs":
-    case "cjs":     return <JavaScriptIcon size={size} />;
-    case "jsx":     return <JavaScriptReactIcon size={size} />;
-    case "py":      return <PythonIcon size={size} />;
-    case "json":
-    case "jsonl":   return <JsonIcon size={size} />;
-    case "css":
-    case "less":    return <CssIcon size={size} />;
-    case "scss":    return <ScssIcon size={size} />;
-    case "html":
-    case "htm":     return <HtmlIcon size={size} />;
-    case "md":
-    case "mdx":     return <MarkdownIcon size={size} />;
-    case "yaml":
-    case "yml":     return <YamlIcon size={size} />;
-    case "toml":    return <TomlIcon size={size} />;
-    case "sh":
-    case "bash":
-    case "zsh":
-    case "fish":    return <ShellIcon size={size} />;
-    case "rs":      return <RustIcon size={size} />;
-    case "go":      return <GoIcon size={size} />;
-    case "sql":     return <SqlIcon size={size} />;
-    case "graphql":
-    case "gql":     return <GraphqlIcon size={size} />;
-    case "tf":
-    case "hcl":     return <TerraformIcon size={size} />;
-    case "docx":    return <DocFileIcon size={size} />;
-    case "pdf":     return <PdfFileIcon size={size} />;
-    case "lock":    return <LockFileIcon size={size} />;
-    default:          return <GenericFileIcon size={size} />;
+  if (lower === ".env" || lower.startsWith(".env.")) return <FileIcon icon="env" size={size} />;
+  if (lower === "dockerfile" || lower.startsWith("dockerfile.")) return <FileIcon icon="docker" size={size} />;
+  if (lower.endsWith(".config.ts") || lower.endsWith(".config.js") || lower.endsWith(".config.mjs") || lower.endsWith(".config.cjs")) {
+    return <FileIcon icon={lower.startsWith("vite.") ? "vite" : "config"} size={size} />;
   }
+
+  const extension = lower.split(".").pop() ?? "";
+  const extensionIcon = EXTENSION_ICONS[extension];
+  return extensionIcon ? <FileIcon icon={extensionIcon} size={size} /> : <GenericFileIcon size={size} />;
 }

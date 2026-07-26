@@ -2,10 +2,10 @@
 
 import type { ReactNode } from "react";
 import { Check, Moon, Sun, Translate } from "@phosphor-icons/react";
-import { useLanguage, type Language } from "@/hooks/useLanguage";
-import { useTheme, type Theme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
+import { useTheme } from "@/hooks/useTheme";
 
-function ChoiceButton<T extends string>({
+function ChoiceButton({
   active,
   icon,
   label,
@@ -71,13 +71,13 @@ export function DisplayConfig() {
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t("display")}</h1>
       </header>
       <SettingSection title={t("theme")} description={t("themeDescription")}>
-        <ChoiceButton<Theme>
+        <ChoiceButton
           active={theme === "light"}
           icon={<Sun size={18} aria-hidden="true" />}
           label={t("light")}
           onClick={() => setTheme("light")}
         />
-        <ChoiceButton<Theme>
+        <ChoiceButton
           active={theme === "dark"}
           icon={<Moon size={18} aria-hidden="true" />}
           label={t("dark")}
@@ -85,13 +85,13 @@ export function DisplayConfig() {
         />
       </SettingSection>
       <SettingSection title={t("language")} description={t("languageDescription")}>
-        <ChoiceButton<Language>
+        <ChoiceButton
           active={language === "en"}
           icon={<Translate size={18} aria-hidden="true" />}
           label={t("english")}
           onClick={() => setLanguage("en")}
         />
-        <ChoiceButton<Language>
+        <ChoiceButton
           active={language === "zh-CN"}
           icon={<Translate size={18} aria-hidden="true" />}
           label={t("chinese")}

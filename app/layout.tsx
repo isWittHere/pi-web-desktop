@@ -26,12 +26,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" translate="no" className={`${inter.variable} ${notoSansMono.variable} notranslate`} suppressHydrationWarning>
+    <html lang="en" data-language="en" translate="no" className={`${inter.variable} ${notoSansMono.variable} notranslate`} suppressHydrationWarning>
       <head>
         <meta name="google" content="notranslate" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("pi-theme");if(t==="dark")document.documentElement.classList.add("dark")}catch(e){}})();`,
+            __html: `(function(){try{var h=document.documentElement,t=localStorage.getItem("pi-theme"),l=localStorage.getItem("pi-language");if(t==="dark")h.classList.add("dark");if(l==="zh-CN"){h.lang=l;h.dataset.language=l}else{h.dataset.language="en"}}catch(e){}})();`,
           }}
         />
       </head>

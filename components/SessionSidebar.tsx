@@ -923,14 +923,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   <button key={wt.path} onClick={() => { setSelectedCwd(wt.path); setWtDropdownOpen(false); setWtError(null); }} title={wt.path} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "var(--bg)", border: "none", borderBottom: "1px solid var(--border)", color: isCurrent ? "var(--text)" : "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11, fontFamily: "var(--font-mono)" }}>
                     {isCurrent ? <Check size={10} color="var(--accent)" weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" /> : <span style={{ width: 10, flexShrink: 0 }} />}
                     <PathLabel text={wt.branch ?? displayCwd(wt.path, homeDir)} style={{ flex: 1 }} />
-                    {wt.isMain && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>main</span>}
+                    {wt.isMain && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("main")}</span>}
                   </button>
                 );
               })}
             </div>
             {!wtNewOpen ? (
-              <button onClick={(e) => { e.stopPropagation(); setWtNewOpen(true); setWtError(null); setTimeout(() => wtNewInputRef.current?.focus(), 0); }} title="Create a worktree checkout for a branch" style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11 }}>
-                <span>New worktree…</span>
+              <button onClick={(e) => { e.stopPropagation(); setWtNewOpen(true); setWtError(null); setTimeout(() => wtNewInputRef.current?.focus(), 0); }} title={t("createWorktree")} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11 }}>
+                <span>{t("newWorktree")}</span>
               </button>
             ) : (
               <div style={{ padding: "6px 8px" }}>
@@ -942,12 +942,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                     if (e.key === "Enter") { e.preventDefault(); void handleCreateWorktree(); }
                     if (e.key === "Escape") { setWtNewOpen(false); setWtNewBranch(""); setWtError(null); }
                   }}
-                  placeholder="branch name"
+                  placeholder={t("branchName")}
                   style={{ width: "100%", fontSize: 11, fontFamily: "var(--font-mono)", padding: "5px 8px", border: "1px solid var(--accent)", borderRadius: 5, outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }}
                 />
                 <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
-                  <button onClick={() => void handleCreateWorktree()} disabled={wtBusy || !wtNewBranch.trim()} style={{ flex: 1, padding: "4px 0", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: wtBusy || !wtNewBranch.trim() ? "not-allowed" : "pointer", opacity: wtBusy || !wtNewBranch.trim() ? 0.65 : 1 }}>{wtBusy ? "Creating…" : "Create"}</button>
-                  <button onClick={() => { setWtNewOpen(false); setWtNewBranch(""); setWtError(null); }} style={{ flex: 1, padding: "4px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer" }}>Cancel</button>
+                  <button onClick={() => void handleCreateWorktree()} disabled={wtBusy || !wtNewBranch.trim()} style={{ flex: 1, padding: "4px 0", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: wtBusy || !wtNewBranch.trim() ? "not-allowed" : "pointer", opacity: wtBusy || !wtNewBranch.trim() ? 0.65 : 1 }}>{wtBusy ? t("creating") : t("create")}</button>
+                  <button onClick={() => { setWtNewOpen(false); setWtNewBranch(""); setWtError(null); }} style={{ flex: 1, padding: "4px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer" }}>{t("cancel")}</button>
                 </div>
                 {wtError && <div style={{ marginTop: 5, color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>{wtError}</div>}
               </div>
@@ -1034,7 +1034,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 e.currentTarget.style.color = "var(--text-muted)";
                 e.currentTarget.style.borderColor = "var(--border)";
               }}
-              title="Refresh"
+              title={t("refresh")}
             >
               {sessionRefreshDone ? (
                 <Check size={15} color="#4ade80" weight="regular" aria-hidden="true" />
@@ -1397,7 +1397,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                               onClick={() => setWtConfirmRemove(null)}
                               style={{ padding: "3px 9px", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
                             >
-                              Cancel
+                              {t("cancel")}
                             </button>
                           </div>
                         );
@@ -1437,13 +1437,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                               <span style={{ width: 10, flexShrink: 0 }} />
                             )}
                             <PathLabel text={wt.branch ?? displayCwd(wt.path, homeDir)} style={{ flex: 1 }} />
-                            {wt.isMain && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>main</span>}
+                            {wt.isMain && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("main")}</span>}
                           </button>
                           {!wt.isMain && (
                             <button
                               onClick={() => void handleRemoveWorktree(wt.path, false)}
                               disabled={wtBusy}
-                              title={`Remove worktree checkout ${wt.path}; the branch is kept`}
+                              title={t("removeWorktree").replace("{path}", wt.path)}
                               style={{
                                 display: "flex", alignItems: "center", justifyContent: "center",
                                 width: 34, height: 28, padding: 0, marginRight: 4,
@@ -1471,7 +1471,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         setWtError(null);
                         setTimeout(() => wtNewInputRef.current?.focus(), 0);
                       }}
-                      title="Create a worktree checkout for a branch"
+                      title={t("createWorktree")}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -1487,7 +1487,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       }}
                     >
                       <Plus size={10} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
-                      <span>New worktree…</span>
+                      <span>{t("newWorktree")}</span>
                     </button>
                   ) : (
                     <div style={{ padding: "6px 8px" }}>
@@ -1509,7 +1509,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                             setWtError(null);
                           }
                         }}
-                        placeholder="branch name"
+                        placeholder={t("branchName")}
                         style={{
                           width: "100%",
                           fontSize: 11,
@@ -1540,7 +1540,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                             opacity: wtBusy || !wtNewBranch.trim() ? 0.65 : 1,
                           }}
                         >
-                          {wtBusy ? "Creating…" : "Create"}
+                          {wtBusy ? t("creating") : t("create")}
                         </button>
                         <button
                           onClick={() => { setWtNewOpen(false); setWtNewBranch(""); setWtError(null); }}
@@ -1555,7 +1555,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                             cursor: "pointer",
                           }}
                         >
-                          Cancel
+                          {t("cancel")}
                         </button>
                       </div>
                     </div>
@@ -1612,7 +1612,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       <div style={{ flex: explorerOpen && (selectedCwdProp || selectedCwd) ? "1 1 0" : "1 1 auto", overflowY: "auto", padding: "0", minHeight: 80 }}>
         {loading && (
           <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-            Loading...
+            {t("loading")}
           </div>
         )}
         {error && (
@@ -1622,7 +1622,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         )}
         {!loading && !error && filteredSessions.length === 0 && (
           <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-            No sessions found
+            {t("noSessionsFound")}
           </div>
         )}
         {sessionTree.map((node) => (
@@ -1676,14 +1676,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               }}
             >
               <CaretRight size={9} weight="regular" style={{ transform: explorerOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
-              Explorer
+              {t("explorer")}
             </button>
             {explorerOpen && (
               <button
                 onClick={() => fileExplorerRef.current?.openUploadPicker()}
                 disabled={explorerUploadBusy}
-                title="Upload files to project root"
-                aria-label="Upload files"
+                title={t("uploadFilesToProjectRoot")}
+                aria-label={t("uploadFiles")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 26, height: 26, padding: 0,
@@ -1709,7 +1709,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
                 explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
               }}
-              title="Refresh explorer"
+              title={t("refreshExplorer")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 26, height: 26, padding: 0, marginRight: 6,
@@ -1823,10 +1823,12 @@ function SessionTreeItem({
 }
 
 function RunningSessionIndicator() {
+  const { t } = useLanguage();
+
   return (
     <span
-      title="Agent running…"
-      aria-label="Agent running"
+      title={t("agentRunning")}
+      aria-label={t("agentRunningLabel")}
       style={{
         width: 14,
         height: 14,
@@ -1860,10 +1862,12 @@ function RunningSessionIndicator() {
 }
 
 function UnreadSessionIndicator() {
+  const { t } = useLanguage();
+
   return (
     <span
-      title="New activity"
-      aria-label="New session activity"
+      title={t("newActivity")}
+      aria-label={t("newSessionActivity")}
       style={{
         width: 14,
         height: 14,
@@ -1910,6 +1914,7 @@ function SessionItem({
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
+  const { t } = useLanguage();
   const [hovered, setHovered] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -1995,7 +2000,7 @@ function SessionItem({
         /* ── Delete confirmation: same height, two flat buttons ── */
         <>
           <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            Delete <span style={{ fontWeight: 600 }}>&ldquo;{title.slice(0, 22)}{title.length > 22 ? "…" : ""}&rdquo;</span>?
+            {t("deleteSession").replace("{title}", `“${title.slice(0, 22)}${title.length > 22 ? "…" : ""}”`)}
           </div>
           <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
             <button
@@ -2010,7 +2015,7 @@ function SessionItem({
               }}
             >
               <Trash size={12} weight="regular" aria-hidden="true" />
-              Delete
+              {t("delete")}
             </button>
             <button
               onClick={handleDeleteCancel}
@@ -2023,7 +2028,7 @@ function SessionItem({
                 whiteSpace: "nowrap",
               }}
             >
-              Cancel
+              {t("cancel")}
             </button>
           </div>
         </>
@@ -2070,7 +2075,7 @@ function SessionItem({
                 lineHeight: 1.4,
                 color: "var(--text)",
               }}
-              title={isRunning ? `${title} · Agent running…` : isUnread ? `${title} · New activity` : title}
+              title={isRunning ? `${title} · ${t("agentRunning")}` : isUnread ? `${title} · ${t("newActivity")}` : title}
             >
               {isRunning ? <RunningSessionIndicator /> : isUnread ? <UnreadSessionIndicator /> : null}
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
@@ -2078,11 +2083,11 @@ function SessionItem({
               </span>
             </div>
             <div style={{ marginTop: 2, display: "flex", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
-              <span title={session.modified}>{formatRelativeTime(session.modified)}</span>
-              <span>{session.messageCount} msgs</span>
+              <span title={session.modified}>{formatRelativeTime(session.modified, t)}</span>
+              <span>{t("messagesCount").replace("{count}", String(session.messageCount))}</span>
               {session.worktreeBranch && (
                 <span
-                  title={`Worktree: ${session.cwd}`}
+                  title={t("worktree").replace("{cwd}", session.cwd)}
                   style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", minWidth: 0, overflow: "hidden" }}
                 >
                   <GitBranch size={9} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
@@ -2096,7 +2101,7 @@ function SessionItem({
           {hasChildren && (
             <button
               onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
-              title={collapsed ? "Expand forks" : "Collapse forks"}
+              title={collapsed ? t("expandForks") : t("collapseForks")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 20, height: 20, padding: 0, flexShrink: 0,
@@ -2115,7 +2120,7 @@ function SessionItem({
             <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
               <button
                 onClick={startRename}
-                title="Rename"
+                title={t("rename")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 32, height: 32, padding: 0,
@@ -2139,7 +2144,7 @@ function SessionItem({
               </button>
               <button
                 onClick={handleDeleteClick}
-                title="Delete"
+                title={t("delete")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 32, height: 32, padding: 0,

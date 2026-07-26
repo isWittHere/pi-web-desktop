@@ -151,7 +151,7 @@ function revokeImagePreview(image: AttachedImage): void {
   }
 }
 
-function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: string }) {
+function QueuedMessageRow({ kind, text, label }: { kind: "steer" | "follow-up"; text: string; label: string }) {
   return (
     <div
       title={text}
@@ -176,7 +176,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
           color: kind === "steer" ? "var(--accent)" : "var(--text-dim)",
         }}
       >
-        {kind}
+        {label}
       </span>
       <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{text}</span>
     </div>
@@ -197,6 +197,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const isMobile = useIsMobile();
   const { t } = useLanguage();
+  const thinkingLevelLabels: Record<typeof THINKING_LEVELS[number], string> = {
+    auto: t("thinkingAuto"),
+    off: t("thinkingOff"),
+    minimal: t("thinkingMinimal"),
+    low: t("thinkingLow"),
+    medium: t("thinkingMedium"),
+    high: t("thinkingHigh"),
+    xhigh: t("thinkingExtraHigh"),
+    max: t("thinkingMax"),
+  };
+  const toolPresetLabels: Record<typeof TOOL_PRESETS[number], string> = {
+    off: t("toolOff"),
+    default: t("toolDefault"),
+    full: t("toolFull"),
+  };
   const thinkingLevelDescriptions: Record<typeof THINKING_LEVELS[number], string> = {
     auto: t("usePiDefault"),
     off: t("reasoningOff"),
@@ -854,10 +869,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     : null;
   const thinkingDisplayLabel = (() => {
     const lvl = thinkingLevel ?? "auto";
-    if (lvl === "auto" || !thinkingLevelMap) return lvl;
-    return thinkingLevelMap[lvl] ?? lvl;
+    if (lvl === "auto" || !thinkingLevelMap) return thinkingLevelLabels[lvl];
+    return thinkingLevelMap[lvl] ?? thinkingLevelLabels[lvl];
   })();
-  const toolPresetLabel = Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default";
+  const toolPresetKey = Object.entries(TOOL_PRESET_MAP).find(([, value]) => value === (toolPreset ?? "default"))?.[0] as typeof TOOL_PRESETS[number] | undefined;
+  const toolPresetLabel = toolPresetLabels[toolPresetKey ?? "default"];
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -970,10 +986,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               )}
             </div>
             {queuedMessages?.steering.map((text, i) => (
-              <QueuedMessageRow key={`steer-${i}`} kind="steer" text={text} />
+              <QueuedMessageRow key={`steer-${i}`} kind="steer" label={t("steer")} text={text} />
             ))}
             {queuedMessages?.followUp.map((text, i) => (
-              <QueuedMessageRow key={`followup-${i}`} kind="follow-up" text={text} />
+              <QueuedMessageRow key={`followup-${i}`} kind="follow-up" label={t("followUp")} text={text} />
             ))}
           </div>
         )}
@@ -1243,7 +1259,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           }}
                         >
                           <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
-                            {entry.isDir ? <FolderIcon size={14} /> : getFileIcon(name, 14)}
+                            {entry.isDir ? <FolderIcon size={14} name={name} /> : getFileIcon(name, 14)}
                           </span>
                           <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {dirPrefix && <span style={{ color: "var(--text-dim)" }}>{dirPrefix}</span>}
@@ -1488,7 +1504,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       const isActive = (thinkingLevel ?? "auto") === lvl;
                       const desc = thinkingLevelDescriptions[lvl];
                       const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
-                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
+                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : thinkingLevelLabels[lvl];
                       const showOriginal = mappedVal != null && mappedVal !== lvl;
                       return (
                         <button
@@ -1716,7 +1732,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           {isActive
                             ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
                             : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>{lvl}</span>
+                          <span style={{ flex: 1 }}>{toolPresetLabels[lvl]}</span>
                           <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
                         </button>
                       );
