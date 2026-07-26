@@ -49,7 +49,9 @@ export function AppShell() {
   }, []);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
-  const [workspaceControlsHost, setWorkspaceControlsHost] = useState<HTMLDivElement | null>(null);
+  const [titleWorkspaceControlsHost, setTitleWorkspaceControlsHost] = useState<HTMLDivElement | null>(null);
+  const [welcomeWorkspaceControlsHost, setWelcomeWorkspaceControlsHost] = useState<HTMLDivElement | null>(null);
+  const workspaceControlsHost = welcomeWorkspaceControlsHost ?? titleWorkspaceControlsHost;
 
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
@@ -362,6 +364,7 @@ export function AppShell() {
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
         workspaceControlsHost={workspaceControlsHost}
+        workspaceControlsSize={welcomeWorkspaceControlsHost ? "large" : "compact"}
       />
 
     </>
@@ -408,7 +411,7 @@ export function AppShell() {
         onToggleFilePanel={() => setRightPanelOpen((v) => !v)}
         onOpenSettings={() => openSettings("models")}
         sessionTitle={sessionTitle}
-        onWorkspaceControlsHostChange={setWorkspaceControlsHost}
+        onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
       />
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
       {/* Mobile overlay backdrop */}
@@ -461,6 +464,7 @@ export function AppShell() {
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
               onOpenFile={handleOpenLinkedFile}
+              onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
             />
           ) : showPlaceholder ? (
             activeCwd ? (

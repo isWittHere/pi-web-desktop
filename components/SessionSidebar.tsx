@@ -30,6 +30,7 @@ interface Props {
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   onAtMentions?: (relativePaths: string[]) => void;
   workspaceControlsHost?: HTMLElement | null;
+  workspaceControlsSize?: "compact" | "large";
 }
 
 interface WorktreeEntry {
@@ -241,7 +242,7 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHost }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHost, workspaceControlsSize = "compact" }: Props) {
   const { t } = useLanguage();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -704,9 +705,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const compactWorktreeLabel = currentWt
     ? (currentWt.branch ?? pathBaseName(currentWt.path))
     : inactiveWorktreeSelector?.label;
+  const isLargeWorkspaceControl = workspaceControlsSize === "large";
   const workspaceControls = workspaceControlsHost ? (
-    <div style={{ display: "flex", alignItems: "center", gap: 2, height: "100%", minWidth: 0 }}>
-      <div ref={dropdownRef} style={{ position: "relative", minWidth: 0 }}>
+    <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: isLargeWorkspaceControl ? 6 : 2, height: isLargeWorkspaceControl ? "auto" : "100%", minWidth: 0, width: isLargeWorkspaceControl ? "100%" : undefined }}>
+      <div ref={dropdownRef} style={{ position: "relative", minWidth: 0, width: isLargeWorkspaceControl ? "fit-content" : undefined, maxWidth: isLargeWorkspaceControl ? "min(100%, 560px)" : undefined }}>
         <button
           className="app-no-drag app-titlebar-context-control"
           onClick={() => setDropdownOpen((v) => !v)}
@@ -714,24 +716,26 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           aria-label={t("selectProject")}
           aria-expanded={dropdownOpen}
           style={{
-            height: 36,
-            maxWidth: 260,
+            height: isLargeWorkspaceControl ? 48 : 36,
+            width: isLargeWorkspaceControl ? "100%" : undefined,
+            maxWidth: isLargeWorkspaceControl ? "100%" : 260,
             minWidth: 0,
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            padding: "0 8px",
+            gap: isLargeWorkspaceControl ? 10 : 6,
+            padding: isLargeWorkspaceControl ? "0 12px" : "0 8px",
             background: dropdownOpen ? "var(--bg-selected)" : "none",
             border: "none",
-            color: dropdownOpen ? "var(--text)" : selectedCwd ? "var(--text-muted)" : "var(--text-dim)",
+            borderRadius: isLargeWorkspaceControl ? 8 : 0,
+            color: dropdownOpen ? "var(--text)" : selectedCwd ? (isLargeWorkspaceControl ? "var(--text)" : "var(--text-muted)") : "var(--text-dim)",
             cursor: "pointer",
-            fontSize: 12,
+            fontSize: isLargeWorkspaceControl ? 24 : 12,
             fontWeight: 500,
             fontFamily: "var(--font-mono)",
             lineHeight: 1,
             letterSpacing: 0,
             textAlign: "left",
-            transition: "background 0.12s, color 0.12s",
+            transition: "background 0.12s, color 0.12s, border-color 0.12s",
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = "var(--bg-hover)";
