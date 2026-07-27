@@ -80,6 +80,7 @@
     "directories": {
       "output": "release"
     },
+    "asar": false,
     "files": [
       "electron/**/*",
       ".next/**/*",
@@ -93,9 +94,6 @@
       "!node_modules/electron/**",
       "!node_modules/electron-builder/**",
       "package.json"
-    ],
-    "asarUnpack": [
-      "node_modules/next/**"
     ],
     "win": {
       "target": "nsis",

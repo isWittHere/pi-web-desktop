@@ -22,10 +22,13 @@
 
 import { spawnSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
+  readlinkSync,
   renameSync,
   rmSync,
   statSync,
@@ -42,8 +45,12 @@ function log(s) { console.log(`\n[build-release] ${s}`); }
 // Run with output streamed live to stdout
 function run(cmd, args) {
   log(`$ ${cmd} ${args.join(" ")}`);
-  const r = spawnSync(cmd, args, { stdio: "inherit", cwd: ROOT });
-  if (r.status !== 0) {
+  const r = spawnSync(cmd, args, {
+    stdio: "inherit",
+    cwd: ROOT,
+    shell: process.platform === "win32",
+  });
+  if (r.status !== 0 && r.status !== null) {
     console.error(`[build-release] ERROR: ${cmd} exited ${r.status}`);
     process.exit(r.status ?? 1);
   }
@@ -52,7 +59,11 @@ function run(cmd, args) {
 
 // Run with stdout captured for string checks
 function cap(cmd, args) {
-  const r = spawnSync(cmd, args, { stdio: "pipe", cwd: ROOT });
+  const r = spawnSync(cmd, args, {
+    stdio: "pipe",
+    cwd: ROOT,
+    shell: process.platform === "win32",
+  });
   const out = (r.stdout || Buffer.alloc(0)).toString().trim();
   return { status: r.status, stdout: out };
 }
@@ -111,10 +122,53 @@ mkdirSync(RELDIR, { recursive: true });
 run("npm", ["run", "build"]);
 
 // ══════════════════════════════════════════════════════════════════════════════
+// 2b. Convert .next/node_modules symlinks to real directories.
+//     turbopack generates hashed module IDs (e.g. pi-coding-agent-4cdde81112ef3dc5)
+//     that point to real npm packages via symlinks. electron-builder on Windows
+//     doesn't follow symlinks, so the packaged app can't resolve these hashed names.
+//     Replace each symlink with a copy of its real target.
+// ══════════════════════════════════════════════════════════════════════════════
+const NEXT_NM = join(ROOT, ".next", "node_modules");
+if (existsSync(NEXT_NM)) {
+  const entries = readdirSync(NEXT_NM);
+  for (const name of entries) {
+    const linkPath = join(NEXT_NM, name);
+    try {
+      const st = lstatSync(linkPath);
+      if (!st.isSymbolicLink()) continue;
+    } catch {
+      continue;
+    }
+    try {
+      const target = readlinkSync(linkPath);
+      if (!existsSync(target)) continue;
+      rmSync(linkPath, { recursive: true, force: true });
+      cpSync(target, linkPath, { recursive: true, dereference: true });
+      log(`  .next/node_modules/${name} ← ${target}`);
+    } catch (err) {
+      log(`  warning: failed to resolve .next/node_modules/${name}: ${err.message}`);
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 3. electron-builder
 // ══════════════════════════════════════════════════════════════════════════════
 log(`Step 3: electron-builder --win ${TARGET}`);
 run("npx", ["electron-builder", "--win", TARGET]);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3b. electron-builder filters out any nested node_modules/ directory (including
+//     .next/node_modules). Copy the converted hashed-package dirs into the
+//     packaged app directly after packaging.
+// ══════════════════════════════════════════════════════════════════════════════
+if (existsSync(UNPKDIR) && existsSync(NEXT_NM)) {
+  const appNextNm = join(UNPKDIR, "resources", "app", ".next", "node_modules");
+  log("Step 3b: injecting .next/node_modules into packaged app");
+  rmSync(appNextNm, { recursive: true, force: true });
+  cpSync(NEXT_NM, appNextNm, { recursive: true });
+  log("  done");
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. Zip the unpacked dir (only meaningful for `dir` target)

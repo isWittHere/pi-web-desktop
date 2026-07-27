@@ -1,19 +1,12 @@
 "use strict";
 
 const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
-const { fork } = require("child_process");
-const fs = require("fs");
+const { spawn, fork } = require("child_process");
 const path = require("path");
 const http = require("http");
 
 const PORT = process.env.PORT || 30141;
-
-// With asar:false, app.isPackaged returns false even in production.
-// Detect dev vs production by checking if resources/ has app/ or app.asar.
-const pkgRoot = path.join(process.resourcesPath, "app");
-const asarRoot = path.join(process.resourcesPath, "app.asar");
-const IS_DEV = !fs.existsSync(pkgRoot) && !fs.existsSync(asarRoot);
-
+const IS_DEV = !app.isPackaged;
 const URL = `http://localhost:${PORT}`;
 
 let mainWindow = null;
@@ -41,32 +34,25 @@ function waitForServer(timeoutMs = 30000) {
 function startServer() {
   const pkgDir = path.join(__dirname, "..");
 
-  // fork() spawns a new Node process using Electron's embedded Node.js
-  // runtime. This works in both dev (node.exe) and production (the
-  // packaged Electron exe), unlike spawn(process.execPath) which fails
-  // in production because process.execPath is Pi Web.exe, not node.
-  const nextBin = IS_DEV
-    ? require.resolve("next/dist/bin/next", { paths: [pkgDir] })
-    : path.join(pkgDir, "node_modules", "next", "dist", "bin", "next");
-
-  const args = IS_DEV
-    ? ["dev", "-p", String(PORT), "--turbopack"]
-    : ["start", "-p", String(PORT)];
-
-  const env = IS_DEV
-    ? { ...process.env, ELECTRON_RUNNING: "1" }
-    : { ...process.env, NODE_ENV: "production", ELECTRON_RUNNING: "1" };
-
-  serverProcess = fork(nextBin, args, {
-    cwd: pkgDir,
-    stdio: "inherit",
-    env,
-  });
-
-  serverProcess.on("error", (err) => {
-    dialog.showErrorBox("Server Error", `Failed to start Next.js server:\n${err.message}`);
-    app.quit();
-  });
+  if (IS_DEV) {
+    // Dev: process.execPath is node.exe — spawn works normally.
+    const nextBin = require.resolve("next/dist/bin/next", { paths: [pkgDir] });
+    serverProcess = spawn(process.execPath, [nextBin, "dev", "-p", String(PORT), "--turbopack"], {
+      cwd: pkgDir,
+      stdio: "inherit",
+      env: { ...process.env, ELECTRON_RUNNING: "1" },
+    });
+  } else {
+    // Production: process.execPath is Pi Web.exe (the Electron exe), not Node.
+    // fork() spawns a new process using Electron's embedded Node.js runtime,
+    // so the Next.js script runs as a plain Node child process.
+    const nextBin = path.join(pkgDir, "node_modules", "next", "dist", "bin", "next");
+    serverProcess = fork(nextBin, ["start", "-p", String(PORT)], {
+      cwd: pkgDir,
+      stdio: "inherit",
+      env: { ...process.env, NODE_ENV: "production", ELECTRON_RUNNING: "1" },
+    });
+  }
 
   serverProcess.on("exit", () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
