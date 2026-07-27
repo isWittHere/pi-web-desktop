@@ -1,0 +1,164 @@
+#!/usr/bin/env node
+/**
+ * Green / portable release builder for Pi Web.
+ *
+ * Workflow:
+ *   1. (optional) git backup of modified work files (excludes ref-repos/)
+ *   2. npm run build          (produces .next/)
+ *   3. electron-builder --win <target>
+ *   4. archive (zip) the unpacked dir for the "green" portable package
+ *
+ * Usage:
+ *   node scripts/build-release.mjs                # dir + zip (default green)
+ *   node scripts/build-release.mjs --target=portable
+ *   node scripts/build-release.mjs --target=nsis
+ *   node scripts/build-release.mjs --no-zip
+ *   node scripts/build-release.mjs --git-backup
+ *   node scripts/build-release.mjs --no-clean
+ *
+ * Target precedence: CLI --target > env PI_WEB_RELEASE_TARGET > "dir".
+ */
+"use strict";
+
+import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import process from "node:process";
+
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const ROOT = resolve(__dirname, "..");
+
+function log(s) { console.log(`\n[build-release] ${s}`); }
+
+// Run with output streamed live to stdout
+function run(cmd, args) {
+  log(`$ ${cmd} ${args.join(" ")}`);
+  const r = spawnSync(cmd, args, { stdio: "inherit", cwd: ROOT });
+  if (r.status !== 0) {
+    console.error(`[build-release] ERROR: ${cmd} exited ${r.status}`);
+    process.exit(r.status ?? 1);
+  }
+  return r;
+}
+
+// Run with stdout captured for string checks
+function cap(cmd, args) {
+  const r = spawnSync(cmd, args, { stdio: "pipe", cwd: ROOT });
+  const out = (r.stdout || Buffer.alloc(0)).toString().trim();
+  return { status: r.status, stdout: out };
+}
+
+// ── parse CLI args ──────────────────────────────────────────────────────────
+const raw = {};
+for (let i = 2; i < process.argv.length; i++) {
+  const a = process.argv[i];
+  if (!a.startsWith("--")) continue;
+  const eq = a.indexOf("=");
+  raw[a.slice(2, eq === -1 ? a.length : eq)] = eq === -1 ? true : a.slice(eq + 1);
+}
+const TARGET   = (raw.target ?? process.env.PI_WEB_RELEASE_TARGET ?? "dir").toLowerCase();
+const DO_ZIP   = !raw["no-zip"];
+const DO_BAK   = !!raw["git-backup"];
+const DO_CLEAN = !raw["no-clean"];
+
+const PKG     = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+const VER     = PKG.version;
+const RELDIR  = join(ROOT, "release");
+const UNPKDIR = join(RELDIR, "win-unpacked");
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1. Git backup (optional)
+// ══════════════════════════════════════════════════════════════════════════════
+if (DO_BAK) {
+  log("Step 1: git backup (ref-repos excluded)");
+  const s = cap("git", ["status", "--porcelain"]);
+  if (s.status !== 0) { log("git unavailable, skip backup"); }
+  else if (!s.stdout) { log("working tree clean"); }
+  else {
+    run("git", [
+      "add", "-u",
+      ":(exclude)ref-repos",
+      ":(exclude)release",
+      ":(exclude).next",
+    ]);
+    const d = cap("git", ["diff", "--cached", "--name-only"]);
+    if (d.stdout) {
+      run("git", ["commit", "-m", `Backup before release build v${VER}`]);
+      log("backup committed");
+    } else {
+      log("nothing staged — skip commit");
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 2. Clean + next build
+// ══════════════════════════════════════════════════════════════════════════════
+log("Step 2: clean & npm run build");
+if (DO_CLEAN && existsSync(RELDIR)) {
+  rmSync(RELDIR, { recursive: true, force: true });
+}
+mkdirSync(RELDIR, { recursive: true });
+run("npm", ["run", "build"]);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3. electron-builder
+// ══════════════════════════════════════════════════════════════════════════════
+log(`Step 3: electron-builder --win ${TARGET}`);
+run("npx", ["electron-builder", "--win", TARGET]);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4. Zip the unpacked dir (only meaningful for `dir` target)
+// ══════════════════════════════════════════════════════════════════════════════
+if (!DO_ZIP) {
+  log("Step 4: skipped (--no-zip)");
+} else if (!existsSync(UNPKDIR) || !statSync(UNPKDIR).isDirectory()) {
+  log("Step 4: no win-unpacked/ (target was not 'dir').");
+} else {
+  const ZIP = join(RELDIR, `PiWeb-${VER}-portable-win.zip`);
+  log(`Step 4: zipping -> ${ZIP}`);
+  rmSync(ZIP, { force: true });
+
+  if (process.platform === "win32") {
+    // Windows 10+ bsdtar auto-detects zip format by .zip extension
+    run("tar", ["-a", "-c", "-f", ZIP, "-C", RELDIR, "win-unpacked"]);
+  } else {
+    // macOS / Linux: rename to nice folder name, then use zip
+    const NICE = join(RELDIR, "Pi Web");
+    if (existsSync(NICE)) rmSync(NICE, { recursive: true, force: true });
+    renameSync(UNPKDIR, NICE);
+    try {
+      run("zip", ["-r", "-q", ZIP, "Pi Web"]);
+    } catch {
+      // fallback: tar.gz
+      const TGZ = join(RELDIR, `PiWeb-${VER}-portable-linux.tar.gz`);
+      log(`zip not found, falling back to tar.gz -> ${TGZ}`);
+      renameSync(NICE, UNPKDIR);
+      run("tar", ["-czf", TGZ, "-C", RELDIR, "win-unpacked"]);
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Summary
+// ══════════════════════════════════════════════════════════════════════════════
+log("✓ Build complete. Release artifacts:");
+try {
+  const items = readdirSync(RELDIR);
+  items.forEach((f) => {
+    const st = statSync(join(RELDIR, f));
+    const sz = st.isDirectory() ? "DIR" : (st.size / 1024 / 1024).toFixed(1) + " MB";
+    log(`  ${f}  (${sz})`);
+  });
+} catch {
+  log(`  (see ${RELDIR}/)`);
+}

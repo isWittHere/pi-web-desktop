@@ -27,7 +27,7 @@
   ],
   "scripts": {
     "dev": "next dev -p 30141 --turbopack",
-    "build": "next build --webpack",
+    "build": "next build",
     "start": "next start -p 30141",
     "lint": "eslint .",
     "electron:dev": "electron .",
@@ -83,17 +83,14 @@
     "files": [
       "electron/**/*",
       ".next/**/*",
-      "!electron/node_modules"
+      "!.next/cache",
+      "!.next/dev",
+      "!.next/**/*.js.map",
+      "!electron/node_modules",
+      "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "node_modules/next",
-        "to": "node_modules/next",
-        "filter": [
-          "**/*",
-          "!**/*.map"
-        ]
-      }
+    "asarUnpack": [
+      "node_modules/next/**"
     ],
     "win": {
       "target": "nsis",
