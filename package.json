@@ -72,6 +72,7 @@
     "jiti": "^2.7.0",
     "postcss": "^8",
     "tailwindcss": "^4.2.2",
+    "to-ico": "^1.1.5",
     "typescript": "^5"
   },
   "build": {
@@ -93,6 +94,11 @@
       "!node_modules/**/node_modules/.cache",
       "!node_modules/electron/**",
       "!node_modules/electron-builder/**",
+      "!node_modules/**/*.js.map",
+      "!node_modules/**/*.mjs.map",
+      "!node_modules/**/*.css.map",
+      "!node_modules/@earendil-works/pi-coding-agent/docs/**",
+      "!node_modules/@earendil-works/pi-coding-agent/examples/**",
       "package.json"
     ],
     "win": {

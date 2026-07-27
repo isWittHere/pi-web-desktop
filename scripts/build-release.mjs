@@ -4,9 +4,11 @@
  *
  * Workflow:
  *   1. (optional) git backup of modified work files (excludes ref-repos/)
- *   2. npm run build          (produces .next/)
- *   3. electron-builder --win <target>
- *   4. archive (zip) the unpacked dir for the "green" portable package
+ *   2. npm dedupe && npm run build   (flatten deps, produce .next/)
+ *   3. npm prune --production        (strip devDependencies)
+ *   4. electron-builder --win <target>
+ *   5. npm install                   (restore devDependencies)
+ *   6. archive (zip) the unpacked dir for the "green" portable package
  *
  * Usage:
  *   node scripts/build-release.mjs                # dir + zip (default green)
@@ -112,13 +114,19 @@ if (DO_BAK) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 2. Clean + next build
+// 2. Clean + dedupe + next build
 // ══════════════════════════════════════════════════════════════════════════════
-log("Step 2: clean & npm run build");
+log("Step 2: clean, dedupe & npm run build");
 if (DO_CLEAN && existsSync(RELDIR)) {
   rmSync(RELDIR, { recursive: true, force: true });
 }
 mkdirSync(RELDIR, { recursive: true });
+
+// Flatten nested node_modules to reduce duplication in the final package.
+// Safe to run even if the tree is already optimal — it only moves packages.
+log("  npm dedupe …");
+run("npm", ["dedupe"]);
+
 run("npm", ["run", "build"]);
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -152,6 +160,14 @@ if (existsSync(NEXT_NM)) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// 2c. Strip devDependencies so only production packages end up in the
+//     packaged app.  electron-builder sees whatever is in node_modules/
+//     at packaging time, so we prune first and restore afterwards.
+// ══════════════════════════════════════════════════════════════════════════════
+log("Step 2c: npm prune --production");
+run("npm", ["prune", "--production"]);
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 3. electron-builder
 // ══════════════════════════════════════════════════════════════════════════════
 log(`Step 3: electron-builder --win ${TARGET}`);
@@ -169,6 +185,13 @@ if (existsSync(UNPKDIR) && existsSync(NEXT_NM)) {
   cpSync(NEXT_NM, appNextNm, { recursive: true });
   log("  done");
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3c. Restore devDependencies that were removed by prune so the working
+//     tree is usable for development after the build finishes.
+// ══════════════════════════════════════════════════════════════════════════════
+log("Step 3c: npm install (restore devDependencies)");
+run("npm", ["install"]);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. Zip the unpacked dir (only meaningful for `dir` target)
