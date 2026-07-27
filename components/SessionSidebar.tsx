@@ -1837,10 +1837,10 @@ function SessionItem({
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setRenameValue(session.name ?? "");
+    setRenameValue(title);
     setRenaming(true);
     setTimeout(() => inputRef.current?.select(), 0);
-  }, [session.name]);
+  }, [title]);
 
   const commitRename = useCallback(async () => {
     const name = renameValue.trim();
@@ -1975,24 +1975,87 @@ function SessionItem({
             <GitBranch size={10} color="var(--text-dim)" weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Title row: indicator + text + collapse + action buttons — all inline, same height */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 5,
                 minWidth: 0,
+                height: 20,
                 fontSize: 12,
                 fontWeight: isSelected ? 500 : 400,
-                lineHeight: 1.4,
+                lineHeight: "20px",
                 color: "var(--text)",
               }}
               title={isRunning ? `${title} · ${t("agentRunning")}` : isUnread ? `${title} · ${t("newActivity")}` : title}
             >
               {isRunning ? <RunningSessionIndicator /> : isUnread ? <UnreadSessionIndicator /> : null}
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
                 {title}
               </span>
+              {/* Collapse toggle — always visible when has children */}
+              {hasChildren && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
+                  title={collapsed ? t("expandForks") : t("collapseForks")}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 20, height: 20, padding: 0, flexShrink: 0,
+                    background: "none", border: "none",
+                    color: "var(--text-dim)", cursor: "pointer",
+                    transform: collapsed ? "rotate(-90deg)" : "none",
+                    transition: "transform 0.15s",
+                  }}
+                >
+                  <CaretDown size={10} weight="regular" aria-hidden="true" />
+                </button>
+              )}
+              {/* Action buttons — always present, visibility toggled to avoid layout jump */}
+              <div style={{ display: "flex", gap: 2, flexShrink: 0, visibility: hovered ? "visible" : "hidden" }}>
+                <button
+                  onClick={startRename}
+                  title={t("rename")}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 20, height: 20, padding: 0,
+                    background: "none", border: "none",
+                    borderRadius: 4, color: "var(--text-dim)",
+                    cursor: "pointer", flexShrink: 0,
+                    transition: "color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "var(--accent)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "var(--text-dim)";
+                  }}
+                >
+                  <PencilSimple size={13} weight="regular" aria-hidden="true" />
+                </button>
+                <button
+                  onClick={handleDeleteClick}
+                  title={t("delete")}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 20, height: 20, padding: 0,
+                    background: "none", border: "none",
+                    borderRadius: 4, color: "var(--text-dim)",
+                    cursor: "pointer", flexShrink: 0,
+                    transition: "color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "#ef4444";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "var(--text-dim)";
+                  }}
+                >
+                  <Trash size={13} weight="regular" aria-hidden="true" />
+                </button>
+              </div>
             </div>
+            {/* Metadata row */}
             <div style={{ marginTop: 2, display: "flex", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
               <span title={session.modified}>{formatRelativeTime(session.modified, t)}</span>
               <span>{t("messagesCount").replace("{count}", String(session.messageCount))}</span>
@@ -2007,78 +2070,6 @@ function SessionItem({
               )}
             </div>
           </div>
-
-          {/* Collapse toggle — always visible when has children */}
-          {hasChildren && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
-              title={collapsed ? t("expandForks") : t("collapseForks")}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 20, height: 20, padding: 0, flexShrink: 0,
-                background: "none", border: "none",
-                color: "var(--text-dim)", cursor: "pointer",
-                transform: collapsed ? "rotate(-90deg)" : "none",
-                transition: "transform 0.15s",
-              }}
-            >
-              <CaretDown size={10} weight="regular" aria-hidden="true" />
-            </button>
-          )}
-
-          {/* Action buttons — shown on hover */}
-          {hovered && (
-            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-              <button
-                onClick={startRename}
-                title={t("rename")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
-                  cursor: "pointer", flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-selected)";
-                  e.currentTarget.style.color = "var(--accent)";
-                  e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                  e.currentTarget.style.borderColor = "var(--border)";
-                }}
-              >
-                <PencilSimple size={14} weight="regular" aria-hidden="true" />
-              </button>
-              <button
-                onClick={handleDeleteClick}
-                title={t("delete")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
-                  cursor: "pointer", flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(239,68,68,0.08)";
-                  e.currentTarget.style.color = "#ef4444";
-                  e.currentTarget.style.borderColor = "rgba(239,68,68,0.35)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                  e.currentTarget.style.borderColor = "var(--border)";
-                }}
-              >
-                <Trash size={14} weight="regular" aria-hidden="true" />
-              </button>
-            </div>
-          )}
         </>
       )}
     </div>

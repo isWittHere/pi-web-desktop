@@ -4,20 +4,25 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowsIn,
+  BellRinging,
+  BellSlash,
   Check,
   ClockCounterClockwise,
   Copy,
   Database,
   FileText,
   Gauge,
-  SpeakerHigh,
-  SpeakerSlash,
+  GitBranch,
   Square,
 } from "@phosphor-icons/react";
 import { useLanguage } from "@/hooks/useLanguage";
 import type { SessionStatsInfo } from "@/lib/pi-types";
+import type { SessionTreeNode } from "@/lib/types";
 import { copyText } from "@/lib/clipboard";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { BranchNavigator } from "./BranchNavigator";
 
 export interface SessionInfoBarProps {
   onViewFullHistory?: () => void;
@@ -32,6 +37,11 @@ export interface SessionInfoBarProps {
   onAbortCompaction?: () => void;
   isCompacting?: boolean;
   compactError?: string | null;
+  branchTree?: SessionTreeNode[];
+  branchActiveLeafId?: string | null;
+  onBranchLeafChange?: (leafId: string | null) => void;
+  /** Show text label alongside the sound icon (e.g. "提示音：开启") */
+  showSoundLabel?: boolean;
 }
 
 function formatTokenCount(n: number): string {
@@ -55,9 +65,13 @@ export function SessionInfoBar({
   onAbortCompaction,
   isCompacting,
   compactError,
+  branchTree,
+  branchActiveLeafId,
+  onBranchLeafChange,
+  showSoundLabel,
 }: SessionInfoBarProps) {
   const { t: translate } = useLanguage();
-  const [activePanel, setActivePanel] = useState<"system" | "session" | null>(null);
+  const [activePanel, setActivePanel] = useState<"system" | "session" | "branches" | null>(null);
   const closePanel = useCallback(() => setActivePanel(null), []);
 
   // Copy state for session file / id
@@ -70,6 +84,25 @@ export function SessionInfoBar({
       copyTimerRef.current = setTimeout(() => setCopiedField(null), 1400);
     });
   }, []);
+
+  const systemPromptTokenEstimate = useMemo(() => {
+    if (!systemPrompt) return 0;
+    let tokens = 0;
+    for (const ch of systemPrompt) {
+      const code = ch.codePointAt(0) ?? 0;
+      if ((code >= 0x4E00 && code <= 0x9FFF) ||
+          (code >= 0x3400 && code <= 0x4DBF) ||
+          (code >= 0x20000 && code <= 0x2A6DF) ||
+          (code >= 0x3040 && code <= 0x309F) ||
+          (code >= 0x30A0 && code <= 0x30FF) ||
+          (code >= 0xAC00 && code <= 0xD7AF)) {
+        tokens += 1;
+      } else {
+        tokens += 0.25;
+      }
+    }
+    return Math.max(1, Math.round(tokens));
+  }, [systemPrompt]);
 
   if (!showChat) return null;
 
@@ -92,6 +125,14 @@ export function SessionInfoBar({
   const hasSystemPrompt = systemPrompt !== null && systemPrompt !== "";
   const hasStats = sessionStats && t && (t.input > 0 || t.output > 0);
 
+  const hasBranching = hasSession && onBranchLeafChange && (() => {
+    const tree = branchTree ?? [];
+    function check(nodes: SessionTreeNode[]): boolean {
+      return nodes.some((node) => node.children.length > 1 || check(node.children));
+    }
+    return check(tree);
+  })();
+
   // Tooltip for stats button
   const tooltipParts: string[] = [];
   if (t) {
@@ -113,7 +154,7 @@ export function SessionInfoBar({
 
   return (
     <div className="session-info-bar">
-      {/* Left: completion sound + full history + system prompt */}
+      {/* Left: sound / history / branches / system prompt */}
       {onSoundToggle && (
         <button
           type="button"
@@ -122,7 +163,12 @@ export function SessionInfoBar({
           title={soundEnabled ? translate("disableCompletionSound") : translate("enableCompletionSound")}
           aria-label={soundEnabled ? translate("disableCompletionSound") : translate("enableCompletionSound")}
         >
-          {soundEnabled ? <SpeakerHigh size={13} /> : <SpeakerSlash size={13} />}
+          {soundEnabled ? <BellRinging size={13} /> : <BellSlash size={13} />}
+          {showSoundLabel && (
+            <span style={{ marginLeft: 4 }}>
+              {soundEnabled ? translate("soundLabelOn") : translate("soundLabelOff")}
+            </span>
+          )}
         </button>
       )}
       {hasSession && (
@@ -136,17 +182,102 @@ export function SessionInfoBar({
           <ClockCounterClockwise size={13} aria-hidden="true" />
         </button>
       )}
+
+      {/* Branch button + popover (left side) */}
+      {hasBranching && (
+        <div className="session-info-bar-popover-host">
+          <button
+            type="button"
+            className={`session-info-bar-button${activePanel === "branches" ? " is-active" : ""}`}
+            onClick={() => setActivePanel((cur) => (cur === "branches" ? null : "branches"))}
+            title={translate("branches")}
+            aria-label={translate("branches")}
+            aria-pressed={activePanel === "branches"}
+          >
+            <GitBranch size={13} aria-hidden="true" />
+          </button>
+          {activePanel === "branches" && (
+            <>
+              <div className="session-info-bar-popover-cover" onClick={closePanel} />
+              <div className="session-info-bar-popover is-branches">
+                <div className="session-info-bar-popover-header">
+                  <span className="session-info-bar-popover-title">
+                    {translate("branches")}
+                  </span>
+                  <button
+                    type="button"
+                    className="session-info-bar-popover-close"
+                    onClick={closePanel}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="session-info-bar-popover-body">
+                  <BranchNavigator
+                    tree={branchTree ?? []}
+                    activeLeafId={branchActiveLeafId ?? null}
+                    onLeafChange={(id) => {
+                      onBranchLeafChange!(id);
+                      closePanel();
+                    }}
+                    hasSession
+                    embedded
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* System prompt button + popover (left side) */}
       {hasSystemPrompt && (
-        <button
-          type="button"
-          className={`session-info-bar-button${activePanel === "system" ? " is-active" : ""}`}
-          onClick={() => setActivePanel((cur) => (cur === "system" ? null : "system"))}
-          title={translate("systemPrompt")}
-          aria-label={translate("systemPrompt")}
-          aria-pressed={activePanel === "system"}
-        >
-          <FileText size={13} aria-hidden="true" />
-        </button>
+        <div className="session-info-bar-popover-host">
+          <button
+            type="button"
+            className={`session-info-bar-button${activePanel === "system" ? " is-active" : ""}`}
+            onClick={() => setActivePanel((cur) => (cur === "system" ? null : "system"))}
+            title={translate("systemPrompt")}
+            aria-label={translate("systemPrompt")}
+            aria-pressed={activePanel === "system"}
+          >
+            <FileText size={13} aria-hidden="true" />
+          </button>
+          {activePanel === "system" && (
+            <>
+              <div className="session-info-bar-popover-cover" onClick={closePanel} />
+              <div className="session-info-bar-popover is-system">
+                <div className="session-info-bar-popover-header">
+                  <span className="session-info-bar-popover-title">
+                    {translate("systemPrompt")}
+                  </span>
+                  <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: 8 }}>
+                    ~{formatTokenCount(systemPromptTokenEstimate)} tokens
+                  </span>
+                  <div style={{ flex: 1 }} />
+                  <button
+                    type="button"
+                    className="session-info-bar-popover-close"
+                    onClick={closePanel}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="session-info-bar-system-body">
+                  {systemPrompt ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {systemPrompt}
+                    </ReactMarkdown>
+                  ) : (
+                    <span className="session-info-bar-popover-empty">
+                      System prompt is empty (tools are disabled)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {/* Spacer */}
@@ -170,181 +301,153 @@ export function SessionInfoBar({
         </div>
       )}
 
-      {/* Token stats */}
+      {/* Token stats button + popover (right side) */}
       {hasStats && (
-        <button
-          type="button"
-          className={`session-info-bar-button is-stats${activePanel === "session" ? " is-active" : ""}`}
-          onClick={() => setActivePanel((cur) => (cur === "session" ? null : "session"))}
-          title={tooltip || translate("sessionInfo")}
-          aria-label={translate("sessionInfo")}
-          aria-pressed={activePanel === "session"}
-        >
-          {t && t.input > 0 && (
-            <span className="session-info-bar-token-chip">
-              <ArrowUp size={10} aria-hidden="true" />
-              {formatTokenCount(t.input)}
-            </span>
-          )}
-          {t && t.output > 0 && (
-            <span className="session-info-bar-token-chip">
-              <ArrowDown size={10} aria-hidden="true" />
-              {formatTokenCount(t.output)}
-            </span>
-          )}
-          {t && t.cacheRead > 0 && (
-            <span className="session-info-bar-token-chip">
-              <Database size={10} aria-hidden="true" />
-              {formatTokenCount(t.cacheRead)}
-            </span>
-          )}
-          {costStr && <span>{costStr}</span>}
-          {ctxStr && (
-            <span className="session-info-bar-token-chip" style={{ color: ctxColor }}>
-              <Gauge size={10} aria-hidden="true" />
-              {ctxStr}
-            </span>
-          )}
-        </button>
-      )}
-
-      {/* Popover: system prompt */}
-      {activePanel === "system" && (
-        <>
-          <div className="session-info-bar-popover-cover" onClick={closePanel} />
-          <div className="session-info-bar-popover is-system">
-            <div className="session-info-bar-popover-header">
-              <span className="session-info-bar-popover-title">
-                {translate("systemPrompt")}
+        <div className="session-info-bar-popover-host">
+          <button
+            type="button"
+            className={`session-info-bar-button is-stats${activePanel === "session" ? " is-active" : ""}`}
+            onClick={() => setActivePanel((cur) => (cur === "session" ? null : "session"))}
+            title={tooltip || translate("sessionInfo")}
+            aria-label={translate("sessionInfo")}
+            aria-pressed={activePanel === "session"}
+          >
+            {t && t.input > 0 && (
+              <span className="session-info-bar-token-chip">
+                <ArrowUp size={10} aria-hidden="true" />
+                {formatTokenCount(t.input)}
               </span>
-              <button
-                type="button"
-                className="session-info-bar-popover-close"
-                onClick={closePanel}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="session-info-bar-popover-body">
-              {systemPrompt || (
-                <span className="session-info-bar-popover-empty">
-                  System prompt is empty (tools are disabled)
-                </span>
-              )}
-            </div>
-          </div>
-        </>
-      )}
+            )}
+            {t && t.output > 0 && (
+              <span className="session-info-bar-token-chip">
+                <ArrowDown size={10} aria-hidden="true" />
+                {formatTokenCount(t.output)}
+              </span>
+            )}
+            {t && t.cacheRead > 0 && (
+              <span className="session-info-bar-token-chip">
+                <Database size={10} aria-hidden="true" />
+                {formatTokenCount(t.cacheRead)}
+              </span>
+            )}
+            {costStr && <span>{costStr}</span>}
+            {ctxStr && (
+              <span className="session-info-bar-token-chip" style={{ color: ctxColor }}>
+                <Gauge size={10} aria-hidden="true" />
+                {ctxStr}
+              </span>
+            )}
+          </button>
+          {activePanel === "session" && sessionStats && (
+            <>
+              <div className="session-info-bar-popover-cover" onClick={closePanel} />
+              <div className="session-info-bar-popover is-session">
+                <div className="session-stats-body">
+                  {(() => {
+                    const tok = sessionStats.tokens;
+                    const ctx = contextUsage ?? sessionStats.contextUsage;
 
-      {/* Popover: session stats */}
-      {activePanel === "session" && sessionStats && (
-        <>
-          <div className="session-info-bar-popover-cover" onClick={closePanel} />
-          <div className="session-info-bar-popover is-session">
-            <div className="session-stats-body">
-              {(() => {
-                const tok = sessionStats.tokens;
-                const ctx = contextUsage ?? sessionStats.contextUsage;
+                    const copyBtn = (field: SessionCopyField, val: string) => {
+                      const copied = copiedField === field;
+                      return (
+                        <button
+                          type="button"
+                          className={`session-stats-copy${copied ? " is-copied" : ""}`}
+                          title={copied ? translate("copied") : field === "file" ? translate("copyFilePath") : translate("copySessionId")}
+                          onClick={() => handleCopyField(field, val)}
+                        >
+                          {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
+                        </button>
+                      );
+                    };
 
-                const copyBtn = (field: SessionCopyField, val: string) => {
-                  const copied = copiedField === field;
-                  return (
-                    <button
-                      type="button"
-                      className={`session-stats-copy${copied ? " is-copied" : ""}`}
-                      title={copied ? translate("copied") : field === "file" ? translate("copyFilePath") : translate("copySessionId")}
-                      onClick={() => handleCopyField(field, val)}
-                    >
-                      {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
-                    </button>
-                  );
-                };
+                    // ── Session Info rows (direct display, no labels) ──
+                    const sessionInfoRows: React.ReactNode[] = [];
+                    if (sessionStats.sessionName) {
+                      sessionInfoRows.push(
+                        <div key="name" className="session-stats-info-name">{sessionStats.sessionName}</div>,
+                      );
+                    }
+                    sessionInfoRows.push(
+                      <div key="file" className="session-stats-info-line">
+                        <span className="session-stats-info-text">
+                          {sessionStats.sessionFile ? (sessionStats.sessionFile.split(/[/\\]/).pop() ?? sessionStats.sessionFile) : translate("sessionInfoInMemory")}
+                        </span>
+                        {sessionStats.sessionFile ? copyBtn("file", sessionStats.sessionFile) : null}
+                      </div>,
+                    );
+                    sessionInfoRows.push(
+                      <div key="id" className="session-stats-info-line">
+                        <span className="session-stats-info-text">
+                          {sessionStats.sessionId}
+                        </span>
+                        {copyBtn("id", sessionStats.sessionId)}
+                      </div>,
+                    );
 
-                // ── Session Info rows (direct display, no labels) ──
-                const sessionInfoRows: React.ReactNode[] = [];
-                if (sessionStats.sessionName) {
-                  sessionInfoRows.push(
-                    <div key="name" className="session-stats-info-name">{sessionStats.sessionName}</div>,
-                  );
-                }
-                sessionInfoRows.push(
-                  <div key="file" className="session-stats-info-line">
-                    <span className="session-stats-info-text">
-                      {sessionStats.sessionFile ? (sessionStats.sessionFile.split(/[/\\]/).pop() ?? sessionStats.sessionFile) : translate("sessionInfoInMemory")}
-                    </span>
-                    {sessionStats.sessionFile ? copyBtn("file", sessionStats.sessionFile) : null}
-                  </div>,
-                );
-                sessionInfoRows.push(
-                  <div key="id" className="session-stats-info-line">
-                    <span className="session-stats-info-text">
-                      {sessionStats.sessionId}
-                    </span>
-                    {copyBtn("id", sessionStats.sessionId)}
-                  </div>,
-                );
+                    // ── Messages rows ──
+                    const msgRows: [string, string][] = [
+                      [translate("sessionInfoUser"), sessionStats.userMessages.toLocaleString()],
+                      [translate("sessionInfoAssistant"), sessionStats.assistantMessages.toLocaleString()],
+                      [translate("sessionInfoToolCalls"), sessionStats.toolCalls.toLocaleString()],
+                      [translate("sessionInfoToolResults"), sessionStats.toolResults.toLocaleString()],
+                      [translate("sessionInfoTotal"), sessionStats.totalMessages.toLocaleString()],
+                    ];
 
-                // ── Messages rows ──
-                const msgRows: [string, string][] = [
-                  [translate("sessionInfoUser"), sessionStats.userMessages.toLocaleString()],
-                  [translate("sessionInfoAssistant"), sessionStats.assistantMessages.toLocaleString()],
-                  [translate("sessionInfoToolCalls"), sessionStats.toolCalls.toLocaleString()],
-                  [translate("sessionInfoToolResults"), sessionStats.toolResults.toLocaleString()],
-                  [translate("sessionInfoTotal"), sessionStats.totalMessages.toLocaleString()],
-                ];
+                    // ── Tokens rows ──
+                    const tokenRows: [string, string][] = [
+                      [translate("sessionInfoInput"), tok.input.toLocaleString()],
+                      [translate("sessionInfoOutput"), tok.output.toLocaleString()],
+                    ];
+                    if (tok.cacheRead > 0) tokenRows.push([translate("sessionInfoCacheRead"), tok.cacheRead.toLocaleString()]);
+                    if (tok.cacheWrite > 0) tokenRows.push([translate("sessionInfoCacheWrite"), tok.cacheWrite.toLocaleString()]);
+                    tokenRows.push([translate("sessionInfoTotal"), tok.total.toLocaleString()]);
+                    if (sessionStats.cost > 0) tokenRows.push([translate("sessionInfoCost"), `$${sessionStats.cost.toFixed(4)}`]);
+                    if (ctx?.contextWindow) {
+                      const pct = ctx.percent;
+                      tokenRows.push([
+                        translate("sessionInfoContext"),
+                        `${pct !== null ? `${pct.toFixed(1)}%` : "?"} / ${ctx.contextWindow.toLocaleString()}`,
+                      ]);
+                    }
 
-                // ── Tokens rows ──
-                const tokenRows: [string, string][] = [
-                  [translate("sessionInfoInput"), tok.input.toLocaleString()],
-                  [translate("sessionInfoOutput"), tok.output.toLocaleString()],
-                ];
-                if (tok.cacheRead > 0) tokenRows.push([translate("sessionInfoCacheRead"), tok.cacheRead.toLocaleString()]);
-                if (tok.cacheWrite > 0) tokenRows.push([translate("sessionInfoCacheWrite"), tok.cacheWrite.toLocaleString()]);
-                tokenRows.push([translate("sessionInfoTotal"), tok.total.toLocaleString()]);
-                if (sessionStats.cost > 0) tokenRows.push([translate("sessionInfoCost"), `$${sessionStats.cost.toFixed(4)}`]);
-                if (ctx?.contextWindow) {
-                  const pct = ctx.percent;
-                  tokenRows.push([
-                    translate("sessionInfoContext"),
-                    `${pct !== null ? `${pct.toFixed(1)}%` : "?"} / ${ctx.contextWindow.toLocaleString()}`,
-                  ]);
-                }
-
-                const row = (label: string, val: string) => (
-                  <div key={label} className="session-stats-row">
-                    <div className="session-stats-label">{label}</div>
-                    <div className="session-stats-value">{val}</div>
-                  </div>
-                );
-
-                return (
-                  <>
-                    {/* Session Info — direct display */}
-                    <div className="session-stats-info-block">
-                      {sessionInfoRows}
-                    </div>
-
-                    {/* Messages + Tokens side-by-side */}
-                    <div className="session-stats-side-by-side">
-                      <div className="session-stats-column">
-                        <div className="session-stats-section-title">{translate("sessionInfoMessages")}</div>
-                        <div className="session-stats-compact-grid">
-                          {msgRows.map(([label, val]) => row(label, val))}
-                        </div>
+                    const row = (label: string, val: string) => (
+                      <div key={label} className="session-stats-row">
+                        <div className="session-stats-label">{label}</div>
+                        <div className="session-stats-value">{val}</div>
                       </div>
-                      <div className="session-stats-column">
-                        <div className="session-stats-section-title">{translate("sessionInfoTokens")}</div>
-                        <div className="session-stats-compact-grid">
-                          {tokenRows.map(([label, val]) => row(label, val))}
+                    );
+
+                    return (
+                      <>
+                        {/* Session Info — direct display */}
+                        <div className="session-stats-info-block">
+                          {sessionInfoRows}
                         </div>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        </>
+
+                        {/* Messages + Tokens side-by-side */}
+                        <div className="session-stats-side-by-side">
+                          <div className="session-stats-column">
+                            <div className="session-stats-section-title">{translate("sessionInfoMessages")}</div>
+                            <div className="session-stats-compact-grid">
+                              {msgRows.map(([label, val]) => row(label, val))}
+                            </div>
+                          </div>
+                          <div className="session-stats-column">
+                            <div className="session-stats-section-title">{translate("sessionInfoTokens")}</div>
+                            <div className="session-stats-compact-grid">
+                              {tokenRows.map(([label, val]) => row(label, val))}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

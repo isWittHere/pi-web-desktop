@@ -285,7 +285,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   });
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
+  const [toolDropdownRect, setToolDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
+  const [thinkingDropdownRect, setThinkingDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
     draftKey ? getDraft(draftKey)?.images.map(draftImageToAttachedImage) ?? [] : []
@@ -1489,7 +1491,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {!isStreaming && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} className="chat-input-toolbar-thinking" style={{ position: "relative" }}>
                 <button
-                  onClick={() => !isStreaming && setThinkingDropdownOpen((v) => !v)}
+                  onClick={(e) => { if (isStreaming) return; const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setThinkingDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setThinkingDropdownOpen((v) => !v); }}
                   disabled={isStreaming}
                   title={t("changeReasoningLevel").replace("{level}", thinkingDisplayLabel)}
                   aria-label={t("reasoningLevel")}
@@ -1520,12 +1522,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <ThinkingLevelIcon level={thinkingLevel ?? "auto"} />
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
                 </button>
-                {thinkingDropdownOpen && (
+                {thinkingDropdownOpen && thinkingDropdownRect && (() => {
+                    const vh = window.visualViewport?.height ?? window.innerHeight;
+                    const vw = window.innerWidth;
+                    const panelMaxW = Math.min(240, vw - 16);
+                    const l = Math.min(thinkingDropdownRect.left, vw - panelMaxW - 8);
+                    const b = vh - thinkingDropdownRect.top + 4;
+                    const maxH = Math.min(360, Math.max(120, Math.min(thinkingDropdownRect.top - 8, vh * 0.6)));
+                    return (
                   <div style={{
-                    position: "absolute", bottom: "calc(100% + 4px)", right: 0,
-                    zIndex: 100, background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    position: "fixed", bottom: b, left: l,
+                    zIndex: 2001, background: "var(--bg-panel)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
-                    overflow: "hidden", minWidth: 200,
+                    overflow: "hidden", minWidth: 200, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
                   }}>
                     {THINKING_LEVELS.filter((lvl) => {
                       if (!availableThinkingLevels) return true;
@@ -1563,7 +1572,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       );
                     })}
                   </div>
-                )}
+                    );
+                  })()}
               </div>
             )}
           </div>
@@ -1648,7 +1658,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {!isStreaming && onToolPresetChange && (
               <div ref={toolDropdownRef} className="chat-input-toolbar-tools" style={{ position: "relative" }}>
                 <button
-                  onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
+                  onClick={(e) => { if (isStreaming) return; const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setToolDropdownOpen((v) => !v); }}
                   disabled={isStreaming}
                   title={t("changeToolPreset").replace("{preset}", toolPresetLabel)}
                   aria-label={t("toolPreset")}
@@ -1679,12 +1689,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <WrenchIcon size={14} />
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
                 </button>
-                {toolDropdownOpen && (
+                {toolDropdownOpen && toolDropdownRect && (() => {
+                    const vh = window.visualViewport?.height ?? window.innerHeight;
+                    const vw = window.innerWidth;
+                    const panelMaxW = Math.min(200, vw - 16);
+                    const panelW = Math.min(panelMaxW, Math.max(120, toolDropdownRect.left + toolDropdownRect.width - 8));
+                    const l = Math.max(8, toolDropdownRect.left + toolDropdownRect.width - panelW);
+                    const b = vh - toolDropdownRect.top + 6;
+                    const maxH = Math.min(320, Math.max(100, Math.min(toolDropdownRect.top - 8, vh * 0.5)));
+                    return (
                   <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    position: "fixed", bottom: b, left: l,
+                    zIndex: 2001, background: "var(--bg-panel)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
-                    overflow: "hidden", minWidth: 120,
+                    overflow: "hidden", minWidth: 120, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
                   }}>
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
@@ -1714,7 +1732,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       );
                     })}
                   </div>
-                )}
+                    );
+                  })()}
               </div>
             )}
 

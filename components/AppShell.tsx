@@ -16,7 +16,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
-import type { SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
@@ -53,21 +53,6 @@ export function AppShell() {
   const [welcomeWorkspaceControlsHost, setWelcomeWorkspaceControlsHost] = useState<HTMLDivElement | null>(null);
   const workspaceControlsHost = welcomeWorkspaceControlsHost ?? titleWorkspaceControlsHost;
 
-  // Branch navigator state — populated by ChatWindow via onBranchDataChange
-  const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
-  const [branchActiveLeafId, setBranchActiveLeafId] = useState<string | null>(null);
-  const branchLeafChangeFnRef = useRef<((leafId: string | null) => void) | null>(null);
-
-  const handleBranchDataChange = useCallback((tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => {
-    setBranchTree(tree);
-    setBranchActiveLeafId(activeLeafId);
-    branchLeafChangeFnRef.current = onLeafChange;
-  }, []);
-
-  const handleBranchLeafChange = useCallback((leafId: string | null) => {
-    branchLeafChangeFnRef.current?.(leafId);
-  }, []);
-
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
 
   const handleSystemPromptChange = useCallback((prompt: string | null) => {
@@ -102,10 +87,10 @@ export function AppShell() {
   }, []);
 
   // Single active panel — only one dropdown open at a time
-  const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "system" | "session" | null>(null);
+  const [activeTopPanel, setActiveTopPanel] = useState<"system" | "session" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  const toggleTopPanel = useCallback((panel: "branches" | "system" | "session") => {
+  const toggleTopPanel = useCallback((panel: "system" | "session") => {
     if (isMobile) setSidebarOpen(false);
     setActiveTopPanel((cur) => cur === panel ? null : panel);
   }, [isMobile]);
@@ -178,11 +163,8 @@ export function AppShell() {
       return prev;
     });
     setSessionKey((k) => k + 1);
-    setBranchTree([]);
-    setBranchActiveLeafId(null);
     setSystemPrompt(null);
     setActiveTopPanel(null);
-    router.replace("/", { scroll: false });
   }, [router, selectedSession]);
 
   // Update browser tab title when workspace changes
@@ -215,8 +197,6 @@ export function AppShell() {
     setSelectedSession(null);
     setNewSessionCwd(cwd);
     setSessionKey((k) => k + 1);
-    setBranchTree([]);
-    setBranchActiveLeafId(null);
     setSystemPrompt(null);
     setActiveTopPanel(null);
     if (isMobile) setSidebarOpen(false);
@@ -281,13 +261,11 @@ export function AppShell() {
       setSelectedSession(null);
       setNewSessionCwd(cwd ?? null);
       setSessionKey((k) => k + 1);
-      setBranchTree([]);
-      setBranchActiveLeafId(null);
       setSystemPrompt(null);
       setActiveTopPanel(null);
       router.replace("/", { scroll: false });
     }
-  }, [selectedSession, router]);
+  }, [router, selectedSession, isMobile]);
 
   const handleOpenFile = useCallback((filePath: string, fileName: string, sourceSessionId?: string | null) => {
     const tabId = `file:${filePath}`;
@@ -392,9 +370,6 @@ export function AppShell() {
         toggleTheme={toggleTheme}
         isMobile={isMobile}
         showChat={showChat}
-        branchTree={branchTree}
-        branchActiveLeafId={branchActiveLeafId}
-        onBranchLeafChange={handleBranchLeafChange}
         systemPrompt={systemPrompt}
         activeTopPanel={activeTopPanel}
         onToggleTopPanel={toggleTopPanel}
@@ -454,7 +429,6 @@ export function AppShell() {
               onSessionForked={handleSessionForked}
               modelsRefreshKey={modelsRefreshKey}
               chatInputRef={chatInputRef}
-              onBranchDataChange={handleBranchDataChange}
               onSystemPromptChange={handleSystemPromptChange}
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}

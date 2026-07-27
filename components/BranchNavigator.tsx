@@ -19,6 +19,8 @@ interface Props {
   onToggle?: () => void;
   /** Whether a session is currently active (used to show appropriate empty reason) */
   hasSession?: boolean;
+  /** When true, renders just the tree content without header or border */
+  embedded?: boolean;
 }
 
 // Find the visible entry IDs on the path from root to activeLeafId.
@@ -218,7 +220,7 @@ function TreeNodeView({ node, assistantLabel, activePathIds, depth, isLast, pare
   );
 }
 
-export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, containerRef, open: openProp, onToggle, hasSession }: Props) {
+export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, containerRef, open: openProp, onToggle, hasSession, embedded }: Props) {
   const { t } = useLanguage();
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
@@ -332,6 +334,33 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
             )}
           </div>
         )}
+      </div>
+    );
+  }
+
+  // Embedded mode: just the tree content, no header/border/toggle
+  if (embedded) {
+    if (!hasContent || !firstNode) {
+      return (
+        <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
+          {noBranchReason ?? t("sessionHasNoBranches")}
+        </div>
+      );
+    }
+    return (
+      <div style={{ padding: "4px 8px 8px 8px" }}>
+        {firstNode.children.map((child, idx) => (
+          <TreeNodeView
+            key={child.entry.id}
+            node={child}
+            assistantLabel={t("assistant")}
+            activePathIds={activePathIds}
+            depth={0}
+            isLast={idx === firstNode.children.length - 1}
+            parentLines={[]}
+            onSelect={handleSelect}
+          />
+        ))}
       </div>
     );
   }

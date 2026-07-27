@@ -1526,6 +1526,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setSessionStatsOverride(null);
   }, [messages.length, contextUsage?.tokens, contextUsage?.percent, contextUsage?.contextWindow]);
 
+  const branchTree = data?.tree ?? [];
+
   return {
     // State
     data, loading, error, activeLeafId, messages, entryIds, streamState,
@@ -1537,6 +1539,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
     isNew,
+    branchTree,
     // Refs
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
@@ -1547,6 +1550,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId,
+    handleLeafChange,
     // Subscriptions
     handleAgentEventRef,
   };

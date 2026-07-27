@@ -138,6 +138,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     isAutoModelSelection,
     agentPhase,
     isNew,
+    branchTree, activeLeafId: branchActiveLeafId, handleLeafChange,
     sessionIdRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
@@ -396,50 +397,76 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       )}
 
       {isEmptyNew ? (
-        <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8">
+        <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto">
           <div className="w-full max-w-[820px]">
+            {/* Header: workspace picker + version info */}
             <div
-              className="mb-3"
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                marginLeft: 16,
-                marginRight: 52,
-                fontFamily: "var(--font-mono)",
+                padding: "0 34px 6px 7px",
+                paddingRight: isMobile ? 16 : 34,
               }}
             >
               <div
-                ref={onWorkspaceControlsHostChange}
-                style={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1, minHeight: 48 }}
-              />
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  web <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
-                </span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  pi <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
-                </span>
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <div
+                  ref={onWorkspaceControlsHostChange}
+                  style={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1, minHeight: 48 }}
+                />
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                    web <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                    pi <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
+                  </span>
+                </div>
               </div>
             </div>
-            <NoticeShelf notices={notices} align="right" />
+
+            {/* Notices */}
+            <div
+              style={{
+                padding: "0 16px",
+                paddingRight: isMobile ? 16 : 34,
+              }}
+            >
+              <NoticeShelf notices={notices} align="right" />
+            </div>
+
             {chatInputElement}
-            <div className="session-info-bar-wrap is-empty">
-            <SessionInfoBar
-              onViewFullHistory={onViewFullHistory}
-              systemPrompt={systemPrompt}
-              sessionStats={sessionStats}
-              contextUsage={contextUsage}
-              hasSession={!!session}
-              showChat={true}
-              soundEnabled={soundEnabled}
-              onSoundToggle={onSoundToggle}
-              onCompact={session ? handleCompact : undefined}
-              onAbortCompaction={handleAbortCompaction}
-              isCompacting={isCompacting}
-              compactError={compactError}
-            />
+
+            {/* Session Info Bar */}
+            <div
+              style={{
+                padding: "0 16px 6px",
+                paddingRight: isMobile ? 16 : 34,
+                marginTop: -15,
+              }}
+            >
+              <SessionInfoBar
+                onViewFullHistory={onViewFullHistory}
+                systemPrompt={systemPrompt}
+                sessionStats={sessionStats}
+                contextUsage={contextUsage}
+                hasSession={!!session}
+                showChat={true}
+                showSoundLabel
+                soundEnabled={soundEnabled}
+                onSoundToggle={onSoundToggle}
+                onCompact={session ? handleCompact : undefined}
+                onAbortCompaction={handleAbortCompaction}
+                isCompacting={isCompacting}
+                compactError={compactError}
+                branchTree={branchTree}
+                branchActiveLeafId={branchActiveLeafId}
+                onBranchLeafChange={handleLeafChange}
+              />
             </div>
           </div>
         </div>
@@ -783,6 +810,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               onAbortCompaction={handleAbortCompaction}
               isCompacting={isCompacting}
               compactError={compactError}
+              branchTree={branchTree}
+              branchActiveLeafId={branchActiveLeafId}
+              onBranchLeafChange={handleLeafChange}
             />
           </div>
         </div>

@@ -12,17 +12,11 @@ import {
   Sun,
   X,
 } from "@phosphor-icons/react";
-import { BranchNavigator } from "./BranchNavigator";
 import { useElectronWindow } from "@/hooks/useElectronWindow";
 import { useLanguage } from "@/hooks/useLanguage";
-import type { SessionTreeNode } from "@/lib/types";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
 type SessionCopyField = "file" | "id";
-
-function hasBranches(nodes: SessionTreeNode[]): boolean {
-  return nodes.some((node) => node.children.length > 1 || hasBranches(node.children));
-}
 
 interface AppTitleBarProps {
   topBarRef: React.RefObject<HTMLDivElement | null>;
@@ -32,12 +26,9 @@ interface AppTitleBarProps {
   toggleTheme: (origin?: { x: number; y: number }) => void;
   isMobile: boolean;
   showChat: boolean;
-  branchTree: SessionTreeNode[];
-  branchActiveLeafId: string | null;
-  onBranchLeafChange: (leafId: string | null) => void;
   systemPrompt: string | null;
-  activeTopPanel: "branches" | "system" | "session" | null;
-  onToggleTopPanel: (panel: "branches" | "system" | "session") => void;
+  activeTopPanel: "system" | "session" | null;
+  onToggleTopPanel: (panel: "system" | "session") => void;
   topPanelPos: { top: number; left: number; width: number } | null;
   sessionStats: SessionStatsInfo | null;
   contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null;
@@ -58,12 +49,9 @@ export function AppTitleBar({
   toggleTheme,
   isMobile,
   showChat,
-  branchTree,
-  branchActiveLeafId,
-  onBranchLeafChange,
   systemPrompt,
   activeTopPanel,
-  onToggleTopPanel,
+  onToggleTopPanel: _onToggleTopPanel,
   topPanelPos,
   sessionStats,
   contextUsage,
@@ -77,7 +65,6 @@ export function AppTitleBar({
 }: AppTitleBarProps) {
   const { isElectron, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
   const { t: translate } = useLanguage();
-  const hasBranching = hasBranches(branchTree);
 
   return (
     <>
@@ -137,21 +124,7 @@ export function AppTitleBar({
         />
 
         {showChat && (
-          <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-            {/* Branch navigator */}
-            {hasBranching && (
-              <BranchNavigator
-                tree={branchTree}
-                activeLeafId={branchActiveLeafId}
-                onLeafChange={onBranchLeafChange}
-                inline
-                containerRef={topBarRef}
-                open={activeTopPanel === "branches"}
-                onToggle={() => onToggleTopPanel("branches")}
-                hasSession
-              />
-            )}
-          </div>
+          <div style={{ display: "flex", alignItems: "stretch", height: "100%" }} />
         )}
 
         {/* Flexible title spacer; in Electron this is the primary drag area. */}
