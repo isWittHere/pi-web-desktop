@@ -1881,7 +1881,7 @@ function SessionItem({
   }, []);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
-  const ITEM_HEIGHT = 54;
+  const ITEM_HEIGHT = 50;
 
   return (
     <div
@@ -2011,8 +2011,9 @@ function SessionItem({
                   <CaretDown size={10} weight="regular" aria-hidden="true" />
                 </button>
               )}
-              {/* Action buttons — always present, visibility toggled to avoid layout jump */}
-              <div style={{ display: "flex", gap: 2, flexShrink: 0, visibility: hovered ? "visible" : "hidden" }}>
+              {/* Action buttons — shown on hover */}
+              {hovered && (
+                <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
                 <button
                   onClick={startRename}
                   title={t("rename")}
@@ -2053,7 +2054,8 @@ function SessionItem({
                 >
                   <Trash size={13} weight="regular" aria-hidden="true" />
                 </button>
-              </div>
+                </div>
+              )}
             </div>
             {/* Metadata row */}
             <div style={{ marginTop: 2, display: "flex", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>

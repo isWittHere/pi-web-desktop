@@ -289,6 +289,17 @@ export function buildProcessSteps(
   return steps;
 }
 
+function thinkingDuration(step: Step): number | undefined {
+  if (step.kind !== "thinking") return undefined;
+  let total: number | undefined;
+  for (const b of step.blocks) {
+    if (b.type === "thinking" && typeof b.duration === "number") {
+      total = (total ?? 0) + b.duration;
+    }
+  }
+  return total;
+}
+
 function formatCustomLabel(customType: string): string {
   return customType
     .replace(/[_-]+/g, " ")
@@ -337,7 +348,7 @@ function StepIcon({ step, ts }: { step: Step; ts: BuildLabelFn }) {
 function ProcessFileTag({ filePath }: { filePath: string }) {
   const basename = filePath.split(/[\\/]/).filter(Boolean).pop() || filePath;
   return (
-    <span className="process-file-tag">
+    <span className="process-file-tag" title={filePath}>
       {getFileIcon(filePath, 12)}
       <span>{basename}</span>
     </span>
@@ -533,33 +544,47 @@ export function ProcessGroup({
   const thoughtCount = blocks.filter((b) => b.type === "thinking" || b.type === "text").length;
   const customCount = steps.filter((s) => s.kind === "custom").length;
 
-  const summaryParts: string[] = [];
-  if (toolCount) {
-    const base = toolCount === 1
-      ? t("processToolCount").replace("{count}", String(toolCount))
-      : t("processToolsCount").replace("{count}", String(toolCount));
-    summaryParts.push(failedCount > 0
-      ? base + t("processFailedCount").replace("{failed}", String(failedCount))
-      : base);
-  }
-  if (thoughtCount) {
-    summaryParts.push(
-      (thoughtCount === 1 ? t("processThoughtCount") : t("processThoughtsCount")).replace("{count}", String(thoughtCount)),
-    );
-  }
-  if (customCount) {
-    summaryParts.push(
-      (customCount === 1 ? t("processCustomCount") : t("processCustomsCount")).replace("{count}", String(customCount)),
-    );
-  }
+  const singleThinking = steps.length === 1 && steps[0].kind === "thinking" && !isStreaming;
+  const singleTool = steps.length === 1 && steps[0].kind === "tool" && !isStreaming;
 
-  const summary = isStreaming
-    ? t("processWorking")
-    : summaryParts.length > 0
+  let summary: string;
+  if (isStreaming) {
+    summary = t("processWorking");
+  } else if (singleThinking) {
+    const d = thinkingDuration(steps[0]);
+    summary = d !== undefined
+      ? t("processThoughtDone").replace("{duration}", String(d))
+      : t("processThoughtDoneNoDuration");
+  } else if (singleTool) {
+    const step = steps[0] as Extract<Step, { kind: "tool" }>;
+    const tool = step.block;
+    const enriched = enrichedToolLabel(tool, ts);
+    const d = tool.duration;
+    summary = d !== undefined ? `${enriched.displayLabel} ${d}s` : enriched.displayLabel;
+  } else {
+    const summaryParts: string[] = [];
+    if (toolCount) {
+      const base = toolCount === 1
+        ? t("processToolCount").replace("{count}", String(toolCount))
+        : t("processToolsCount").replace("{count}", String(toolCount));
+      summaryParts.push(failedCount > 0
+        ? base + t("processFailedCount").replace("{failed}", String(failedCount))
+        : base);
+    }
+    if (thoughtCount) {
+      summaryParts.push(
+        (thoughtCount === 1 ? t("processThoughtCount") : t("processThoughtsCount")).replace("{count}", String(thoughtCount)),
+      );
+    }
+    if (customCount) {
+      summaryParts.push(
+        (customCount === 1 ? t("processCustomCount") : t("processCustomsCount")).replace("{count}", String(customCount)),
+      );
+    }
+    summary = summaryParts.length > 0
       ? t("processUsed").replace("{summary}", summaryParts.join(" · "))
       : t("processCompleted");
-
-  const singleThinking = steps.length === 1 && steps[0].kind === "thinking" && !isStreaming;
+  }
 
   return (
     <div className="group/process relative mb-3 min-w-0">

@@ -516,7 +516,6 @@ pre, code {
 
 .group\/process .process-file-tag {
   flex: 0 1 auto;
-  max-width: 118px;
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -530,10 +529,6 @@ pre, code {
   line-height: inherit;
   cursor: inherit;
   white-space: nowrap;
-}
-.group\/process .process-file-tag span {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .group\/process .process-file-tag svg {
   flex: 0 0 auto;
