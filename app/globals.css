@@ -390,13 +390,13 @@ pre, code {
   opacity: 1;
 }
 .chat-input-toolbar {
-  min-height: 40px;
-  padding: 6px;
+  min-height: 32px;
+  padding: 4px;
   border: 0;
   font-size: 12px;
 }
 .chat-input-toolbar button {
-  border-radius: 6px !important;
+  border-radius: 4px !important;
   font-size: inherit !important;
 }
 /* Reset border-radius on model dropdown panel buttons */
@@ -408,13 +408,13 @@ pre, code {
 }
 .chat-input-send {
   display: inline-flex !important;
-  width: 28px !important;
-  height: 28px !important;
+  width: 24px !important;
+  height: 24px !important;
   align-items: center !important;
   justify-content: center !important;
   padding: 0 !important;
   border: 0 !important;
-  border-radius: 6px !important;
+  border-radius: 4px !important;
   background: transparent !important;
   color: var(--text-dim) !important;
   box-shadow: none !important;
@@ -682,7 +682,7 @@ pre, code {
   border: none;
   height: 1.5px;
   margin: 12px 0;
-  background: repeating-linear-gradient(90deg, var(--border) 0 6px, transparent 6px 10px);
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--border) 45%, transparent) 0 6px, transparent 6px 10px);
 }
 .markdown-body .katex-display {
   margin: 0.6em 0;
@@ -995,7 +995,7 @@ span.linenumber {
 .session-info-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0px;
   height: 26px;
   font-size: 11px;
   color: var(--text-muted);
@@ -1007,8 +1007,8 @@ span.linenumber {
    (with minimap gutter on desktop). Inner .session-info-bar-inner
    caps the same 820px max-width and centers. */
 .session-info-bar-wrap {
-  padding: 0 16px;
-  padding-right: 34px;     /* 16 + 18 (minimap gutter) */
+  padding: 0 8px;
+  padding-right: 26px;     /* 16 + 18 (minimap gutter) */
   margin-top: -15px;       /* cancels ChatInput's 15px bottom padding */
   padding-bottom: 4px;     /* breathing room under the row */
 }
@@ -1035,7 +1035,7 @@ span.linenumber {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 6px;
+  padding: 4px;
   height: 22px;
   background: none;
   border: none;

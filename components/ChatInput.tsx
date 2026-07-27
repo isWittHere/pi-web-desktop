@@ -20,6 +20,7 @@ import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/Check";
 import { CpuIcon } from "@phosphor-icons/react/Cpu";
 import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
+import { LightningIcon } from "@phosphor-icons/react/Lightning";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/PaperPlaneTilt";
 import { PlusIcon } from "@phosphor-icons/react/Plus";
 import { SquareIcon } from "@phosphor-icons/react/Square";
@@ -89,7 +90,50 @@ function compareModelOptions(a: ModelOption, b: ModelOption): number {
     || MODEL_OPTION_COLLATOR.compare(a.modelId, b.modelId);
 }
 
-const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+const THINKING_LEVELS = ["max", "xhigh", "high", "medium", "low", "minimal", "auto", "off"] as const;
+
+function ThinkingLevelIcon({ level, size = 14 }: { level: (typeof THINKING_LEVELS)[number]; size?: number }) {
+  if (level === "off") {
+    return <LightbulbIcon size={size} weight="regular" color="var(--text-dim)" />;
+  }
+
+  if (level === "auto") {
+    return <ArrowClockwiseIcon size={size} color="var(--accent)" />;
+  }
+
+  const useFill = ["medium", "high", "xhigh", "max"].includes(level);
+  const bulbWeight = useFill ? "fill" : "regular";
+  const accentColor = "var(--accent)";
+
+  return (
+    <span style={{ position: "relative", display: "inline-flex" }}>
+      <LightbulbIcon size={size} weight={bulbWeight} color={accentColor} />
+      {level === "high" && (
+        <PlusIcon
+          size={Math.round(size * 0.57)}
+          weight="bold"
+          color={accentColor}
+          style={{ position: "absolute", right: -3, top: -2, background: "var(--bg)", borderRadius: "50%" }}
+        />
+      )}
+      {level === "xhigh" && (
+        <LightningIcon
+          size={Math.round(size * 0.57)}
+          weight="fill"
+          color={accentColor}
+          style={{ position: "absolute", right: -3, top: -2, background: "var(--bg)", borderRadius: "50%" }}
+        />
+      )}
+      {level === "max" && (
+        <span style={{ position: "absolute", right: -5, top: -2, display: "inline-flex", background: "var(--bg)", borderRadius: "50%" }}>
+          <LightningIcon size={Math.round(size * 0.5)} weight="fill" color={accentColor} style={{ marginRight: -3 }} />
+          <LightningIcon size={Math.round(size * 0.5)} weight="fill" color={accentColor} />
+        </span>
+      )}
+    </span>
+  );
+}
+
 
 
 function formatTokenCount(tokens: number): string {
@@ -1365,10 +1409,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("injectMessageNow")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
-                    padding: "7px 12px",
+                    padding: "4px 9px",
                     background: canQueueStreamingMessage ? "rgba(234,179,8,0.12)" : "none",
                     border: "1px solid rgba(234,179,8,0.35)",
-                    borderRadius: 8,
+                    borderRadius: 6,
                     color: canQueueStreamingMessage ? "rgba(180,130,0,1)" : "var(--text-dim)",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
@@ -1386,10 +1430,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("queueMessageAfterFinish")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
-                    padding: "7px 12px",
+                    padding: "4px 9px",
                     background: canQueueStreamingMessage ? "rgba(129,140,248,0.12)" : "none",
                     border: "1px solid rgba(129,140,248,0.35)",
-                    borderRadius: 8,
+                    borderRadius: 6,
                     color: canQueueStreamingMessage ? "rgba(99,102,241,1)" : "var(--text-dim)",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
@@ -1422,9 +1466,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               aria-label={t("attachImage")}
               style={{
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                width: 28, height: 28, padding: 0,
+                width: 24, height: 24, padding: 0,
                 background: "none", border: "none",
-                borderRadius: 9,
+                borderRadius: 6,
                 color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
                 cursor: isStreaming ? "not-allowed" : "pointer",
                 opacity: isStreaming ? 0.5 : 1,
@@ -1451,12 +1495,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   aria-label={t("reasoningLevel")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 5px" : "6px 10px",
+                    padding: isMobile ? "0 5px" : "3px 7px",
                     width: isMobile ? "auto" : undefined,
-                    height: 28,
+                    height: 24,
                     background: thinkingDropdownOpen ? "var(--bg-hover)" : "none",
                     border: "none",
-                    borderRadius: 9,
+                    borderRadius: 6,
                     color: "var(--text-muted)",
                     cursor: isStreaming ? "not-allowed" : "pointer",
                     fontSize: 12,
@@ -1473,15 +1517,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     e.currentTarget.style.color = "var(--text-muted)";
                   }}
                 >
-                  <LightbulbIcon size={14} />
+                  <ThinkingLevelIcon level={thinkingLevel ?? "auto"} />
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
                 </button>
                 {thinkingDropdownOpen && (
                   <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                    overflow: "hidden", minWidth: 180,
+                    position: "absolute", bottom: "calc(100% + 4px)", right: 0,
+                    zIndex: 100, background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
+                    overflow: "hidden", minWidth: 200,
                   }}>
                     {THINKING_LEVELS.filter((lvl) => {
                       if (!availableThinkingLevels) return true;
@@ -1489,7 +1533,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       return availableThinkingLevels.includes(lvl);
                     }).map((lvl) => {
                       const isActive = (thinkingLevel ?? "auto") === lvl;
-                      const desc = thinkingLevelDescriptions[lvl];
                       const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
                       const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : thinkingLevelLabels[lvl];
                       const showOriginal = mappedVal != null && mappedVal !== lvl;
@@ -1499,25 +1542,23 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           onClick={() => { setThinkingDropdownOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
+                            width: "100%", padding: "6px 12px",
                             background: isActive ? "var(--bg-selected)" : "none",
                             border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
+                            color: isActive ? "var(--accent)" : "var(--text)",
                             cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
+                            fontFamily: "var(--font-mono)",
                             whiteSpace: "nowrap",
                           }}
                           onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                           onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
                         >
-                          {isActive
-                            ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
+                          <ThinkingLevelIcon level={lvl} size={14} />
                           <span style={{ flex: 1 }}>
                             {displayLabel}
-                            {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>}
+                            {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: 5 }}>({lvl})</span>}
                           </span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
+                          {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                         </button>
                       );
                     })}
@@ -1556,11 +1597,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   alignItems: "center",
                   justifyContent: "center",
                   width: "100%",
-                  height: 28,
-                  padding: "6px 8px",
+                  height: 24,
+                  padding: "3px 5px",
                   background: "none",
                   border: "none",
-                  borderRadius: 9,
+                  borderRadius: 6,
                   color: "var(--text-muted)",
                   cursor: controlsMenuOpen ? "default" : "pointer",
                   fontSize: 12,
@@ -1613,12 +1654,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   aria-label={t("toolPreset")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 5px" : "6px 10px",
+                    padding: isMobile ? "0 5px" : "3px 7px",
                     width: isMobile ? "auto" : undefined,
-                    height: 28,
+                    height: 24,
                     background: toolDropdownOpen ? "var(--bg-hover)" : "none",
                     border: "none",
-                    borderRadius: 9,
+                    borderRadius: 6,
                     color: "var(--text-muted)",
                     cursor: isStreaming ? "not-allowed" : "pointer",
                     fontSize: 12,
@@ -1641,8 +1682,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 {toolDropdownOpen && (
                   <div style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+                    zIndex: 100, background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                     overflow: "hidden", minWidth: 120,
                   }}>
                     {TOOL_PRESETS.map((lvl) => {
@@ -1655,22 +1696,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
+                            width: "100%", padding: "6px 12px",
                             background: isActive ? "var(--bg-selected)" : "none",
                             border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
+                            color: isActive ? "var(--accent)" : "var(--text)",
                             cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
+                            fontFamily: "var(--font-mono)",
                             whiteSpace: "nowrap",
                           }}
                           onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                           onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
                         >
-                          {isActive
-                            ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
                           <span style={{ flex: 1 }}>{toolPresetLabels[lvl]}</span>
                           <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
+                          {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                         </button>
                       );
                     })}
@@ -1692,14 +1731,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     style={{
                       display: "flex", alignItems: "center", gap: 6,
                       justifyContent: isMobile ? "flex-start" : undefined,
-                      padding: isMobile ? "6px 8px" : "6px 10px",
-                      height: 28,
+                      padding: isMobile ? "4px 6px" : "3px 7px",
+                      height: 24,
                       width: isMobile ? "100%" : undefined,
                       maxWidth: isMobile ? "100%" : 220,
                       overflow: "hidden",
                       background: modelDropdownOpen ? "var(--bg-hover)" : "none",
                       border: "none",
-                      borderRadius: 9,
+                      borderRadius: 6,
                       color: "var(--text-muted)",
                       cursor: isStreaming ? "not-allowed" : "pointer",
                       fontSize: 12,
@@ -1753,8 +1792,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       position: "fixed",
                       bottom,
                       ...panelPos,
-                      zIndex: 2000, background: "var(--bg)", border: "1px solid var(--border)",
-                      borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+                      zIndex: 2000, background: "var(--bg-panel)", border: "1px solid var(--border)",
+                      borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                       overflow: "hidden", maxHeight: maxH, overflowY: "auto",
                       }}>
                       {/* Favorites group — at top, always expanded */}
@@ -1781,21 +1820,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   style={{
                                     display: "flex", alignItems: "center", gap: 8,
                                     flex: 1, minWidth: 0,
-                                    padding: "7px 12px",
+                                    padding: "6px 12px",
                                     background: isActive ? "var(--bg-selected)" : "none",
                                     border: "none",
-                                    color: isActive ? "var(--text)" : "var(--text-muted)",
+                                    color: isActive ? "var(--accent)" : "var(--text)",
                                     cursor: "pointer", fontSize: 12, textAlign: "left",
-                                    fontWeight: isActive ? 600 : 400,
+                                    fontFamily: "var(--font-mono)",
                                     whiteSpace: "nowrap", overflow: "hidden",
                                   }}
                                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
                                 >
-                                  {isActive
-                                    ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
-                                    : <span style={{ width: 10, flexShrink: 0 }} />}
                                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
+                                  {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                                   <span
                                     onClick={(e) => { e.stopPropagation(); toggleFavorite(opt.provider, opt.modelId); }}
                                     className="model-star"
@@ -1860,21 +1897,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   style={{
                                     display: "flex", alignItems: "center", gap: 8,
                                     flex: 1, minWidth: 0,
-                                    padding: "7px 12px",
+                                    padding: "6px 12px",
                                     background: isActive ? "var(--bg-selected)" : "none",
                                     border: "none",
-                                    color: isActive ? "var(--text)" : "var(--text-muted)",
+                                    color: isActive ? "var(--accent)" : "var(--text)",
                                     cursor: "pointer", fontSize: 12, textAlign: "left",
-                                    fontWeight: isActive ? 600 : 400,
+                                    fontFamily: "var(--font-mono)",
                                     whiteSpace: "nowrap", overflow: "hidden",
                                   }}
                                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
                                 >
-                                  {isActive
-                                    ? <CheckIcon size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
-                                    : <span style={{ width: 10, flexShrink: 0 }} />}
                                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
+                                  {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                                   <span
                                     onClick={(e) => { e.stopPropagation(); toggleFavorite(opt.provider, opt.modelId); }}
                                     className="model-star"
@@ -1926,11 +1961,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 aria-label={t("stopAgent")}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
-                  padding: "6px 10px",
-                  height: 28,
+                  padding: "3px 7px",
+                  height: 24,
                   background: "rgba(239,68,68,0.08)",
                   border: "1px solid rgba(239,68,68,0.3)",
-                  borderRadius: 9,
+                  borderRadius: 6,
                   color: "#ef4444",
                   cursor: "pointer",
                   fontSize: 12, fontWeight: 600,
@@ -1960,14 +1995,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 32,
-                  height: 28,
+                  width: 26,
+                  height: 24,
                   padding: 0,
                   marginLeft: 0,
                   background: "var(--bg-hover)",
                   border: "none",
                   borderLeft: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                  borderRadius: "0 9px 9px 0",
+                  borderRadius: "0 6px 6px 0",
                   color: "var(--text)",
                   cursor: "pointer",
                   transition: "background 0.12s, color 0.12s",
