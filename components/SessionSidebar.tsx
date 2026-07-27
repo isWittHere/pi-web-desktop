@@ -268,6 +268,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [worktreeLoadingCwd, setWorktreeLoadingCwd] = useState<string | null>(null);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
+  const [sessionsOpen, setSessionsOpen] = useState(true);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
@@ -883,19 +884,28 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       {/* Header */}
       <div style={{ flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center" }}>
-          <div
+          <button
+            onClick={() => setSessionsOpen((v) => !v)}
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
               flex: 1,
               padding: "6px 10px",
+              background: "none",
+              border: "none",
               color: "var(--text-muted)",
+              cursor: "pointer",
               fontSize: 11,
               fontWeight: 600,
               letterSpacing: "0.05em",
               textTransform: "uppercase",
+              textAlign: "left",
             }}
           >
+            <CaretRight size={9} weight="regular" style={{ transform: sessionsOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
             {t("sessions")}
-          </div>
+          </button>
           <button
             onClick={handleNewSession}
             disabled={!selectedCwd}
@@ -1506,40 +1516,43 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         )}
       </div>
 
-      {/* Session list */}
-      <div style={{ flex: "0 1 auto", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: "min(40%, 360px)" }}>
-        {loading && (
-          <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-            {t("loading")}
-          </div>
-        )}
-        {error && (
-          <div style={{ padding: "12px 14px", color: "#f87171", fontSize: 12 }}>
-            {error}
-          </div>
-        )}
-        {!loading && !error && filteredSessions.length === 0 && (
-          <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-            {t("noSessionsFound")}
-          </div>
-        )}
-        {sessionTree.map((node) => (
-          <SessionTreeItem
-            key={node.session.id}
-            node={node}
-            selectedSessionId={selectedSessionId}
-            runningSessionIds={runningSessionIds}
-            unreadSessionIds={unreadSessionIds}
-            onSelectSession={handleSelectSessionFromList}
-            onRenamed={loadSessions}
-            onSessionDeleted={(id) => {
-              onSessionDeleted?.(id);
-              loadSessions();
-            }}
-            depth={0}
-          />
-        ))}
-      </div>
+      {/* Session list — when both panels open, uses intelligent max-height;
+           when explorer is collapsed, expands to fill remaining space. */}
+      {sessionsOpen && (
+        <div style={{ flex: explorerOpen ? "0 1 auto" : "1 1 0", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: explorerOpen ? "min(40%, 360px)" : "none" }}>
+          {loading && (
+            <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
+              {t("loading")}
+            </div>
+          )}
+          {error && (
+            <div style={{ padding: "12px 14px", color: "#f87171", fontSize: 12 }}>
+              {error}
+            </div>
+          )}
+          {!loading && !error && filteredSessions.length === 0 && (
+            <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
+              {t("noSessionsFound")}
+            </div>
+          )}
+          {sessionTree.map((node) => (
+            <SessionTreeItem
+              key={node.session.id}
+              node={node}
+              selectedSessionId={selectedSessionId}
+              runningSessionIds={runningSessionIds}
+              unreadSessionIds={unreadSessionIds}
+              onSelectSession={handleSelectSessionFromList}
+              onRenamed={loadSessions}
+              onSessionDeleted={(id) => {
+                onSessionDeleted?.(id);
+                loadSessions();
+              }}
+              depth={0}
+            />
+          ))}
+        </div>
+      )}
 
       {/* File Explorer section */}
       {(selectedCwdProp || selectedCwd) && (

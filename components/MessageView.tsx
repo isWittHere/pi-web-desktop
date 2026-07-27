@@ -3,8 +3,9 @@
 import { memo, useState, useRef, useEffect, useMemo } from "react";
 import { MarkdownBody } from "./MarkdownBody";
 import { copyText } from "@/lib/clipboard";
-import { parseCompactionSummary } from "@/lib/compaction-summary";
+
 import { isEmptyThinkingBlock } from "@/lib/message-display";
+import { CompactionSummary } from "./CompactionSummary";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/ArrowBendDownRight";
 import { ArrowDownIcon } from "@phosphor-icons/react/ArrowDown";
@@ -119,7 +120,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
   }
   if (message.role === "custom") {
     if ((message as CustomMessage).customType === "compaction") {
-      return <CompactionMessageView message={message as CustomMessage} />;
+      return <CompactionSummary content={(message as CustomMessage).content} />;
     }
     return <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} />;
   }
@@ -1041,88 +1042,7 @@ function PairedResult({ text, isEmpty, isError, processStyle = false }: {
   );
 }
 
-function CompactionMessageView({ message }: { message: CustomMessage }) {
-  const { t } = useLanguage();
-  const summary = getMessageText(message.content);
-  const parsedSummary = useMemo(() => parseCompactionSummary(summary), [summary]);
-  const time = formatTime(message.timestamp);
 
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div
-        style={{
-          border: "1px solid var(--border)",
-          borderRadius: 8,
-          overflow: "hidden",
-          background: "var(--bg)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "7px 10px",
-            borderBottom: "1px solid var(--border)",
-            background: "var(--bg-panel)",
-            color: "var(--text-muted)",
-          }}
-        >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>
-            {t("compaction")}
-          </span>
-          {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
-        </div>
-
-        <div style={{ padding: "11px 13px 12px" }}>
-          <div style={{ color: "var(--text)", fontSize: 15, fontWeight: 700, lineHeight: 1.35 }}>
-            {t("conversationCompacted")}
-          </div>
-          <div style={{ marginTop: 3, marginBottom: 10, color: "var(--text)", fontSize: 14, lineHeight: 1.5 }}>
-            {t("compactionSummaryDescription")}
-          </div>
-          {parsedSummary.body ? (
-            <MarkdownBody className="markdown-compaction-message">{parsedSummary.body}</MarkdownBody>
-          ) : (
-            <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("noSummary")}</span>
-          )}
-          <CompactionFileMetadata readFiles={parsedSummary.readFiles} modifiedFiles={parsedSummary.modifiedFiles} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CompactionFileMetadata({ readFiles, modifiedFiles }: { readFiles: string[]; modifiedFiles: string[] }) {
-  const { t } = useLanguage();
-  const total = readFiles.length + modifiedFiles.length;
-  if (total === 0) return null;
-
-  const parts = [];
-  if (readFiles.length > 0) parts.push(t("readFilesCount").replace("{count}", String(readFiles.length)));
-  if (modifiedFiles.length > 0) parts.push(t("modifiedFilesCount").replace("{count}", String(modifiedFiles.length)));
-
-  return (
-    <details className="compaction-file-details">
-      <summary>{t("fileContext").replace("{context}", parts.join(", "))}</summary>
-      {modifiedFiles.length > 0 && <CompactionFileList title={t("modifiedFiles")} files={modifiedFiles} />}
-      {readFiles.length > 0 && <CompactionFileList title={t("readFiles")} files={readFiles} />}
-    </details>
-  );
-}
-
-function CompactionFileList({ title, files }: { title: string; files: string[] }) {
-  return (
-    <div className="compaction-file-section">
-      <div className="compaction-file-title">{title}</div>
-      <ul className="compaction-file-list">
-        {files.map((file) => (
-          <li key={file}>{file}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessage; cwd?: string; onOpenFile?: (filePath: string) => void }) {
   const { t } = useLanguage();

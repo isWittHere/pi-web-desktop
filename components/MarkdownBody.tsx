@@ -37,6 +37,13 @@ interface MarkdownBodyProps {
   onOpenFile?: (filePath: string) => void;
 }
 
+function headingId(children: unknown) {
+  return String(children)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
 
@@ -46,6 +53,15 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
         remarkPlugins={markdownRemarkPlugins}
         rehypePlugins={markdownRehypePlugins}
         components={{
+          h1({ children }: React.ComponentProps<'h1'>) {
+            return <h1 id={headingId(children)} className="scroll-mt-24 text-xl font-semibold mt-4 mb-2 text-(--text)">{children}</h1>
+          },
+          h2({ children }: React.ComponentProps<'h2'>) {
+            return <h2 id={headingId(children)} className="scroll-mt-24 text-lg font-semibold mt-3 mb-2 text-(--text)">{children}</h2>
+          },
+          h3({ children }: React.ComponentProps<'h3'>) {
+            return <h3 id={headingId(children)} className="scroll-mt-24 text-base font-semibold mt-3 mb-1 text-(--text)">{children}</h3>
+          },
           code({ className, children, ...props }) {
             const lang = className?.replace("language-", "").toLowerCase() ?? "";
             const raw = String(children);
@@ -58,7 +74,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
             }
             return (
               <code
-                className="markdown-inline-code"
+                className="inline max-w-full whitespace-normal break-words [overflow-wrap:anywhere] align-baseline bg-(--bg-secondary) border border-(--border) px-1.5 py-0.5 text-xs font-mono text-(--accent-blue)"
                 {...props}
               >
                 {children}
@@ -71,11 +87,12 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
           a({ href, children, ...props }) {
             // `node` is react-markdown metadata, not a DOM attribute.
             delete props.node;
+            const linkClass = "text-(--accent-blue) underline underline-offset-2 hover:text-(--accent-blue)/80";
             const filePath = onOpenFile ? resolveLocalFileHref(href, cwd) : null;
             const openFile = onOpenFile;
             if (!filePath || !openFile) {
               return (
-                <a href={href} {...props} target="_blank" rel="noopener noreferrer">
+                <a href={href} {...props} className={linkClass} target="_blank" rel="noopener noreferrer">
                   {children}
                 </a>
               );
@@ -91,15 +108,19 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
             };
 
             return (
-              <a href={href} {...props} onClick={handleClick}>
+              <a href={href} {...props} className={linkClass} onClick={handleClick}>
                 {children}
               </a>
             );
           },
           table({ children }) {
             return (
-              <div className="markdown-table-wrap">
-                <table>{children}</table>
+              <div className="my-3 rounded-lg overflow-hidden border border-(--border)">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse [&_tr:last-child>td]:border-b-0">
+                    {children}
+                  </table>
+                </div>
               </div>
             );
           },

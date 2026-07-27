@@ -384,7 +384,7 @@ const translations = {
     tokensPerSecond: "{count} t/s",
     thinkingContentUnavailable: "Thinking content unavailable",
     loadingThinking: "Loading thinking...",
-    compaction: "compaction",
+
     conversationCompacted: "Conversation compacted",
     compactionSummaryDescription: "The conversation history before this point was compacted into the following summary:",
     noSummary: "(no summary)",
@@ -790,7 +790,7 @@ const translations = {
     tokensPerSecond: "{count} 令牌/秒",
     thinkingContentUnavailable: "思考内容不可用",
     loadingThinking: "正在加载思考内容...",
-    compaction: "上下文压缩",
+
     conversationCompacted: "对话已压缩",
     compactionSummaryDescription: "此处之前的对话历史已压缩为以下摘要：",
     noSummary: "（无摘要）",

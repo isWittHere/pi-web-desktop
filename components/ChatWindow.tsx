@@ -84,6 +84,10 @@ function hasDisplayableProcessMessage(message: AgentMessage): boolean {
   return message.role === "custom";
 }
 
+function isCompactionBoundary(message: AgentMessage): boolean {
+  return message.role === "custom" && message.customType === "compaction";
+}
+
 function withAssistantBlocks(
   message: AssistantMessage,
   content: AssistantContentBlock[],
@@ -530,7 +534,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               const rendered: ReactNode[] = [];
               for (let idx = 0; idx < messages.length;) {
                 const msg = messages[idx];
-                if (msg.role !== "user") {
+                const startsCompactionTurn = isCompactionBoundary(msg);
+                // The SDK may trim the user prompt that triggered compaction from
+                // the rebuilt context. Treat the retained compaction entry as the
+                // turn boundary so its first following agent response still uses
+                // the ProcessGroup rendering path rather than the legacy message
+                // renderer.
+                if (msg.role !== "user" && !startsCompactionTurn) {
                   rendered.push(renderMessage(idx));
                   idx += 1;
                   continue;
@@ -541,7 +551,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 while (endIdx < messages.length && messages[endIdx].role !== "user") endIdx += 1;
 
                 const finalAssistantIdx = findFinalAssistantIndex(messages, userIdx, endIdx);
-                const isLiveTail = (agentRunning || streamState.isStreaming) && endIdx === messages.length && userIdx === lastUserIdx;
+                const isLiveTail = (agentRunning || streamState.isStreaming)
+                  && endIdx === messages.length
+                  && (userIdx === lastUserIdx || startsCompactionTurn);
 
                 if (isLiveTail) {
                   rendered.push(renderMessage(userIdx));
