@@ -24,6 +24,12 @@
 # electron
 electron/node_modules/
 
+# tauri (remnants from previous Tauri migration, kept to prevent re-inclusion)
+src-tauri/
+tauri-dist/
+build-app/
+build-temp/
+
 # misc
 .DS_Store
 *.pem

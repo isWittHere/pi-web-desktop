@@ -24,6 +24,16 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "private, no-cache, max-age=0, must-revalidate" },
         ],
       },
+      // Allow cross-origin access to API routes. Helps when accessing the dev
+      // server from other devices on the LAN (e.g. mobile testing via WiFi).
+      {
+        source: "/api/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Access-Control-Allow-Methods", value: "GET,POST,PATCH,DELETE,OPTIONS" },
+          { key: "Access-Control-Allow-Headers", value: "content-type" },
+        ],
+      },
     ];
   },
   env: {

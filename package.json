@@ -83,10 +83,15 @@
     "files": [
       "electron/**/*",
       ".next/**/*",
+      "node_modules/**/*",
       "!.next/cache",
       "!.next/dev",
       "!.next/**/*.js.map",
       "!electron/node_modules",
+      "!node_modules/.cache",
+      "!node_modules/**/node_modules/.cache",
+      "!node_modules/electron/**",
+      "!node_modules/electron-builder/**",
       "package.json"
     ],
     "asarUnpack": [
