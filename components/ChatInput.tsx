@@ -22,9 +22,6 @@ import { CpuIcon } from "@phosphor-icons/react/Cpu";
 import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/PaperPlaneTilt";
 import { PlusIcon } from "@phosphor-icons/react/Plus";
-import { SpeakerHighIcon } from "@phosphor-icons/react/SpeakerHigh";
-import { SpeakerSlashIcon } from "@phosphor-icons/react/SpeakerSlash";
-
 import { SquareIcon } from "@phosphor-icons/react/Square";
 import { StarIcon } from "@phosphor-icons/react/Star";
 import { WrenchIcon } from "@phosphor-icons/react/Wrench";
@@ -68,8 +65,6 @@ interface Props {
   slashCommandsLoading?: boolean;
   onLoadSlashCommands?: () => Promise<SlashCommandInfo[]> | SlashCommandInfo[];
   onBuiltinCommand?: (message: string) => Promise<BuiltinSlashCommandResult>;
-  soundEnabled?: boolean;
-  onSoundToggle?: () => void;
   onAudioUnlock?: () => void;
   draftKey?: string;
   /** Session working directory — enables the @ file autocomplete menu */
@@ -190,7 +185,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   retryInfo, queuedMessages, onRecallQueue,
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
   onBuiltinCommand,
-  soundEnabled, onSoundToggle, onAudioUnlock,
+  onAudioUnlock,
   onPromptWithStreamingBehavior,
   draftKey,
   cwd,
@@ -1447,39 +1442,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             >
               <PlusIcon size={14} />
             </button>
-            {onSoundToggle !== undefined && (
-              <button
-                className="chat-input-toolbar-sound"
-                onClick={onSoundToggle}
-                title={soundEnabled ? t("disableCompletionSound") : t("enableCompletionSound")}
-                aria-label={soundEnabled ? t("disableCompletionSound") : t("enableCompletionSound")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                  width: 28,
-                  height: 28,
-                  padding: 0,
-                  background: "none",
-                  border: "none",
-                  borderRadius: 9,
-                  color: soundEnabled ? "var(--text-muted)" : "var(--text-dim)",
-                  cursor: "pointer",
-                  opacity: soundEnabled ? 1 : 0.55,
-                  transition: "background 0.12s, color 0.12s, opacity 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                  e.currentTarget.style.opacity = "1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
-                  e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
-                }}
-              >
-                {soundEnabled ? <SpeakerHighIcon size={14} /> : <SpeakerSlashIcon size={14} />}
-              </button>
-            )}
             {!isStreaming && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} className="chat-input-toolbar-thinking" style={{ position: "relative" }}>
                 <button

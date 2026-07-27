@@ -316,8 +316,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       slashCommandsLoading={slashCommandsLoading}
       onLoadSlashCommands={loadSlashCommands}
       onBuiltinCommand={handleBuiltinSlashCommand}
-      soundEnabled={soundEnabled}
-      onSoundToggle={onSoundToggle}
       onAudioUnlock={unlockAudio}
       draftKey={session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined)}
       cwd={session?.cwd ?? newSessionCwd}
@@ -427,7 +425,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             </div>
             <NoticeShelf notices={notices} align="right" />
             {chatInputElement}
-            <div style={{ marginTop: -15, paddingBottom: 4 }}>
+            <div className="session-info-bar-wrap is-empty">
             <SessionInfoBar
               onViewFullHistory={onViewFullHistory}
               systemPrompt={systemPrompt}
@@ -435,6 +433,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               contextUsage={contextUsage}
               hasSession={!!session}
               showChat={true}
+              soundEnabled={soundEnabled}
+              onSoundToggle={onSoundToggle}
               onCompact={session ? handleCompact : undefined}
               onAbortCompaction={handleAbortCompaction}
               isCompacting={isCompacting}
@@ -768,8 +768,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </div>
         </div>
         {chatInputElement}
-        <div style={{ padding: `0 ${CHAT_COLUMN_PADDING}px`, paddingRight: isMobile ? CHAT_COLUMN_PADDING : CHAT_INPUT_RIGHT_PADDING, marginTop: -15, paddingBottom: 4 }}>
-          <div style={{ maxWidth: 820, margin: "0 auto" }}>
+        <div className={`session-info-bar-wrap${isMobile ? " is-mobile" : ""}`}>
+          <div className="session-info-bar-inner">
             <SessionInfoBar
               onViewFullHistory={onViewFullHistory}
               systemPrompt={systemPrompt}
@@ -777,6 +777,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               contextUsage={contextUsage}
               hasSession={!!session}
               showChat={true}
+              soundEnabled={soundEnabled}
+              onSoundToggle={onSoundToggle}
               onCompact={session ? handleCompact : undefined}
               onAbortCompaction={handleAbortCompaction}
               isCompacting={isCompacting}
