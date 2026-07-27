@@ -94,6 +94,7 @@
       "!node_modules/**/node_modules/.cache",
       "!node_modules/electron/**",
       "!node_modules/electron-builder/**",
+      "!node_modules/@electron/**",
       "!node_modules/**/*.js.map",
       "!node_modules/**/*.mjs.map",
       "!node_modules/**/*.css.map",

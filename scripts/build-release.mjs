@@ -163,9 +163,15 @@ if (existsSync(NEXT_NM)) {
 // 2c. Strip devDependencies so only production packages end up in the
 //     packaged app.  electron-builder sees whatever is in node_modules/
 //     at packaging time, so we prune first and restore afterwards.
+//     electron must be re-installed after prune because electron-builder
+//     needs it to resolve the version and access platform binaries — but
+//     the !node_modules/electron/** exclusion keeps it out of the package.
 // ══════════════════════════════════════════════════════════════════════════════
 log("Step 2c: npm prune --production");
 run("npm", ["prune", "--production"]);
+
+log("  reinstalling electron for builder");
+run("npm", ["install", "--no-save", "electron"]);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 3. electron-builder
