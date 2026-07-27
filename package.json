@@ -32,6 +32,9 @@
     "lint": "eslint .",
     "electron:dev": "electron .",
     "electron:build": "npm run build && electron-builder",
+    "electron:dir": "npm run build && electron-builder --win dir",
+    "electron:portable": "npm run build && electron-builder --win portable",
+    "release:green": "node scripts/build-release.mjs",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
   },
   "dependencies": {
@@ -95,6 +98,9 @@
     "win": {
       "target": "nsis",
       "icon": "public/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.exe"
     },
     "mac": {
       "target": "dmg",
