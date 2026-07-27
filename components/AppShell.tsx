@@ -69,7 +69,6 @@ export function AppShell() {
   }, []);
 
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
-  const systemBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleSystemPromptChange = useCallback((prompt: string | null) => {
     setSystemPrompt(prompt);
@@ -393,12 +392,9 @@ export function AppShell() {
         toggleTheme={toggleTheme}
         isMobile={isMobile}
         showChat={showChat}
-        selectedSession={selectedSession}
-        onViewFullHistory={handleViewFullHistory}
         branchTree={branchTree}
         branchActiveLeafId={branchActiveLeafId}
         onBranchLeafChange={handleBranchLeafChange}
-        systemBtnRef={systemBtnRef}
         systemPrompt={systemPrompt}
         activeTopPanel={activeTopPanel}
         onToggleTopPanel={toggleTopPanel}
@@ -465,6 +461,8 @@ export function AppShell() {
               onContextUsageChange={handleContextUsageChange}
               onOpenFile={handleOpenLinkedFile}
               onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
+              onViewFullHistory={handleViewFullHistory}
+              systemPrompt={systemPrompt}
             />
           ) : showPlaceholder ? (
             activeCwd ? (

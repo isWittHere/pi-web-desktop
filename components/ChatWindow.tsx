@@ -8,6 +8,7 @@ import { collectProcessContentBlocks, splitAssistantContentBlocks } from "@/lib/
 import { MessageView } from "./MessageView";
 import { ProcessGroup } from "./ProcessGroup";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
+import { SessionInfoBar } from "./SessionInfoBar";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
 import { useAudio } from "@/hooks/useAudio";
@@ -38,6 +39,8 @@ interface Props {
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
   onOpenFile?: (filePath: string) => void;
   onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
+  onViewFullHistory?: () => void;
+  systemPrompt: string | null;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: TranslationKey) => string): string {
@@ -100,7 +103,7 @@ function withAssistantBlocks(
 
 
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt }: Props) {
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
   const isMobile = useIsMobile();
   const { t } = useLanguage();
@@ -299,10 +302,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       modelNames={modelNames}
       modelList={modelList}
       onModelChange={handleModelChange}
-      onCompact={session ? handleCompact : undefined}
-      onAbortCompaction={handleAbortCompaction}
-      isCompacting={isCompacting}
-      compactError={compactError}
       compactResult={compactResult}
       toolPreset={toolPreset}
       onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
@@ -428,11 +427,25 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             </div>
             <NoticeShelf notices={notices} align="right" />
             {chatInputElement}
+            <div style={{ marginTop: -15, paddingBottom: 4 }}>
+            <SessionInfoBar
+              onViewFullHistory={onViewFullHistory}
+              systemPrompt={systemPrompt}
+              sessionStats={sessionStats}
+              contextUsage={contextUsage}
+              hasSession={!!session}
+              showChat={true}
+              onCompact={session ? handleCompact : undefined}
+              onAbortCompaction={handleAbortCompaction}
+              isCompacting={isCompacting}
+              compactError={compactError}
+            />
+            </div>
           </div>
         </div>
       ) : (
       <>
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden z-0">
         <div
           style={{
             position: "absolute",
@@ -743,11 +756,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         )}
       </div>
 
-      <div className="relative">
+      <div className="relative z-10">
         <div
           style={{
             padding: `0 ${CHAT_COLUMN_PADDING}px`,
-            paddingRight: isMobile ? CHAT_COLUMN_PADDING : CHAT_INPUT_RIGHT_PADDING,
+            paddingRight: isMobile ? CHAT_COLUMN_PADDING : CHAT_INPUT_RIGHT_PADDING
           }}
         >
           <div style={{ maxWidth: 820, margin: "0 auto" }}>
@@ -755,6 +768,22 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </div>
         </div>
         {chatInputElement}
+        <div style={{ padding: `0 ${CHAT_COLUMN_PADDING}px`, paddingRight: isMobile ? CHAT_COLUMN_PADDING : CHAT_INPUT_RIGHT_PADDING, marginTop: -15, paddingBottom: 4 }}>
+          <div style={{ maxWidth: 820, margin: "0 auto" }}>
+            <SessionInfoBar
+              onViewFullHistory={onViewFullHistory}
+              systemPrompt={systemPrompt}
+              sessionStats={sessionStats}
+              contextUsage={contextUsage}
+              hasSession={!!session}
+              showChat={true}
+              onCompact={session ? handleCompact : undefined}
+              onAbortCompaction={handleAbortCompaction}
+              isCompacting={isCompacting}
+              compactError={compactError}
+            />
+          </div>
+        </div>
       </div>
       </>
       )}

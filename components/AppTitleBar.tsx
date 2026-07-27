@@ -1,16 +1,9 @@
 "use client";
 
 import {
-  ClockCounterClockwise,
-  ArrowDown,
-  ArrowUp,
   Check,
   Copy,
-  Database,
-  FileText,
-  Gauge,
   Gear,
-  Info,
   List,
   Minus,
   Moon,
@@ -22,7 +15,7 @@ import {
 import { BranchNavigator } from "./BranchNavigator";
 import { useElectronWindow } from "@/hooks/useElectronWindow";
 import { useLanguage } from "@/hooks/useLanguage";
-import type { SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { SessionTreeNode } from "@/lib/types";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
 type SessionCopyField = "file" | "id";
@@ -39,12 +32,9 @@ interface AppTitleBarProps {
   toggleTheme: (origin?: { x: number; y: number }) => void;
   isMobile: boolean;
   showChat: boolean;
-  selectedSession: SessionInfo | null;
-  onViewFullHistory: () => void;
   branchTree: SessionTreeNode[];
   branchActiveLeafId: string | null;
   onBranchLeafChange: (leafId: string | null) => void;
-  systemBtnRef: React.RefObject<HTMLButtonElement | null>;
   systemPrompt: string | null;
   activeTopPanel: "branches" | "system" | "session" | null;
   onToggleTopPanel: (panel: "branches" | "system" | "session") => void;
@@ -68,12 +58,9 @@ export function AppTitleBar({
   toggleTheme,
   isMobile,
   showChat,
-  selectedSession,
-  onViewFullHistory,
   branchTree,
   branchActiveLeafId,
   onBranchLeafChange,
-  systemBtnRef,
   systemPrompt,
   activeTopPanel,
   onToggleTopPanel,
@@ -90,7 +77,6 @@ export function AppTitleBar({
 }: AppTitleBarProps) {
   const { isElectron, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
   const { t: translate } = useLanguage();
-  const hasSystemPrompt = Boolean(systemPrompt?.trim());
   const hasBranching = hasBranches(branchTree);
 
   return (
@@ -152,40 +138,6 @@ export function AppTitleBar({
 
         {showChat && (
           <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-            {/* Full history */}
-            {selectedSession && (
-              <button
-                className="app-no-drag"
-                onClick={onViewFullHistory}
-                title={translate("viewFullHistory")}
-                aria-label={translate("viewFullHistory")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 36,
-                  height: 36,
-                  padding: 0,
-                  background: "none",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                }}
-              >
-                <ClockCounterClockwise size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
-              </button>
-            )}
-
             {/* Branch navigator */}
             {hasBranching && (
               <BranchNavigator
@@ -198,32 +150,6 @@ export function AppTitleBar({
                 onToggle={() => onToggleTopPanel("branches")}
                 hasSession
               />
-            )}
-
-            {/* System prompt */}
-            {hasSystemPrompt && (
-              <button
-                className="app-no-drag"
-                ref={systemBtnRef}
-                onClick={() => onToggleTopPanel("system")}
-                title={translate("systemPrompt")}
-                aria-label={translate("systemPrompt")}
-                aria-pressed={activeTopPanel === "system"}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 36, height: 36, padding: 0,
-                  background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
-                  flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = activeTopPanel === "system" ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)"; }}
-              >
-                <FileText size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
-              </button>
             )}
           </div>
         )}
@@ -257,95 +183,6 @@ export function AppTitleBar({
             </span>
           )}
         </div>
-
-
-
-        {/* Session stats — right-aligned */}
-        {showChat && (sessionStats || contextUsage) && (() => {
-          const t = sessionStats?.tokens;
-          const c = sessionStats?.cost ?? 0;
-          const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-          const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : `<$0.01`) : null;
-
-          let ctxColor = "var(--text-muted)";
-          let ctxStr: string | null = null;
-          if (contextUsage?.contextWindow) {
-            const pct = contextUsage.percent;
-            if (pct !== null && pct > 90) ctxColor = "#ef4444";
-            else if (pct !== null && pct > 70) ctxColor = "rgba(234,179,8,0.95)";
-            ctxStr = pct !== null ? `${pct.toFixed(0)}% / ${fmt(contextUsage.contextWindow)}` : `? / ${fmt(contextUsage.contextWindow)}`;
-          }
-
-          const tooltipParts: string[] = [];
-          if (t) {
-            tooltipParts.push(`${translate("sessionInfoInput")}: ${t.input.toLocaleString()}`);
-            tooltipParts.push(`${translate("sessionInfoOutput")}: ${t.output.toLocaleString()}`);
-            tooltipParts.push(`${translate("sessionInfoCacheRead")}: ${t.cacheRead.toLocaleString()}`);
-            tooltipParts.push(`${translate("sessionInfoCacheWrite")}: ${t.cacheWrite.toLocaleString()}`);
-            if (c > 0) tooltipParts.push(`${translate("sessionInfoCost")}: $${c.toFixed(4)}`);
-          }
-          if (contextUsage?.contextWindow) {
-            const pct = contextUsage.percent;
-            tooltipParts.push(`${translate("sessionInfoContext")}: ${pct !== null ? `${pct.toFixed(1)}%` : "?"} / ${contextUsage.contextWindow.toLocaleString()}`);
-          }
-          const tooltip = tooltipParts.join("  |  ");
-
-          return (
-            <button
-              className="app-no-drag"
-              type="button"
-              onClick={() => onToggleTopPanel("session")}
-              title={tooltip || translate("sessionInfo")}
-              aria-label={translate("sessionInfo")}
-              aria-pressed={activeTopPanel === "session"}
-              style={{
-                marginLeft: "auto",
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "0 10px",
-                height: 36,
-                background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
-                border: "none",
-                fontSize: 12, color: "var(--text-muted)",
-                whiteSpace: "nowrap", cursor: "pointer",
-                fontVariantNumeric: "tabular-nums",
-                transition: "background 0.12s, color 0.12s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = activeTopPanel === "session" ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = activeTopPanel === "session" ? "var(--text)" : "var(--text-muted)"; }}
-            >
-              {isMobile && <Info size={16} aria-hidden="true" />}
-              {!isMobile && t && t.input > 0 && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <ArrowUp size={12} aria-hidden="true" />
-                  {fmt(t.input)}
-                </span>
-              )}
-              {!isMobile && t && t.output > 0 && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <ArrowDown size={12} aria-hidden="true" />
-                  {fmt(t.output)}
-                </span>
-              )}
-              {!isMobile && t && t.cacheRead > 0 && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <Database size={12} aria-hidden="true" />
-                  {fmt(t.cacheRead)}
-                </span>
-              )}
-              {!isMobile && costStr && (
-                <span style={{ display: "flex", alignItems: "center" }}>
-                  {costStr}
-                </span>
-              )}
-              {ctxStr && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4, color: ctxColor }}>
-                  <Gauge size={12} aria-hidden="true" />
-                  {ctxStr}
-                </span>
-              )}
-            </button>
-          );
-        })()}
 
 
 

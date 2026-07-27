@@ -14,7 +14,7 @@ import { ArrowBendUpLeftIcon } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowElbowDownRightIcon } from "@phosphor-icons/react/ArrowElbowDownRight";
 import { ArrowUpIcon } from "@phosphor-icons/react/ArrowUp";
-import { ArrowsInIcon } from "@phosphor-icons/react/ArrowsIn";
+
 import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/Check";
@@ -24,6 +24,7 @@ import { PaperPlaneTiltIcon } from "@phosphor-icons/react/PaperPlaneTilt";
 import { PlusIcon } from "@phosphor-icons/react/Plus";
 import { SpeakerHighIcon } from "@phosphor-icons/react/SpeakerHigh";
 import { SpeakerSlashIcon } from "@phosphor-icons/react/SpeakerSlash";
+
 import { SquareIcon } from "@phosphor-icons/react/Square";
 import { StarIcon } from "@phosphor-icons/react/Star";
 import { WrenchIcon } from "@phosphor-icons/react/Wrench";
@@ -53,10 +54,6 @@ interface Props {
   modelNames?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string }[];
   onModelChange?: (provider: string, modelId: string) => void;
-  onCompact?: () => void;
-  onAbortCompaction?: () => void;
-  isCompacting?: boolean;
-  compactError?: string | null;
   compactResult?: CompactResultInfo | null;
   toolPreset?: "none" | "default" | "full";
   onToolPresetChange?: (preset: "none" | "default" | "full") => void;
@@ -188,7 +185,7 @@ function QueuedMessageRow({ kind, text, label }: { kind: "steer" | "follow-up"; 
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, onModelChange,
-  onCompact, onAbortCompaction, isCompacting, compactError, compactResult, toolPreset, onToolPresetChange,
+  compactResult, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, onRecallQueue,
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
@@ -937,7 +934,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       style={{
         flexShrink: 0,
         background: "transparent",
-        padding: "0 16px 16px",
+        padding: "0 16px 15px",
         paddingRight: isMobile ? 16 : 34, // desktop: 16px base + 18px for ChatMinimap alignment
       }}
     >
@@ -1645,56 +1642,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 backdropFilter: "blur(10px)",
               } : null),
             }}>
-            {!isStreaming && onCompact && (
-              <div className="chat-input-toolbar-compact" style={{ position: "relative" }}>
-                {compactError && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    background: "#1f2937", color: "#f87171",
-                    fontSize: 11, padding: "4px 8px", borderRadius: 5,
-                    whiteSpace: "nowrap", pointerEvents: "none",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.2)", zIndex: 50,
-                  }}>
-                    {compactError}
-                  </div>
-                )}
-                <button
-                  onClick={isCompacting ? onAbortCompaction : onCompact}
-                  disabled={isStreaming && !isCompacting}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 5px" : "6px 10px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 28,
-                    background: isCompacting ? "rgba(239,68,68,0.08)" : "none",
-                    border: "none",
-                    borderRadius: 9,
-                    color: isCompacting ? "#ef4444" : "var(--text-muted)",
-                    cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
-                    fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming && !isCompacting) return;
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.16)" : "var(--bg-hover)";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.08)" : "none";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text-muted)";
-                  }}
-                  title={isCompacting ? t("stopCompaction") : t("compactContext")}
-                  aria-label={isCompacting ? t("stopCompaction") : t("compactContext")}
-                >
-                  {isCompacting ? (
-                    <><SquareIcon size={14} />{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("compacting")}</span>}</>
-                  ) : (
-                    <><ArrowsInIcon size={14} />{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("compact")}</span>}</>
-                  )}
-                </button>
-              </div>
-            )}
-
             {!isStreaming && onToolPresetChange && (
               <div ref={toolDropdownRef} className="chat-input-toolbar-tools" style={{ position: "relative" }}>
                 <button

@@ -457,24 +457,86 @@ pre, code {
   padding: 1px 0;
 }
 .group\/summary-row {
-  min-height: 25px;
+  min-height: 24px;
 }
 .group\/summary {
   font-size: 14px;
 }
 .group\/process .process-tab {
-  min-height: 24px;
-  border-color: color-mix(in srgb, var(--border) 88%, transparent);
-  background-color: transparent;
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
 .group\/process .process-tab:hover {
-  border-color: var(--border-hover);
-  background-color: var(--bg-subtle);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text);
 }
 .group\/process .process-tab-active {
-  border-color: color-mix(in srgb, var(--accent-blue) 46%, var(--border));
-  background-color: color-mix(in srgb, var(--accent-blue) 5%, var(--bg-card));
-  color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.group\/process .process-tab-active:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+.group\/process .process-tab-error {
+  background-color: rgba(248, 113, 113, 0.06);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 3px,
+    rgba(248, 113, 113, 0.12) 3px 6px
+  );
+  color: #f87171;
+}
+.group\/process .process-tab-error.process-tab-active {
+  background-color: rgba(248, 113, 113, 0.16);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 3px,
+    rgba(248, 113, 113, 0.2) 3px 6px
+  );
+  color: #f87171;
+}
+.group\/process .process-tab-error:hover {
+  background-color: rgba(248, 113, 113, 0.12);
+}
+.group\/process .process-tab-error.process-tab-active:hover {
+  background-color: rgba(248, 113, 113, 0.22);
+}
+
+.group\/process .process-file-tag {
+  flex: 0 1 auto;
+  max-width: 118px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 1px;
+  padding: 0 3px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font-size: 1em;
+  line-height: inherit;
+  cursor: inherit;
+  white-space: nowrap;
+}
+.group\/process .process-file-tag span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.group\/process .process-file-tag svg {
+  flex: 0 0 auto;
 }
 .group\/process [class*="overflow-y-auto"] {
   scrollbar-color: var(--border) transparent;
@@ -618,9 +680,9 @@ pre, code {
 .markdown-body tbody tr:nth-child(even) td { background: var(--bg-subtle); }
 .markdown-body hr {
   border: none;
-  height: 1px;
+  height: 1.5px;
   margin: 12px 0;
-  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  background: repeating-linear-gradient(90deg, var(--border) 0 6px, transparent 6px 10px);
 }
 .markdown-body .katex-display {
   margin: 0.6em 0;
@@ -923,6 +985,267 @@ span.linenumber {
   0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
   40%  { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.25); }
   100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SessionInfoBar — bottom-row session info bar (under ChatInput).
+   Replaces the inline-style implementation. Hover/active/compacting
+   states are handled in CSS, removing JS-driven onMouseEnter/Leave.
+   ───────────────────────────────────────────────────────────── */
+.session-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+
+/* Outer wrapper from ChatWindow: padding mirrors ChatInput column
+   (with minimap gutter on desktop). Inner .session-info-bar-inner
+   caps the same 820px max-width and centers. */
+.session-info-bar-wrap {
+  padding: 0 var(--chat-col-padding, 16px);
+  padding-right: var(--chat-col-padding, 16px);
+  margin-top: -15px;       /* cancels ChatInput's 15px bottom padding */
+  padding-bottom: 4px;     /* breathing room under the row */
+}
+.session-info-bar-wrap.is-mobile {
+  padding-right: var(--chat-col-padding, 16px);
+}
+.session-info-bar-inner {
+  max-width: 820px;
+  margin: 0 auto;
+}
+/* Empty-session variant: only the negative margin is needed,
+   padding is supplied by the parent column. */
+.session-info-bar-wrap.is-empty {
+  margin-top: -15px;
+  padding-bottom: 4px;
+}
+
+.session-info-bar-spacer {
+  flex: 1 1 auto;
+}
+
+.session-info-bar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  height: 22px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.session-info-bar-button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.session-info-bar-button.is-active {
+  background: var(--bg-selected);
+  color: var(--text);
+}
+.session-info-bar-button.is-active:hover {
+  background: var(--bg-selected);
+  color: var(--text);
+}
+/* Token stats button uses a slightly wider internal gap than the icon buttons. */
+.session-info-bar-button.is-stats {
+  gap: 5px;
+}
+
+/* Compact button — pulsing red while compacting. */
+.session-info-bar-button.is-compacting {
+  color: #ef4444;
+}
+.session-info-bar-button.is-compacting:hover {
+  background: rgba(239, 68, 68, 0.16);
+  color: #ef4444;
+}
+
+.session-info-bar-compact-wrap {
+  position: relative;
+}
+.session-info-bar-compact-error {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  background: #1f2937;
+  color: #f87171;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 50;
+}
+
+.session-info-bar-token-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Popover cover (click-outside catcher) + base popover box. */
+.session-info-bar-popover-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 499;
+}
+.session-info-bar-popover {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 4px;
+  z-index: 500;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+.session-info-bar-popover.is-system {
+  max-width: 520px;
+  width: max-content;
+  max-height: 280px;
+}
+.session-info-bar-popover.is-session {
+  min-width: 320px;
+  max-width: 400px;
+}
+.session-info-bar-popover-header {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+.session-info-bar-popover-title {
+  font-weight: 600;
+  color: var(--text);
+}
+.session-info-bar-popover-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+}
+.session-info-bar-popover-close:hover {
+  color: var(--text);
+}
+.session-info-bar-popover-body {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+}
+.session-info-bar-popover-empty {
+  font-style: italic;
+}
+
+/* Session stats popover body */
+.session-stats-body {
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.session-stats-label {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.session-stats-value {
+  text-align: right;
+  white-space: nowrap;
+}
+.session-stats-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.session-stats-compact-grid {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  column-gap: 14px;
+  row-gap: 3px;
+  justify-content: start;
+}
+.session-stats-row {
+  display: contents;
+}
+.session-stats-info-block {
+  margin-bottom: 2px;
+}
+.session-stats-info-name {
+  color: var(--text-dim);
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+.session-stats-info-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.session-stats-info-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-stats-side-by-side {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.session-stats-column {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.session-stats-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.12s;
+}
+.session-stats-copy:hover {
+  color: var(--accent);
+}
+.session-stats-copy.is-copied {
+  color: var(--accent);
+}
+.session-stats-copy.is-copied:hover {
+  color: var(--accent);
 }
 
 @keyframes saved-check-draw {

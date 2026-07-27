@@ -7,9 +7,23 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useProcessDisplayMode } from "@/hooks/useProcessDisplayMode";
 import type { ProcessContentBlock } from "@/lib/process-content";
 import type { ThinkingContent, ToolCallContent } from "@/lib/types";
+import type { StepTone } from "@/lib/step-categorizer";
+import {
+  classifyToolTone,
+  classifyDocumentChangeKind,
+  classifyShellCommand,
+  extractToolTarget,
+  basenameResourcePath,
+} from "@/lib/step-categorizer";
+import type { StepIconName } from "@/lib/step-visuals";
 import { BrainIcon } from "@phosphor-icons/react/Brain";
+import { BookOpenIcon } from "@phosphor-icons/react/BookOpen";
 import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { ColumnsIcon } from "@phosphor-icons/react/Columns";
+import { CopySimpleIcon } from "@phosphor-icons/react/CopySimple";
+import { DownloadSimpleIcon } from "@phosphor-icons/react/DownloadSimple";
+import { FilePlusIcon } from "@phosphor-icons/react/FilePlus";
+import { FolderIcon } from "@phosphor-icons/react/Folder";
 import { ImageIcon } from "@phosphor-icons/react/Image";
 import { ListBulletsIcon } from "@phosphor-icons/react/ListBullets";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/MagnifyingGlass";
@@ -17,6 +31,9 @@ import { PencilSimpleLineIcon } from "@phosphor-icons/react/PencilSimpleLine";
 import { RowsIcon } from "@phosphor-icons/react/Rows";
 import { TerminalIcon } from "@phosphor-icons/react/Terminal";
 import { ToolboxIcon } from "@phosphor-icons/react/Toolbox";
+import { TrashIcon } from "@phosphor-icons/react/Trash";
+import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
+import { getFileIcon } from "./FileIcons";
 
 interface ProcessGroupProps {
   blocks: ProcessContentBlock[];
@@ -34,49 +51,200 @@ type Step =
   | { kind: "custom"; id: string; label: string; block: Extract<ProcessContentBlock, { type: "custom" }> }
   | { kind: "image"; id: string; label: string; block: Extract<ProcessContentBlock, { type: "image" }> };
 
-const processLabels = {
-  en: {
-    thinking: "Thinking",
-    generatedImage: "Generated image",
-    working: "Working...",
-    used: "Used {summary}",
-    tool: "{count} tool",
-    tools: "{count} tools",
-    thought: "{count} thought",
-    thoughts: "{count} thoughts",
-    event: "{count} event",
-    events: "{count} events",
-    tabMode: "Tab mode",
-    timelineMode: "Timeline mode",
-    failed: "failed",
-    processOutput: "Process output",
-  },
-  "zh-CN": {
-    thinking: "思考",
-    generatedImage: "生成的图片",
-    working: "工作中...",
-    used: "使用了 {summary}",
-    tool: "{count} 个工具",
-    tools: "{count} 个工具",
-    thought: "{count} 条思考",
-    thoughts: "{count} 条思考",
-    event: "{count} 个事件",
-    events: "{count} 个事件",
-    tabMode: "标签页模式",
-    timelineMode: "时间线模式",
-    failed: "失败",
-    processOutput: "处理输出",
-  },
-} as const;
+// ---------------------------------------------------------------------------
+// Step labels (with tone enrichment)
+// ---------------------------------------------------------------------------
 
-type ProcessLabels = { [Key in keyof typeof processLabels.en]: string };
-
-function toolLabel(block: Extract<ProcessContentBlock, { type: "toolCall" }>): string {
+function toolFallbackLabel(block: Extract<ProcessContentBlock, { type: "toolCall" }>): string {
   const label = block.input.label;
   return typeof label === "string" && label.trim() ? label : block.toolName;
 }
 
-export function buildProcessSteps(blocks: ProcessContentBlock[], labels: ProcessLabels = processLabels.en): Step[] {
+type BuildLabelFn = (key: string) => string;
+
+function enrichedToolLabel(
+  block: Extract<ProcessContentBlock, { type: "toolCall" }>,
+  ts: BuildLabelFn,
+): { displayLabel: string; iconName: StepIconName; target?: string; tone?: StepTone; typeLabel?: string } {
+  const fallback = toolFallbackLabel(block);
+  const isError = block.status === "error";
+
+  if (isError) {
+    return { displayLabel: fallback, iconName: "warning", tone: undefined };
+  }
+
+  const tone = classifyToolTone({
+    toolName: block.toolName,
+    label: typeof block.input.label === "string" ? block.input.label : undefined,
+    args: block.input,
+    result: typeof block.result === "string" ? block.result : undefined,
+  });
+
+  let iconName: StepIconName = "toolbox";
+
+  if (tone === "document_change") {
+    const kind = classifyDocumentChangeKind({
+      toolName: block.toolName,
+      label: typeof block.input.label === "string" ? block.input.label : undefined,
+      args: block.input,
+      result: typeof block.result === "string" ? block.result : undefined,
+    });
+    if (kind === "create") iconName = "filePlus";
+    else if (kind === "delete") iconName = "trash";
+    else iconName = "pencilSimpleLine";
+
+    const typeKey =
+      kind === "create" ? "processStepFileCreate" :
+      kind === "delete" ? "processStepFileDelete" :
+      "processStepFileEdit";
+    const typeLabel = ts(typeKey);
+
+    const target = extractToolTarget({
+      toolName: block.toolName,
+      label: typeof block.input.label === "string" ? block.input.label : undefined,
+      args: block.input,
+      result: typeof block.result === "string" ? block.result : undefined,
+    });
+
+    if (target) {
+      return { displayLabel: `${typeLabel} ${basenameResourcePath(target)}`, iconName, target, tone, typeLabel };
+    }
+    return { displayLabel: `${typeLabel}: ${fallback}`.slice(0, 100), iconName, tone, typeLabel };
+  }
+
+  if (tone === "document_read") {
+    iconName = "bookOpen";
+    const typeLabel = ts("processStepFileRead");
+    const target = extractToolTarget({
+      toolName: block.toolName,
+      label: typeof block.input.label === "string" ? block.input.label : undefined,
+      args: block.input,
+      result: typeof block.result === "string" ? block.result : undefined,
+    });
+    if (target) {
+      return { displayLabel: `${typeLabel} ${basenameResourcePath(target)}`, iconName, target, tone, typeLabel };
+    }
+    return { displayLabel: fallback, iconName, tone, typeLabel };
+  }
+
+  if (tone === "document_search") {
+    iconName = "magnifyingGlass";
+    const typeLabel = ts("processStepSearch");
+    const pattern =
+      typeof block.input.pattern === "string" ? block.input.pattern :
+      typeof block.input.query === "string" ? block.input.query :
+      "";
+    if (pattern) {
+      return { displayLabel: `${typeLabel} "${pattern.slice(0, 60)}"`, iconName, tone, typeLabel };
+    }
+    return { displayLabel: fallback, iconName, tone, typeLabel };
+  }
+
+  if (tone === "directory_list") {
+    iconName = "folder";
+    const typeLabel = ts("processStepList");
+    const target = extractToolTarget({
+      toolName: block.toolName,
+      label: typeof block.input.label === "string" ? block.input.label : undefined,
+      args: block.input,
+      result: typeof block.result === "string" ? block.result : undefined,
+    });
+    if (target) {
+      return { displayLabel: `${typeLabel} ${basenameResourcePath(target)}`, iconName, target, tone, typeLabel };
+    }
+    return { displayLabel: fallback, iconName, tone, typeLabel };
+  }
+
+  if (tone === "file_find") {
+    iconName = "magnifyingGlass";
+    const typeLabel = ts("processStepFind");
+    const pattern =
+      typeof block.input.pattern === "string" ? block.input.pattern :
+      typeof block.input.glob === "string" ? block.input.glob :
+      "";
+    if (pattern) {
+      return { displayLabel: `${typeLabel} "${pattern.slice(0, 60)}"`, iconName, tone, typeLabel };
+    }
+    return { displayLabel: fallback, iconName, tone, typeLabel };
+  }
+
+  if (tone === "command_execution") {
+    const command = typeof block.input.command === "string"
+      ? block.input.command
+      : typeof block.input.cmd === "string"
+        ? block.input.cmd
+        : "";
+    if (command) {
+      const shell = classifyShellCommand(command);
+      if (shell.kind === "list") {
+        iconName = "folder";
+        const typeLabel = ts("processStepList");
+        const target = shell.argument ? ` ${shell.argument}` : "";
+        return { displayLabel: `${typeLabel}${target}`, iconName, tone, typeLabel };
+      }
+      if (shell.kind === "search") {
+        iconName = "magnifyingGlass";
+        const typeLabel = ts("processStepSearch");
+        const query = shell.argument ? ` "${shell.argument.slice(0, 60)}"` : "";
+        return { displayLabel: `${typeLabel}${query}`, iconName, tone, typeLabel };
+      }
+      if (shell.kind === "find") {
+        iconName = "magnifyingGlass";
+        const typeLabel = ts("processStepFind");
+        const query = shell.argument ? ` "${shell.argument.slice(0, 60)}"` : "";
+        return { displayLabel: `${typeLabel}${query}`, iconName, tone, typeLabel };
+      }
+      if (shell.kind === "read") {
+        iconName = "bookOpen";
+        const typeLabel = ts("processStepRead");
+        const target = shell.argument ? ` ${shell.argument}` : "";
+        return { displayLabel: `${typeLabel}${target}`, iconName, tone, typeLabel, target: shell.argument || undefined };
+      }
+      if (shell.kind === "fetch") {
+        iconName = "download";
+        const typeLabel = ts("processStepFetch");
+        const preview = shell.argument ? ` ${shell.argument.slice(0, 80)}` : "";
+        return { displayLabel: `${typeLabel}${preview}`, iconName, tone, typeLabel };
+      }
+      if (shell.kind === "delete") {
+        iconName = "trash";
+        const typeLabel = ts("processStepDelete");
+        const target = shell.argument ? ` ${shell.argument}` : "";
+        return { displayLabel: `${typeLabel}${target}`, iconName, tone, typeLabel };
+      }
+      if (shell.kind === "copy") {
+        iconName = "copy";
+        const typeLabel = ts("processStepCopy");
+        const target = shell.argument ? ` ${shell.argument}` : "";
+        return { displayLabel: `${typeLabel}${target}`, iconName, tone, typeLabel };
+      }
+      iconName = "terminal";
+      const typeLabel = ts("processStepCommand");
+      const firstLine = command.split("\n")[0].trim();
+      const preview = firstLine.length > 80 ? firstLine.slice(0, 77) + "..." : firstLine;
+      return { displayLabel: `${typeLabel} ${preview}`, iconName, tone, typeLabel };
+    }
+    iconName = "terminal";
+    return { displayLabel: fallback, iconName, tone };
+  }
+
+  if (tone === "todo_update") {
+    iconName = "checklist";
+    const typeLabel = ts("processStepTodo");
+    return { displayLabel: fallback, iconName, tone, typeLabel };
+  }
+
+  return { displayLabel: fallback, iconName, tone };
+}
+
+// ---------------------------------------------------------------------------
+// Build steps from blocks
+// ---------------------------------------------------------------------------
+
+export function buildProcessSteps(
+  blocks: ProcessContentBlock[],
+  ts: BuildLabelFn,
+): Step[] {
   const steps: Step[] = [];
   let pending: Array<Extract<ProcessContentBlock, { type: "thinking" | "text" }>> = [];
 
@@ -85,7 +253,7 @@ export function buildProcessSteps(blocks: ProcessContentBlock[], labels: Process
     steps.push({
       kind: "thinking",
       id: pending.map((block) => block.id).join("+"),
-      label: labels.thinking,
+      label: ts("processStepThinking"),
       blocks: pending,
     });
     pending = [];
@@ -97,10 +265,11 @@ export function buildProcessSteps(blocks: ProcessContentBlock[], labels: Process
       continue;
     }
     if (block.type === "toolCall") {
+      const { displayLabel } = enrichedToolLabel(block, ts);
       steps.push({
         kind: "tool",
         id: block.id,
-        label: toolLabel(block),
+        label: displayLabel,
         block,
         leadBlocks: pending,
       });
@@ -112,7 +281,7 @@ export function buildProcessSteps(blocks: ProcessContentBlock[], labels: Process
     if (block.type === "custom") {
       steps.push({ kind: "custom", id: block.id, label: formatCustomLabel(block.customType), block });
     } else if (block.type === "image") {
-      steps.push({ kind: "image", id: block.id, label: labels.generatedImage, block });
+      steps.push({ kind: "image", id: block.id, label: ts("processOutput"), block });
     }
   }
 
@@ -123,28 +292,65 @@ export function buildProcessSteps(blocks: ProcessContentBlock[], labels: Process
 function formatCustomLabel(customType: string): string {
   return customType
     .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+// ---------------------------------------------------------------------------
+// Icons
+// ---------------------------------------------------------------------------
 
 function Caret({ expanded }: { expanded: boolean }) {
   return <CaretRightIcon size={12} className={`shrink-0 transition-all duration-150 ${expanded ? "rotate-90" : ""}`} />;
 }
 
-function StepIcon({ step }: { step: Step }) {
-  if (step.kind === "thinking") return <BrainIcon size={14} />;
-  if (step.kind === "image") return <ImageIcon size={14} />;
-  if (step.kind === "custom") return <ListBulletsIcon size={14} />;
+function stepIconElement(iconName: StepIconName, size: number = 14) {
+  switch (iconName) {
+    case "brain": return <BrainIcon size={size} />;
+    case "bookOpen": return <BookOpenIcon size={size} />;
+    case "magnifyingGlass": return <MagnifyingGlassIcon size={size} />;
+    case "pencilSimpleLine": return <PencilSimpleLineIcon size={size} />;
+    case "filePlus": return <FilePlusIcon size={size} />;
+    case "trash": return <TrashIcon size={size} />;
+    case "folder": return <FolderIcon size={size} />;
+    case "download": return <DownloadSimpleIcon size={size} />;
+    case "copy": return <CopySimpleIcon size={size} />;
+    case "terminal": return <TerminalIcon size={size} />;
+    case "toolbox": return <ToolboxIcon size={size} />;
+    case "image": return <ImageIcon size={size} />;
+    case "listBullets": return <ListBulletsIcon size={size} />;
+    case "checklist": return <ListBulletsIcon size={size} />;
+    case "warning":
+    case "circleX": return <WarningCircleIcon size={size} />;
+    default: return <ToolboxIcon size={size} />;
+  }
+}
 
-  const name = step.block.toolName.toLowerCase();
-  if (/read|fetch|search|grep|find|list/.test(name)) return <MagnifyingGlassIcon size={14} />;
-  if (/write|edit|patch|move|copy|delete/.test(name)) return <PencilSimpleLineIcon size={14} />;
-  if (/terminal|bash|command|exec|shell/.test(name)) return <TerminalIcon size={14} />;
-  return <ToolboxIcon size={14} />;
+function StepIcon({ step, ts }: { step: Step; ts: BuildLabelFn }) {
+  if (step.kind === "thinking") return stepIconElement("brain");
+  if (step.kind === "image") return stepIconElement("image");
+  if (step.kind === "custom") return stepIconElement("listBullets");
+
+  const { iconName } = enrichedToolLabel(step.block, ts);
+  return stepIconElement(iconName);
+}
+
+function ProcessFileTag({ filePath }: { filePath: string }) {
+  const basename = filePath.split(/[\\/]/).filter(Boolean).pop() || filePath;
+  return (
+    <span className="process-file-tag">
+      {getFileIcon(filePath, 12)}
+      <span>{basename}</span>
+    </span>
+  );
 }
 
 function DisplayModeIcon({ mode }: { mode: "timeline" | "tabs" }) {
   return mode === "timeline" ? <RowsIcon size={14} /> : <ColumnsIcon size={14} />;
 }
+
+// ---------------------------------------------------------------------------
+// Step content rendering
+// ---------------------------------------------------------------------------
 
 function imageSource(block: Extract<ProcessContentBlock, { type: "image" }>): string | undefined {
   const source = block.source;
@@ -153,12 +359,12 @@ function imageSource(block: Extract<ProcessContentBlock, { type: "image" }>): st
   return `data:${source.media_type ?? "image/png"};base64,${source.data}`;
 }
 
-function StepContent({ step, cwd, onOpenFile, sessionId, labels }: {
+function StepContent({ step, cwd, onOpenFile, sessionId, ts }: {
   step: Step;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   sessionId?: string;
-  labels: ProcessLabels;
+  ts: BuildLabelFn;
 }) {
   if (step.kind === "thinking") {
     return <ProcessNarrative blocks={step.blocks} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
@@ -188,9 +394,10 @@ function StepContent({ step, cwd, onOpenFile, sessionId, labels }: {
   }
 
   const src = imageSource(step.block);
-  // Session images can be data URLs, which Next/Image does not optimize.
-  // eslint-disable-next-line @next/next/no-img-element
-  return src ? <img src={src} alt={labels.processOutput} className="max-h-72 max-w-full rounded border border-border object-contain" /> : null;
+  return src ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={ts("processOutput")} className="max-h-72 max-w-full rounded border border-border object-contain" />
+  ) : null;
 }
 
 function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId }: {
@@ -201,34 +408,54 @@ function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId }: {
 }) {
   return (
     <div className="space-y-2 pr-2">
-      {blocks.map((block) => block.type === "text" ? (
-        <MarkdownBody key={block.id} cwd={cwd} onOpenFile={onOpenFile} className="!text-text-dim">{block.text}</MarkdownBody>
-      ) : (
-        <ThinkingBlock
-          key={block.id}
-          block={{ type: "thinking", thinking: block.thinking, deferred: block.deferred } as ThinkingContent}
-          sessionId={sessionId}
-          entryId={block.origin.sourceEntryId}
-          blockIndex={block.origin.sourceBlockIndex ?? 0}
-          contentOnly
-          cwd={cwd}
-          onOpenFile={onOpenFile}
-          className="!text-text-dim"
-        />
-      ))}
+      {blocks.map((block) =>
+        block.type === "text" ? (
+          <MarkdownBody key={block.id} cwd={cwd} onOpenFile={onOpenFile} className="!text-text-dim">
+            {block.text}
+          </MarkdownBody>
+        ) : (
+          <ThinkingBlock
+            key={block.id}
+            block={{ type: "thinking", thinking: block.thinking, deferred: block.deferred } as ThinkingContent}
+            sessionId={sessionId}
+            entryId={block.origin.sourceEntryId}
+            blockIndex={block.origin.sourceBlockIndex ?? 0}
+            contentOnly
+            cwd={cwd}
+            onOpenFile={onOpenFile}
+            className="!text-text-dim"
+          />
+        ),
+      )}
     </div>
   );
 }
 
 function stepHasContent(step: Step): boolean {
-  if (step.kind === "thinking") return step.blocks.some((block) => block.type === "text" ? block.text.trim() : block.deferred || block.thinking.trim());
+  if (step.kind === "thinking") {
+    return step.blocks.some((b) =>
+      b.type === "text" ? b.text.trim().length > 0 : b.deferred || b.thinking.trim().length > 0,
+    );
+  }
   return true;
 }
 
-export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onAutoExpanded, cwd, onOpenFile, sessionId }: ProcessGroupProps) {
-  const { language } = useLanguage();
-  const labels = processLabels[language];
-  const steps = useMemo(() => buildProcessSteps(blocks, labels), [blocks, labels]);
+// ---------------------------------------------------------------------------
+// ProcessGroup
+// ---------------------------------------------------------------------------
+
+export function ProcessGroup({
+  blocks,
+  isStreaming,
+  defaultExpanded = false,
+  onAutoExpanded,
+  cwd,
+  onOpenFile,
+  sessionId,
+}: ProcessGroupProps) {
+  const { t } = useLanguage();
+  const ts: BuildLabelFn = useCallback((key: string) => t(key as Parameters<typeof t>[0]), [t]);
+  const steps = useMemo(() => buildProcessSteps(blocks, ts), [blocks, ts]);
   const [areaExpanded, setAreaExpanded] = useState(isStreaming || defaultExpanded);
   const [stepStates, setStepStates] = useState<Record<string, boolean>>({});
   const { displayMode, setDisplayMode } = useProcessDisplayMode();
@@ -239,8 +466,6 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onA
   const wasStreamingRef = useRef(false);
   const hasUserSelectedTabRef = useRef(false);
   const hasAppliedDefaultExpansionRef = useRef(false);
-
-
 
   useEffect(() => {
     if (isStreaming) {
@@ -266,7 +491,6 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onA
 
   useEffect(() => {
     if (steps.length === 0) return;
-
     const latest = steps[steps.length - 1];
     setActiveTab((currentTab) => {
       if (hasUserSelectedTabRef.current && currentTab < steps.length) return currentTab;
@@ -304,14 +528,37 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onA
 
   if (steps.length === 0) return null;
 
-  const toolCount = steps.filter((step) => step.kind === "tool").length;
-  const thoughtCount = blocks.filter((block) => block.type === "thinking" || block.type === "text").length;
-  const customCount = steps.filter((step) => step.kind === "custom").length;
+  const toolCount = steps.filter((s) => s.kind === "tool").length;
+  const failedCount = steps.filter((s) => s.kind === "tool" && s.block.status === "error").length;
+  const thoughtCount = blocks.filter((b) => b.type === "thinking" || b.type === "text").length;
+  const customCount = steps.filter((s) => s.kind === "custom").length;
+
   const summaryParts: string[] = [];
-  if (toolCount) summaryParts.push((toolCount === 1 ? labels.tool : labels.tools).replace("{count}", String(toolCount)));
-  if (thoughtCount) summaryParts.push((thoughtCount === 1 ? labels.thought : labels.thoughts).replace("{count}", String(thoughtCount)));
-  if (customCount) summaryParts.push((customCount === 1 ? labels.event : labels.events).replace("{count}", String(customCount)));
-  const summary = isStreaming ? labels.working : labels.used.replace("{summary}", summaryParts.join(" · "));
+  if (toolCount) {
+    const base = toolCount === 1
+      ? t("processToolCount").replace("{count}", String(toolCount))
+      : t("processToolsCount").replace("{count}", String(toolCount));
+    summaryParts.push(failedCount > 0
+      ? base + t("processFailedCount").replace("{failed}", String(failedCount))
+      : base);
+  }
+  if (thoughtCount) {
+    summaryParts.push(
+      (thoughtCount === 1 ? t("processThoughtCount") : t("processThoughtsCount")).replace("{count}", String(thoughtCount)),
+    );
+  }
+  if (customCount) {
+    summaryParts.push(
+      (customCount === 1 ? t("processCustomCount") : t("processCustomsCount")).replace("{count}", String(customCount)),
+    );
+  }
+
+  const summary = isStreaming
+    ? t("processWorking")
+    : summaryParts.length > 0
+      ? t("processUsed").replace("{summary}", summaryParts.join(" · "))
+      : t("processCompleted");
+
   const singleThinking = steps.length === 1 && steps[0].kind === "thinking" && !isStreaming;
 
   return (
@@ -319,7 +566,7 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onA
       <div className="group/summary-row flex items-center justify-between">
         <button
           type="button"
-          onClick={() => setAreaExpanded((value) => !value)}
+          onClick={() => setAreaExpanded((v) => !v)}
           className="group/summary flex min-w-0 items-center gap-1.5 text-left text-sm leading-relaxed text-text-muted transition-colors hover:text-text"
           aria-expanded={areaExpanded}
         >
@@ -337,7 +584,7 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onA
               setAreaExpanded(true);
             }}
             className="shrink-0 p-1 text-text-dim opacity-0 transition-colors hover:text-text group-hover/summary-row:opacity-100"
-            title={displayMode === "timeline" ? labels.tabMode : labels.timelineMode}
+            title={displayMode === "timeline" ? t("processTabMode") : t("processTimelineMode")}
           >
             <DisplayModeIcon mode={displayMode} />
           </button>
@@ -349,13 +596,13 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onA
           {singleThinking ? (
             <div className="relative mt-2">
               <div ref={scrollRef} className="max-h-[280px] overflow-y-auto pr-2">
-                <StepContent step={steps[0]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />
+                <StepContent step={steps[0]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} />
               </div>
               {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
               {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
             </div>
           ) : displayMode === "timeline" ? (
-            <div className="relative">
+            <div className="relative mt-2">
               {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
               {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
               <div ref={scrollRef} className={isStreaming ? "max-h-[320px] overflow-y-auto" : ""}>
@@ -364,21 +611,33 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onA
                   {steps.map((step, index) => {
                     const open = stepStates[step.id] ?? false;
                     const hasContent = stepHasContent(step);
+                    const isError = step.kind === "tool" && step.block.status === "error";
+                    const toolInfo = step.kind === "tool" ? enrichedToolLabel(step.block, ts) : null;
+                    const hasFileTag = toolInfo?.target !== undefined && toolInfo?.typeLabel !== undefined;
                     return (
                       <div key={step.id} className="group/step relative min-w-0">
                         {index < steps.length - 1 && <span className="absolute bottom-[-9px] left-[7px] top-[22px] border-l border-border" />}
                         <button
                           type="button"
                           onClick={() => hasContent && setStepStates((state) => ({ ...state, [step.id]: !open }))}
-                          className={`flex w-full min-w-0 items-center gap-1.5 text-left text-sm leading-relaxed text-text-dim transition-colors ${hasContent ? "cursor-pointer hover:text-text-muted" : "cursor-default"}`}
+                          className={`flex w-full min-w-0 items-center gap-1.5 text-left text-sm leading-relaxed transition-colors ${
+                            hasContent ? "cursor-pointer" : "cursor-default"
+                          } ${isError ? "text-red-400 hover:text-red-300" : "text-text-dim hover:text-text-muted"}`}
                         >
-                          <span className="shrink-0"><StepIcon step={step} /></span>
-                          <span className="truncate">{step.label}</span>
+                          <span className="shrink-0"><StepIcon step={step} ts={ts} /></span>
+                          {hasFileTag ? (
+                            <>
+                              <span className="shrink-0">{toolInfo!.typeLabel}</span>
+                              <ProcessFileTag filePath={toolInfo!.target!} />
+                            </>
+                          ) : (
+                            <span className="truncate">{step.label}</span>
+                          )}
                           {step.kind === "tool" && step.block.duration !== undefined && (
                             <span className="shrink-0 text-[11px] tabular-nums text-text-dim">{step.block.duration}s</span>
                           )}
-                          {step.kind === "tool" && step.block.status === "error" && (
-                            <span className="shrink-0 text-[11px] text-red-400">{labels.failed}</span>
+                          {isError && (
+                            <span className="shrink-0 text-[11px] font-medium text-red-400">{t("processFailedStep")}</span>
                           )}
                           {hasContent && (
                             <span className={`ml-0.5 shrink-0 opacity-0 transition-opacity group-hover/step:opacity-50 ${open ? "rotate-90" : ""}`}>
@@ -388,7 +647,7 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onA
                         </button>
                         {open && hasContent && (
                           <div className="ml-5 mt-1.5 overflow-hidden">
-                            <StepContent step={step} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />
+                            <StepContent step={step} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} />
                           </div>
                         )}
                       </div>
@@ -400,24 +659,43 @@ export function ProcessGroup({ blocks, isStreaming, defaultExpanded = false, onA
           ) : (
             <div>
               <div className="mt-2 flex flex-wrap gap-1">
-                {steps.map((step, index) => (
-                  <button
-                    key={step.id}
-                    type="button"
-                    onClick={() => {
-                      hasUserSelectedTabRef.current = true;
-                      setActiveTab(index);
-                    }}
-                    className={`process-tab flex items-center gap-1 rounded-sm border px-2 py-0.5 font-mono text-xs transition-colors ${activeTab === index ? "process-tab-active border-border text-accent" : "border-border text-text-dim hover:text-text"}`}
-                  >
-                    <StepIcon step={step} />
-                    <span className="max-w-52 truncate">{step.label}</span>
-                  </button>
-                ))}
+                {steps.map((step, index) => {
+                  const isError = step.kind === "tool" && step.block.status === "error";
+                  const toolInfo = step.kind === "tool" ? enrichedToolLabel(step.block, ts) : null;
+                  const hasFileTag = toolInfo?.target !== undefined && toolInfo?.typeLabel !== undefined;
+                  return (
+                    <button
+                      key={step.id}
+                      type="button"
+                      onClick={() => {
+                        hasUserSelectedTabRef.current = true;
+                        setActiveTab(index);
+                      }}
+                      data-has-file-target={hasFileTag ? "true" : undefined}
+                      className={`process-tab flex items-center gap-1 font-mono text-xs transition-colors ${
+                        activeTab === index
+                          ? isError
+                            ? "process-tab-error"
+                            : "process-tab-active"
+                          : "text-text-dim hover:text-text"
+                      }`}
+                    >
+                      <StepIcon step={step} ts={ts} />
+                      {hasFileTag ? (
+                        <>
+                          <span className="shrink-0">{toolInfo!.typeLabel}</span>
+                          <ProcessFileTag filePath={toolInfo!.target!} />
+                        </>
+                      ) : (
+                        <span className="max-w-52 truncate">{step.label}</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
               <div className="relative mt-2">
                 <div ref={scrollRef} className="max-h-[280px] overflow-y-auto pr-2">
-                  {steps[activeTab] && <StepContent step={steps[activeTab]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} labels={labels} />}
+                  {steps[activeTab] && <StepContent step={steps[activeTab]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} />}
                 </div>
                 {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
                 {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
