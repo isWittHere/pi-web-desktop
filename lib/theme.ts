@@ -5,6 +5,10 @@
  * resolves `vars` references, and maps the 51 pi CLI color tokens to pi-web's
  * ~23 CSS custom properties.
  *
+ * Themes are organized as **sets** — each set pairs a dark and a light variant
+ * (e.g. "gruvbox" → gruvbox-dark.json + gruvbox-light.json). A set may also
+ * contain only one variant (single-file theme).
+ *
  * pi CLI theme format:
  *   { name, vars: { key: hex|number, ... }, colors: { token: hex|number|varRef|"", ... } }
  *
@@ -27,18 +31,31 @@ export interface PiTheme {
   colors: Record<string, string | number>;
 }
 
-export interface ThemeInfo {
+/** Represents a paired theme set (e.g. "gruvbox" with dark + light variants). */
+export interface ThemeSetInfo {
+  /** Base name (e.g. "gruvbox") — used as the stable identifier. */
   name: string;
+  /** Human-readable display name. */
   displayName: string;
-  /** File path for a user or project theme. */
-  path: string;
+  /** Whether this set has a dark variant. */
+  hasDark: boolean;
+  /** Whether this set has a light variant. */
+  hasLight: boolean;
+  /** True for the built-in default theme (no JSON files). */
+  builtin: boolean;
 }
 
+/** A resolved, ready-to-use theme (one variant of a set). */
 export interface ResolvedTheme {
+  /** Base theme-set name. */
   name: string;
+  /** Whether this specific variant is dark. */
+  isDark: boolean;
   /** CSS variable name → hex value (e.g. "--bg" → "#282828") */
   cssVars: Record<string, string>;
 }
+
+export type ThemeVariant = "dark" | "light";
 
 // ─── 256-color palette → hex ────────────────────────────────────────────────
 
@@ -188,39 +205,24 @@ function relativeLuminance(hex: string): number {
 
 /**
  * Maps resolved pi CLI theme colors + vars to pi-web CSS custom properties.
- *
- * Strategy:
- * 1. Direct 1:1 mappings where pi CLI tokens have clear pi-web equivalents.
- * 2. Derive web-specific colors from the vars palette (bg0-bg4, fg0-fg4, semantic).
- * 3. Fall back to sensible defaults when a pi CLI token is empty/missing.
  */
 function mapToCssVars(
   colors: Record<string, string>,
   vars: Record<string, string>,
 ): Record<string, string> {
   // ── Extract base palette from vars ──
-  // Common conventions in pi CLI themes:
-  //   bg0 = darkest bg, bg1-bg4 = progressively lighter (dark themes)
-  //   fg0 = lightest text, fg1-fg4 = progressively dimmer
   const bg0 = vars.bg0 || "#1a1a1a";
   const bg1 = vars.bg1 || "#242424";
   const bg2 = vars.bg2 || "#2e2e2e";
   const bg3 = vars.bg3 || "#383838";
-  const bg4 = vars.bg4 || "#4a4a4a";
   const fg0 = vars.fg0 || "#e8e8e8";
-  const fg1 = vars.fg1 || "#d4d4d4";
   const fg3 = vars.fg3 || "#888888";
   const fg4 = vars.fg4 || "#555555";
 
   // Semantic palette colors
   const red = vars.red || "#dc2626";
-  const brightRed = vars.bright_red || "#f87171";
   const green = vars.green || "#16a34a";
-  const brightGreen = vars.bright_green || "#3fb950";
   const orange = vars.orange || "#d97706";
-  const brightOrange = vars.bright_orange || "#f59e0b";
-  const blue = vars.blue || "#2563eb";
-  const brightBlue = vars.bright_blue || "#60a5fa";
 
   // ── Resolve key pi CLI tokens ──
   const accent = colors.accent || orange;
@@ -229,16 +231,12 @@ function mapToCssVars(
   const dim = colors.dim || fg4;
   const border = colors.border || bg3;
   const borderAccent = colors.borderAccent || accent;
-  const borderMuted = colors.borderMuted || bg2;
+  const selectedBg = colors.selectedBg || bg2;
   const success = colors.success || green;
   const error = colors.error || red;
   const warning = colors.warning || orange;
-  const selectedBg = colors.selectedBg || bg2;
   const userMessageBg = colors.userMessageBg || bg1;
-  const userMessageText = colors.userMessageText || text;
   const toolSuccessBg = colors.toolSuccessBg || bg1;
-  const toolPendingBg = colors.toolPendingBg || bg1;
-  const toolErrorBg = colors.toolErrorBg || bg1;
 
   // Determine if dark theme
   const isDark = relativeLuminance(bg0) < 0.5;
@@ -252,7 +250,6 @@ function mapToCssVars(
   css["--bg-secondary"] = bg1;
   css["--bg-card"] = bg1;
   css["--bg-hover"] = bg2;
-  // Ensure selected bg is visually distinct from panel bg (use at least bg2 for dark, bg2 equivalent for light)
   css["--bg-selected"] = selectedBg === bg1 ? bg2 : selectedBg;
   css["--bg-card-hover"] = mix(bg1, bg2, 0.5);
   css["--bg-subtle"] = isDark
@@ -271,7 +268,7 @@ function mapToCssVars(
   // Accent
   css["--accent"] = accent;
   css["--accent-hover"] = isDark ? lighten(accent, 0.2) : darken(accent, 0.15);
-  css["--accent-blue"] = accent; // pi-web uses accent-blue for links/thinking
+  css["--accent-blue"] = accent;
 
   // Semantic colors
   css["--accent-red"] = error;
@@ -280,12 +277,10 @@ function mapToCssVars(
 
   // Message bubbles
   css["--user-bg"] = userMessageBg;
-  css["--assistant-bg"] = bg0; // assistant messages on main bg
+  css["--assistant-bg"] = bg0;
   css["--tool-bg"] = toolSuccessBg;
-  // Also set tool pending/error backgrounds as CSS comments for reference
-  // (these are used via color-mix() in globals.css, which works with base colors)
 
-  // Hatch pattern (used in process tab error states)
+  // Hatch pattern
   css["--hatch-color"] = isDark
     ? `rgba(${hexToRgb(accent)?.join(",") || "100,193,182"},0.16)`
     : `rgba(${hexToRgb(accent)?.join(",") || "13,148,136"},0.12)`;
@@ -294,8 +289,6 @@ function mapToCssVars(
 }
 
 // ─── Theme loading ──────────────────────────────────────────────────────────
-
-
 
 /** All required pi CLI color tokens (51 tokens). */
 const ALL_COLOR_TOKENS = [
@@ -342,14 +335,47 @@ function parseThemeFile(path: string): PiTheme | null {
   }
 }
 
+// ─── File-name convention helpers ───────────────────────────────────────────
+
+/**
+ * Detect the base name and variant from a theme filename.
+ *
+ * Convention:
+ *   gruvbox-dark.json  → { base: "gruvbox", variant: "dark" }
+ *   gruvbox-light.json → { base: "gruvbox", variant: "light" }
+ *   monokai.json       → { base: "monokai", variant: null }
+ */
+function parseThemeFilename(
+  filename: string,
+): { base: string; variant: ThemeVariant | null } {
+  const stem = basename(filename, extname(filename));
+
+  // Try "-dark" / "-light" suffix (case-insensitive)
+  const darkMatch = /^(.+)-dark$/i.exec(stem);
+  if (darkMatch) return { base: darkMatch[1], variant: "dark" };
+
+  const lightMatch = /^(.+)-light$/i.exec(stem);
+  if (lightMatch) return { base: lightMatch[1], variant: "light" };
+
+  // Single-file theme — variant determined from content later
+  return { base: stem, variant: null };
+}
+
 /**
  * Scan a directory for pi CLI theme JSON files.
- * Returns parsed PiTheme objects (non-recursive, only top-level .json files).
+ * Returns an array of { path, base, variant, isDark } records.
  */
-function scanThemeDir(dir: string): PiTheme[] {
-  const themes: PiTheme[] = [];
+interface ScannedFile {
+  path: string;
+  base: string;
+  variant: ThemeVariant | null;
+  isDark: boolean;
+}
+
+function scanThemeDir(dir: string): ScannedFile[] {
+  const results: ScannedFile[] = [];
   try {
-    if (!existsSync(dir)) return themes;
+    if (!existsSync(dir)) return results;
     const entries = readdirSync(dir);
     for (const entry of entries) {
       if (extname(entry) !== ".json") continue;
@@ -359,49 +385,79 @@ function scanThemeDir(dir: string): PiTheme[] {
       } catch {
         continue;
       }
+      const parsed = parseThemeFilename(entry);
+      // Determine actual polarity from file content
       const theme = parseThemeFile(fullPath);
-      if (theme) themes.push(theme);
+      if (!theme) continue;
+      const vars = resolveVars(theme.vars);
+      const bg0 = vars.bg0 || "#1a1a1a";
+      const isDark = relativeLuminance(bg0) < 0.5;
+      // If variant wasn't detected from filename, infer from content
+      const variant = parsed.variant ?? (isDark ? "dark" : "light");
+
+      results.push({ path: fullPath, base: parsed.base, variant, isDark });
     }
   } catch {
     // Permission errors, etc.
   }
-  return themes;
+  return results;
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
-/** List all available themes (global + project). */
-export function listThemes(projectCwd?: string): ThemeInfo[] {
-  const result: ThemeInfo[] = [];
+/** List all available theme sets (global + project). */
+export function listThemeSets(projectCwd?: string): ThemeSetInfo[] {
+  const result: ThemeSetInfo[] = [];
   const seen = new Set<string>();
+
+  // Collect all scanned files
+  const allFiles: ScannedFile[] = [];
 
   // Global themes: ~/.pi/agent/themes/
   const globalDir = join(homedir(), ".pi", "agent", "themes");
-  for (const theme of scanThemeDir(globalDir)) {
-    if (seen.has(theme.name)) continue;
-    seen.add(theme.name);
-    result.push({
-      name: theme.name,
-      displayName: themeNameToDisplay(theme.name),
-      path: join(globalDir, `${theme.name}.json`),
-    });
-  }
+  allFiles.push(...scanThemeDir(globalDir));
 
   // Project themes: .pi/themes/ (relative to cwd)
   if (projectCwd) {
     const projectDir = join(projectCwd, ".pi", "themes");
-    for (const theme of scanThemeDir(projectDir)) {
-      if (seen.has(theme.name)) continue;
-      seen.add(theme.name);
-      result.push({
-        name: theme.name,
-        displayName: themeNameToDisplay(theme.name),
-        path: join(projectDir, `${theme.name}.json`),
-      });
+    allFiles.push(...scanThemeDir(projectDir));
+  }
+
+  // Group by base name
+  const groups = new Map<string, ScannedFile[]>();
+  for (const f of allFiles) {
+    const list = groups.get(f.base) || [];
+    list.push(f);
+    groups.set(f.base, list);
+  }
+
+  // Build ThemeSetInfo for each group
+  for (const [base, files] of groups) {
+    if (seen.has(base)) continue;
+    seen.add(base);
+
+    let hasDark = false;
+    let hasLight = false;
+    for (const f of files) {
+      if (f.variant === "dark") hasDark = true;
+      if (f.variant === "light") hasLight = true;
     }
+
+    result.push({
+      name: base,
+      displayName: themeNameToDisplay(base),
+      hasDark,
+      hasLight,
+      builtin: false,
+    });
   }
 
   return result;
+}
+
+/** Backwards-compat alias. */
+export function listThemes(projectCwd?: string): ThemeSetInfo[] {
+  return listThemeSets(projectCwd);
 }
 
 /** Convert a kebab-case theme name to a display-friendly title. */
@@ -413,45 +469,73 @@ function themeNameToDisplay(name: string): string {
 }
 
 /**
- * Load and fully resolve a theme by name.
+ * Resolve a specific variant of a theme set.
  *
- * Resolution steps:
- * 1. Scan global and project theme directories to find the file.
- * 2. Parse the JSON, resolve vars, resolve colors, and map to CSS variables.
+ * Lookup order:
+ *   1. `{base}-{variant}.json` (e.g. `gruvbox-dark.json`)
+ *   2. `{base}.json` (single-file fallback)
+ *   3. The opposite variant (if only one variant exists and user requests the other)
+ *
+ * @param name  Base theme-set name (e.g. "gruvbox").
+ * @param variant  Which variant to load ("dark" or "light").
+ * @param projectCwd  Optional project working directory for project themes.
  */
-export function resolveTheme(name: string, projectCwd?: string): ResolvedTheme | null {
-  // Search for the theme file
-  let theme: PiTheme | null = null;
+export function resolveTheme(
+  name: string,
+  variant: ThemeVariant,
+  projectCwd?: string,
+): ResolvedTheme | null {
+  if (!name) return null;
 
-  // Try global dir
-  const globalDir = join(homedir(), ".pi", "agent", "themes");
-  const globalPath = join(globalDir, `${name}.json`);
-  if (existsSync(globalPath)) {
-    theme = parseThemeFile(globalPath);
+  const dirs: string[] = [
+    join(homedir(), ".pi", "agent", "themes"),
+  ];
+  if (projectCwd) {
+    dirs.push(join(projectCwd, ".pi", "themes"));
   }
 
-  // Try project dir
-  if (!theme && projectCwd) {
-    const projectDir = join(projectCwd, ".pi", "themes");
-    const projectPath = join(projectDir, `${name}.json`);
-    if (existsSync(projectPath)) {
-      theme = parseThemeFile(projectPath);
+  // Candidate filenames in priority order
+  const candidates = [
+    `${name}-${variant}.json`,  // e.g. gruvbox-dark.json
+    `${name}.json`,             // e.g. monokai.json (single-file)
+    `${name}-${variant === "dark" ? "light" : "dark"}.json`, // opposite variant fallback
+  ];
+
+  for (const dir of dirs) {
+    for (const candidate of candidates) {
+      const fullPath = join(dir, candidate);
+      if (!existsSync(fullPath)) continue;
+      const theme = parseThemeFile(fullPath);
+      if (!theme) continue;
+
+      const vars = resolveVars(theme.vars);
+      const colors = resolveColors(theme.colors, vars);
+      const cssVars = mapToCssVars(colors, vars);
+      const bg0 = vars.bg0 || "#1a1a1a";
+
+      return {
+        name, // Use the base name, not the file's internal name
+        isDark: relativeLuminance(bg0) < 0.5,
+        cssVars,
+      };
     }
   }
 
-  // Try direct path (from settings or CLI)
-  if (!theme && existsSync(name)) {
-    theme = parseThemeFile(name);
+  // Try as direct path (from settings or CLI)
+  if (existsSync(name)) {
+    const theme = parseThemeFile(name);
+    if (theme) {
+      const vars = resolveVars(theme.vars);
+      const colors = resolveColors(theme.colors, vars);
+      const cssVars = mapToCssVars(colors, vars);
+      const bg0 = vars.bg0 || "#1a1a1a";
+      return {
+        name: basename(name, extname(name)),
+        isDark: relativeLuminance(bg0) < 0.5,
+        cssVars,
+      };
+    }
   }
 
-  if (!theme) return null;
-
-  // Resolve
-  const vars = resolveVars(theme.vars);
-  const colors = resolveColors(theme.colors, vars);
-  const cssVars = mapToCssVars(colors, vars);
-  return {
-    name: theme.name,
-    cssVars,
-  };
+  return null;
 }

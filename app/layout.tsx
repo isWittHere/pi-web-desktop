@@ -26,7 +26,7 @@ export default function RootLayout({
         <meta name="google" content="notranslate" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var h=document.documentElement,m=localStorage.getItem("pi-theme-mode"),t=localStorage.getItem("pi-theme"),l=localStorage.getItem("pi-language");if(m==="dark")h.classList.add("dark");else if(!m&&t==="dark")h.classList.add("dark");if(t&&t!=="dark"&&t!=="light"&&t!==""){h.dataset.theme=t}h.dataset.themeMode=m||(t==="dark"?"dark":"light");if(l==="zh-CN"){h.lang=l;h.dataset.language=l}else{h.dataset.language="en"}}catch(e){}})();`,
+            __html: `(function(){try{var h=document.documentElement,m=localStorage.getItem("pi-theme-mode")||"dark",t=localStorage.getItem("pi-theme")||"",l=localStorage.getItem("pi-language"),r=m;if(!t){var od=localStorage.getItem("pi-theme-dark"),ol=localStorage.getItem("pi-theme-light");if(od){t=od.replace(/-dark$/i,"");try{localStorage.setItem("pi-theme",t);localStorage.removeItem("pi-theme-dark");localStorage.removeItem("pi-theme-light")}catch(e){}}else if(ol){t=ol.replace(/-light$/i,"");try{localStorage.setItem("pi-theme",t);localStorage.removeItem("pi-theme-dark");localStorage.removeItem("pi-theme-light")}catch(e){}}}if(m==="system"){r=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}if(r==="dark")h.classList.add("dark");if(t){h.dataset.theme=t}h.dataset.themeMode=m;h.dataset.themeResolvedMode=r;if(l==="zh-CN"){h.lang=l;h.dataset.language=l}else{h.dataset.language="en"}}catch(e){}})();`,
           }}
         />
       </head>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveTheme } from "@/lib/theme";
+import { resolveTheme, type ThemeVariant } from "@/lib/theme";
 
 export async function GET(
   request: NextRequest,
@@ -9,12 +9,17 @@ export async function GET(
     const { name } = await params;
     const { searchParams } = new URL(request.url);
     const cwd = searchParams.get("cwd") || undefined;
+    const mode = (searchParams.get("mode") || "dark") as ThemeVariant;
 
-    const resolved = resolveTheme(decodeURIComponent(name), cwd);
+    const resolved = resolveTheme(
+      decodeURIComponent(name),
+      mode === "light" ? "light" : "dark",
+      cwd,
+    );
 
     if (!resolved) {
       return NextResponse.json(
-        { error: `Theme "${name}" not found` },
+        { error: `Theme "${name}" variant "${mode}" not found` },
         { status: 404 },
       );
     }
