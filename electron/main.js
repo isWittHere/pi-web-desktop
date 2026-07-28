@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage } = require("electron");
 const { fork } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -18,6 +18,7 @@ const URL = `http://localhost:${PORT}`;
 
 let mainWindow = null;
 let serverProcess = null;
+let tray = null;
 
 function waitForServer(timeoutMs = 30000) {
   const start = Date.now();
@@ -75,13 +76,56 @@ function startServer() {
   });
 }
 
+function getIconPath() {
+  return path.join(__dirname, "..", "public", "icon.ico");
+}
+
+function createTray() {
+  // Use nativeImage.createFromPath for reliable tray icon rendering on Windows
+  const iconPath = path.join(__dirname, "tray-icon.png");
+  const trayIcon = nativeImage.createFromPath(iconPath);
+  tray = new Tray(trayIcon);
+  tray.setToolTip("Pi Agent Web");
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: "Show",
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+
+  tray.on("double-click", () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 function createWindow() {
+  const iconPath = getIconPath();
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 480,
     minHeight: 400,
     title: "Pi Agent Web",
+    icon: iconPath,
     frame: false,
     backgroundColor: "#1a1a1a",
     webPreferences: {
@@ -119,6 +163,13 @@ function createWindow() {
   mainWindow.on("unmaximize", sendMaximizedState);
 
   mainWindow.loadURL(URL);
+
+  mainWindow.on("close", (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -158,6 +209,7 @@ async function bootstrap() {
     }
   }
 
+  createTray();
   createWindow();
 }
 
@@ -184,6 +236,11 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
+  app.isQuitting = true;
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
   if (serverProcess) {
     serverProcess.kill();
     serverProcess = null;

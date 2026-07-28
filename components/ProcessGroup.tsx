@@ -701,7 +701,7 @@ export function ProcessGroup({
                         activeTab === index
                           ? isError
                             ? "process-tab-error"
-                            : "process-tab-active"
+                            : `process-tab-active${isStreaming ? " process-tab-streaming" : ""}`
                           : "text-text-dim hover:text-text"
                       }`}
                     >

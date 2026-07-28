@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Cpu, Monitor, Plug, Stack, X } from "@phosphor-icons/react";
+import { ChatCenteredText, Cpu, Monitor, Plug, Stack, X } from "@phosphor-icons/react";
+import { ChatConfig } from "./ChatConfig";
 import { DisplayConfig } from "./DisplayConfig";
 import { ModelsConfig } from "./ModelsConfig";
 import { PluginsConfig } from "./PluginsConfig";
@@ -9,7 +10,7 @@ import { SkillsConfig } from "./SkillsConfig";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useLanguage, type TranslationKey } from "@/hooks/useLanguage";
 
-export type SettingsTab = "display" | "models" | "skills" | "plugins";
+export type SettingsTab = "display" | "chat" | "models" | "skills" | "plugins";
 
 interface SettingsModalProps {
   initialTab?: SettingsTab;
@@ -22,6 +23,7 @@ interface SettingsModalProps {
 
 const tabs: { id: SettingsTab; labelKey: TranslationKey; Icon: typeof Cpu }[] = [
   { id: "display", labelKey: "display", Icon: Monitor },
+  { id: "chat", labelKey: "chat", Icon: ChatCenteredText },
   { id: "models", labelKey: "models", Icon: Cpu },
   { id: "skills", labelKey: "skills", Icon: Stack },
   { id: "plugins", labelKey: "plugins", Icon: Plug },
@@ -172,6 +174,9 @@ export function SettingsModal({
 
           <div style={{ display: activeTab === "display" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>
             <DisplayConfig />
+          </div>
+          <div style={{ display: activeTab === "chat" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>
+            <ChatConfig />
           </div>
           <div style={{ display: activeTab === "models" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>
             <ModelsConfig embedded onSavedAction={onModelsSavedAction} />

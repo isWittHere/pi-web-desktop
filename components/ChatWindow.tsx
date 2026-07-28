@@ -399,6 +399,36 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       {isEmptyNew ? (
         <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto">
           <div className="w-full max-w-[820px]">
+            {/* Pi Logo */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                marginBottom: 28,
+              }}
+            >
+              <svg
+                fill="currentColor"
+                fillRule="evenodd"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+                style={{
+                  width: 64,
+                  height: 64,
+                  color: "var(--accent)",
+                  opacity: 0.85,
+                }}
+                aria-label="Pi"
+              >
+                <title>Pi</title>
+                <path
+                  clipRule="evenodd"
+                  d="M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5z"
+                />
+                <path d="M17.5 12H23v11h-5.5V12z" />
+              </svg>
+            </div>
+
             {/* Header: workspace picker + version info */}
             <div
               style={{

@@ -489,6 +489,13 @@ pre, code {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--accent);
 }
+.group\/process .process-tab-streaming {
+  animation: tab-breathe 1.8s ease-in-out infinite;
+}
+@keyframes tab-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 .group\/process .process-tab-error {
   background-color: rgba(248, 113, 113, 0.06);
   background-image: repeating-linear-gradient(

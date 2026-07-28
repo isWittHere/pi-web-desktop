@@ -61,6 +61,7 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^25",
     "@types/react": "^19",
@@ -84,6 +85,7 @@
     "asar": false,
     "files": [
       "electron/**/*",
+      "public/**/*",
       ".next/**/*",
       "node_modules/**/*",
       "!.next/cache",
