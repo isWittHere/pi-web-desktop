@@ -6,7 +6,7 @@
 
 - **Purpose**: Give pi users a visual alternative to the CLI with session browsing, file exploration, and settings management.
 - **Target Audience**: Developers using pi as their coding agent who want a richer UI.
-- **Key Features**: Session browsing & forking, real-time SSE chat, file explorer & viewer, model/plugins/skills configuration, Git worktree management, Electron desktop app support, i18n (English & 中文).
+- **Key Features**: Session browsing & forking, real-time SSE chat, file explorer & viewer, model/plugins/skills configuration, pi CLI theme system (load & preview JSON themes), Git worktree management, Electron desktop app support, i18n (English & 中文).
 
 ---
 
@@ -68,6 +68,8 @@ pi-web-main/
 │   │   ├── skills/route.ts           # GET/PATCH loaded skills & disable-model-invocation
 │   │   ├── skills/install/route.ts   # POST install via npx skills add
 │   │   ├── skills/search/route.ts    # GET/POST skills.sh search
+│   │   ├── themes/route.ts           # GET list available theme sets
+│   │   ├── themes/[name]/route.ts    # GET resolve a specific theme variant
 │   │   └── worktrees/route.ts        # GET/POST/DELETE git worktrees
 │   ├── globals.css               # Global styles + CSS variables + Tailwind
 │   ├── layout.tsx                # Root layout (fonts, theme, i18n init)
@@ -96,6 +98,9 @@ pi-web-main/
 │   ├── ProcessGroup.tsx          # Process/step visualization groups
 │   ├── SessionInfoBar.tsx        # Context usage, cost, compaction state
 │   ├── SettingsModal.tsx         # Generic settings modal container
+│   ├── ChatConfig.tsx            # Chat settings panel (input shortcut, etc.)
+│   ├── ProviderIcon.tsx          # Provider logo icon component (30+ providers)
+│   ├── SettingToggle.tsx         # Reusable toggle switch + settings section layout
 │   ├── TabBar.tsx                # Tab bar (Chat + open file tabs)
 │   └── MarkdownBody.test.mjs     # Markdown rendering tests
 │
@@ -143,6 +148,7 @@ pi-web-main/
 │   ├── skills-service.ts         # Skills service abstraction
 │   ├── step-categorizer.ts       # Step categorization for process display
 │   ├── step-visuals.ts           # Step visualization helpers
+│   ├── theme.ts                  # Pi CLI theme loader, 256-color palette, CSS var mapper
 │   ├── tool-presets.ts           # PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
 │   ├── types.ts                  # Shared TypeScript types
 │   └── worktree.ts               # Project/worktree resolution and git worktree ops
@@ -168,6 +174,7 @@ pi-web-main/
 ├── public/                       # Static assets
 │   ├── catppuccin-icons/         # File icon theme
 │   ├── favicon.svg / icon.*      # App icons
+│   ├── gruvbox-dark.json         # Built-in pi CLI theme (Gruvbox Dark)
 │   └── pi-original.svg           # Pi logo
 │
 ├── main.js                       # ⚠️ Legacy electron entry (superseded by electron/main.js)
@@ -244,17 +251,22 @@ pi-web-main/
 | `electron/preload.js` | Context bridge: window controls IPC, directory picker |
 | `global.d.ts` | Ambient types for `window.electron` and `window.piDesktop` |
 | `bin/pi-web.js` | CLI entry point (`npx @agegr/pi-web`) |
-| `app/layout.tsx` | Root layout: fonts, theme init, i18n init |
+| `app/layout.tsx` | Root layout: fonts, theme mode/name migration & init, i18n init (inline script before hydration) |
 | `app/page.tsx` | Entry: renders `<AppShell />` inside `<Suspense>` |
 | `app/globals.css` | Global styles + CSS variables (see below) |
 
 ### CSS Variables (`app/globals.css`)
+Tailwind v4 `@theme` maps CSS custom properties to utility classes. Core variables:
 ```
---bg --bg-panel --bg-hover --bg-selected --border
+--bg --bg-panel --bg-secondary --bg-card --bg-hover --bg-selected --bg-card-hover --bg-subtle
+--border --border-hover
 --text --text-muted --text-dim
---accent --user-bg --tool-bg
---font-mono
+--accent --accent-hover --accent-blue
+--accent-red --accent-green --accent-orange
+--user-bg --assistant-bg --tool-bg
+--hatch-color --font-mono
 ```
+Dark/light `:root` / `html.dark` defaults are defined in `globals.css` but overridden at runtime by the theme system (see Theme System below).
 
 ---
 
@@ -453,6 +465,18 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - **Dev vs Production**: `IS_DEV` determined by checking `resources/app` and `resources/app.asar` existence (since `asar: false`, `app.isPackaged` returns false even in production)
 - **Process spawning**: Uses `fork()` (not `spawn()`) in production because `process.execPath` is `Pi Web.exe`, not Node.js
 
+### Theme System (`lib/theme.ts` + `hooks/useTheme.ts` + `app/api/themes/`)
+- **Theme sets**: Themes are organized as paired dark+light variants under a base name (e.g. "gruvbox" → `gruvbox-dark.json` + `gruvbox-light.json`). Single-file themes are also supported.
+- **File lookup** (global → project): `~/.pi/agent/themes/` then `<cwd>/.pi/themes/`. Also accepts direct file paths.
+- **Resolution**: `lib/theme.ts` parses pi CLI theme JSON, resolves `vars` references, converts 256-color indices to hex via xterm palette, and maps 51 pi CLI tokens to ~23 pi-web CSS custom properties.
+- **API**: `GET /api/themes` lists available theme sets; `GET /api/themes/{name}?mode=dark|light` resolves a specific variant and returns the CSS variable map.
+- **Cache**: `useTheme` caches resolved themes by `name::mode` in a module-level Map.
+- **Border depth slider**: User-adjustable 0-100 range blends `--border`/`--border-hover` from invisible (matches bg) → theme default → max contrast (matches text). Uses `color-mix()`.
+- **View transitions**: `toggleTheme()` uses the View Transition API with a circular clip-path animation triggered from the click origin.
+- **System color scheme**: `useTheme` subscribes to `(prefers-color-scheme: dark)` media query for "system" mode.
+- **Layout inline script**: `app/layout.tsx` reads `pi-theme-mode`, `pi-theme`, runs migration from old per-mode keys (`pi-theme-dark`/`pi-theme-light`), and sets `data-theme-mode`/`data-theme-resolved-mode`/`dark` class before React hydration.
+- **Built-in defaults**: `globals.css` provides `:root` (light) and `html.dark` (dark) CSS variable defaults. They act as fallback when no pi CLI theme is selected.
+
 ### i18n
 - Supports English (`en`) and 中文 (`zh-CN`)
 - Language stored in `localStorage` as `pi-language`
@@ -467,5 +491,5 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 
 ---
 
-*Last Updated: 2025-07-28*
+*Last Updated: 2026-07-29*
 *Generated by: AGENTS-maker*
