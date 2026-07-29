@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Check,
   Copy,
@@ -14,6 +15,7 @@ import {
 } from "@phosphor-icons/react";
 import { useElectronWindow } from "@/hooks/useElectronWindow";
 import { useLanguage } from "@/hooks/useLanguage";
+import type { TranslationKey } from "@/hooks/useLanguage";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
 type SessionCopyField = "file" | "id";
@@ -39,6 +41,54 @@ interface AppTitleBarProps {
   onOpenSettings: () => void;
   sessionTitle: string | null;
   onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
+}
+
+/** Renders a placeholder icon until mounted, then the correct theme icon.
+ *  Avoids SSR hydration mismatch caused by the server always defaulting
+ *  to dark mode while the client inline script restores a stored preference. */
+function ThemeToggleButton({
+  isDark,
+  toggleTheme,
+  translate,
+}: {
+  isDark: boolean;
+  toggleTheme: (origin?: { x: number; y: number }) => void;
+  translate: (key: TranslationKey) => string;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  const title = mounted
+    ? (isDark ? translate("switchToLight") : translate("switchToDark"))
+    : translate("switchToLight"); // SSR default: dark mode
+
+  return (
+    <button
+      className="app-no-drag"
+      suppressHydrationWarning
+      onClick={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      }}
+      title={title}
+      aria-label={title}
+      aria-pressed={mounted ? isDark : true}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: 36, height: 36, padding: 0,
+        background: "none", border: "none",
+        color: "var(--text-muted)", cursor: "pointer", flexShrink: 0,
+        transition: "background 0.12s, color 0.12s",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+    >
+      {mounted
+        ? (isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />)
+        : <Sun size={16} aria-hidden="true" />
+      }
+    </button>
+  );
 }
 
 export function AppTitleBar({
@@ -178,27 +228,9 @@ export function AppTitleBar({
           <SidebarSimple size={16} aria-hidden="true" style={{ transform: "scaleX(-1)" }} />
         </button>
 
-        {/* Theme toggle */}
-        <button
-          className="app-no-drag"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-          }}
-          title={isDark ? translate("switchToLight") : translate("switchToDark")}
-          aria-label={isDark ? translate("switchToLight") : translate("switchToDark")}
-          aria-pressed={isDark}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 36, height: 36, padding: 0,
-            background: "none", border: "none",
-            color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-        >
-          {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
-        </button>
+        {/* Theme toggle — defer render until client mount to avoid
+            SSR hydration mismatch on icon and attributes. */}
+        <ThemeToggleButton isDark={isDark} toggleTheme={toggleTheme} translate={translate} />
 
         {/* Settings */}
         <button
