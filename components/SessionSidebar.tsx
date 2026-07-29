@@ -1827,15 +1827,25 @@ function SessionItem({
   const [hovered, setHovered] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [renameCaretIndex, setRenameCaretIndex] = useState(0);
+  const [renameCaretLeft, setRenameCaretLeft] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const renameMeasureRef = useRef<HTMLSpanElement>(null);
 
   const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
+
+  // A two-pixel overlay gives the otherwise native one-pixel input caret a
+  // clearer visual weight while the title is edited in place.
+  useLayoutEffect(() => {
+    if (renaming) setRenameCaretLeft(renameMeasureRef.current?.getBoundingClientRect().width ?? 0);
+  }, [renaming, renameValue, renameCaretIndex]);
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setRenameValue(title);
+    setRenameCaretIndex(title.length);
     setRenaming(true);
     setTimeout(() => inputRef.current?.select(), 0);
   }, [title]);
@@ -1941,32 +1951,8 @@ function SessionItem({
             </button>
           </div>
         </>
-      ) : renaming ? (
-        /* ── Rename: input fills the same row ── */
-        <input
-          ref={inputRef}
-          value={renameValue}
-          onChange={(e) => setRenameValue(e.target.value)}
-          onBlur={commitRename}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitRename();
-            if (e.key === "Escape") setRenaming(false);
-          }}
-          autoFocus
-          style={{
-            flex: 1,
-            fontSize: 12,
-            padding: "5px 8px",
-            border: "1px solid var(--accent)",
-            borderRadius: 5,
-            outline: "none",
-            background: "var(--bg)",
-            color: "var(--text)",
-            height: 30,
-          }}
-        />
       ) : (
-        /* ── Normal view ── */
+        /* ── Session content; renaming swaps only the title text in place ── */
         <>
           {/* Fork indicator for child sessions */}
           {depth > 0 && (
@@ -1989,9 +1975,89 @@ function SessionItem({
               title={isRunning ? `${title} · ${t("agentRunning")}` : isUnread ? `${title} · ${t("newActivity")}` : title}
             >
               {isRunning ? <RunningSessionIndicator /> : isUnread ? <UnreadSessionIndicator /> : null}
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
-                {title}
-              </span>
+              {renaming ? (
+                <div
+                  style={{
+                    position: "relative",
+                    flex: "1 1 0",
+                    alignSelf: "stretch",
+                    width: "100%",
+                    minWidth: 0,
+                    height: 20,
+                    background: "color-mix(in srgb, var(--accent) 18%, var(--bg))",
+                    borderRadius: 3,
+                  }}
+                >
+                  <span
+                    ref={renameMeasureRef}
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      visibility: "hidden",
+                      whiteSpace: "pre",
+                      font: "inherit",
+                      lineHeight: "inherit",
+                    }}
+                  >
+                    {renameValue.slice(0, renameCaretIndex)}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      top: 2,
+                      bottom: 2,
+                      left: renameCaretLeft,
+                      width: 2,
+                      background: "var(--accent)",
+                      borderRadius: 1,
+                      animation: "blink 1s step-end infinite",
+                      pointerEvents: "none",
+                    }}
+                  />
+                  <input
+                  ref={inputRef}
+                  value={renameValue}
+                  onChange={(e) => {
+                    setRenameValue(e.target.value);
+                    setRenameCaretIndex(e.target.selectionStart ?? e.target.value.length);
+                  }}
+                  onSelect={(e) => setRenameCaretIndex(e.currentTarget.selectionEnd ?? 0)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitRename();
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setRenaming(false);
+                    }
+                  }}
+                  aria-label={t("rename")}
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    minWidth: 0,
+                    height: 20,
+                    margin: 0,
+                    padding: 0,
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    borderRadius: "inherit",
+                    color: "inherit",
+                    font: "inherit",
+                    lineHeight: "inherit",
+                    caretColor: "transparent",
+                  }}
+                  />
+                </div>
+              ) : (
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
+                  {title}
+                </span>
+              )}
               {/* Collapse toggle — always visible when has children */}
               {hasChildren && (
                 <button
@@ -2010,7 +2076,7 @@ function SessionItem({
                 </button>
               )}
               {/* Action buttons — shown on hover */}
-              {hovered && (
+              {hovered && !renaming && (
                 <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
                 <button
                   onClick={startRename}

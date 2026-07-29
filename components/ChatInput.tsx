@@ -1394,6 +1394,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <textarea
             ref={textareaRef}
             value={value}
+            spellCheck={false}
             onChange={(e) => {
               setValue(e.target.value);
               updateAtQuery(e.target.value, e.target.selectionStart);

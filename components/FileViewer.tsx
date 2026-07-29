@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, type MouseEvent } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, type MouseEvent } from "react";
 import { DownloadSimple } from "@phosphor-icons/react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
@@ -17,7 +17,8 @@ import {
 } from "@/lib/file-types";
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { resolveLocalFileHref } from "@/lib/file-links";
-import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins } from "@/lib/markdown";
+import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { CodeBlock, MermaidBlock } from "@/components/MarkdownBody";
 
 interface Props {
   filePath: string;
@@ -783,6 +784,11 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
     };
   }, [filePath, fetchContent, sourceSessionId]);
 
+  const normalizedMarkdown = useMemo(
+    () => normalizeDisplayMath(data?.content ?? ""),
+    [data?.content],
+  );
+
   if (loading) {
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 13 }}>
@@ -968,30 +974,83 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
             style={{ padding: "24px 32px" }}
           >
             <ReactMarkdown
-              remarkPlugins={markdownPreviewRemarkPlugins}
-              rehypePlugins={markdownPreviewRehypePlugins}
+              remarkPlugins={markdownRemarkPlugins}
+              rehypePlugins={markdownRehypePlugins}
               components={{
+                h1({ children }: React.ComponentProps<'h1'>) {
+                  return <h1 id={headingId(children)}>{children}</h1>
+                },
+                h2({ children }: React.ComponentProps<'h2'>) {
+                  return <h2 id={headingId(children)}>{children}</h2>
+                },
+                h3({ children }: React.ComponentProps<'h3'>) {
+                  return <h3 id={headingId(children)}>{children}</h3>
+                },
+                code({ className, children, ...props }) {
+                  const lang = className?.replace("language-", "").toLowerCase() ?? "";
+                  const raw = String(children);
+                  const isBlock = className?.includes("language-") || raw.includes("\n");
+                  if (isBlock) {
+                    if (lang === "mermaid") {
+                      return <MermaidBlock code={raw.replace(/\n$/, "")} />;
+                    }
+                    return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
+                  }
+                  return (
+                    <code
+                      className="inline max-w-full whitespace-normal break-words [overflow-wrap:anywhere] align-baseline bg-(--bg-secondary) border border-(--border) px-1.5 py-0.5 text-xs font-mono text-(--accent-blue)"
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
+                pre({ children }) {
+                  return <>{children}</>;
+                },
                 a({ href, children, ...props }) {
                   delete props.node;
+                  const linkClass = "text-(--accent-blue) underline underline-offset-2 hover:text-(--accent-blue)/80";
                   const linkedFile = onOpenFile
                     ? resolveLocalFileHref(href, markdownDirectory, cwd ?? markdownDirectory)
                     : null;
                   if (!linkedFile || !onOpenFile) {
-                    return <a href={href} {...props}>{children}</a>;
+                    return (
+                      <a href={href} {...props} className={linkClass} target="_blank" rel="noopener noreferrer">
+                        {children}
+                      </a>
+                    );
                   }
 
                   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
                     if (event.defaultPrevented || event.button !== 0) return;
                     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    const target = event.currentTarget.getAttribute("target");
+                    if (target && target !== "_self") return;
                     event.preventDefault();
                     onOpenFile(linkedFile);
                   };
 
-                  return <a href={href} {...props} onClick={handleClick}>{children}</a>;
+                  return (
+                    <a href={href} {...props} className={linkClass} onClick={handleClick}>
+                      {children}
+                    </a>
+                  );
+                },
+                table({ children }) {
+                  return (
+                    <div className="my-3 rounded-lg overflow-hidden border border-(--border)">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse [&_tr:last-child>td]:border-b-0">
+                          {children}
+                        </table>
+                      </div>
+                    </div>
+                  );
                 },
               }}
             >
-              {data.content}
+              {normalizedMarkdown}
             </ReactMarkdown>
           </div>
         ) : (

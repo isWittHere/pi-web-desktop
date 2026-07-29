@@ -10,7 +10,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useTheme } from "@/hooks/useTheme";
 import { copyText } from "@/lib/clipboard";
 import { resolveLocalFileHref } from "@/lib/file-links";
-import { markdownRehypePlugins, markdownRemarkPlugins } from "@/lib/markdown";
+import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 
 const markdownLabels = {
   en: {
@@ -35,13 +35,6 @@ interface MarkdownBodyProps {
   isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
-}
-
-function headingId(children: unknown) {
-  return String(children)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
-    .replace(/^-+|-+$/g, '')
 }
 
 export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile }: MarkdownBodyProps) {
@@ -132,36 +125,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
   );
 }
 
-function normalizeDisplayMath(markdown: string): string {
-  const lineBreak = markdown.includes("\r\n") ? "\r\n" : "\n";
-  const lines = markdown.split(/\r?\n/);
-  let fence: { marker: string; size: number } | null = null;
-
-  return lines
-    .map((line) => {
-      const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})/);
-      if (fenceMatch) {
-        const marker = fenceMatch[1][0];
-        const size = fenceMatch[1].length;
-        if (!fence) fence = { marker, size };
-        else if (marker === fence.marker && size >= fence.size) fence = null;
-        return line;
-      }
-
-      if (fence) return line;
-
-      const displayMathMatch = line.match(/^([ \t]{0,3})\$\$(.+)\$\$[ \t]*$/);
-      if (!displayMathMatch) return line;
-
-      const math = displayMathMatch[2].trim();
-      if (!math) return line;
-
-      return `${displayMathMatch[1]}$$${lineBreak}${math}${lineBreak}${displayMathMatch[1]}$$`;
-    })
-    .join(lineBreak);
-}
-
-function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boolean }) {
+export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boolean }) {
   const { language, t } = useLanguage();
   const labels = markdownLabels[language];
   const { isDark } = useTheme();
@@ -243,7 +207,7 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
   );
 }
 
-function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; headerAction?: ReactNode }) {
+export function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; headerAction?: ReactNode }) {
   const { language, t } = useLanguage();
   const labels = markdownLabels[language];
   const { isDark } = useTheme();

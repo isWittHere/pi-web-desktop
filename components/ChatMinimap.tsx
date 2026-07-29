@@ -17,6 +17,19 @@ const LANE_GAP = 1;
 const LANE_PADDING = 2;
 const MIN_MARKER_HEIGHT = 3;
 const MARKER_GAP = 1;
+const PREVIEW_LINE_HEIGHT = 15;
+const PREVIEW_PADDING_Y = 4;
+const MAX_PREVIEW_LINES = 5;
+
+function stripXmlTags(text: string): string {
+  return text
+    // Thinking is sometimes stored as a text block, and some providers escape
+    // tags before storing them. Handle both forms before creating the preview.
+    .replace(/<\/?[\w:-]+\b[^>]*>/g, " ")
+    .replace(/&lt;\/?[\w:-]+\b[^&]*?&gt;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 interface DisplayNode extends NodeInfo {
   displayTopPx: number;
@@ -46,7 +59,13 @@ function getMessagePreview(msg: AgentMessage | Partial<AgentMessage>): string {
       .filter((b): b is TextContent => b.type === "text")
       .map((b) => b.text)
       .join(" ");
-    if (text) return text.slice(0, 200);
+    if (text) return stripXmlTags(text).slice(0, 200);
+    const thinking = blocks
+      .filter((b) => b.type === "thinking")
+      .map((b) => stripXmlTags((b as { type: string; thinking?: string }).thinking ?? ""))
+      .filter(Boolean)
+      .join(" ");
+    if (thinking) return thinking.slice(0, 200);
     const toolNames = blocks
       .filter((b) => b.type === "toolCall")
       .map((b) => (b as { type: string; toolName: string }).toolName);
@@ -64,6 +83,17 @@ function getNodeColor(msg: AgentMessage | Partial<AgentMessage>): string {
   if (hasFailedTool) return "var(--accent-red)";
   if (blocks.some((block) => block.type === "toolCall")) return "var(--accent-green)";
   return "var(--text-dim)";
+}
+
+function getPreviewBackground(msg: AgentMessage | Partial<AgentMessage>): string {
+  if (msg.role === "user") return "var(--minimap-preview-user-bg)";
+
+  const blocks = (msg as Partial<AssistantMessage>).content ?? [];
+  if (blocks.some((block) => block.type === "toolCall" && (block as { error?: string }).error)) {
+    return "var(--minimap-preview-error-bg)";
+  }
+  if (blocks.some((block) => block.type === "toolCall")) return "var(--minimap-preview-tool-bg)";
+  return "var(--minimap-preview-default-bg)";
 }
 
 // Higher-priority navigation landmarks stay visible when message extents touch.
@@ -390,23 +420,30 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
       {minimapHovered && hoveredNode && (() => {
         const preview = getMessagePreview(hoveredNode.msg);
         if (!preview) return null;
-        const color = getNodeColor(hoveredNode.msg);
-        const tooltipTop = Math.max(0, Math.min(minimapHeightPx - 22, hoveredNode.displayTopPx - 11));
+        const previewBackground = getPreviewBackground(hoveredNode.msg);
+        // Taller minimaps can show more context without obscuring nearby nodes.
+        const previewLines = Math.max(1, Math.min(MAX_PREVIEW_LINES, Math.floor(minimapHeightPx / 120)));
+        const tooltipHeight = previewLines * PREVIEW_LINE_HEIGHT + PREVIEW_PADDING_Y;
+        // Anchor the preview's visual center to its marker. The previous
+        // calculation used a maximum height as a top offset, which made short
+        // previews appear above the marker on tall minimaps.
+        const tooltipCenter = Math.max(
+          tooltipHeight / 2,
+          Math.min(minimapHeightPx - tooltipHeight / 2, hoveredNode.displayTopPx),
+        );
         return (
           <div
             style={{
               position: "absolute",
-              top: tooltipTop,
+              top: tooltipCenter,
+              transform: "translateY(-50%)",
               right: "100%",
               marginRight: 6,
-              background: "var(--bg)",
-              borderTop: `1px solid ${color}`,
-              borderRight: `1px solid ${color}`,
-              borderBottom: `1px solid ${color}`,
-              borderLeft: `2px solid ${color}`,
+              background: previewBackground,
+              border: "none",
               borderRadius: 4,
               padding: "2px 7px",
-              width: 200,
+              width: 220,
               zIndex: 100,
               pointerEvents: "none",
             }}
@@ -415,10 +452,12 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
               style={{
                 fontSize: 11,
                 color: "var(--text)",
-                lineHeight: 1.4,
-                whiteSpace: "nowrap",
+                lineHeight: `${PREVIEW_LINE_HEIGHT}px`,
+                display: "-webkit-box",
+                WebkitBoxOrient: "vertical",
+                WebkitLineClamp: previewLines,
                 overflow: "hidden",
-                textOverflow: "ellipsis",
+                overflowWrap: "anywhere",
               }}
             >
               {preview}

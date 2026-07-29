@@ -60,6 +60,11 @@
   --accent-red: #dc2626;
   --accent-green: #16a34a;
   --accent-orange: #d97706;
+  /* Fixed mix ratios are supported reliably, unlike a percentage custom property. */
+  --minimap-preview-user-bg: color-mix(in srgb, var(--accent) 6%, var(--bg-hover));
+  --minimap-preview-tool-bg: color-mix(in srgb, var(--accent-green) 6%, var(--bg-hover));
+  --minimap-preview-error-bg: color-mix(in srgb, var(--accent-red) 6%, var(--bg-hover));
+  --minimap-preview-default-bg: color-mix(in srgb, var(--text-dim) 6%, var(--bg-hover));
   --hatch-color: rgba(13, 148, 136, 0.12);
   --hatch-spacing: 6px;
   --hatch-width: 1px;
@@ -88,6 +93,10 @@ html.dark {
   --accent-red: #f87171;
   --accent-green: #3fb950;
   --accent-orange: #d29922;
+  --minimap-preview-user-bg: color-mix(in srgb, var(--accent) 18%, var(--bg-hover));
+  --minimap-preview-tool-bg: color-mix(in srgb, var(--accent-green) 18%, var(--bg-hover));
+  --minimap-preview-error-bg: color-mix(in srgb, var(--accent-red) 18%, var(--bg-hover));
+  --minimap-preview-default-bg: color-mix(in srgb, var(--text-dim) 18%, var(--bg-hover));
   --hatch-color: rgba(100, 193, 182, 0.16);
 }
 

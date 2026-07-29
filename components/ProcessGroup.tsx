@@ -16,7 +16,7 @@ import {
   basenameResourcePath,
 } from "@/lib/step-categorizer";
 import type { StepIconName } from "@/lib/step-visuals";
-import { BrainIcon } from "@phosphor-icons/react/Brain";
+import { ChatTeardropDotsIcon } from "@phosphor-icons/react/ChatTeardropDots";
 import { BookOpenIcon } from "@phosphor-icons/react/BookOpen";
 import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { ColumnsIcon } from "@phosphor-icons/react/Columns";
@@ -481,7 +481,7 @@ function Caret({ expanded }: { expanded: boolean }) {
 
 function stepIconElement(iconName: StepIconName, size: number = 14) {
   switch (iconName) {
-    case "brain": return <BrainIcon size={size} />;
+    case "brain": return <ChatTeardropDotsIcon size={size} />;
     case "bookOpen": return <BookOpenIcon size={size} />;
     case "magnifyingGlass": return <MagnifyingGlassIcon size={size} />;
     case "pencilSimpleLine": return <PencilSimpleLineIcon size={size} />;
@@ -722,6 +722,8 @@ export function ProcessGroup({
   const wasStreamingRef = useRef(false);
   const hasUserSelectedTabRef = useRef(false);
   const hasAppliedDefaultExpansionRef = useRef(false);
+  const userScrolledUpRef = useRef(false);
+  const ignoreProgrammaticScrollUntilRef = useRef(0);
 
   useEffect(() => {
     if (isStreaming) {
@@ -730,6 +732,7 @@ export function ProcessGroup({
       return;
     }
     if (!wasStreamingRef.current) return;
+    userScrolledUpRef.current = false;
     setStepStates({});
     const timer = window.setTimeout(() => setAreaExpanded(false), 300);
     wasStreamingRef.current = false;
@@ -762,6 +765,14 @@ export function ProcessGroup({
     setShowBottomShadow(element.scrollHeight - element.scrollTop - element.clientHeight > 1);
   }, []);
 
+  const handleProcessUserScroll = useCallback(() => {
+    if (Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUpRef.current = distFromBottom > 4;
+  }, []);
+
   useEffect(() => {
     const element = scrollRef.current;
     if (!element || !areaExpanded) return;
@@ -777,7 +788,16 @@ export function ProcessGroup({
   }, [activeTab, areaExpanded, displayMode, isStreaming, stepStates, steps.length, updateShadows]);
 
   useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !areaExpanded) return;
+    el.addEventListener("scroll", handleProcessUserScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleProcessUserScroll);
+  }, [areaExpanded, displayMode, handleProcessUserScroll]);
+
+  useEffect(() => {
     if (!isStreaming || !scrollRef.current) return;
+    if (userScrolledUpRef.current) return;
+    ignoreProgrammaticScrollUntilRef.current = Date.now() + 100;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     updateShadows();
   }, [blocks, isStreaming, updateShadows]);
@@ -970,7 +990,12 @@ export function ProcessGroup({
                       key={step.id}
                       type="button"
                       onClick={() => {
-                        hasUserSelectedTabRef.current = true;
+                        if (index === steps.length - 1 && isStreaming) {
+                          hasUserSelectedTabRef.current = false;
+                          userScrolledUpRef.current = false;
+                        } else {
+                          hasUserSelectedTabRef.current = true;
+                        }
                         setActiveTab(index);
                       }}
                       data-has-file-target={hasFileTag ? "true" : undefined}
