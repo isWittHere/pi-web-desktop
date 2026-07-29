@@ -268,7 +268,7 @@ function mapToCssVars(
   // Accent
   css["--accent"] = accent;
   css["--accent-hover"] = isDark ? lighten(accent, 0.2) : darken(accent, 0.15);
-  css["--accent-blue"] = accent;
+  css["--accent-blue"] = vars.blue || accent;
 
   // Semantic colors
   css["--accent-red"] = error;

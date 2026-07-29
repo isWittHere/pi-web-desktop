@@ -10,7 +10,7 @@ import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/ArrowBendDownRight";
 import { ArrowDownIcon } from "@phosphor-icons/react/ArrowDown";
 import { ArrowUpIcon } from "@phosphor-icons/react/ArrowUp";
-import { ArrowsDownUpIcon } from "@phosphor-icons/react/ArrowsDownUp";
+import { CloudArrowDownIcon } from "@phosphor-icons/react/CloudArrowDown";
 import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/Check";
 import { CopyIcon } from "@phosphor-icons/react/Copy";
@@ -471,13 +471,13 @@ function AssistantMessageView({
               {est > 0 && (
                 <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text)" }} title={t("estimatedStreamingTokenCount")}>
                   <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 11, fontWeight: 400 }}>
-                    <ArrowsDownUpIcon size={11} />
+                    <CloudArrowDownIcon size={13} />
                     {est}
                   </span>
                   {tps !== null && (() => {
-                    const bg = tps >= 50 ? "#53b3cb" : tps >= 30 ? "#9bc53d" : tps >= 15 ? "#f9c22e" : "#e01a4f";
+                    const speedVar = tps >= 50 ? "--accent-green" : tps >= 30 ? "--accent-blue" : tps >= 15 ? "--accent-orange" : "--accent-red";
                     return (
-                      <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: bg, color: "#fff", fontSize: 11, fontWeight: 400 }}>
+                      <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: `var(${speedVar})`, color: "var(--bg)", fontSize: 11, fontWeight: 400 }}>
                         {t("tokensPerSecond").replace("{count}", tps.toFixed(1))}
                       </span>
                     );

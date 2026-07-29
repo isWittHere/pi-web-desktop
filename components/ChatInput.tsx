@@ -12,20 +12,20 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ArrowBendUpLeftIcon } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/ArrowClockwise";
-import { ArrowElbowDownRightIcon } from "@phosphor-icons/react/ArrowElbowDownRight";
-import { ArrowUpIcon } from "@phosphor-icons/react/ArrowUp";
+import { ArrowElbowUpLeftIcon } from "@phosphor-icons/react/ArrowElbowUpLeft";
+import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
 
 import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/Check";
-import { CpuIcon } from "@phosphor-icons/react/Cpu";
 import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
 import { LightningIcon } from "@phosphor-icons/react/Lightning";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/PaperPlaneTilt";
 import { PlusIcon } from "@phosphor-icons/react/Plus";
 import { SquareIcon } from "@phosphor-icons/react/Square";
 import { StarIcon } from "@phosphor-icons/react/Star";
-import { WrenchIcon } from "@phosphor-icons/react/Wrench";
+import { StarFourIcon } from "@phosphor-icons/react/StarFour";
+import { ProviderIcon } from "./ProviderIcon";
 import { XIcon } from "@phosphor-icons/react/X";
 
 export interface AttachedImage {
@@ -98,7 +98,7 @@ function ThinkingLevelIcon({ level, size = 14 }: { level: (typeof THINKING_LEVEL
   }
 
   if (level === "auto") {
-    return <ArrowClockwiseIcon size={size} color="var(--accent)" />;
+    return <StarFourIcon size={size} weight="regular" color="var(--accent)" />;
   }
 
   const useFill = ["medium", "high", "xhigh", "max"].includes(level);
@@ -113,7 +113,7 @@ function ThinkingLevelIcon({ level, size = 14 }: { level: (typeof THINKING_LEVEL
           size={Math.round(size * 0.57)}
           weight="bold"
           color={accentColor}
-          style={{ position: "absolute", right: -3, top: -2, background: "var(--bg)", borderRadius: "50%" }}
+          style={{ position: "absolute", right: -4, top: -1 }}
         />
       )}
       {level === "xhigh" && (
@@ -121,11 +121,11 @@ function ThinkingLevelIcon({ level, size = 14 }: { level: (typeof THINKING_LEVEL
           size={Math.round(size * 0.57)}
           weight="fill"
           color={accentColor}
-          style={{ position: "absolute", right: -3, top: -2, background: "var(--bg)", borderRadius: "50%" }}
+          style={{ position: "absolute", right: -4, top: -1 }}
         />
       )}
       {level === "max" && (
-        <span style={{ position: "absolute", right: -5, top: -2, display: "inline-flex", background: "var(--bg)", borderRadius: "50%" }}>
+        <span style={{ position: "absolute", right: -6, top: -1, display: "inline-flex" }}>
           <LightningIcon size={Math.round(size * 0.5)} weight="fill" color={accentColor} style={{ marginRight: -3 }} />
           <LightningIcon size={Math.round(size * 0.5)} weight="fill" color={accentColor} />
         </span>
@@ -236,30 +236,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const isMobile = useIsMobile();
   const { t } = useLanguage();
+  // Thinking levels are model-facing identifiers, so keep their labels in English.
   const thinkingLevelLabels: Record<typeof THINKING_LEVELS[number], string> = {
-    auto: t("thinkingAuto"),
-    off: t("thinkingOff"),
-    minimal: t("thinkingMinimal"),
-    low: t("thinkingLow"),
-    medium: t("thinkingMedium"),
-    high: t("thinkingHigh"),
-    xhigh: t("thinkingExtraHigh"),
-    max: t("thinkingMax"),
+    auto: "auto",
+    off: "off",
+    minimal: "minimal",
+    low: "low",
+    medium: "medium",
+    high: "high",
+    xhigh: "xhigh",
+    max: "max",
   };
   const toolPresetLabels: Record<typeof TOOL_PRESETS[number], string> = {
     off: t("toolOff"),
     default: t("toolDefault"),
     full: t("toolFull"),
-  };
-  const thinkingLevelDescriptions: Record<typeof THINKING_LEVELS[number], string> = {
-    auto: t("usePiDefault"),
-    off: t("reasoningOff"),
-    minimal: t("minimalReasoning"),
-    low: t("lowReasoning"),
-    medium: t("mediumReasoning"),
-    high: t("highReasoning"),
-    xhigh: t("extraHighReasoning"),
-    max: t("maxReasoning"),
   };
   const builtinSlashCommands: SlashCommandPaletteItem[] = [
     { name: "compact", description: t("compactCommandDescription"), source: "builtin" },
@@ -1371,6 +1362,34 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             } as React.CSSProperties}
           >
           {isStreaming && <div className="chat-input-streaming-overlay hatch-45" aria-hidden="true" />}
+          {isStreaming && (onSteer || onFollowUp) && (
+            <div className="chat-input-streaming-actions">
+              {onSteer && (
+                <button
+                  type="button"
+                  className="chat-input-streaming-action chat-input-streaming-action-steer"
+                  onClick={() => sendQueued("steer")}
+                  disabled={!canQueueStreamingMessage}
+                  title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("injectMessageNow")}
+                  aria-label={t("steer")}
+                >
+                  <ArrowElbowUpLeftIcon size={15} />
+                </button>
+              )}
+              {onFollowUp && (
+                <button
+                  type="button"
+                  className="chat-input-streaming-action"
+                  onClick={() => sendQueued("followup")}
+                  disabled={!canQueueStreamingMessage}
+                  title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("queueMessageAfterFinish")}
+                  aria-label={t("followUp")}
+                >
+                  <SortDescendingIcon size={15} />
+                </button>
+              )}
+            </div>
+          )}
           <div className="chat-input-editor-row">
           <textarea
             ref={textareaRef}
@@ -1417,52 +1436,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
           />
 
-          {isStreaming ? (
-            <div className="chat-input-primary-actions" style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
-              {onSteer && (
-                <button
-                  onClick={() => sendQueued("steer")}
-                  disabled={!canQueueStreamingMessage}
-                  title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("injectMessageNow")}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "4px 9px",
-                    background: canQueueStreamingMessage ? "var(--bg-hover)" : "none",
-                    border: "none",
-                    borderRadius: 6,
-                    color: canQueueStreamingMessage ? "var(--text)" : "var(--text-dim)",
-                    cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
-                    fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background 0.12s",
-                  }}
-                >
-                  <ArrowElbowDownRightIcon size={12} />
-                  {t("steer")}
-                </button>
-              )}
-              {onFollowUp && (
-                <button
-                  onClick={() => sendQueued("followup")}
-                  disabled={!canQueueStreamingMessage}
-                  title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("queueMessageAfterFinish")}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "4px 9px",
-                    background: canQueueStreamingMessage ? "var(--bg-hover)" : "none",
-                    border: "none",
-                    borderRadius: 6,
-                    color: canQueueStreamingMessage ? "var(--text)" : "var(--text-dim)",
-                    cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
-                    fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background 0.12s",
-                  }}
-                >
-                  <ArrowUpIcon size={12} />
-                  {t("followUp")}
-                </button>
-              )}
-            </div>
-          ) : null}
           </div>
 
         {/* Bottom bar: left | center (context) | right */}
@@ -1518,7 +1491,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     background: thinkingDropdownOpen ? "var(--bg-hover)" : "none",
                     border: "none",
                     borderRadius: 6,
-                    color: "var(--text-muted)",
+                    color: (thinkingLevel ?? "auto") === "off" ? "var(--text-dim)" : "var(--accent)",
                     cursor: isStreaming ? "not-allowed" : "pointer",
                     fontSize: 12,
                     opacity: isStreaming ? 0.5 : 1,
@@ -1527,20 +1500,25 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   onMouseEnter={(e) => {
                     if (isStreaming) return;
                     e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = thinkingDropdownOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
                   }}
                 >
                   <ThinkingLevelIcon level={thinkingLevel ?? "auto"} />
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
+                  <CaretDownIcon
+                    size={11}
+                    weight="bold"
+                    aria-hidden="true"
+                    style={{ transform: thinkingDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.12s" }}
+                  />
                 </button>
                 {thinkingDropdownOpen && thinkingDropdownRect && (() => {
                     const vh = window.visualViewport?.height ?? window.innerHeight;
                     const vw = window.innerWidth;
                     const panelMaxW = Math.min(240, vw - 16);
+                    // Anchor the menu's bottom-right to the selector's top-right.
                     const l = Math.min(thinkingDropdownRect.left, vw - panelMaxW - 8);
                     const b = vh - thinkingDropdownRect.top + 4;
                     const maxH = Math.min(360, Math.max(120, Math.min(thinkingDropdownRect.top - 8, vh * 0.6)));
@@ -1701,20 +1679,27 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     e.currentTarget.style.color = "var(--text-muted)";
                   }}
                 >
-                  <WrenchIcon size={14} />
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
+                  <CaretDownIcon
+                    size={11}
+                    weight="bold"
+                    aria-hidden="true"
+                    style={{ transform: toolDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.12s" }}
+                  />
                 </button>
                 {toolDropdownOpen && toolDropdownRect && (() => {
                     const vh = window.visualViewport?.height ?? window.innerHeight;
                     const vw = window.innerWidth;
                     const panelMaxW = Math.min(200, vw - 16);
-                    const panelW = Math.min(panelMaxW, Math.max(120, toolDropdownRect.left + toolDropdownRect.width - 8));
-                    const l = Math.max(8, toolDropdownRect.left + toolDropdownRect.width - panelW);
+                    // Anchor the menu's bottom-right corner to the selector's
+                    // top-right corner. `right` preserves the alignment even
+                    // when the menu width follows its content.
+                    const r = Math.max(8, vw - (toolDropdownRect.left + toolDropdownRect.width));
                     const b = vh - toolDropdownRect.top + 6;
                     const maxH = Math.min(320, Math.max(100, Math.min(toolDropdownRect.top - 8, vh * 0.5)));
                     return (
                   <div style={{
-                    position: "fixed", bottom: b, left: l,
+                    position: "fixed", bottom: b, right: r,
                     zIndex: 2001, background: "var(--bg-panel)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                     overflow: "hidden", minWidth: 120, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
@@ -1789,8 +1774,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       e.currentTarget.style.color = "var(--text-muted)";
                     }}
                   >
-                    <CpuIcon size={14} />
+                    <ProviderIcon id={model?.provider ?? "unknown"} size={14} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
+                    <CaretDownIcon
+                      size={11}
+                      weight="bold"
+                      aria-hidden="true"
+                      style={{ flexShrink: 0, transform: modelDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.12s" }}
+                    />
                   </button>
                   {modelDropdownOpen && modelDropdownRect && (() => {
                     const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
@@ -1805,7 +1796,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     const panelPos: React.CSSProperties = isMobile
                       ? { left: 8, right: 8, maxWidth: "calc(100vw - 16px)" }
                       : {
-                          left: Math.min(modelDropdownRect.left, viewportWidth - panelMaxWidth - 8),
+                          // Anchor the content-sized panel to the selector's
+                          // right edge, while preserving an 8px viewport inset.
+                          right: Math.max(8, viewportWidth - (modelDropdownRect.left + modelDropdownRect.width)),
                           width: "max-content",
                           minWidth: Math.min(panelMinWidth, panelMaxWidth),
                           maxWidth: panelMaxWidth,
@@ -1865,6 +1858,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
                                 >
+                                  <ProviderIcon id={opt.provider} size={14} />
                                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
                                   {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                                   <span
@@ -1942,6 +1936,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
                                 >
+                                  <ProviderIcon id={opt.provider} size={14} />
                                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
                                   {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                                   <span

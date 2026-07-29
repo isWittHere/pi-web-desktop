@@ -20,6 +20,7 @@ function notify() { listeners.forEach((cb) => cb()); }
 
 const KEY_MODE = "pi-theme-mode";
 const KEY_THEME = "pi-theme";
+const KEY_BORDER_DEPTH = "pi-border-depth";
 
 /** Migration: extract base name from old per-mode keys (e.g. "gruvbox-dark" → "gruvbox"). */
 function migrateOldTheme(): string | null {
@@ -66,6 +67,17 @@ function readTheme(): string {
     if (v) return v;
   } catch {}
   return "";
+}
+
+function readBorderDepth(): number {
+  try {
+    const v = localStorage.getItem(KEY_BORDER_DEPTH);
+    if (v !== null) {
+      const n = parseInt(v, 10);
+      if (!isNaN(n) && n >= 0 && n <= 100) return n;
+    }
+  } catch {}
+  return 50;
 }
 
 // ─── System preference ──────────────────────────────────────────────────────
@@ -119,17 +131,99 @@ const THEME_CSS_VARS = [
   "--hatch-color",
 ];
 
+/**
+ * Preserve the raw theme border colors before any depth adjustment.
+ * These stay untouched; `applyBorderDepth` reads them to derive
+ * the active `--border` / `--border-hover` values.
+ */
+const BORDER_ORIG_VARS = ["--border-orig", "--border-hover-orig"] as const;
+
 function applyCssVars(vars: Record<string, string>) {
   const el = document.documentElement;
   for (const k of THEME_CSS_VARS) {
     if (vars[k]) el.style.setProperty(k, vars[k]);
     else el.style.removeProperty(k);
   }
+  // snapshot original border colors for depth slider
+  if (vars["--border"]) el.style.setProperty("--border-orig", vars["--border"]);
+  else el.style.removeProperty("--border-orig");
+  if (vars["--border-hover"]) el.style.setProperty("--border-hover-orig", vars["--border-hover"]);
+  else el.style.removeProperty("--border-hover-orig");
 }
 
 function clearCssVars() {
   const el = document.documentElement;
   for (const k of THEME_CSS_VARS) el.style.removeProperty(k);
+  for (const k of BORDER_ORIG_VARS) el.style.removeProperty(k);
+}
+
+// ─── Border depth adjustment ────────────────────────────────────────────────
+
+/**
+ * Derive active `--border` / `--border-hover` from the original theme
+ * border colors + the user-controlled depth slider.
+ *
+ * Depth  0 → border = background  (invisible)
+ * Depth 50 → border = theme value (passthrough)
+ * Depth 100 → border = text color (maximum contrast)
+ */
+/** Ensure --border-orig / --border-hover-orig are populated.
+ *  For pi CLI JSON themes they are set by applyCssVars().
+ *  For the built-in Default theme (globals.css :root / html.dark)
+ *  we read the computed --border / --border-hover from the CSS
+ *  cascade and cache them as -orig, so the depth slider always
+ *  has a real color to blend from. */
+function ensureBorderOrig() {
+  const el = document.documentElement;
+  let orig = el.style.getPropertyValue("--border-orig").trim();
+  let hover = el.style.getPropertyValue("--border-hover-orig").trim();
+
+  if (!orig || !hover) {
+    const cs = getComputedStyle(el);
+    if (!orig) {
+      orig = cs.getPropertyValue("--border").trim();
+      if (orig) el.style.setProperty("--border-orig", orig);
+    }
+    if (!hover) {
+      hover = cs.getPropertyValue("--border-hover").trim();
+      if (hover) el.style.setProperty("--border-hover-orig", hover);
+    }
+  }
+}
+
+function applyBorderDepth(depth: number) {
+  const el = document.documentElement;
+
+  // Make sure we have source colors even for the Default (CSS-only) theme.
+  ensureBorderOrig();
+
+  if (depth === 50) {
+    // Use originals directly — no color-mix overhead
+    const orig = el.style.getPropertyValue("--border-orig").trim();
+    const hoverOrig = el.style.getPropertyValue("--border-hover-orig").trim();
+    if (orig) el.style.setProperty("--border", orig);
+    else el.style.removeProperty("--border");
+    if (hoverOrig) el.style.setProperty("--border-hover", hoverOrig);
+    else el.style.removeProperty("--border-hover");
+    return;
+  }
+
+  const n = depth / 100;
+
+  const expr = (origProp: string) => {
+    if (n <= 0.5) {
+      // 0→50: blend from bg (invisible) to theme original
+      const origPct = Math.round(n * 2 * 100); // 0% → 100%
+      return `color-mix(in srgb, var(${origProp}) ${origPct}%, var(--bg) ${100 - origPct}%)`;
+    } else {
+      // 50→100: blend from theme original to text (max contrast)
+      const textPct = Math.round((n - 0.5) * 2 * 100); // 0% → 100%
+      return `color-mix(in srgb, var(${origProp}) ${100 - textPct}%, var(--text) ${textPct}%)`;
+    }
+  };
+
+  el.style.setProperty("--border", expr("--border-orig"));
+  el.style.setProperty("--border-hover", expr("--border-hover-orig"));
 }
 
 // ─── Fetch + apply ──────────────────────────────────────────────────────────
@@ -157,18 +251,15 @@ async function applyModeAndTheme(
 ): Promise<void> {
   const el = document.documentElement;
 
-  // Apply dark class based on resolved mode
   if (resolvedMode === "dark") el.classList.add("dark");
   else el.classList.remove("dark");
 
-  // No custom theme → use globals.css built-in
   if (!themeName) {
     delete el.dataset.theme;
     clearCssVars();
     return;
   }
 
-  // Named theme → load appropriate variant
   el.dataset.theme = themeName;
   const resolved = await fetchTheme(themeName, resolvedMode);
   if (resolved) {
@@ -196,11 +287,20 @@ export function useTheme() {
     return resolveEffectiveMode(getModeSnapshot());
   });
 
+  // Border depth slider (0-100, default 50 = theme unchanged)
+  const [borderDepth, setBorderDepthState] = useState<number>(() => readBorderDepth());
+
+  const setBorderDepth = useCallback((depth: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(depth)));
+    setBorderDepthState(clamped);
+    try { localStorage.setItem(KEY_BORDER_DEPTH, String(clamped)); } catch {}
+    applyBorderDepth(clamped);
+  }, []);
+
   const isDark = resolvedMode === "dark";
 
   const applyingRef = useRef(false);
 
-  // Sync document attributes + resolvedMode state
   const syncDOM = useCallback((rmode: ResolvedMode, m: ThemeMode, t: string) => {
     const el = document.documentElement;
     el.dataset.themeMode = m;
@@ -212,7 +312,7 @@ export function useTheme() {
     setResolvedMode(rmode);
   }, []);
 
-  // On mount: if inline script set pending attrs, apply them
+  // On mount: apply theme + border depth from inline-script pre-set attributes
   useEffect(() => {
     const el = document.documentElement;
     const dm = el.dataset.themeMode as ThemeMode | undefined;
@@ -230,11 +330,12 @@ export function useTheme() {
       applyingRef.current = false;
       try { localStorage.setItem(KEY_MODE, m); } catch {}
       try { localStorage.setItem(KEY_THEME, t); } catch {}
+      applyBorderDepth(readBorderDepth());
       notify();
     });
   }, []);
 
-  // Subscribe to OS color scheme changes
+  // OS color scheme changes
   useEffect(() => {
     return subscribeSystemColorScheme(() => {
       if (getModeSnapshot() === "system") {
@@ -242,6 +343,7 @@ export function useTheme() {
         const tn = readTheme();
         syncDOM(newResolved, "system", tn);
         applyModeAndTheme(newResolved, tn);
+        applyBorderDepth(readBorderDepth());
         notify();
       }
     });
@@ -257,6 +359,7 @@ export function useTheme() {
       try { localStorage.setItem(KEY_THEME, name); } catch {}
       const m = getModeSnapshot();
       syncDOM(resolvedMode, m, name);
+      applyBorderDepth(readBorderDepth());
       notify();
     } finally {
       applyingRef.current = false;
@@ -275,13 +378,14 @@ export function useTheme() {
       await applyModeAndTheme(rmode, tn);
       try { localStorage.setItem(KEY_MODE, nextMode); } catch {}
       syncDOM(rmode, nextMode, tn);
+      applyBorderDepth(readBorderDepth());
       notify();
     } finally {
       applyingRef.current = false;
     }
   }, [syncDOM]);
 
-  /** Toggle between light / dark (explicit modes). If currently "system", switch to the opposite of resolved. */
+  /** Toggle between light / dark (explicit modes). */
   const toggleTheme = useCallback((origin?: ToggleOrigin) => {
     const curMode = getModeSnapshot();
     const curResolved = resolvedMode;
@@ -319,19 +423,16 @@ export function useTheme() {
   }, [resolvedMode, setModeAction]);
 
   return {
-    /** Stored preference: "light" | "dark" | "system" */
     mode,
-    /** Actual rendered mode (never "system"). Triggers re-renders. */
     resolvedMode,
-    /** Selected theme set name ("" for built-in default). */
     themeName: storedThemeName,
-    /** Set mode preference (light / dark / system). */
     setMode: setModeAction,
-    /** Set theme set without changing mode. */
     setTheme,
-    /** Quick toggle between light/dark (with View Transition). */
     toggleTheme,
-    /** Is the current effective mode dark? */
     isDark,
+    /** Border visibility depth (0 = invisible, 50 = theme default, 100 = max contrast). */
+    borderDepth,
+    /** Set border depth (0-100). */
+    setBorderDepth,
   };
 }

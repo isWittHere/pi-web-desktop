@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Check, Moon, PaintBrush, Sun, Monitor } from "@phosphor-icons/react";
-import { useLanguage } from "@/hooks/useLanguage";
+import { Moon, PaintBrush, Sun, Monitor } from "@phosphor-icons/react";
+import { useLanguage, type TranslationKey } from "@/hooks/useLanguage";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import type { ThemeSetInfo } from "@/lib/theme";
 
@@ -12,25 +12,32 @@ const tagGroupStyle: React.CSSProperties = {
   display: "flex", gap: 6, flexWrap: "wrap",
 };
 
-function tagStyle(active: boolean, disabled?: boolean): React.CSSProperties {
+function tagStyle(active: boolean, hovered: boolean, disabled?: boolean): React.CSSProperties {
+  const borderColor = active
+    ? "var(--accent)"
+    : hovered
+      ? "var(--border-hover)"
+      : "var(--border)";
+  const bg = active
+    ? "color-mix(in srgb, var(--accent) 12%, var(--bg))"
+    : hovered
+      ? "var(--bg-hover)"
+      : "var(--bg-card)";
+  const color = active ? "var(--accent)" : hovered ? "var(--text)" : "var(--text-muted)";
+
   return {
     display: "inline-flex", alignItems: "center", gap: 7,
     padding: "7px 14px",
-    border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+    border: `1px solid ${borderColor}`,
     borderRadius: 8,
-    background: active ? "color-mix(in srgb, var(--accent) 12%, var(--bg))" : "var(--bg-card)",
-    color: active ? "var(--accent)" : "var(--text-muted)",
+    background: bg,
+    color,
     fontSize: 13, fontWeight: active ? 600 : 400,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.5 : 1,
     transition: "border-color 0.15s, background 0.15s, color 0.15s",
     outline: "none", whiteSpace: "nowrap",
   };
-}
-
-function tagHover(active: boolean): React.CSSProperties {
-  if (active) return {};
-  return { borderColor: "var(--border-hover)", background: "var(--bg-hover)", color: "var(--text)" };
 }
 
 function SectionLabel({ icon, label }: { icon: React.ReactNode; label: string }) {
@@ -54,16 +61,42 @@ function ConfigSection({ title, description, children }: { title: string; descri
   );
 }
 
+// ── Border depth icon ───────────────────────────────────────────────────────
+
+function BorderIcon({ depth }: { depth: number }) {
+  const n = depth / 100;
+  return (
+    <svg width={14} height={14} viewBox="0 0 14 14" style={{ flexShrink: 0 }}>
+      <rect
+        x={1.5} y={1.5} width={11} height={11} rx={2.5}
+        style={{
+          fill: "none",
+          stroke: "var(--text-dim)",
+          strokeWidth: 1 + n * 2,
+          opacity: 0.2 + n * 0.8,
+        }}
+      />
+      <rect
+        x={4} y={4} width={6} height={6} rx={1}
+        style={{
+          fill: "var(--text-dim)",
+          opacity: 0.05 + n * 0.35,
+        }}
+      />
+    </svg>
+  );
+}
+
 // ── Variant availability dots ───────────────────────────────────────────────
 
-function VariantDots({ hasDark, hasLight }: { hasDark: boolean; hasLight: boolean }) {
+function VariantDots({ hasDark, hasLight, t }: { hasDark: boolean; hasLight: boolean; t: (key: TranslationKey) => string }) {
   return (
     <span style={{ display: "inline-flex", gap: 3, alignItems: "center", flexShrink: 0 }}>
       {hasDark && (
-        <span title="Dark variant available" style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#7c6f64" }} />
+        <span title={t("darkVariant")} style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#7c6f64" }} />
       )}
       {hasLight && (
-        <span title="Light variant available" style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#d5c4a1", border: "1px solid rgba(0,0,0,0.1)" }} />
+        <span title={t("lightVariant")} style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#d5c4a1", border: "1px solid rgba(0,0,0,0.1)" }} />
       )}
     </span>
   );
@@ -72,11 +105,12 @@ function VariantDots({ hasDark, hasLight }: { hasDark: boolean; hasLight: boolea
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export function DisplayConfig() {
-  const { mode, resolvedMode, themeName, setMode, setTheme } = useTheme();
+  const { mode, resolvedMode, themeName, setMode, setTheme, borderDepth, setBorderDepth } = useTheme();
   const { language, setLanguage, t } = useLanguage();
   const [themeSets, setThemeSets] = useState<ThemeSetInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
+  const [hoveredTag, setHoveredTag] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,13 +134,7 @@ export function DisplayConfig() {
     setMode(m);
   }, [setMode]);
 
-  const modeOptions: { value: ThemeMode; label: string; icon: React.ReactNode }[] = [
-    { value: "light", label: "Light", icon: <Sun size={15} weight={mode === "light" ? "fill" : "regular"} /> },
-    { value: "dark", label: "Dark", icon: <Moon size={15} weight={mode === "dark" ? "fill" : "regular"} /> },
-    { value: "system", label: "System", icon: <Monitor size={15} weight={mode === "system" ? "fill" : "regular"} /> },
-  ];
-
-  const resolvedLabel = resolvedMode === "dark" ? "Dark" : "Light";
+  const modeLabel = resolvedMode === "dark" ? t("dark") : t("light");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
@@ -114,71 +142,119 @@ export function DisplayConfig() {
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t("display")}</h1>
       </header>
 
-      {/* ── Theme (pick theme set) ── */}
+      {/* ── Theme ── */}
       <ConfigSection title={t("theme")} description={t("themeDescription")}>
-        <SectionLabel icon={<PaintBrush size={14} weight="fill" />} label="Color Scheme" />
+        {/* Color Scheme */}
+        <SectionLabel icon={<PaintBrush size={14} weight="fill" />} label={t("colorScheme")} />
         {loading ? (
-          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Loading themes…</span>
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("loadingThemes")}</span>
         ) : (
           <div style={tagGroupStyle}>
-            {/* Default (built-in) */}
             <button
               type="button" onClick={() => handleThemeChange("")} disabled={applying !== null}
-              style={tagStyle(themeName === "", applying !== null)}
-              onMouseEnter={(e) => { if (themeName !== "") Object.assign(e.currentTarget.style, tagHover(false)); }}
-              onMouseLeave={(e) => { if (themeName !== "") { e.currentTarget.style.borderColor = ""; e.currentTarget.style.background = ""; e.currentTarget.style.color = ""; } }}
+              style={tagStyle(themeName === "", hoveredTag === "__default__", applying !== null)}
+              onMouseEnter={() => setHoveredTag("__default__")}
+              onMouseLeave={() => setHoveredTag(null)}
             >
-              Default
+              {t("defaultTheme")}
             </button>
 
-            {/* Custom theme sets */}
             {themeSets.map((ts) => (
               <button
                 key={ts.name} type="button"
                 onClick={() => handleThemeChange(ts.name)} disabled={applying !== null}
-                style={tagStyle(themeName === ts.name, applying === ts.name)}
-                onMouseEnter={(e) => { if (themeName !== ts.name) Object.assign(e.currentTarget.style, tagHover(false)); }}
-                onMouseLeave={(e) => { if (themeName !== ts.name) { e.currentTarget.style.borderColor = ""; e.currentTarget.style.background = ""; e.currentTarget.style.color = ""; } }}
+                style={tagStyle(themeName === ts.name, hoveredTag === ts.name, applying === ts.name)}
+                onMouseEnter={() => setHoveredTag(ts.name)}
+                onMouseLeave={() => setHoveredTag(null)}
               >
                 {ts.displayName}
-                <VariantDots hasDark={ts.hasDark} hasLight={ts.hasLight} />
+                <VariantDots hasDark={ts.hasDark} hasLight={ts.hasLight} t={t} />
               </button>
             ))}
           </div>
         )}
 
-        {/* ── Mode selector ── */}
+        {/* Border depth */}
+        <div style={{ marginTop: 20 }}>
+          <SectionLabel
+            icon={<BorderIcon depth={borderDepth} />}
+            label={`${t("borderVisibility")} (${borderDepth})`}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{t("borderSubtle")}</span>
+            <input
+              type="range"
+              min={0} max={100} step={1}
+              value={borderDepth}
+              onChange={(e) => setBorderDepth(Number(e.target.value))}
+              style={{
+                flex: 1,
+                accentColor: "var(--accent)",
+                height: 6,
+                cursor: "pointer",
+              }}
+            />
+            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{t("borderBold")}</span>
+          </div>
+          <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+            {[0, 25, 50, 75, 100].map((d) => {
+              const active = borderDepth === d;
+              const previewBorder = d <= 50
+                ? `color-mix(in srgb, var(--border-orig) ${d * 2}%, var(--bg) ${100 - d * 2}%)`
+                : `color-mix(in srgb, var(--border-orig) ${100 - (d - 50) * 2}%, var(--text) ${(d - 50) * 2}%)`;
+              return (
+                <div
+                  key={d}
+                  onClick={() => setBorderDepth(d)}
+                  style={{
+                    width: 28, height: 20,
+                    border: `2px solid ${active ? "var(--accent)" : previewBorder}`,
+                    borderRadius: 5,
+                    background: "var(--bg-card)",
+                    cursor: "pointer",
+                    transition: "border-color 0.1s",
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Appearance Mode */}
         <div style={{ marginTop: 20 }}>
           <SectionLabel
             icon={resolvedMode === "dark" ? <Moon size={14} weight="fill" /> : <Sun size={14} weight="fill" />}
-            label="Appearance Mode"
+            label={t("appearanceMode")}
           />
           <div style={tagGroupStyle}>
-            {modeOptions.map((opt) => {
+            {([
+              { value: "light" as ThemeMode, icon: <Sun size={15} weight={mode === "light" ? "fill" : "regular"} /> },
+              { value: "dark" as ThemeMode, icon: <Moon size={15} weight={mode === "dark" ? "fill" : "regular"} /> },
+              { value: "system" as ThemeMode, icon: <Monitor size={15} weight={mode === "system" ? "fill" : "regular"} /> },
+            ]).map((opt) => {
               const active = mode === opt.value;
               return (
                 <button
                   key={opt.value} type="button" onClick={() => handleModeChange(opt.value)}
-                  style={tagStyle(active)}
-                  onMouseEnter={(e) => { if (!active) Object.assign(e.currentTarget.style, tagHover(active)); }}
-                  onMouseLeave={(e) => { if (!active) { e.currentTarget.style.borderColor = ""; e.currentTarget.style.background = ""; e.currentTarget.style.color = ""; } }}
+                  style={tagStyle(active, hoveredTag === `mode:${opt.value}`)}
+                  onMouseEnter={() => setHoveredTag(`mode:${opt.value}`)}
+                  onMouseLeave={() => setHoveredTag(null)}
                 >
                   {opt.icon}
-                  {opt.label}
+                  {t(opt.value)}
                 </button>
               );
             })}
           </div>
-          <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-            {mode === "system"
-              ? `Following system preference. Currently using ${resolvedLabel} mode.`
-              : `${resolvedLabel} mode active${themeName ? ` with «${themeName}» theme` : ""}.`}
-          </p>
+
         </div>
 
         {!loading && themeSets.length === 0 && (
           <p style={{ margin: "14px 0 0", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-            No custom themes installed. Add <code style={{ fontSize: 10, background: "var(--bg-secondary)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>~/.pi/agent/themes/*.json</code> to see them here.
+            {t("noCustomThemes")}{" "}
+            {t("noCustomThemesHint")}{" "}
+            <code style={{ fontSize: 10, background: "var(--bg-secondary)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>~/.pi/agent/themes/*.json</code>{" "}
+            {t("noCustomThemesHint2")}
           </p>
         )}
       </ConfigSection>
@@ -192,11 +268,11 @@ export function DisplayConfig() {
               <button
                 key={lang} type="button"
                 onClick={() => setLanguage(lang === "zh-CN" ? "zh-CN" : "en")}
-                style={tagStyle(active)}
-                onMouseEnter={(e) => { if (!active) Object.assign(e.currentTarget.style, tagHover(active)); }}
-                onMouseLeave={(e) => { if (!active) { e.currentTarget.style.borderColor = ""; e.currentTarget.style.background = ""; e.currentTarget.style.color = ""; } }}
+                style={tagStyle(active, hoveredTag === `lang:${lang}`)}
+                onMouseEnter={() => setHoveredTag(`lang:${lang}`)}
+                onMouseLeave={() => setHoveredTag(null)}
               >
-                {lang === "en" ? "English" : "中文"}
+                {lang === "en" ? t("english") : t("chinese")}
               </button>
             );
           })}

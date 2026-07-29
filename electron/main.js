@@ -213,11 +213,28 @@ async function bootstrap() {
   createWindow();
 }
 
-// Remove the native menu bar for a clean frameless look.
-// DevTools can still be toggled via Ctrl+Shift+I / F12.
-Menu.setApplicationMenu(null);
+// ── Single-instance lock ──────────────────────────────────────
+// Prevent multiple copies of the app from running at the same time.
+const gotTheLock = app.requestSingleInstanceLock();
 
-app.whenReady().then(bootstrap);
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    // Someone tried to launch a second instance → restore the existing window.
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  // Remove the native menu bar for a clean frameless look.
+  // DevTools can still be toggled via Ctrl+Shift+I / F12.
+  Menu.setApplicationMenu(null);
+
+  app.whenReady().then(bootstrap);
+}
 
 app.on("window-all-closed", () => {
   if (serverProcess) {

@@ -70,6 +70,16 @@ export function classifyToolTone(tool: ToolIdentity): StepTone | undefined {
   const hasCommandPayload = hasArgKey(tool.args, ["command", "cmd", "script"]);
   const hasPattern = hasArgKey(tool.args, ["pattern", "query"]);
 
+  // Command execution — must be checked FIRST so bash/shell commands aren't
+  // misclassified by the regex patterns below (e.g. "bash cat" matching "cat"
+  // in document_read, "bash ls" matching "ls" in directory_list, etc.)
+  if (
+    hasCommandPayload ||
+    /\b(bash|shell|terminal|command|run|exec|execute|python|node|npm|pnpm|yarn|cargo|go|pytest|test|build|make|git|docker|kubectl|curl|wget)\b/i.test(text)
+  ) {
+    return "command_execution";
+  }
+
   // Todo / task list
   if (/\b(todo|todowrite|todo_write|write_todo|task_list|task\s*list)\b/i.test(text)) {
     return "todo_update";
@@ -114,14 +124,6 @@ export function classifyToolTone(tool: ToolIdentity): StepTone | undefined {
     (hasPath && !hasWritePayload && !hasCommandPayload)
   ) {
     return "document_read";
-  }
-
-  // Command execution
-  if (
-    /\b(bash|shell|terminal|command|run|exec|execute|python|node|npm|pnpm|yarn|cargo|go|pytest|test|build|make|git|docker|kubectl|curl|wget)\b/i.test(text) ||
-    hasCommandPayload
-  ) {
-    return "command_execution";
   }
 
   return undefined;
@@ -320,6 +322,11 @@ const SKIP_COMMANDS = new Set([
   "pushd", "popd", "dirs",
 ]);
 
+/** Commands that wrap another command — skip them and their arguments/flags. */
+const WRAPPER_SKIP_COMMANDS = new Set([
+  "timeout",
+]);
+
 const LIST_COMMANDS = new Set(["ls", "dir", "ll", "la", "l", "tree", "eza", "exa"]);
 const SEARCH_COMMANDS = new Set(["rg", "grep", "egrep", "fgrep", "ack", "ag", "ripgrep"]);
 const FIND_COMMANDS = new Set(["find", "fd", "fdfind", "locate", "mlocate", "glob"]);
@@ -349,10 +356,19 @@ export function classifyShellCommand(raw: string): ShellCommandInfo {
     if (words.length === 0) continue;
 
     let i = 0;
-    while (i < words.length && SKIP_COMMANDS.has(words[i].toLowerCase())) {
+    while (
+      i < words.length &&
+      (SKIP_COMMANDS.has(words[i].toLowerCase()) || WRAPPER_SKIP_COMMANDS.has(words[i].toLowerCase()))
+    ) {
       const skipBin = words[i].toLowerCase();
       i += 1;
       if (i < words.length && ["cd", "chdir", "pushd"].includes(skipBin)) i += 1;
+      // timeout: skip --flags and the numeric duration argument to reach the real command
+      if (skipBin === "timeout") {
+        while (i < words.length && (words[i].startsWith("-") || /^\d/.test(words[i]))) {
+          i++;
+        }
+      }
     }
 
     if (i >= words.length) continue;
