@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { SettingSection, SettingToggle } from "./SettingToggle";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 
 export type InputShortcut = "enter" | "ctrl-enter";
 
@@ -18,7 +18,7 @@ function getStoredShortcut(): InputShortcut {
 }
 
 export function ChatConfig() {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [shortcut, setShortcut] = useState<InputShortcut>(getStoredShortcut);
 
   useEffect(() => {
@@ -40,14 +40,14 @@ export function ChatConfig() {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
       <header style={{ padding: "18px 22px 14px", borderBottom: "1px solid var(--border)" }}>
-        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t("chat")}</h1>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t("desktop.chat")}</h1>
       </header>
-      <SettingSection title={t("inputShortcut")} description={t("inputShortcutDescription")}>
+      <SettingSection title={t("desktop.inputShortcut")} description={t("desktop.inputShortcutDescription")}>
         <SettingToggle
           checked={shortcut === "ctrl-enter"}
           onChange={(checked) => setShortcutAndPersist(checked ? "ctrl-enter" : "enter")}
-          label={t("useCtrlEnter")}
-          description={t("useCtrlEnterDescription")}
+          label={t("desktop.useCtrlEnter")}
+          description={t("desktop.useCtrlEnterDescription")}
         />
       </SettingSection>
     </div>

@@ -15,7 +15,7 @@ import {
   GitBranch,
   Square,
 } from "@phosphor-icons/react";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { SessionTreeNode } from "@/lib/types";
 import { copyText } from "@/lib/clipboard";
@@ -70,7 +70,7 @@ export function SessionInfoBar({
   onBranchLeafChange,
   showSoundLabel,
 }: SessionInfoBarProps) {
-  const { t: translate } = useLanguage();
+  const { t: translate } = useI18n();
   const [activePanel, setActivePanel] = useState<"system" | "session" | "branches" | null>(null);
   const closePanel = useCallback(() => setActivePanel(null), []);
 
@@ -136,18 +136,18 @@ export function SessionInfoBar({
   // Tooltip for stats button
   const tooltipParts: string[] = [];
   if (t) {
-    tooltipParts.push(`${translate("sessionInfoInput")}: ${t.input.toLocaleString()}`);
-    tooltipParts.push(`${translate("sessionInfoOutput")}: ${t.output.toLocaleString()}`);
+    tooltipParts.push(`${translate("desktop.sessionInfoInput")}: ${t.input.toLocaleString()}`);
+    tooltipParts.push(`${translate("desktop.sessionInfoOutput")}: ${t.output.toLocaleString()}`);
     if (t.cacheRead > 0)
-      tooltipParts.push(`${translate("sessionInfoCacheRead")}: ${t.cacheRead.toLocaleString()}`);
+      tooltipParts.push(`${translate("desktop.sessionInfoCacheRead")}: ${t.cacheRead.toLocaleString()}`);
     if (t.cacheWrite > 0)
-      tooltipParts.push(`${translate("sessionInfoCacheWrite")}: ${t.cacheWrite.toLocaleString()}`);
-    if (c > 0) tooltipParts.push(`${translate("sessionInfoCost")}: $${c.toFixed(4)}`);
+      tooltipParts.push(`${translate("desktop.sessionInfoCacheWrite")}: ${t.cacheWrite.toLocaleString()}`);
+    if (c > 0) tooltipParts.push(`${translate("desktop.sessionInfoCost")}: $${c.toFixed(4)}`);
   }
   if (contextUsage?.contextWindow) {
     const pct = contextUsage.percent;
     tooltipParts.push(
-      `${translate("sessionInfoContext")}: ${pct !== null ? `${pct.toFixed(1)}%` : "?"} / ${contextUsage.contextWindow.toLocaleString()}`,
+      `${translate("desktop.sessionInfoContext")}: ${pct !== null ? `${pct.toFixed(1)}%` : "?"} / ${contextUsage.contextWindow.toLocaleString()}`,
     );
   }
   const tooltip = tooltipParts.join("  |  ");
@@ -160,13 +160,13 @@ export function SessionInfoBar({
           type="button"
           className="session-info-bar-button"
           onClick={onSoundToggle}
-          title={soundEnabled ? translate("disableCompletionSound") : translate("enableCompletionSound")}
-          aria-label={soundEnabled ? translate("disableCompletionSound") : translate("enableCompletionSound")}
+          title={soundEnabled ? translate("desktop.disableCompletionSound") : translate("desktop.enableCompletionSound")}
+          aria-label={soundEnabled ? translate("desktop.disableCompletionSound") : translate("desktop.enableCompletionSound")}
         >
           {soundEnabled ? <BellRinging size={13} /> : <BellSlash size={13} />}
           {showSoundLabel && (
             <span style={{ marginLeft: 4 }}>
-              {soundEnabled ? translate("soundLabelOn") : translate("soundLabelOff")}
+              {soundEnabled ? translate("desktop.soundLabelOn") : translate("desktop.soundLabelOff")}
             </span>
           )}
         </button>
@@ -176,8 +176,8 @@ export function SessionInfoBar({
           type="button"
           className="session-info-bar-button"
           onClick={onViewFullHistory}
-          title={translate("viewFullHistory")}
-          aria-label={translate("viewFullHistory")}
+          title={translate("desktop.viewFullHistory")}
+          aria-label={translate("desktop.viewFullHistory")}
         >
           <ClockCounterClockwise size={13} aria-hidden="true" />
         </button>
@@ -190,8 +190,8 @@ export function SessionInfoBar({
             type="button"
             className={`session-info-bar-button${activePanel === "branches" ? " is-active" : ""}`}
             onClick={() => setActivePanel((cur) => (cur === "branches" ? null : "branches"))}
-            title={translate("branches")}
-            aria-label={translate("branches")}
+            title={translate("desktop.branches")}
+            aria-label={translate("desktop.branches")}
             aria-pressed={activePanel === "branches"}
           >
             <GitBranch size={13} aria-hidden="true" />
@@ -202,7 +202,7 @@ export function SessionInfoBar({
               <div className="session-info-bar-popover is-branches">
                 <div className="session-info-bar-popover-header">
                   <span className="session-info-bar-popover-title">
-                    {translate("branches")}
+                    {translate("desktop.branches")}
                   </span>
                   <button
                     type="button"
@@ -237,8 +237,8 @@ export function SessionInfoBar({
             type="button"
             className={`session-info-bar-button${activePanel === "system" ? " is-active" : ""}`}
             onClick={() => setActivePanel((cur) => (cur === "system" ? null : "system"))}
-            title={translate("systemPrompt")}
-            aria-label={translate("systemPrompt")}
+            title={translate("desktop.systemPrompt")}
+            aria-label={translate("desktop.systemPrompt")}
             aria-pressed={activePanel === "system"}
           >
             <FileText size={13} aria-hidden="true" />
@@ -249,7 +249,7 @@ export function SessionInfoBar({
               <div className="session-info-bar-popover is-system">
                 <div className="session-info-bar-popover-header">
                   <span className="session-info-bar-popover-title">
-                    {translate("systemPrompt")}
+                    {translate("desktop.systemPrompt")}
                   </span>
                   <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: 8 }}>
                     ~{formatTokenCount(systemPromptTokenEstimate)} tokens
@@ -293,8 +293,8 @@ export function SessionInfoBar({
             type="button"
             className={`session-info-bar-button${isCompacting ? " is-compacting" : ""}`}
             onClick={isCompacting ? onAbortCompaction : onCompact}
-            title={isCompacting ? translate("stopCompaction") : translate("compactContext")}
-            aria-label={isCompacting ? translate("stopCompaction") : translate("compactContext")}
+            title={isCompacting ? translate("desktop.stopCompaction") : translate("desktop.compactContext")}
+            aria-label={isCompacting ? translate("desktop.stopCompaction") : translate("desktop.compactContext")}
           >
             {isCompacting ? <Square size={13} /> : <ArrowsIn size={13} />}
           </button>
@@ -308,8 +308,8 @@ export function SessionInfoBar({
             type="button"
             className={`session-info-bar-button is-stats${activePanel === "session" ? " is-active" : ""}`}
             onClick={() => setActivePanel((cur) => (cur === "session" ? null : "session"))}
-            title={tooltip || translate("sessionInfo")}
-            aria-label={translate("sessionInfo")}
+            title={tooltip || translate("desktop.sessionInfo")}
+            aria-label={translate("desktop.sessionInfo")}
             aria-pressed={activePanel === "session"}
           >
             {t && t.input > 0 && (
@@ -353,7 +353,7 @@ export function SessionInfoBar({
                         <button
                           type="button"
                           className={`session-stats-copy${copied ? " is-copied" : ""}`}
-                          title={copied ? translate("copied") : field === "file" ? translate("copyFilePath") : translate("copySessionId")}
+                          title={copied ? translate("desktop.copied") : field === "file" ? translate("desktop.copyFilePath") : translate("desktop.copySessionId")}
                           onClick={() => handleCopyField(field, val)}
                         >
                           {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
@@ -371,7 +371,7 @@ export function SessionInfoBar({
                     sessionInfoRows.push(
                       <div key="file" className="session-stats-info-line">
                         <span className="session-stats-info-text">
-                          {sessionStats.sessionFile ? (sessionStats.sessionFile.split(/[/\\]/).pop() ?? sessionStats.sessionFile) : translate("sessionInfoInMemory")}
+                          {sessionStats.sessionFile ? (sessionStats.sessionFile.split(/[/\\]/).pop() ?? sessionStats.sessionFile) : translate("desktop.sessionInfoInMemory")}
                         </span>
                         {sessionStats.sessionFile ? copyBtn("file", sessionStats.sessionFile) : null}
                       </div>,
@@ -387,26 +387,26 @@ export function SessionInfoBar({
 
                     // ── Messages rows ──
                     const msgRows: [string, string][] = [
-                      [translate("sessionInfoUser"), sessionStats.userMessages.toLocaleString()],
-                      [translate("sessionInfoAssistant"), sessionStats.assistantMessages.toLocaleString()],
-                      [translate("sessionInfoToolCalls"), sessionStats.toolCalls.toLocaleString()],
-                      [translate("sessionInfoToolResults"), sessionStats.toolResults.toLocaleString()],
-                      [translate("sessionInfoTotal"), sessionStats.totalMessages.toLocaleString()],
+                      [translate("desktop.sessionInfoUser"), sessionStats.userMessages.toLocaleString()],
+                      [translate("desktop.sessionInfoAssistant"), sessionStats.assistantMessages.toLocaleString()],
+                      [translate("desktop.sessionInfoToolCalls"), sessionStats.toolCalls.toLocaleString()],
+                      [translate("desktop.sessionInfoToolResults"), sessionStats.toolResults.toLocaleString()],
+                      [translate("desktop.sessionInfoTotal"), sessionStats.totalMessages.toLocaleString()],
                     ];
 
                     // ── Tokens rows ──
                     const tokenRows: [string, string][] = [
-                      [translate("sessionInfoInput"), tok.input.toLocaleString()],
-                      [translate("sessionInfoOutput"), tok.output.toLocaleString()],
+                      [translate("desktop.sessionInfoInput"), tok.input.toLocaleString()],
+                      [translate("desktop.sessionInfoOutput"), tok.output.toLocaleString()],
                     ];
-                    if (tok.cacheRead > 0) tokenRows.push([translate("sessionInfoCacheRead"), tok.cacheRead.toLocaleString()]);
-                    if (tok.cacheWrite > 0) tokenRows.push([translate("sessionInfoCacheWrite"), tok.cacheWrite.toLocaleString()]);
-                    tokenRows.push([translate("sessionInfoTotal"), tok.total.toLocaleString()]);
-                    if (sessionStats.cost > 0) tokenRows.push([translate("sessionInfoCost"), `$${sessionStats.cost.toFixed(4)}`]);
+                    if (tok.cacheRead > 0) tokenRows.push([translate("desktop.sessionInfoCacheRead"), tok.cacheRead.toLocaleString()]);
+                    if (tok.cacheWrite > 0) tokenRows.push([translate("desktop.sessionInfoCacheWrite"), tok.cacheWrite.toLocaleString()]);
+                    tokenRows.push([translate("desktop.sessionInfoTotal"), tok.total.toLocaleString()]);
+                    if (sessionStats.cost > 0) tokenRows.push([translate("desktop.sessionInfoCost"), `$${sessionStats.cost.toFixed(4)}`]);
                     if (ctx?.contextWindow) {
                       const pct = ctx.percent;
                       tokenRows.push([
-                        translate("sessionInfoContext"),
+                        translate("desktop.sessionInfoContext"),
                         `${pct !== null ? `${pct.toFixed(1)}%` : "?"} / ${ctx.contextWindow.toLocaleString()}`,
                       ]);
                     }
@@ -428,13 +428,13 @@ export function SessionInfoBar({
                         {/* Messages + Tokens side-by-side */}
                         <div className="session-stats-side-by-side">
                           <div className="session-stats-column">
-                            <div className="session-stats-section-title">{translate("sessionInfoMessages")}</div>
+                            <div className="session-stats-section-title">{translate("desktop.sessionInfoMessages")}</div>
                             <div className="session-stats-compact-grid">
                               {msgRows.map(([label, val]) => row(label, val))}
                             </div>
                           </div>
                           <div className="session-stats-column">
-                            <div className="session-stats-section-title">{translate("sessionInfoTokens")}</div>
+                            <div className="session-stats-section-title">{translate("desktop.sessionInfoTokens")}</div>
                             <div className="session-stats-compact-grid">
                               {tokenRows.map(([label, val]) => row(label, val))}
                             </div>

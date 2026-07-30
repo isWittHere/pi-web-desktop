@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { CaretDown, GitBranch } from "@phosphor-icons/react";
 import type { SessionEntry, SessionTreeNode } from "@/lib/types";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 
 interface Props {
   tree: SessionTreeNode[];
@@ -221,7 +221,7 @@ function TreeNodeView({ node, assistantLabel, activePathIds, depth, isLast, pare
 }
 
 export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, containerRef, open: openProp, onToggle, hasSession, embedded }: Props) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -251,9 +251,9 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
   }, [onLeafChange]);
 
   const noBranchReason = !hasSession
-    ? t("noActiveSession")
+    ? t("desktop.noActiveSession")
     : !hasBranch(tree)
-      ? t("sessionHasNoBranches")
+      ? t("desktop.sessionHasNoBranches")
       : null;
 
   // Find first meaningful node (skip pure linear prefix)
@@ -296,8 +296,8 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = open ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = open ? "var(--text)" : "var(--text-muted)"; }}
-          title={t("branches")}
-          aria-label={t("branches")}
+          title={t("desktop.branches")}
+          aria-label={t("desktop.branches")}
           aria-pressed={open}
         >
           {branchIcon}
@@ -318,7 +318,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
                   <TreeNodeView
                     key={child.entry.id}
                     node={child}
-                    assistantLabel={t("assistant")}
+                    assistantLabel={t("desktop.assistant")}
                     activePathIds={activePathIds}
                     depth={0}
                     isLast={idx === firstNode.children.length - 1}
@@ -343,7 +343,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
     if (!hasContent || !firstNode) {
       return (
         <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-          {noBranchReason ?? t("sessionHasNoBranches")}
+          {noBranchReason ?? t("desktop.sessionHasNoBranches")}
         </div>
       );
     }
@@ -353,7 +353,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
           <TreeNodeView
             key={child.entry.id}
             node={child}
-            assistantLabel={t("assistant")}
+            assistantLabel={t("desktop.assistant")}
             activePathIds={activePathIds}
             depth={0}
             isLast={idx === firstNode.children.length - 1}
@@ -385,7 +385,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
         }}
       >
         {branchIcon}
-        <span style={{ color: "var(--text-muted)" }}>{t("branches")}</span>
+        <span style={{ color: "var(--text-muted)" }}>{t("desktop.branches")}</span>
         {chevron}
       </button>
 
@@ -407,7 +407,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
                 <TreeNodeView
                   key={child.entry.id}
                   node={child}
-                  assistantLabel={t("assistant")}
+                  assistantLabel={t("desktop.assistant")}
                   activePathIds={activePathIds}
                   depth={0}
                   isLast={idx === firstNode.children.length - 1}
@@ -418,7 +418,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
             </div>
           ) : (
             <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-              {noBranchReason ?? t("sessionHasNoBranches")}
+              {noBranchReason ?? t("desktop.sessionHasNoBranches")}
             </div>
           )}
         </div>

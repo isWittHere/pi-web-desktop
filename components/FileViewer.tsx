@@ -7,7 +7,7 @@ import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import ReactMarkdown from "react-markdown";
 import { useTheme } from "@/hooks/useTheme";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 import {
   DOCX_PREVIEW_MAX_BYTES,
   getFileExt,
@@ -49,13 +49,13 @@ function getFileApiUrl(
 }
 
 function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceSessionId?: string | null }) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
 
   return (
     <a
       href={getFileApiUrl(filePath, "download", sourceSessionId)}
       download={getFileName(filePath)}
-      title={t("downloadFile")}
+      title={t("desktop.downloadFile")}
       style={{
         display: "flex",
         alignItems: "center",
@@ -157,7 +157,7 @@ function diffLines(oldLines: string[], newLines: string[]): DiffLine[] {
 }
 
 function DiffView({ oldContent, newContent }: { oldContent: string; newContent: string; language: string }) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const oldLines = oldContent.split("\n");
   const newLines = newContent.split("\n");
   const diff = diffLines(oldLines, newLines);
@@ -166,7 +166,7 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
   if (!hasChanges) {
     return (
       <div style={{ padding: "12px 16px", fontSize: 12, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-        {t("noChanges")}
+        {t("desktop.noChanges")}
       </div>
     );
   }
@@ -230,7 +230,7 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
                 borderBottom: "1px solid var(--border)",
               }}
             >
-              {t("unchangedLines").replace("{count}", String(seg.count))}
+              {t("desktop.unchangedLines", { count: seg.count })}
             </div>
           );
           diffIdx += seg.count;
@@ -313,7 +313,7 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
 }
 
 function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -377,11 +377,11 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
         <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span style={{ marginLeft: "auto" }}>{ext || t("image")}</span>
+        <span style={{ marginLeft: "auto" }}>{ext || t("desktop.image")}</span>
         {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
         {formatSizeStr && <span>{formatSizeStr}</span>}
         <span
-          title={watching ? t("liveSyncActive") : t("notWatching")}
+          title={watching ? t("desktop.liveSyncActive") : t("desktop.notWatching")}
           style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
         >
           <span
@@ -394,7 +394,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
               boxShadow: watching ? "0 0 4px #4ade80" : "none",
             }}
           />
-          {watching ? t("live") : t("static")}
+          {watching ? t("desktop.live") : t("desktop.static")}
         </span>
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
@@ -424,7 +424,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
               const img = e.currentTarget;
               setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
             }}
-            onError={() => setError(t("failedToLoadImage"))}
+            onError={() => setError(t("desktop.failedToLoadImage"))}
             style={{
               maxWidth: "100%",
               maxHeight: "100%",
@@ -447,7 +447,7 @@ function formatDuration(seconds: number): string {
 }
 
 function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -511,11 +511,11 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
         <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span style={{ marginLeft: "auto" }}>{ext || t("audio")}</span>
+        <span style={{ marginLeft: "auto" }}>{ext || t("desktop.audio")}</span>
         {duration != null && <span>{formatDuration(duration)}</span>}
         {size != null && <span>{formatSize(size)}</span>}
         <span
-          title={watching ? t("liveSyncActive") : t("notWatching")}
+          title={watching ? t("desktop.liveSyncActive") : t("desktop.notWatching")}
           style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
         >
           <span
@@ -528,7 +528,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
               boxShadow: watching ? "0 0 4px #4ade80" : "none",
             }}
           />
-          {watching ? t("live") : t("static")}
+          {watching ? t("desktop.live") : t("desktop.static")}
         </span>
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
@@ -554,7 +554,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
             preload="metadata"
             src={src}
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-            onError={() => setError(t("failedToLoadAudio"))}
+            onError={() => setError(t("desktop.failedToLoadAudio"))}
             style={{ width: "100%" }}
           />
         </div>
@@ -564,7 +564,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
 }
 
 function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -595,7 +595,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
         if (typeof d.size === "number") {
           setSize(d.size);
           if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
-            setError(t("docxTooLargeForPreview"));
+            setError(t("desktop.docxTooLargeForPreview"));
           }
         }
       })
@@ -611,7 +611,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
         if (typeof d.size === "number") {
           setSize(d.size);
           if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
-            setError(t("docxTooLargeForPreview"));
+            setError(t("desktop.docxTooLargeForPreview"));
             return;
           }
         }
@@ -646,11 +646,11 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
         <span style={{ fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span style={{ marginLeft: "auto" }}>{ext === "docx" ? t("docxPreview") : "pdf"}</span>
+        <span style={{ marginLeft: "auto" }}>{ext === "docx" ? t("desktop.docxPreview") : "pdf"}</span>
         {size != null && <span>{formatSize(size)}</span>}
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
         <span
-          title={watching ? t("liveSyncActive") : t("notWatching")}
+          title={watching ? t("desktop.liveSyncActive") : t("desktop.notWatching")}
           style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)", flexShrink: 0 }}
         >
           <span
@@ -663,7 +663,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
               boxShadow: watching ? "0 0 4px #4ade80" : "none",
             }}
           />
-          {watching ? t("live") : t("static")}
+          {watching ? t("desktop.live") : t("desktop.static")}
         </span>
       </div>
       <div style={{ flex: 1, minHeight: 0, background: "var(--bg-panel)" }}>
@@ -676,7 +676,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
             key={previewUrl}
             src={previewUrl}
             sandbox={isPdf ? undefined : ""}
-            title={t("previewFile").replace("{file}", getFileName(filePath))}
+            title={t("desktop.previewFile", { file: getFileName(filePath) })}
             style={{ width: "100%", height: "100%", border: "none", background: isPdf ? "var(--bg)" : "#eef1f5" }}
           />
         )}
@@ -700,7 +700,7 @@ export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props
 
 function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
   const { isDark } = useTheme();
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -792,7 +792,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
   if (loading) {
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 13 }}>
-        {t("loadingFile")}
+        {t("desktop.loadingFile")}
       </div>
     );
   }
@@ -833,12 +833,12 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
           {getRelativeFilePath(filePath, cwd)}
         </span>
         <span style={{ marginLeft: "auto" }}>{data.language}</span>
-        {viewMode === "source" && <span>{t("lines").replace("{count}", String(lines.length))}</span>}
+        {viewMode === "source" && <span>{t("desktop.lines", { count: lines.length })}</span>}
         <span>{formatSize(data.size)}</span>
 
         {/* Live watch indicator */}
         <span
-          title={watching ? t("liveSyncActive") : t("notWatching")}
+          title={watching ? t("desktop.liveSyncActive") : t("desktop.notWatching")}
           style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
         >
           <span
@@ -851,7 +851,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
               boxShadow: watching ? "0 0 4px #4ade80" : "none",
             }}
           />
-          {watching ? t("live") : t("static")}
+          {watching ? t("desktop.live") : t("desktop.static")}
         </span>
 
         {/* Diff / Source toggle — shown only when there are changes */}
@@ -866,7 +866,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
                 fontWeight: viewMode === "source" ? 600 : 400,
               }}
             >
-              {t("source")}
+              {t("desktop.source")}
             </button>
             <button
               onClick={() => setViewMode("diff")}
@@ -877,7 +877,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
                 fontWeight: viewMode === "diff" ? 600 : 400,
               }}
             >
-              {t("diff")} {changeCount > 0 && <span style={{ color: "#4ade80", marginLeft: 2 }}>+{changeCount}</span>}
+              {t("desktop.diff")} {changeCount > 0 && <span style={{ color: "#4ade80", marginLeft: 2 }}>+{changeCount}</span>}
             </button>
           </div>
         )}
@@ -886,7 +886,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
         {viewMode === "source" && !previewMode && (
           <button
             onClick={() => setWrapLines((v) => !v)}
-            title={wrapLines ? t("disableWordWrap") : t("enableWordWrap")}
+            title={wrapLines ? t("desktop.disableWordWrap") : t("desktop.enableWordWrap")}
             style={{
               padding: "2px 8px", fontSize: 11, cursor: "pointer",
               background: wrapLines ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -895,7 +895,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
               fontWeight: wrapLines ? 600 : 400,
             }}
           >
-            {t("wrap")}
+            {t("desktop.wrap")}
           </button>
         )}
 
@@ -911,7 +911,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
                 fontWeight: !previewMode ? 600 : 400,
               }}
             >
-              {t("code")}
+              {t("desktop.code")}
             </button>
             <button
               onClick={() => setPreviewMode(true)}
@@ -922,7 +922,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
                 fontWeight: previewMode ? 600 : 400,
               }}
             >
-              {t("preview")}
+              {t("desktop.preview")}
             </button>
           </div>
         )}
@@ -939,7 +939,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
                 fontWeight: previewMode ? 600 : 400,
               }}
             >
-              {t("preview")}
+              {t("desktop.preview")}
             </button>
             <button
               onClick={() => setPreviewMode(false)}
@@ -950,7 +950,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
                 fontWeight: !previewMode ? 600 : 400,
               }}
             >
-              {t("raw")}
+              {t("desktop.raw")}
             </button>
           </div>
         )}
@@ -966,7 +966,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
             srcDoc={data.content}
             sandbox="allow-scripts"
             style={{ width: "100%", height: "100%", border: "none", background: "var(--bg)" }}
-            title={t("htmlPreview")}
+            title={t("desktop.htmlPreview")}
           />
         ) : isMarkdown && previewMode ? (
           <div

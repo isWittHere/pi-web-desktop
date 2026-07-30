@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MarkdownBody } from "./MarkdownBody";
 import { MessageView, ThinkingBlock, ToolCallBlock } from "./MessageView";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 import { useProcessDisplayMode } from "@/hooks/useProcessDisplayMode";
 import type { ProcessContentBlock } from "@/lib/process-content";
 import type { ThinkingContent, ToolCallContent } from "@/lib/types";
@@ -709,7 +709,7 @@ export function ProcessGroup({
   onOpenFile,
   sessionId,
 }: ProcessGroupProps) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const ts: BuildLabelFn = useCallback((key: string) => t(key as Parameters<typeof t>[0]), [t]);
   const steps = useMemo(() => buildProcessSteps(blocks, ts, isStreaming), [blocks, ts, isStreaming]);
   const [areaExpanded, setAreaExpanded] = useState(isStreaming || defaultExpanded);
@@ -822,12 +822,12 @@ export function ProcessGroup({
 
   let summary: string;
   if (isStreaming) {
-    summary = t("processWorking");
+    summary = t("desktop.processWorking");
   } else if (singleThinking) {
     const d = thinkingDuration(steps[0]);
     summary = d !== undefined
-      ? t("processThoughtDone").replace("{duration}", String(d))
-      : t("processThoughtDoneNoDuration");
+      ? t("desktop.processThoughtDone", { duration: d })
+      : t("desktop.processThoughtDoneNoDuration");
   } else if (singleTool) {
     const step = steps[0];
     if (step.kind === "toolGroup") {
@@ -844,25 +844,29 @@ export function ProcessGroup({
     const summaryParts: string[] = [];
     if (toolCount) {
       const base = toolCount === 1
-        ? t("processToolCount").replace("{count}", String(toolCount))
-        : t("processToolsCount").replace("{count}", String(toolCount));
+        ? t("desktop.processToolCount", { count: toolCount })
+        : t("desktop.processToolsCount", { count: toolCount });
       summaryParts.push(failedCount > 0
-        ? base + t("processFailedCount").replace("{failed}", String(failedCount))
+        ? base + t("desktop.processFailedCount", { failed: failedCount })
         : base);
     }
     if (thoughtCount) {
       summaryParts.push(
-        (thoughtCount === 1 ? t("processThoughtCount") : t("processThoughtsCount")).replace("{count}", String(thoughtCount)),
+        thoughtCount === 1
+          ? t("desktop.processThoughtCount", { count: thoughtCount })
+          : t("desktop.processThoughtsCount", { count: thoughtCount }),
       );
     }
     if (customCount) {
       summaryParts.push(
-        (customCount === 1 ? t("processCustomCount") : t("processCustomsCount")).replace("{count}", String(customCount)),
+        customCount === 1
+          ? t("desktop.processCustomCount", { count: customCount })
+          : t("desktop.processCustomsCount", { count: customCount }),
       );
     }
     summary = summaryParts.length > 0
-      ? t("processUsed").replace("{summary}", summaryParts.join(" · "))
-      : t("processCompleted");
+      ? t("desktop.processUsed", { summary: summaryParts.join(" · ") })
+      : t("desktop.processCompleted");
   }
 
   return (
@@ -888,7 +892,7 @@ export function ProcessGroup({
               setAreaExpanded(true);
             }}
             className="shrink-0 p-1 text-text-dim opacity-0 transition-colors hover:text-text group-hover/summary-row:opacity-100"
-            title={displayMode === "timeline" ? t("processTabMode") : t("processTimelineMode")}
+            title={displayMode === "timeline" ? t("desktop.processTabMode") : t("desktop.processTimelineMode")}
           >
             <DisplayModeIcon mode={displayMode} />
           </button>
@@ -955,7 +959,7 @@ export function ProcessGroup({
                             <span className="shrink-0 text-[11px] tabular-nums text-text-dim">{step.block.duration}s</span>
                           )}
                           {isError && (
-                            <span className="shrink-0 text-[11px] font-medium text-red-400">{t("processFailedStep")}</span>
+                            <span className="shrink-0 text-[11px] font-medium text-red-400">{t("desktop.processFailedStep")}</span>
                           )}
                           {hasContent && (
                             <span className={`ml-0.5 shrink-0 opacity-0 transition-opacity group-hover/step:opacity-50 ${open ? "rotate-90" : ""}`}>

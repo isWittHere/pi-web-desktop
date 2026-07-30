@@ -8,7 +8,7 @@ import { ModelsConfig } from "./ModelsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { useLanguage, type TranslationKey } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 
 export type SettingsTab = "display" | "chat" | "models" | "skills" | "plugins";
 
@@ -21,12 +21,12 @@ interface SettingsModalProps {
   onSessionReloadedAction: () => void;
 }
 
-const tabs: { id: SettingsTab; labelKey: TranslationKey; Icon: typeof Cpu }[] = [
-  { id: "display", labelKey: "display", Icon: Monitor },
-  { id: "chat", labelKey: "chat", Icon: ChatCenteredText },
-  { id: "models", labelKey: "models", Icon: Cpu },
-  { id: "skills", labelKey: "skills", Icon: Stack },
-  { id: "plugins", labelKey: "plugins", Icon: Plug },
+const tabs: { id: SettingsTab; labelKey: string; Icon: typeof Cpu }[] = [
+  { id: "display", labelKey: "desktop.display", Icon: Monitor },
+  { id: "chat", labelKey: "desktop.chat", Icon: ChatCenteredText },
+  { id: "models", labelKey: "desktop.models", Icon: Cpu },
+  { id: "skills", labelKey: "desktop.skills", Icon: Stack },
+  { id: "plugins", labelKey: "desktop.plugins", Icon: Plug },
 ];
 
 export function SettingsModal({
@@ -38,7 +38,7 @@ export function SettingsModal({
   onSessionReloadedAction,
 }: SettingsModalProps) {
   const isMobile = useIsMobile();
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<SettingsTab>(
     initialTab === "skills" || initialTab === "plugins" ? (cwd ? initialTab : "display") : initialTab,
   );
@@ -61,7 +61,7 @@ export function SettingsModal({
       <section
         role="dialog"
         aria-modal="true"
-        aria-label={t("settings")}
+        aria-label={t("desktop.settings")}
         style={{
           width: isMobile ? "calc(100vw - 16px)" : 1000,
           maxWidth: "calc(100vw - 16px)",
@@ -87,7 +87,7 @@ export function SettingsModal({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("settings")}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("desktop.settings")}</span>
             {activeTab === "models" ? (
               <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 ~/.pi/agent/models.json
@@ -101,8 +101,8 @@ export function SettingsModal({
           <button
             type="button"
             onClick={onCloseAction}
-            title={t("closeSettings")}
-            aria-label={t("closeSettings")}
+            title={t("desktop.closeSettings")}
+            aria-label={t("desktop.closeSettings")}
             style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 4, display: "flex" }}
           >
             <X size={18} aria-hidden="true" />
@@ -111,7 +111,7 @@ export function SettingsModal({
 
         <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: "hidden" }}>
           <nav
-            aria-label={t("settingsSections")}
+            aria-label={t("desktop.settingsSections")}
             style={{
               display: "flex",
               flexDirection: isMobile ? "row" : "column",

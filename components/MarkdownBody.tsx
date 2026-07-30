@@ -6,28 +6,13 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { copyText } from "@/lib/clipboard";
 import { resolveLocalFileHref } from "@/lib/file-links";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 
-const markdownLabels = {
-  en: {
-    previewAvailableAfterStreaming: "Preview available after streaming",
-    previewMermaidDiagram: "Preview Mermaid diagram",
-    invalidMermaidDiagram: "Invalid Mermaid diagram",
-    renderingMermaidDiagram: "Rendering Mermaid diagram",
-    plainText: "text",
-  },
-  "zh-CN": {
-    previewAvailableAfterStreaming: "流式输出结束后可预览",
-    previewMermaidDiagram: "预览 Mermaid 图表",
-    invalidMermaidDiagram: "无效的 Mermaid 图表",
-    renderingMermaidDiagram: "正在渲染 Mermaid 图表",
-    plainText: "文本",
-  },
-} as const;
+
 
 interface MarkdownBodyProps {
   children: string;
@@ -126,8 +111,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
 }
 
 export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boolean }) {
-  const { language, t } = useLanguage();
-  const labels = markdownLabels[language];
+  const { t } = useI18n();
   const { isDark } = useTheme();
   const [showPreview, setShowPreview] = useState(false);
   const [svg, setSvg] = useState<string | null>(null);
@@ -177,10 +161,12 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
     <button
       onClick={() => setShowPreview((v) => !v)}
       disabled={isStreaming}
-      title={isStreaming ? labels.previewAvailableAfterStreaming : (showPreview ? t("source") : labels.previewMermaidDiagram)}
+      title={isStreaming
+              ? t("desktop.markdownPreviewAvailableAfterStreaming")
+              : (showPreview ? t("desktop.source") : t("desktop.markdownPreviewMermaidDiagram"))}
       className={["markdown-code-action", showPreview ? "is-active" : ""].filter(Boolean).join(" ")}
     >
-      {showPreview ? t("source") : t("preview")}
+      {showPreview ? t("desktop.source") : t("desktop.preview")}
     </button>
   );
 
@@ -190,9 +176,9 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
 
   const body =
     failedKey === currentKey ? (
-      <div className="mermaid-block mermaid-block-error">{labels.invalidMermaidDiagram}</div>
+      <div className="mermaid-block mermaid-block-error">{t("desktop.markdownInvalidMermaidDiagram")}</div>
     ) : !svg || renderedKey !== currentKey ? (
-      <div className="mermaid-block mermaid-block-loading" aria-label={labels.renderingMermaidDiagram} />
+      <div className="mermaid-block mermaid-block-loading" aria-label={t("desktop.markdownRenderingMermaidDiagram")} />
     ) : (
       <div
         className="mermaid-block"
@@ -208,8 +194,7 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
 }
 
 export function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; headerAction?: ReactNode }) {
-  const { language, t } = useLanguage();
-  const labels = markdownLabels[language];
+  const { t } = useI18n();
   const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -247,11 +232,11 @@ export function CodeBlock({ code, lang, headerAction }: { code: string; lang: st
           letterSpacing: "0.06em",
           textTransform: "uppercase",
           userSelect: "none",
-        }}>{lang || labels.plainText}</span>
+        }}>{lang || t("desktop.markdownPlainText")}</span>
         {headerAction}
         <button
           onClick={copy}
-          title={copied ? t("copied") : t("copy")}
+          title={copied ? t("desktop.copied") : t("desktop.copy")}
           style={{
             display: "flex",
             alignItems: "center",

@@ -16,7 +16,7 @@ import { CheckIcon } from "@phosphor-icons/react/Check";
 import { CopyIcon } from "@phosphor-icons/react/Copy";
 import { DatabaseIcon } from "@phosphor-icons/react/Database";
 import { GitForkIcon } from "@phosphor-icons/react/GitFork";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 import type {
   AgentMessage,
   UserMessage,
@@ -154,7 +154,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   prevAssistantEntryId?: string;
   onEditContent?: (content: string) => void;
 }) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -234,7 +234,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
           }}>
             <button
               onClick={copyContent}
-              title={t("copyMessage")}
+              title={t("desktop.copyMessage")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 22, height: 22,
@@ -264,7 +264,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               {canNavigate && (
                 <button
                   onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(content); }}
-                  title={t("editFromHere")}
+                  title={t("desktop.editFromHere")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 22, height: 22,
@@ -284,7 +284,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 <button
                   onClick={() => { onFork!(entryId!); }}
                   disabled={forking}
-                  title={forking ? t("creatingNewSession") : t("newSessionFromHere")}
+                  title={forking ? t("desktop.creatingNewSession") : t("desktop.newSessionFromHere")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 22, height: 22,
@@ -332,7 +332,7 @@ function AssistantMessageView({
   sessionId?: string;
   entryId?: string;
 }) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
   const blockItems = (message.content ?? [])
     .map((block, originalIndex) => ({ block, originalIndex }))
@@ -469,7 +469,7 @@ function AssistantMessageView({
             <>
 
               {est > 0 && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text)" }} title={t("estimatedStreamingTokenCount")}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text)" }} title={t("desktop.estimatedStreamingTokenCount")}>
                   <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 11, fontWeight: 400 }}>
                     <CloudArrowDownIcon size={13} />
                     {est}
@@ -478,7 +478,7 @@ function AssistantMessageView({
                     const speedVar = tps >= 50 ? "--accent-green" : tps >= 30 ? "--accent-blue" : tps >= 15 ? "--accent-orange" : "--accent-red";
                     return (
                       <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: `var(${speedVar})`, color: "var(--bg)", fontSize: 11, fontWeight: 400 }}>
-                        {t("tokensPerSecond").replace("{count}", tps.toFixed(1))}
+                        {t("desktop.tokensPerSecond", { count: tps.toFixed(1) })}
                       </span>
                     );
                   })()}
@@ -530,7 +530,7 @@ function AssistantMessageView({
         {textContent && !isStreaming && (
           <button
             onClick={copyContent}
-            title={t("copyMessage")}
+            title={t("desktop.copyMessage")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 22, height: 22,
@@ -587,7 +587,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
   onOpenFile?: (filePath: string) => void;
   className?: string;
 }) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -598,7 +598,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
     setExpanded(nextExpanded);
     if (!nextExpanded || !block.deferred || content !== null) return;
     if (!sessionId || !entryId) {
-      setError(t("thinkingContentUnavailable"));
+      setError(t("desktop.thinkingContentUnavailable"));
       return;
     }
 
@@ -636,14 +636,14 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
       >
         <span className={`thinking-block-caret ${expanded ? "is-expanded" : ""}`} aria-hidden="true">›</span>
         <span className="thinking-block-icon" aria-hidden="true">✦</span>
-        <span>{t("thinking")}</span>
+        <span>{t("desktop.thinking")}</span>
         {duration !== undefined && (
           <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
       </button>
       {expanded && (
         <div className={`thinking-block-content ${error ? "is-error" : ""}`}>
-          {loading ? t("loadingThinking") : error ?? (block.deferred ? content : block.thinking)}
+          {loading ? t("desktop.loadingThinking") : error ?? (block.deferred ? content : block.thinking)}
         </div>
       )}
     </div>
@@ -659,7 +659,7 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpe
   onOpenFile?: (filePath: string) => void;
   className?: string;
 }) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(block.deferred === true);
   const [error, setError] = useState<string | null>(null);
@@ -672,7 +672,7 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpe
     }
     if (!sessionId || !entryId) {
       setLoading(false);
-      setError(t("thinkingContentUnavailable"));
+      setError(t("desktop.thinkingContentUnavailable"));
       return;
     }
     setLoading(true);
@@ -684,7 +684,7 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpe
     return () => { cancelled = true; };
   }, [block.deferred, blockIndex, entryId, sessionId, t]);
 
-  if (loading) return <div className="text-xs text-text-dim">{t("loadingThinking")}</div>;
+  if (loading) return <div className="text-xs text-text-dim">{t("desktop.loadingThinking")}</div>;
   if (error) return <div className="text-xs text-red-400">{error}</div>;
 
   return (
@@ -779,7 +779,7 @@ function PairedDiffResult({ diff, processStyle = false }: {
 }
 
 function SplitPatchView({ text }: { text: string }) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const files = useMemo(() => parseUnifiedPatch(text), [text]);
   if (!files) return <PatchTextView text={text} />;
   const showFileHeaders = files.length > 1;
@@ -809,8 +809,8 @@ function SplitPatchView({ text }: { text: string }) {
                 borderBottom: "1px solid var(--border)",
               }}
             >
-              <SplitDiffHeader title={file.oldPath || t("before")} side="left" />
-              <SplitDiffHeader title={file.newPath || t("after")} side="right" />
+              <SplitDiffHeader title={file.oldPath || t("desktop.before")} side="left" />
+              <SplitDiffHeader title={file.newPath || t("desktop.after")} side="right" />
             </div>
           )}
 
@@ -1011,7 +1011,7 @@ function PairedResult({ text, isEmpty, isError, processStyle = false }: {
   isError: boolean;
   processStyle?: boolean;
 }) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const border = processStyle ? "var(--border)" : isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)";
   return (
     <div
@@ -1036,7 +1036,7 @@ function PairedResult({ text, isEmpty, isError, processStyle = false }: {
           opacity: isEmpty ? 0.6 : 1,
         }}
       >
-        {isEmpty ? t("noOutput") : text}
+        {isEmpty ? t("desktop.noOutput") : text}
       </pre>
     </div>
   );
@@ -1045,7 +1045,7 @@ function PairedResult({ text, isEmpty, isError, processStyle = false }: {
 
 
 function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessage; cwd?: string; onOpenFile?: (filePath: string) => void }) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const isHiddenDisplay = message.display === false;
   const [contentExpanded, setContentExpanded] = useState(!isHiddenDisplay);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
@@ -1054,7 +1054,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
   const images = getMessageImages(message.content);
   const hasDetails = message.details !== undefined;
   const detailsText = hasDetails ? safeJson(message.details) : "";
-  const title = formatCustomType(message.customType, t("extension"));
+  const title = formatCustomType(message.customType, t("desktop.extension"));
   const time = formatTime(message.timestamp);
 
   const copyContent = () => {
@@ -1090,7 +1090,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
           <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>
             {title}
           </span>
-          {isHiddenDisplay && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{t("hiddenExtensionMessage")}</span>}
+          {isHiddenDisplay && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{t("desktop.hiddenExtensionMessage")}</span>}
           {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
         </div>
 
@@ -1113,7 +1113,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                 })}
               </div>
             )}
-            {text ? <MarkdownBody className="markdown-custom-message" cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody> : <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("noMessage")}</span>}
+            {text ? <MarkdownBody className="markdown-custom-message" cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody> : <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("desktop.noMessage")}</span>}
           </div>
         ) : (
           <button
@@ -1130,7 +1130,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
               textAlign: "left",
             }}
           >
-            {text ? previewText(text, t("showExtensionMessage")) : t("showExtensionMessage")}
+            {text ? previewText(text, t("desktop.showExtensionMessage")) : t("desktop.showExtensionMessage")}
           </button>
         )}
 
@@ -1156,7 +1156,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                 fontSize: 11,
               }}
             >
-              {copied ? t("copied") : t("copy")}
+              {copied ? t("desktop.copied") : t("desktop.copy")}
             </button>
           ) : null}
           {(hasDetails || isHiddenDisplay) && (
@@ -1176,8 +1176,8 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
               }}
             >
               {isHiddenDisplay
-                ? (contentExpanded ? t("collapse") : t("expand"))
-                : (detailsExpanded ? t("hideDetails") : t("showDetails"))}
+                ? (contentExpanded ? t("desktop.collapse") : t("desktop.expand"))
+                : (detailsExpanded ? t("desktop.hideDetails") : t("desktop.showDetails"))}
             </button>
           )}
         </div>

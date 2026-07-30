@@ -9,7 +9,7 @@ import {
 } from "@/lib/file-fuzzy";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 import { ArrowBendUpLeftIcon } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowElbowUpLeftIcon } from "@phosphor-icons/react/ArrowElbowUpLeft";
@@ -235,7 +235,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   cwd,
 }: Props, ref) {
   const isMobile = useIsMobile();
-  const { t } = useLanguage();
+  const { t } = useI18n();
   // Thinking levels are model-facing identifiers, so keep their labels in English.
   const thinkingLevelLabels: Record<typeof THINKING_LEVELS[number], string> = {
     auto: "auto",
@@ -248,22 +248,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     max: "max",
   };
   const toolPresetLabels: Record<typeof TOOL_PRESETS[number], string> = {
-    off: t("toolOff"),
-    default: t("toolDefault"),
-    full: t("toolFull"),
+    off: t("desktop.toolOff"),
+    default: t("desktop.toolDefault"),
+    full: t("desktop.toolFull"),
   };
   const builtinSlashCommands: SlashCommandPaletteItem[] = [
-    { name: "compact", description: t("compactCommandDescription"), source: "builtin" },
-    { name: "reload", description: t("reloadCommandDescription"), source: "builtin" },
-    { name: "name", description: t("nameCommandDescription"), source: "builtin" },
-    { name: "session", description: t("sessionCommandDescription"), source: "builtin" },
-    { name: "copy", description: t("copyCommandDescription"), source: "builtin" },
+    { name: "compact", description: t("desktop.compactCommandDescription"), source: "builtin" },
+    { name: "reload", description: t("desktop.reloadCommandDescription"), source: "builtin" },
+    { name: "name", description: t("desktop.nameCommandDescription"), source: "builtin" },
+    { name: "session", description: t("desktop.sessionCommandDescription"), source: "builtin" },
+    { name: "copy", description: t("desktop.copyCommandDescription"), source: "builtin" },
   ];
   const slashSourceGroupLabels: Record<SlashCommandSource, string> = {
-    builtin: t("builtIn"),
-    extension: t("extensions"),
-    prompt: t("prompts"),
-    skill: t("commandSkills"),
+    builtin: t("desktop.builtIn"),
+    extension: t("desktop.extensions"),
+    prompt: t("desktop.prompts"),
+    skill: t("desktop.commandSkills"),
   };
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
@@ -548,8 +548,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const slashCommandCountLabel = `${filteredSlashCommands.length} ${t(
     slashQuery
-      ? (filteredSlashCommands.length === 1 ? "match" : "matches")
-      : (filteredSlashCommands.length === 1 ? "command" : "commands")
+      ? (filteredSlashCommands.length === 1 ? "desktop.match" : "desktop.matches")
+      : (filteredSlashCommands.length === 1 ? "desktop.command" : "desktop.commands")
   )}`;
   const hasInputText = Boolean(value.trim());
   const canQueueStreamingMessage = hasInputText && attachedImages.length === 0;
@@ -942,7 +942,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? Math.max(0, compactResult.tokensBefore - compactResult.estimatedTokensAfter)
     : 0;
   const compactResultText = compactResult
-    ? `${t("compacted")} ${formatTokenCount(compactResult.tokensBefore)} -> ${formatTokenCount(compactResult.estimatedTokensAfter)} ${t("tokens")} (${formatTokenCount(compactSavedTokens)} ${t("saved")})`
+    ? `${t("desktop.compacted")} ${formatTokenCount(compactResult.tokensBefore)} -> ${formatTokenCount(compactResult.estimatedTokensAfter)} ${t("desktop.tokens")} (${formatTokenCount(compactSavedTokens)} ${t("desktop.saved")})`
     : null;
   const thinkingDisplayLabel = (() => {
     const lvl = thinkingLevel ?? "auto";
@@ -1028,12 +1028,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 textTransform: "uppercase",
                 letterSpacing: 0.4,
               }}>
-                {t("queued")} · {(queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)}
+                {t("desktop.queued")} · {(queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)}
               </span>
               {onRecallQueue && (
                 <button
                   onClick={onRecallQueue}
-                  title={t("recallQueuedMessages")}
+                  title={t("desktop.recallQueuedMessages")}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1058,15 +1058,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                 >
                   <ArrowBendUpLeftIcon size={13} />
-                  {t("recallToInput")}
+                  {t("desktop.recallToInput")}
                 </button>
               )}
             </div>
             {queuedMessages?.steering.map((text, i) => (
-              <QueuedMessageRow key={`steer-${i}`} kind="steer" label={t("steer")} text={text} />
+              <QueuedMessageRow key={`steer-${i}`} kind="steer" label={t("desktop.steer")} text={text} />
             ))}
             {queuedMessages?.followUp.map((text, i) => (
-              <QueuedMessageRow key={`followup-${i}`} kind="follow-up" label={t("followUp")} text={text} />
+              <QueuedMessageRow key={`followup-${i}`} kind="follow-up" label={t("desktop.followUp")} text={text} />
             ))}
           </div>
         )}
@@ -1079,7 +1079,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <ArrowClockwiseIcon size={11} style={{ flexShrink: 0 }} />
-            {t("retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
+            {t("desktop.retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
         {compactResultText && (
@@ -1106,8 +1106,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 />
                 <button
                   onClick={() => removeImage(i)}
-                  title={t("removeImage")}
-                  aria-label={t("removeImage")}
+                  title={t("desktop.removeImage")}
+                  aria-label={t("desktop.removeImage")}
                   style={{
                     position: "absolute", top: -4, right: -4,
                     width: 16, height: 16, borderRadius: "50%",
@@ -1153,13 +1153,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   color: "var(--text-dim)",
                 }}
               >
-                <span>{slashCommandsLoading ? t("loadingCommands") : `${t("slashCommands")} · ${slashCommandCountLabel}`}</span>
-                <span style={{ fontFamily: "var(--font-mono)" }}>{t("tabOrEnter")}</span>
+                <span>{slashCommandsLoading ? t("desktop.loadingCommands") : `${t("desktop.slashCommands")} · ${slashCommandCountLabel}`}</span>
+                <span style={{ fontFamily: "var(--font-mono)" }}>{t("desktop.tabOrEnter")}</span>
               </div>
               <div style={{ maxHeight: "calc(min(38vh, 300px) - 24px)", overflowY: "auto", padding: 4 }}>
                 {!slashCommandsLoading && filteredSlashCommands.length === 0 ? (
                   <div style={{ padding: "2px 2px 2px", fontSize: 12, color: "var(--text-dim)" }}>
-                    {t("noSlashCommands")}
+                    {t("desktop.noSlashCommands")}
                   </div>
                 ) : (
                   groupedSlashCommands.map((group) => (
@@ -1251,11 +1251,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           )}
           {atMenuOpen && atQuery !== null && (() => {
             const indexLoading = fileIndexLoading && (!fileIndex || fileIndex.cwd !== cwd);
-            const matchCountLabel = `${atMatches.length} ${t(atMatches.length === 1 ? "match" : "matches")}`;
+            const matchCountLabel = `${atMatches.length} ${t(atMatches.length === 1 ? "desktop.match" : "desktop.matches")}`;
             // With a truncated index, local results are provisional — the
             // debounced server search over the full listing replaces them.
             const truncatedHint = fileIndex?.truncated && !serverResultInUse
-              ? (atQuery.query ? ` · ${t("searchingAllFiles")}` : ` · ${t("indexTruncated")}`)
+              ? (atQuery.query ? ` · ${t("desktop.searchingAllFiles")}` : ` · ${t("desktop.indexTruncated")}`)
               : "";
             return (
               <div
@@ -1287,15 +1287,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 >
                   <span>
                     {indexLoading
-                      ? t("loadingFiles")
-                      : `${t("files")} · ${matchCountLabel}${truncatedHint}`}
+                      ? t("desktop.loadingFiles")
+                      : `${t("desktop.files")} · ${matchCountLabel}${truncatedHint}`}
                   </span>
-                  <span style={{ fontFamily: "var(--font-mono)" }}>{t("tabOrEnter")}</span>
+                  <span style={{ fontFamily: "var(--font-mono)" }}>{t("desktop.tabOrEnter")}</span>
                 </div>
                 <div style={{ maxHeight: "calc(min(30vh, 240px) - 24px)", overflowY: "auto", padding: 2 }}>
                   {!indexLoading && atMatches.length === 0 ? (
                     <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>
-                      {needsServerSearch && !serverResultInUse ? t("searching") : t("noMatchingFiles")}
+                      {needsServerSearch && !serverResultInUse ? t("desktop.searching") : t("desktop.noMatchingFiles")}
                     </div>
                   ) : (
                     atMatches.map((entry, index) => {
@@ -1370,8 +1370,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   className="chat-input-streaming-action chat-input-streaming-action-steer"
                   onClick={() => sendQueued("steer")}
                   disabled={!canQueueStreamingMessage}
-                  title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("injectMessageNow")}
-                  aria-label={t("steer")}
+                  title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.injectMessageNow")}
+                  aria-label={t("desktop.steer")}
                 >
                   <ArrowElbowUpLeftIcon size={15} />
                 </button>
@@ -1382,8 +1382,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   className="chat-input-streaming-action"
                   onClick={() => sendQueued("followup")}
                   disabled={!canQueueStreamingMessage}
-                  title={attachedImages.length ? t("imageAttachmentsCannotQueue") : t("queueMessageAfterFinish")}
-                  aria-label={t("followUp")}
+                  title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.queueMessageAfterFinish")}
+                  aria-label={t("desktop.followUp")}
                 >
                   <SortDescendingIcon size={15} />
                 </button>
@@ -1417,9 +1417,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onPaste={handlePaste}
             placeholder={
               isStreaming && (onSteer || onFollowUp)
-                ? t("steerOrQueueFollowUp")
-                : isStreaming ? t("agentRunning")
-                : t("messageWithCommands")
+                ? t("desktop.steerOrQueueFollowUp")
+                : isStreaming ? t("desktop.agentRunning")
+                : t("desktop.messageWithCommands")
             }
             rows={1}
             className="chat-input-textarea"
@@ -1453,8 +1453,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               className="chat-input-toolbar-attach"
               onClick={() => fileInputRef.current?.click()}
               disabled={isStreaming}
-              title={t("attachImage")}
-              aria-label={t("attachImage")}
+              title={t("desktop.attachImage")}
+              aria-label={t("desktop.attachImage")}
               style={{
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                 width: 24, height: 24, padding: 0,
@@ -1482,8 +1482,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={(e) => { if (isStreaming) return; const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setThinkingDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setThinkingDropdownOpen((v) => !v); }}
                   disabled={isStreaming}
-                  title={t("changeReasoningLevel").replace("{level}", thinkingDisplayLabel)}
-                  aria-label={t("reasoningLevel")}
+                  title={t("desktop.changeReasoningLevel", { level: thinkingDisplayLabel })}
+                  aria-label={t("desktop.reasoningLevel")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                     padding: isMobile ? "0 5px" : "3px 7px",
@@ -1587,8 +1587,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {isMobile && (
               <button
                 type="button"
-                title={controlsMenuOpen ? undefined : t("moreControls")}
-                aria-label={t("moreControls")}
+                title={controlsMenuOpen ? undefined : t("desktop.moreControls")}
+                aria-label={t("desktop.moreControls")}
                 aria-expanded={controlsMenuOpen}
                 aria-hidden={controlsMenuOpen || undefined}
                 tabIndex={controlsMenuOpen ? -1 : undefined}
@@ -1625,7 +1625,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   e.currentTarget.style.color = "var(--text-muted)";
                 }}
               >
-                {t("more")}
+                {t("desktop.more")}
               </button>
             )}
             <div className="chat-input-toolbar-actions" style={{
@@ -1654,8 +1654,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={(e) => { if (isStreaming) return; const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setToolDropdownOpen((v) => !v); }}
                   disabled={isStreaming}
-                  title={t("changeToolPreset").replace("{preset}", toolPresetLabel)}
-                  aria-label={t("toolPreset")}
+                  title={t("desktop.changeToolPreset", { preset: toolPresetLabel })}
+                  aria-label={t("desktop.toolPreset")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                     padding: isMobile ? "0 5px" : "3px 7px",
@@ -1708,7 +1708,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = (toolPreset ?? "default") === preset;
-                      const desc = lvl === "off" ? t("noToolsReadOnly") : lvl === "default" ? t("fourBuiltInTools") : t("allBuiltInTools");
+                      const desc = lvl === "off" ? t("desktop.noToolsReadOnly") : lvl === "default" ? t("desktop.fourBuiltInTools") : t("desktop.allBuiltInTools");
                       return (
                         <button
                           key={lvl}
@@ -1832,7 +1832,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
                             textTransform: "uppercase", letterSpacing: "0.07em",
                           }}>
-                            {t("favorites")}
+                            {t("desktop.favorites")}
                           </div>
                           {favModels.map((opt) => {
                             const isActive = opt.modelId === model?.modelId && opt.provider === model?.provider;
@@ -1875,8 +1875,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                     }}
                                     onMouseEnter={(e) => { e.stopPropagation(); e.currentTarget.style.color = "var(--accent)"; }}
                                     onMouseLeave={(e) => { e.stopPropagation(); e.currentTarget.style.color = isFav ? "var(--accent)" : "var(--text-dim)"; }}
-                                    title={isFav ? t("unfavorite") : t("favorite")}
-                                    aria-label={isFav ? t("unfavorite") : t("favorite")}
+                                    title={isFav ? t("desktop.unfavorite") : t("desktop.favorite")}
+                                    aria-label={isFav ? t("desktop.unfavorite") : t("desktop.favorite")}
                                   >
                                     <StarIcon size={12} weight={isFav ? "fill" : "regular"} />
                                   </span>
@@ -1953,8 +1953,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                     }}
                                     onMouseEnter={(e) => { e.stopPropagation(); e.currentTarget.style.color = "var(--accent)"; }}
                                     onMouseLeave={(e) => { e.stopPropagation(); e.currentTarget.style.color = isFav ? "var(--accent)" : "var(--text-dim)"; }}
-                                    title={isFav ? t("unfavorite") : t("favorite")}
-                                    aria-label={isFav ? t("unfavorite") : t("favorite")}
+                                    title={isFav ? t("desktop.unfavorite") : t("desktop.favorite")}
+                                    aria-label={isFav ? t("desktop.unfavorite") : t("desktop.favorite")}
                                   >
                                     <StarIcon size={12} weight={isFav ? "fill" : "regular"} />
                                   </span>
@@ -1977,8 +1977,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 onClick={handleSend}
                 disabled={!value.trim() && !attachedImages.length}
                 className="chat-input-send"
-                title={t("sendMessage")}
-                aria-label={t("sendMessage")}
+                title={t("desktop.sendMessage")}
+                aria-label={t("desktop.sendMessage")}
               >
                 <PaperPlaneTiltIcon size={14} />
               </button>
@@ -1987,8 +1987,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {isStreaming && (
               <button
                 onClick={onAbort}
-                title={t("stopAgent")}
-                aria-label={t("stopAgent")}
+                title={t("desktop.stopAgent")}
+                aria-label={t("desktop.stopAgent")}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "3px 7px",
@@ -2006,15 +2006,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
               >
                 <SquareIcon size={14} />
-                {t("stop")}
+                {t("desktop.stop")}
               </button>
             )}
 
             {isMobile && controlsMenuOpen && (
               <button
                 type="button"
-                title={t("collapseControls")}
-                aria-label={t("collapseControls")}
+                title={t("desktop.collapseControls")}
+                aria-label={t("desktop.collapseControls")}
                 aria-expanded={true}
                 onClick={() => {
                   setToolDropdownOpen(false);

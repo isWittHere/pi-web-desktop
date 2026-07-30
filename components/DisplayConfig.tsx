@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Moon, PaintBrush, Sun, Monitor } from "@phosphor-icons/react";
-import { useLanguage, type TranslationKey } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import type { ThemeSetInfo } from "@/lib/theme";
 
@@ -89,14 +89,14 @@ function BorderIcon({ depth }: { depth: number }) {
 
 // ── Variant availability dots ───────────────────────────────────────────────
 
-function VariantDots({ hasDark, hasLight, t }: { hasDark: boolean; hasLight: boolean; t: (key: TranslationKey) => string }) {
+function VariantDots({ hasDark, hasLight, t }: { hasDark: boolean; hasLight: boolean; t: (key: string) => string }) {
   return (
     <span style={{ display: "inline-flex", gap: 3, alignItems: "center", flexShrink: 0 }}>
       {hasDark && (
-        <span title={t("darkVariant")} style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#7c6f64" }} />
+        <span title={t("desktop.darkVariant")} style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#7c6f64" }} />
       )}
       {hasLight && (
-        <span title={t("lightVariant")} style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#d5c4a1", border: "1px solid rgba(0,0,0,0.1)" }} />
+        <span title={t("desktop.lightVariant")} style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#d5c4a1", border: "1px solid rgba(0,0,0,0.1)" }} />
       )}
     </span>
   );
@@ -106,7 +106,7 @@ function VariantDots({ hasDark, hasLight, t }: { hasDark: boolean; hasLight: boo
 
 export function DisplayConfig() {
   const { mode, resolvedMode, themeName, setMode, setTheme, borderDepth, setBorderDepth } = useTheme();
-  const { language, setLanguage, t } = useLanguage();
+  const { locale: language, setLocale: setLanguage, t } = useI18n();
   const [themeSets, setThemeSets] = useState<ThemeSetInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
@@ -134,20 +134,20 @@ export function DisplayConfig() {
     setMode(m);
   }, [setMode]);
 
-  const modeLabel = resolvedMode === "dark" ? t("dark") : t("light");
+  const modeLabel = resolvedMode === "dark" ? t("desktop.dark") : t("desktop.light");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
       <header style={{ padding: "18px 22px 14px", borderBottom: "1px solid var(--border)" }}>
-        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t("display")}</h1>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t("desktop.display")}</h1>
       </header>
 
       {/* ── Theme ── */}
-      <ConfigSection title={t("theme")} description={t("themeDescription")}>
+      <ConfigSection title={t("desktop.theme")} description={t("desktop.themeDescription")}>
         {/* Color Scheme */}
-        <SectionLabel icon={<PaintBrush size={14} weight="fill" />} label={t("colorScheme")} />
+        <SectionLabel icon={<PaintBrush size={14} weight="fill" />} label={t("desktop.colorScheme")} />
         {loading ? (
-          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("loadingThemes")}</span>
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("desktop.loadingThemes")}</span>
         ) : (
           <div style={tagGroupStyle}>
             <button
@@ -156,7 +156,7 @@ export function DisplayConfig() {
               onMouseEnter={() => setHoveredTag("__default__")}
               onMouseLeave={() => setHoveredTag(null)}
             >
-              {t("defaultTheme")}
+              {t("desktop.defaultTheme")}
             </button>
 
             {themeSets.map((ts) => (
@@ -178,10 +178,10 @@ export function DisplayConfig() {
         <div style={{ marginTop: 20 }}>
           <SectionLabel
             icon={<BorderIcon depth={borderDepth} />}
-            label={`${t("borderVisibility")} (${borderDepth})`}
+            label={`${t("desktop.borderVisibility")} (${borderDepth})`}
           />
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{t("borderSubtle")}</span>
+            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{t("desktop.borderSubtle")}</span>
             <input
               type="range"
               min={0} max={100} step={1}
@@ -194,7 +194,7 @@ export function DisplayConfig() {
                 cursor: "pointer",
               }}
             />
-            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{t("borderBold")}</span>
+            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{t("desktop.borderBold")}</span>
           </div>
           <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
             {[0, 25, 50, 75, 100].map((d) => {
@@ -224,7 +224,7 @@ export function DisplayConfig() {
         <div style={{ marginTop: 20 }}>
           <SectionLabel
             icon={resolvedMode === "dark" ? <Moon size={14} weight="fill" /> : <Sun size={14} weight="fill" />}
-            label={t("appearanceMode")}
+            label={t("desktop.appearanceMode")}
           />
           <div style={tagGroupStyle}>
             {([
@@ -251,16 +251,16 @@ export function DisplayConfig() {
 
         {!loading && themeSets.length === 0 && (
           <p style={{ margin: "14px 0 0", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-            {t("noCustomThemes")}{" "}
-            {t("noCustomThemesHint")}{" "}
+            {t("desktop.noCustomThemes")}{" "}
+            {t("desktop.noCustomThemesHint")}{" "}
             <code style={{ fontSize: 10, background: "var(--bg-secondary)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>~/.pi/agent/themes/*.json</code>{" "}
-            {t("noCustomThemesHint2")}
+            {t("desktop.noCustomThemesHint2")}
           </p>
         )}
       </ConfigSection>
 
       {/* ── Language ── */}
-      <ConfigSection title={t("language")} description={t("languageDescription")}>
+      <ConfigSection title={t("desktop.language")} description={t("desktop.languageDescription")}>
         <div style={tagGroupStyle}>
           {(["en", "zh-CN"] as const).map((lang) => {
             const active = (lang === "zh-CN") ? language === "zh-CN" : language !== "zh-CN";
@@ -272,7 +272,7 @@ export function DisplayConfig() {
                 onMouseEnter={() => setHoveredTag(`lang:${lang}`)}
                 onMouseLeave={() => setHoveredTag(null)}
               >
-                {lang === "en" ? t("english") : t("chinese")}
+                {lang === "en" ? t("desktop.english") : t("desktop.chinese")}
               </button>
             );
           })}

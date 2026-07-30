@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { X } from "@phosphor-icons/react";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 import { getFileIcon } from "./FileIcons";
 
 export interface Tab {
@@ -20,7 +20,7 @@ interface Props {
 }
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
-  const { t } = useLanguage();
+  const { t } = useI18n();
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
 
   return (
@@ -90,8 +90,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
                 flexShrink: 0,
                 transition: "background 0.1s, color 0.1s",
               }}
-              title={t("closeTab")}
-              aria-label={t("closeTabWithLabel").replace("{label}", tab.label)}
+              title={t("desktop.closeTab")}
+              aria-label={t("desktop.closeTabWithLabel", { label: tab.label })}
             >
               <X size={11} aria-hidden="true" />
             </button>

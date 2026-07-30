@@ -14,8 +14,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useElectronWindow } from "@/hooks/useElectronWindow";
-import { useLanguage } from "@/hooks/useLanguage";
-import type { TranslationKey } from "@/hooks/useLanguage";
+import { useI18n } from "@/hooks/useI18n";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
 type SessionCopyField = "file" | "id";
@@ -53,14 +52,14 @@ function ThemeToggleButton({
 }: {
   isDark: boolean;
   toggleTheme: (origin?: { x: number; y: number }) => void;
-  translate: (key: TranslationKey) => string;
+  translate: (key: string) => string;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
   const title = mounted
-    ? (isDark ? translate("switchToLight") : translate("switchToDark"))
-    : translate("switchToLight"); // SSR default: dark mode
+    ? (isDark ? translate("desktop.switchToLight") : translate("desktop.switchToDark"))
+    : translate("desktop.switchToLight"); // SSR default: dark mode
 
   return (
     <button
@@ -114,7 +113,7 @@ export function AppTitleBar({
   onWorkspaceControlsHostChange,
 }: AppTitleBarProps) {
   const { isElectron, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
-  const { t: translate } = useLanguage();
+  const { t: translate } = useI18n();
 
   return (
     <>
@@ -144,8 +143,8 @@ export function AppTitleBar({
         <button
           className="app-no-drag"
           onClick={onSidebarToggle}
-          title={sidebarOpen ? translate("hideSidebar") : translate("showSidebar")}
-          aria-label={sidebarOpen ? translate("hideSidebar") : translate("showSidebar")}
+          title={sidebarOpen ? translate("desktop.hideSidebar") : translate("desktop.showSidebar")}
+          aria-label={sidebarOpen ? translate("desktop.hideSidebar") : translate("desktop.showSidebar")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
@@ -213,8 +212,8 @@ export function AppTitleBar({
         <button
           className="app-no-drag"
           onClick={onToggleFilePanel}
-          title={rightPanelOpen ? translate("hideFilePanel") : translate("showFilePanel")}
-          aria-label={rightPanelOpen ? translate("hideFilePanel") : translate("showFilePanel")}
+          title={rightPanelOpen ? translate("desktop.hideFilePanel") : translate("desktop.showFilePanel")}
+          aria-label={rightPanelOpen ? translate("desktop.hideFilePanel") : translate("desktop.showFilePanel")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
@@ -237,8 +236,8 @@ export function AppTitleBar({
           className="app-no-drag"
           type="button"
           onClick={onOpenSettings}
-          title={translate("settings")}
-          aria-label={translate("settings")}
+          title={translate("desktop.settings")}
+          aria-label={translate("desktop.settings")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
@@ -257,8 +256,8 @@ export function AppTitleBar({
             <button
               className="app-no-drag"
               onClick={minimize}
-              title={translate("minimize")}
-              aria-label={translate("minimize")}
+              title={translate("desktop.minimize")}
+              aria-label={translate("desktop.minimize")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 44, height: "100%", padding: 0,
@@ -274,8 +273,8 @@ export function AppTitleBar({
             <button
               className="app-no-drag"
               onClick={toggleMaximize}
-              title={isMaximized ? translate("restore") : translate("maximize")}
-              aria-label={isMaximized ? translate("restore") : translate("maximize")}
+              title={isMaximized ? translate("desktop.restore") : translate("desktop.maximize")}
+              aria-label={isMaximized ? translate("desktop.restore") : translate("desktop.maximize")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 44, height: "100%", padding: 0,
@@ -291,8 +290,8 @@ export function AppTitleBar({
             <button
               className="app-no-drag"
               onClick={close}
-              title={translate("close")}
-              aria-label={translate("close")}
+              title={translate("desktop.close")}
+              aria-label={translate("desktop.close")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 44, height: "100%", padding: 0,
@@ -358,29 +357,29 @@ export function AppTitleBar({
             }}>
               {sessionStats ? (() => {
                 const sessionRows = [
-                  ...(sessionStats.sessionName ? [{ label: translate("name"), value: sessionStats.sessionName, copyField: null }] : []),
-                  { label: translate("sessionInfoFile"), value: sessionStats.sessionFile ?? translate("sessionInfoInMemory"), copyField: "file" as const },
-                  { label: translate("sessionInfoId"), value: sessionStats.sessionId, copyField: "id" as const },
+                  ...(sessionStats.sessionName ? [{ label: translate("desktop.name"), value: sessionStats.sessionName, copyField: null }] : []),
+                  { label: translate("desktop.sessionInfoFile"), value: sessionStats.sessionFile ?? translate("desktop.sessionInfoInMemory"), copyField: "file" as const },
+                  { label: translate("desktop.sessionInfoId"), value: sessionStats.sessionId, copyField: "id" as const },
                 ];
                 const messageRows = [
-                  [translate("sessionInfoUser"), sessionStats.userMessages.toLocaleString()],
-                  [translate("sessionInfoAssistant"), sessionStats.assistantMessages.toLocaleString()],
-                  [translate("sessionInfoToolCalls"), sessionStats.toolCalls.toLocaleString()],
-                  [translate("sessionInfoToolResults"), sessionStats.toolResults.toLocaleString()],
-                  [translate("sessionInfoTotal"), sessionStats.totalMessages.toLocaleString()],
+                  [translate("desktop.sessionInfoUser"), sessionStats.userMessages.toLocaleString()],
+                  [translate("desktop.sessionInfoAssistant"), sessionStats.assistantMessages.toLocaleString()],
+                  [translate("desktop.sessionInfoToolCalls"), sessionStats.toolCalls.toLocaleString()],
+                  [translate("desktop.sessionInfoToolResults"), sessionStats.toolResults.toLocaleString()],
+                  [translate("desktop.sessionInfoTotal"), sessionStats.totalMessages.toLocaleString()],
                 ];
                 const tokenRows = [
-                  [translate("sessionInfoInput"), sessionStats.tokens.input.toLocaleString()],
-                  [translate("sessionInfoOutput"), sessionStats.tokens.output.toLocaleString()],
-                  ...(sessionStats.tokens.cacheRead > 0 ? [[translate("sessionInfoCacheRead"), sessionStats.tokens.cacheRead.toLocaleString()]] : []),
-                  ...(sessionStats.tokens.cacheWrite > 0 ? [[translate("sessionInfoCacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString()]] : []),
-                  [translate("sessionInfoTotal"), sessionStats.tokens.total.toLocaleString()],
+                  [translate("desktop.sessionInfoInput"), sessionStats.tokens.input.toLocaleString()],
+                  [translate("desktop.sessionInfoOutput"), sessionStats.tokens.output.toLocaleString()],
+                  ...(sessionStats.tokens.cacheRead > 0 ? [[translate("desktop.sessionInfoCacheRead"), sessionStats.tokens.cacheRead.toLocaleString()]] : []),
+                  ...(sessionStats.tokens.cacheWrite > 0 ? [[translate("desktop.sessionInfoCacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString()]] : []),
+                  [translate("desktop.sessionInfoTotal"), sessionStats.tokens.total.toLocaleString()],
                 ];
                 const ctx = contextUsage ?? sessionStats.contextUsage;
                 const formatCompact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
                 const extraTokenRows = [
-                  ...(sessionStats.cost > 0 ? [[translate("sessionInfoCost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
-                  ...(ctx?.contextWindow ? [[translate("sessionInfoContext"), `${ctx.percent !== null ? `${ctx.percent.toFixed(1)}%` : "?"} / ${formatCompact(ctx.contextWindow)}`]] : []),
+                  ...(sessionStats.cost > 0 ? [[translate("desktop.sessionInfoCost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
+                  ...(ctx?.contextWindow ? [[translate("desktop.sessionInfoContext"), `${ctx.percent !== null ? `${ctx.percent.toFixed(1)}%` : "?"} / ${formatCompact(ctx.contextWindow)}`]] : []),
                 ];
                 const section = (
                   title: string,
@@ -417,7 +416,7 @@ export function AppTitleBar({
                   return (
                     <button
                       type="button"
-                      title={copied ? translate("copied") : field === "file" ? translate("copyFilePath") : translate("copySessionId")}
+                      title={copied ? translate("desktop.copied") : field === "file" ? translate("desktop.copyFilePath") : translate("desktop.copySessionId")}
                       onClick={() => onCopySessionField(field, value)}
                       style={{
                         alignSelf: "start",
@@ -452,7 +451,7 @@ export function AppTitleBar({
                 };
                 const sessionInfoSection = (
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("sessionInfoTitle")}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("desktop.sessionInfoTitle")}</div>
                     <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
                       {sessionRows.map((row) => (
                         <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
@@ -483,13 +482,13 @@ export function AppTitleBar({
                     fontFamily: "var(--font-mono)",
                   }}>
                     {sessionInfoSection}
-                    {section(translate("sessionInfoMessages"), messageRows)}
-                    {section(translate("sessionInfoTokens"), [...tokenRows, ...extraTokenRows], "right", true)}
+                    {section(translate("desktop.sessionInfoMessages"), messageRows)}
+                    {section(translate("desktop.sessionInfoTokens"), [...tokenRows, ...extraTokenRows], "right", true)}
                   </div>
                 );
               })() : (
                 <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                  {translate("sendMessageForSessionInfo")}
+                  {translate("desktop.sendMessageForSessionInfo")}
                 </div>
               )}
             </div>
