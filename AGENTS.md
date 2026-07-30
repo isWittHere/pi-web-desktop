@@ -10,6 +10,31 @@
 
 ---
 
+## Fork Strategy & Upstream Integration Policy
+
+This project began from upstream pi-web `v0.7.16`, but is now a deliberately diverged **Electron-first desktop product**. Upstream pi-web remains an important source of Pi SDK compatibility, security, correctness, and reliability improvements; it is **not** the UI/UX baseline for this repository.
+
+### Product Priority
+
+1. **Preserve the desktop product experience.** Frameless Electron behavior, the custom title bar, Phosphor/provider icons, IA Writer Quattro/Lilex typography, advanced theme system, process-timeline message UI, right-side navigation, enhanced Markdown, and desktop sidebar interactions are protected product assets.
+2. **Align upstream core behavior.** Prefer porting upstream fixes for security boundaries, Pi SDK/API compatibility, model/session/auth correctness, filesystem safety, and SSE reliability.
+3. **Port behavior, not whole components.** When an upstream core change needs UI support, implement its observable behavior inside the local component architecture. Do not wholesale replace local `components/` files, `AppShell.tsx`, theme systems, or CSS with upstream Web-first implementations. The i18n registry/provider/catalog is an approved standalone architecture migration, but its desktop startup behavior and local message coverage must be preserved.
+4. **Migrate coupled features as a unit.** Do not partially port cross-layer changes. For example, model scope support must cover SDK resolution, API response/cache contracts, `AgentSession` construction, and local UI feedback—not merely model-selector filtering.
+5. **Keep each upstream port reversible.** Separate SDK/runtime, security, data integrity, auth, SSE, and UI changes into focused commits with focused tests and manual validation.
+
+### Mandatory Merge Rules
+
+- Treat `ref-repos/` as read-only comparison material. It is never staged, committed, copied wholesale, or used as a replacement source tree.
+- Never overwrite local `package.json`: preserve Electron packaging/scripts, fonts, icons, and desktop release tooling while manually reconciling upstream runtime dependencies.
+- Treat `components/AppShell.tsx`, `SessionSidebar.tsx`, `ChatWindow.tsx`, `ChatInput.tsx`, `MarkdownBody.tsx`, `FileViewer.tsx`, `app/globals.css`, and `hooks/useTheme.ts` as high-conflict desktop assets. Apply targeted behavioral changes only.
+- i18n may align with upstream through a focused `lib/i18n` registry/provider/catalog migration. Do not replace local `AppShell` or settings UI to obtain it; preserve `app/layout.tsx` pre-hydration language bootstrap, existing `pi-language` migration, `data-language`, and all desktop-specific translations. Use a `useLanguage()` compatibility shim while call sites and namespaced keys migrate.
+- Security updates must be adapted to the Electron server lifecycle. In particular, changing listener binding, Host/Origin validation, CORS, or `PI_WEB_PASSWORD` must be validated with `electron/main.js` readiness checks and BrowserWindow startup; never retain wildcard API CORS merely for LAN convenience.
+- Upstream UI enhancements such as resizable panels may be adopted only by manually integrating their interaction/accessibility behavior with the local title bar, responsive layout, CSS variables, and i18n.
+
+For the current upstream target and phased acceptance criteria, see `.myLastChat/MLC_上游v0.8.5合并规划与架构准则.md`.
+
+---
+
 ## Technology Stack
 
 | Category | Technology | Version |
@@ -111,7 +136,7 @@ pi-web-main/
 │   ├── useElectronWindow.ts      # Electron window controls bridge
 │   ├── useIsMobile.ts            # Responsive breakpoint hook
 │   ├── useKeyboardShortcuts.ts   # Global keyboard shortcuts
-│   ├── useLanguage.ts            # i18n (en / zh-CN)
+│   ├── useLanguage.ts            # Legacy-compatible i18n hook (en / zh-CN)
 │   ├── useProcessDisplayMode.ts  # Process visualization preferences
 │   └── useTheme.ts              # Dark/light theme
 │
@@ -459,9 +484,10 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - `/api/sessions/[id]/export` delegates to pi's export helper, then patches recursive tree helpers in the generated HTML to iterative versions so very deep linear sessions do not overflow the browser call stack.
 
 ### Electron Desktop Specifics
-- **Frameless window**: Custom title bar via `AppTitleBar.tsx` + `useElectronWindow.ts`
+- **Frameless window**: Custom title bar via `AppTitleBar.tsx` + `useElectronWindow.ts`; layout changes must preserve the title bar drag region, native window controls, and workspace-control hosts.
 - **System tray**: Minimize to tray on close; double-click tray to restore; Quit from tray menu
-- **Server lifecycle**: Electron waits for an existing server on port 30141, starts one if not found
+- **Server lifecycle**: Electron waits for an existing server on port 30141, starts one if not found. Changes to listener binding, password authentication, Host/Origin checks, or response status handling must keep this readiness path working.
+- **Default network boundary**: The desktop server should remain loopback-only unless an explicit, security-reviewed LAN mode is enabled. Do not use wildcard API CORS as a substitute for an access-control design.
 - **Dev vs Production**: `IS_DEV` determined by checking `resources/app` and `resources/app.asar` existence (since `asar: false`, `app.isPackaged` returns false even in production)
 - **Process spawning**: Uses `fork()` (not `spawn()`) in production because `process.execPath` is `Pi Web.exe`, not Node.js
 
@@ -478,18 +504,20 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - **Built-in defaults**: `globals.css` provides `:root` (light) and `html.dark` (dark) CSS variable defaults. They act as fallback when no pi CLI theme is selected.
 
 ### i18n
-- Supports English (`en`) and 中文 (`zh-CN`)
-- Language stored in `localStorage` as `pi-language`
-- Layout script applies language before React hydration to prevent flash
-- `useLanguage.ts` hook manages translations across all components
+- Supports English (`en`) and 中文 (`zh-CN`).
+- Current language is bootstrapped before hydration by `app/layout.tsx`, which reads `pi-language`, applies `html.lang` and `data-language`, and prevents a visible language flash in Electron.
+- The target architecture is upstream-aligned `lib/i18n/` primitives (locale registry, provider, message catalogs, interpolation, locale-aware formatting) with local desktop adaptations.
+- During migration, read existing `pi-language` before `pi-locale`, preserve local desktop-only translations, and keep `useLanguage()` as a compatibility shim over `useI18n()` until all call sites and translation-key aliases are migrated.
+- Any catalog change needs English/Chinese key-parity and call-site-resolution tests; do not import upstream AppShell or language-menu UI merely to adopt i18n.
 
 ### ref-repos
 - `ref-repos/` directory contains reference source code for development
-- **Never commit** to git
+- It is comparison-only: inspect and selectively reimplement required behavior in the local architecture; never use it for a wholesale source-tree or component replacement.
+- **Never commit** to git; explicitly inspect `git status` before staging upstream-integration work.
 - Excluded from TypeScript compilation in `tsconfig.json`
 - Excluded from ESLint in `eslint.config.mjs`
 
 ---
 
-*Last Updated: 2026-07-29*
+*Last Updated: 2026-07-31*
 *Generated by: AGENTS-maker*
