@@ -159,7 +159,10 @@ const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
 const AGENT_STATE_RECONCILE_MS = 15_000;
-const EVENT_STREAM_CONNECT_TIMEOUT_MS = 5_000;
+// Opening an inactive session may load its resources and extensions before the
+// SSE route can emit `connected`. Five seconds is not enough for a cold
+// Turbopack route or a session with several extensions.
+const EVENT_STREAM_CONNECT_TIMEOUT_MS = 30_000;
 const MAX_NOTICES = 5;
 const NOTICE_VISIBLE_MS = 5000;
 const NOTICE_EXIT_ANIMATION_MS = 180;
