@@ -1212,6 +1212,14 @@ span.linenumber {
   gap: 2px;
 }
 
+/* Context usage donut chart — arc length = usage %, color follows severity. */
+.session-info-bar-donut {
+  display: block;
+}
+.session-info-bar-donut-arc {
+  transition: stroke-dashoffset 0.35s ease;
+}
+
 /* Popover host — wraps a button and its popover so the popover
    positions relative to the button, not the whole bar. */
 .session-info-bar-popover-host {

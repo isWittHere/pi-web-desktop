@@ -11,7 +11,6 @@ import {
   Copy,
   Database,
   FileText,
-  Gauge,
   GitBranch,
   Square,
 } from "@phosphor-icons/react";
@@ -111,15 +110,10 @@ export function SessionInfoBar({
   const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : "<$0.01") : null;
 
   let ctxColor = "var(--text-muted)";
-  let ctxStr: string | null = null;
   if (contextUsage?.contextWindow) {
     const pct = contextUsage.percent;
     if (pct !== null && pct > 90) ctxColor = "#ef4444";
     else if (pct !== null && pct > 70) ctxColor = "rgba(234,179,8,0.95)";
-    ctxStr =
-      pct !== null
-        ? `${pct.toFixed(0)}% / ${formatTokenCount(contextUsage.contextWindow)}`
-        : `? / ${formatTokenCount(contextUsage.contextWindow)}`;
   }
 
   const hasSystemPrompt = systemPrompt !== null && systemPrompt !== "";
@@ -146,8 +140,9 @@ export function SessionInfoBar({
   }
   if (contextUsage?.contextWindow) {
     const pct = contextUsage.percent;
+    const used = contextUsage.tokens;
     tooltipParts.push(
-      `${translate("desktop.sessionInfoContext")}: ${pct !== null ? `${pct.toFixed(1)}%` : "?"} / ${contextUsage.contextWindow.toLocaleString()}`,
+      `${translate("desktop.sessionInfoContext")}: ${pct !== null ? `${pct.toFixed(1)}%` : "?"} ${used !== null ? formatTokenCount(used) : "?"}/${formatTokenCount(contextUsage.contextWindow)}`,
     );
   }
   const tooltip = tooltipParts.join("  |  ");
@@ -331,10 +326,36 @@ export function SessionInfoBar({
               </span>
             )}
             {costStr && <span>{costStr}</span>}
-            {ctxStr && (
+            {contextUsage?.contextWindow && (
               <span className="session-info-bar-token-chip" style={{ color: ctxColor }}>
-                <Gauge size={10} aria-hidden="true" />
-                {ctxStr}
+                {/* Pure donut chart — arc length = context usage %. Details are in the tooltip & stats popover. */}
+                <svg
+                  className="session-info-bar-donut"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                >
+                  <circle cx="8" cy="8" r="6.75" fill="none" stroke="var(--border)" strokeWidth="2.5" />
+                  <circle
+                    className="session-info-bar-donut-arc"
+                    cx="8"
+                    cy="8"
+                    r="6.75"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    pathLength={100}
+                    strokeDasharray={100}
+                    strokeDashoffset={
+                      contextUsage.percent === null
+                        ? 0 // unknown usage → full ring
+                        : 100 - Math.min(100, Math.max(0, contextUsage.percent))
+                    }
+                    transform="rotate(-90 8 8)"
+                  />
+                </svg>
               </span>
             )}
           </button>
@@ -405,9 +426,10 @@ export function SessionInfoBar({
                     if (sessionStats.cost > 0) tokenRows.push([translate("desktop.sessionInfoCost"), `$${sessionStats.cost.toFixed(4)}`]);
                     if (ctx?.contextWindow) {
                       const pct = ctx.percent;
+                      const used = ctx.tokens;
                       tokenRows.push([
                         translate("desktop.sessionInfoContext"),
-                        `${pct !== null ? `${pct.toFixed(1)}%` : "?"} / ${ctx.contextWindow.toLocaleString()}`,
+                        `${pct !== null ? `${pct.toFixed(1)}%` : "?"} ${used !== null ? formatTokenCount(used) : "?"}/${formatTokenCount(ctx.contextWindow)}`,
                       ]);
                     }
 
