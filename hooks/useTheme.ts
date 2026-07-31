@@ -312,7 +312,8 @@ export function useTheme() {
     setResolvedMode(rmode);
   }, []);
 
-  // On mount: apply theme + border depth from inline-script pre-set attributes
+  // On mount: apply theme + border depth from inline-script pre-set attributes.
+  // These snapshots intentionally seed a one-time hydration reconciliation.
   useEffect(() => {
     const el = document.documentElement;
     const dm = el.dataset.themeMode as ThemeMode | undefined;
@@ -333,6 +334,8 @@ export function useTheme() {
       applyBorderDepth(readBorderDepth());
       notify();
     });
+    // The inline bootstrap state must be reconciled once before subscriptions update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // OS color scheme changes

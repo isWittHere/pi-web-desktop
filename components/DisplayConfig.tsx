@@ -134,7 +134,6 @@ export function DisplayConfig() {
     setMode(m);
   }, [setMode]);
 
-  const modeLabel = resolvedMode === "dark" ? t("desktop.dark") : t("desktop.light");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>

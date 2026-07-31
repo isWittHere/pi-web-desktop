@@ -29,7 +29,7 @@ interface AppTitleBarProps {
   showChat: boolean;
   systemPrompt: string | null;
   activeTopPanel: "system" | "session" | null;
-  onToggleTopPanel: (panel: "system" | "session") => void;
+
   topPanelPos: { top: number; left: number; width: number } | null;
   sessionStats: SessionStatsInfo | null;
   contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null;
@@ -100,7 +100,7 @@ export function AppTitleBar({
   showChat,
   systemPrompt,
   activeTopPanel,
-  onToggleTopPanel: _onToggleTopPanel,
+
   topPanelPos,
   sessionStats,
   contextUsage,

@@ -101,10 +101,6 @@ export function AppShell() {
   const [activeTopPanel, setActiveTopPanel] = useState<"system" | "session" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  const toggleTopPanel = useCallback((panel: "system" | "session") => {
-    if (isMobile) setSidebarOpen(false);
-    setActiveTopPanel((cur) => cur === panel ? null : panel);
-  }, [isMobile]);
 
   const openSessionStatsPanel = useCallback(() => {
     if (isMobile) setSidebarOpen(false);
@@ -228,7 +224,7 @@ export function AppShell() {
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
     setActiveTopPanel(null);
-  }, [router, selectedSession]);
+  }, [selectedSession]);
 
   // Update browser tab title when workspace changes
   useEffect(() => {
@@ -328,7 +324,7 @@ export function AppShell() {
       setActiveTopPanel(null);
       router.replace("/", { scroll: false });
     }
-  }, [router, selectedSession, isMobile]);
+  }, [router, selectedSession]);
 
   const handleOpenFile = useCallback((filePath: string, fileName: string, sourceSessionId?: string | null) => {
     const tabId = `file:${filePath}`;
@@ -435,7 +431,6 @@ export function AppShell() {
         showChat={showChat}
         systemPrompt={systemPrompt}
         activeTopPanel={activeTopPanel}
-        onToggleTopPanel={toggleTopPanel}
         topPanelPos={topPanelPos}
         sessionStats={sessionStats}
         contextUsage={contextUsage}

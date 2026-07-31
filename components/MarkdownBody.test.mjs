@@ -32,6 +32,6 @@ test("opens non-file markdown links in a safe new tab", () => {
 test("keeps local file markdown links in the app", () => {
   const html = renderMarkdown("[file](components/MarkdownBody.tsx)");
 
-  assert.match(html, /<a href="components\/MarkdownBody\.tsx">file<\/a>/);
+  assert.match(html, /<a (?=[^>]*href="components\/MarkdownBody\.tsx")[^>]*>file<\/a>/);
   assert.doesNotMatch(html, /target=|rel=|\snode=/);
 });
