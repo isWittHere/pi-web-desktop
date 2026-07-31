@@ -4,6 +4,7 @@ import { createAgentSessionServices, getAgentDir, type SettingsManager } from "@
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { loadModelsWithCache, type ModelsData } from "@/lib/models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "@/lib/model-scope";
+import { projectTrustReloadOptions } from "@/lib/project-trust";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,14 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   const thinkingLevelMaps: Record<string, Record<string, string | null>> = {};
 
   const agentDir = getAgentDir();
-  const services = await createAgentSessionServices({ cwd, agentDir });
+  // Model enumeration imports project extensions to discover their providers.
+  // Gate that import before repository-controlled factories can execute.
+  const trustReloadOptions = projectTrustReloadOptions(cwd, agentDir);
+  const services = await createAgentSessionServices({
+    cwd,
+    agentDir,
+    ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
+  });
   const settings: SettingsManager = services.settingsManager;
   const scope = await resolveVisibleModels(
     services.modelRuntime,

@@ -33,6 +33,17 @@ export interface SkillUpdateResult {
   message?: string;
 }
 
+export interface ProjectTrustStatus {
+  requiresTrust: boolean;
+  trusted: boolean;
+}
+
+export interface SkillsResponse {
+  skills: SkillInfo[];
+  diagnostics: Array<{ type: "warning" | "error"; message: string; source?: string; path?: string }>;
+  projectResourcesLoaded: boolean;
+}
+
 export interface SkillInfo {
   name: string;
   description: string;
@@ -88,4 +99,5 @@ export interface PluginsResponse {
   packages: PluginPackageInfo[];
   totals: PluginResourceCounts;
   diagnostics: PluginDiagnostic[];
+  projectResourcesLoaded: boolean;
 }

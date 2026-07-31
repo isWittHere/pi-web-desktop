@@ -10,6 +10,7 @@ import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
 import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
+import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -30,6 +31,7 @@ import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
 import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
+import type { ProjectTrustStatus } from "@/lib/api-types";
 
 type SessionCopyField = "file" | "id";
 
@@ -48,6 +50,10 @@ export function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("models");
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
+  const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
+  const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
+  const [projectTrustBusy, setProjectTrustBusy] = useState(false);
+  const [projectTrustError, setProjectTrustError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   // On mobile the sidebar is an overlay drawer; hide it by default so the chat
@@ -373,8 +379,52 @@ export function AppShell() {
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
+  const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
+
+  useEffect(() => {
+    setProjectTrust(null);
+    setProjectTrustDialogOpen(false);
+    setProjectTrustError(null);
+    if (!projectTrustCwd) return;
+
+    const controller = new AbortController();
+    fetch(`/api/project-trust?cwd=${encodeURIComponent(projectTrustCwd)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json() as ProjectTrustStatus & { error?: string };
+        if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+        setProjectTrust(data);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("Failed to load project trust:", error);
+      });
+    return () => controller.abort();
+  }, [projectTrustCwd]);
+
+  const handleTrustProject = useCallback(async () => {
+    if (!projectTrustCwd || projectTrustBusy) return;
+    setProjectTrustBusy(true);
+    setProjectTrustError(null);
+    try {
+      const response = await fetch("/api/project-trust", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd: projectTrustCwd }),
+      });
+      const data = await response.json() as ProjectTrustStatus & { error?: string };
+      if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+      setProjectTrust(data);
+      setProjectTrustDialogOpen(false);
+      setModelsRefreshKey((key) => key + 1);
+      setSessionKey((key) => key + 1);
+    } catch (error) {
+      setProjectTrustError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProjectTrustBusy(false);
+    }
+  }, [projectTrustBusy, projectTrustCwd]);
 
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const settingsCwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
@@ -442,6 +492,38 @@ export function AppShell() {
         sessionTitle={sessionTitle}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
       />
+      {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
+        <button
+          type="button"
+          onClick={() => {
+            setProjectTrustError(null);
+            setProjectTrustDialogOpen(true);
+          }}
+          title={t("desktop.projectResourcesRestricted")}
+          aria-label={t("desktop.projectResourcesRestricted")}
+          style={{
+            position: "fixed",
+            top: isMobile ? 48 : 48,
+            right: isMobile ? 12 : 20,
+            zIndex: 700,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "8px 11px",
+            border: "1px solid color-mix(in srgb, var(--accent-orange) 52%, var(--border))",
+            borderRadius: 7,
+            background: "color-mix(in srgb, var(--accent-orange) 11%, var(--bg-panel))",
+            color: "var(--accent-orange)",
+            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.16)",
+            cursor: "pointer",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          <span aria-hidden="true">⚠</span>
+          {t("desktop.trustProject")}
+        </button>
+      )}
       <div
         style={{
           "--right-panel-width": `${rightPanel.width}px`,
@@ -585,6 +667,17 @@ export function AppShell() {
         </div>
       </div>
     </div>
+    {projectTrustDialogOpen && projectTrustCwd && (
+      <ProjectTrustDialog
+        cwd={projectTrustCwd}
+        busy={projectTrustBusy}
+        error={projectTrustError}
+        onCancelAction={() => {
+          if (!projectTrustBusy) setProjectTrustDialogOpen(false);
+        }}
+        onConfirmAction={() => void handleTrustProject()}
+      />
+    )}
     {settingsOpen && (
       <SettingsModal
         initialTab={settingsTab}
