@@ -378,6 +378,8 @@ export const zhCNLocale = {
     "desktop.skillSearchHint": "搜索 skills.sh，发现并为你的 Agent 安装技能。",
     "desktop.visibleInModelPrompt": "在模型提示词中可见 — 点击以禁用",
     "desktop.hiddenFromModelPrompt": "在模型提示词中隐藏 — 点击以启用",
+    "desktop.dormant": "休眠",
+    "desktop.hiddenButInvocable": "已从模型中隐藏，仍可手动调用",
     "desktop.check": "检查",
     "desktop.upToDate": "已是最新",
     "desktop.automaticChecksUnavailable": "无法自动检查更新",

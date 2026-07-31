@@ -378,6 +378,8 @@ export const enLocale = {
     "desktop.skillSearchHint": "Search skills.sh to discover and install skills for your agent.",
     "desktop.visibleInModelPrompt": "Visible in model prompt — click to disable",
     "desktop.hiddenFromModelPrompt": "Hidden from model prompt — click to enable",
+    "desktop.dormant": "Dormant",
+    "desktop.hiddenButInvocable": "Hidden from the model, still manually invocable",
     "desktop.check": "Check",
     "desktop.upToDate": "Up to date",
     "desktop.automaticChecksUnavailable": "Automatic checks unavailable",

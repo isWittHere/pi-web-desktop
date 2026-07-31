@@ -159,6 +159,7 @@ const USER_SCROLL_INTENT_MS = 1200;
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
+const EVENT_STREAM_IDLE_GRACE_MS = 30_000;
 const AGENT_STATE_RECONCILE_MS = 15_000;
 // Opening an inactive session may load its resources and extensions before the
 // SSE route can emit `connected`. Five seconds is not enough for a cold
@@ -174,6 +175,12 @@ type EventStreamConnectionStatus = "connected" | "timeout" | "closed";
 type EventStreamConnectionResult = {
   status: EventStreamConnectionStatus;
   source: EventSource;
+};
+
+type EventStreamConnectionAttempt = {
+  source: EventSource;
+  promise: Promise<EventStreamConnectionResult>;
+  pending: boolean;
 };
 
 class EventStreamConnectionError extends Error {
@@ -372,8 +379,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>({ steering: [], followUp: [] });
 
   const eventSourceRef = useRef<EventSource | null>(null);
+  const eventSourceSessionIdRef = useRef<string | null>(null);
+  const eventConnectionAttemptRef = useRef<EventStreamConnectionAttempt | null>(null);
+  const eventStreamGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const eventStreamGraceGenerationRef = useRef(0);
+  const eventStreamGraceActiveRef = useRef(false);
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
   const agentRunningRef = useRef(false);
+  const sdkAgentActiveRef = useRef(false);
+  const rpcPromptPendingRef = useRef(false);
+  const notifiedPromptRunIdRef = useRef(-1);
   const bashRunningRef = useRef(false);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   const initialScrollDoneRef = useRef(false);
@@ -612,20 +627,37 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [ensureNewSession]);
 
-  const connectEvents = useCallback((sid: string): Promise<EventStreamConnectionResult> => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+  const cancelEventStreamGrace = useCallback(() => {
+    eventStreamGraceGenerationRef.current += 1;
+    eventStreamGraceActiveRef.current = false;
+    if (eventStreamGraceTimerRef.current) {
+      clearTimeout(eventStreamGraceTimerRef.current);
+      eventStreamGraceTimerRef.current = null;
     }
+  }, []);
+
+  const closeEvents = useCallback(() => {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    eventSourceSessionIdRef.current = null;
+    eventConnectionAttemptRef.current = null;
+  }, []);
+
+  const connectEvents = useCallback((sid: string): Promise<EventStreamConnectionResult> => {
+    closeEvents();
     const es = new EventSource(`/api/agent/${encodeURIComponent(sid)}/events`);
     eventSourceRef.current = es;
+    eventSourceSessionIdRef.current = sid;
 
-    return new Promise((resolve) => {
+    const promise = new Promise<EventStreamConnectionResult>((resolve) => {
       let settled = false;
       const settle = (status: EventStreamConnectionStatus) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
+        if (eventConnectionAttemptRef.current?.source === es) {
+          eventConnectionAttemptRef.current.pending = false;
+        }
         resolve({ status, source: es });
       };
       const timeout = setTimeout(() => settle("timeout"), EVENT_STREAM_CONNECT_TIMEOUT_MS);
@@ -636,33 +668,49 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (event.type === "connected") settle("connected");
           handleAgentEventRef.current?.(event);
         } catch {
-          // ignore
+          // Ignore malformed events; EventSource itself reconnects after transient errors.
         }
       };
       es.onerror = () => {
-        if (es.readyState === EventSource.CLOSED) {
-          // Fatal error (404/500/content-type mismatch): browser won't
-          // auto-reconnect. Settle the Promise and manually reconnect for
-          // already-running sessions.
-          settle("closed");
-          if (eventSourceRef.current === es && agentRunningRef.current) {
-            eventSourceRef.current = null;
-            setTimeout(() => {
-              if (agentRunningRef.current) void connectEvents(sid);
-            }, 1000);
+        if (es.readyState !== EventSource.CLOSED) return;
+        settle("closed");
+        if (eventSourceRef.current !== es || (!agentRunningRef.current && !eventStreamGraceActiveRef.current)) return;
+
+        eventSourceRef.current = null;
+        eventSourceSessionIdRef.current = null;
+        eventConnectionAttemptRef.current = null;
+        const reconnectGeneration = eventStreamGraceGenerationRef.current;
+        setTimeout(() => {
+          if (
+            reconnectGeneration === eventStreamGraceGenerationRef.current
+            && !eventSourceRef.current
+            && (agentRunningRef.current || eventStreamGraceActiveRef.current)
+          ) {
+            void connectEvents(sid);
           }
-        }
-        // Recoverable errors (CONNECTING): let EventSource auto-reconnect.
-        // The timeout above resolves only to let callers decide whether this
-        // connection must be ready before they continue.
+        }, 1000);
       };
     });
-  }, []);
+    eventConnectionAttemptRef.current = { source: es, promise, pending: true };
+    return promise;
+  }, [closeEvents]);
 
   const ensureEventsConnected = useCallback(async (sid: string) => {
+    const current = eventSourceRef.current;
+    if (current && eventSourceSessionIdRef.current === sid) {
+      if (current.readyState === EventSource.OPEN) return;
+      const attempt = eventConnectionAttemptRef.current;
+      if (attempt?.source === current && attempt.pending) {
+        await attempt.promise;
+        if (eventSourceRef.current === current && current.readyState === EventSource.OPEN) return;
+      }
+    }
+
     const result = await connectEvents(sid);
     if (result.status === "connected" || result.source.readyState === EventSource.OPEN) return;
     if (eventSourceRef.current === result.source) eventSourceRef.current = null;
+    if (eventSourceSessionIdRef.current === sid) eventSourceSessionIdRef.current = null;
+    if (eventConnectionAttemptRef.current?.source === result.source) eventConnectionAttemptRef.current = null;
     result.source.close();
     throw new EventStreamConnectionError(result.status);
   }, [connectEvents]);
@@ -761,39 +809,116 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [addNotice, opts.chatInputRef]);
 
-  const finishPromptWithoutStream = useCallback(async (sid: string | null = sessionIdRef.current, runId?: number) => {
-    // Bail out before loadSession too: a stale finish for a previous run
-    // must not overwrite the messages of the run currently streaming.
-    if (runId !== undefined && promptRunIdRef.current !== runId) return;
+  const settleUiStage = useCallback(() => {
+    const wasRunning = agentRunningRef.current;
+    agentRunningRef.current = false;
+    setAgentRunning(false);
+    setAgentPhase(null);
+    setRetryInfo(null);
+    dispatch({ type: "end" });
+    return wasRunning;
+  }, []);
+
+  const notifyPromptStage = useCallback((runId: number) => {
+    if (notifiedPromptRunIdRef.current === runId) return false;
+    notifiedPromptRunIdRef.current = runId;
+    onAgentEnd?.();
+    return true;
+  }, [onAgentEnd]);
+
+  const scheduleEventStreamClose = useCallback((sid: string) => {
+    cancelEventStreamGrace();
+    eventStreamGraceActiveRef.current = true;
+    const generation = eventStreamGraceGenerationRef.current;
+
+    const checkServerIdle = async () => {
+      if (
+        generation !== eventStreamGraceGenerationRef.current
+        || sessionIdRef.current !== sid
+        || !eventStreamGraceActiveRef.current
+      ) return;
+
+      try {
+        const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json() as { running?: boolean; state?: AgentStateResponse };
+        if (
+          generation !== eventStreamGraceGenerationRef.current
+          || sessionIdRef.current !== sid
+          || !eventStreamGraceActiveRef.current
+        ) return;
+
+        const state = data.state;
+        const promptActive = Boolean(data.running && state && (state.isStreaming || state.isPromptRunning));
+        if (promptActive) {
+          eventStreamGraceActiveRef.current = false;
+          eventStreamGraceTimerRef.current = null;
+          sdkAgentActiveRef.current = Boolean(state?.isStreaming);
+          rpcPromptPendingRef.current = Boolean(state?.isPromptRunning);
+          agentRunningRef.current = true;
+          setAgentRunning(true);
+          setAgentPhase(state?.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
+          return;
+        }
+
+        if (data.running && state?.isCompacting) {
+          setIsCompacting(true);
+          eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), PROMPT_SETTLE_POLL_MS);
+          return;
+        }
+
+        eventStreamGraceActiveRef.current = false;
+        eventStreamGraceTimerRef.current = null;
+        closeEvents();
+      } catch {
+        // Keep the stream open while state cannot be verified.
+        if (
+          generation !== eventStreamGraceGenerationRef.current
+          || sessionIdRef.current !== sid
+          || !eventStreamGraceActiveRef.current
+        ) return;
+        eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), PROMPT_SETTLE_POLL_MS);
+      }
+    };
+
+    eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), EVENT_STREAM_IDLE_GRACE_MS);
+  }, [cancelEventStreamGrace, closeEvents]);
+
+  const finishPromptWithoutStream = useCallback(async (sid: string | null = sessionIdRef.current, runId = promptRunIdRef.current) => {
+    // A slow reconciliation response from a previous run must never settle the
+    // current run or overwrite its messages.
+    if (promptRunIdRef.current !== runId) return;
     try {
       if (sid) await loadSession(sid);
     } finally {
-      if (runId !== undefined && promptRunIdRef.current !== runId) return;
+      if (promptRunIdRef.current !== runId) return;
+      const promptWasPending = rpcPromptPendingRef.current;
+      const agentWasActive = sdkAgentActiveRef.current;
+      rpcPromptPendingRef.current = false;
+      sdkAgentActiveRef.current = false;
       optimisticUserMessageKeyRef.current = null;
-      if (!agentRunningRef.current) return;
-      eventSourceRef.current?.close();
-      eventSourceRef.current = null;
-      agentRunningRef.current = false;
-      setAgentRunning(false);
-      setAgentPhase(null);
-      setRetryInfo(null);
-      dispatch({ type: "end" });
-      onAgentEnd?.();
+      const wasRunning = settleUiStage();
+      if (promptWasPending) {
+        notifyPromptStage(runId);
+      } else if (agentWasActive && wasRunning) {
+        onAgentEnd?.();
+      }
+      if (sid) scheduleEventStreamClose(sid);
     }
-  }, [loadSession, onAgentEnd]);
+  }, [loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, settleUiStage]);
 
-  const waitForPromptSettlement = useCallback(async (sid: string, runId?: number) => {
+  const waitForPromptSettlement = useCallback(async (sid: string, runId = promptRunIdRef.current) => {
     await delay(PROMPT_SETTLE_INITIAL_DELAY_MS);
     const startedAt = Date.now();
 
     while (agentRunningRef.current && Date.now() - startedAt < PROMPT_SETTLE_MAX_MS) {
-      if (runId !== undefined && promptRunIdRef.current !== runId) return;
+      if (promptRunIdRef.current !== runId) return;
       try {
         const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
         if (res.ok) {
           const data = await res.json() as { running?: boolean; state?: AgentStateResponse };
           const state = data.state;
-          if (!data.running || !state || (!state.isStreaming && !state.isPromptRunning && !state.isBashRunning)) {
+          if (!data.running || !state || (!state.isStreaming && !state.isPromptRunning)) {
             await finishPromptWithoutStream(sid, runId);
             return;
           }
@@ -873,41 +998,84 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleAgentEvent = useCallback((event: AgentEvent) => {
     switch (event.type) {
       case "agent_start":
+        cancelEventStreamGrace();
+        sdkAgentActiveRef.current = true;
         agentRunningRef.current = true;
         setAgentRunning(true);
         setAgentPhase({ kind: "waiting_model" });
         dispatch({ type: "start" });
         break;
       case "agent_end": {
-        // agent_end can occur before retry, compaction, or extension follow-up
-        // work. Keep the logical prompt and its SSE connection alive until the
-        // server emits prompt_done and reports an idle state.
+        // Multiple agent_end events may precede retry, compaction, queued
+        // extension work, or agent_settled. Keep the SSE stream alive; the
+        // grace window owns eventual connection teardown.
         if (!agentRunningRef.current) break;
-        // Terminal provider failures (HTTP 400/403, quota errors, retries
-        // exhausted) surface only as an assistant message with stopReason
-        // "error" + errorMessage — pi-cli prints them inline, but the web UI
-        // used to swallow them into an invisible empty bubble. willRetry
-        // separates retryable errors (429/5xx currently being auto-retried,
-        // which keep showing the retry line) from terminal ones; only the
-        // latter get an error notice.
+        setAgentPhase(null);
+        setRetryInfo(null);
+        dispatch({ type: "end" });
+        // Preserve the desktop-only terminal provider-error notification while
+        // using the upstream settlement lifecycle for all other end events.
         if (event.willRetry !== true) {
           const failedMessages = (event.messages as AgentMessage[] | undefined) ?? [];
           for (let i = failedMessages.length - 1; i >= 0; i--) {
-            const m = failedMessages[i];
-            if (m?.role !== "assistant") continue;
-            if (m.stopReason === "error" && m.errorMessage) {
-              addNotice({ type: "error", message: m.errorMessage });
+            const message = failedMessages[i];
+            if (message?.role !== "assistant") continue;
+            if (message.stopReason === "error" && message.errorMessage) {
+              addNotice({ type: "error", message: message.errorMessage });
             }
             break;
           }
         }
-        if (sessionIdRef.current) void loadSession(sessionIdRef.current);
+        const sid = sessionIdRef.current;
+        if (sid) {
+          void loadSession(sid);
+          void fetch(`/api/agent/${encodeURIComponent(sid)}`)
+            .then((response) => response.ok ? response.json() as Promise<{ state?: AgentStateResponse }> : undefined)
+            .then((data) => {
+              const state = data?.state;
+              if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
+              if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
+              if (state?.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
+              if (state?.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
+              setQueuedMessages(normalizeQueuedMessages(state?.queuedMessages));
+            })
+            .catch(() => {});
+        }
         break;
       }
-      case "prompt_done":
-        if (!agentRunningRef.current || !sessionIdRef.current) break;
-        void waitForPromptSettlement(sessionIdRef.current, promptRunIdRef.current);
+      case "agent_settled": {
+        const agentWasActive = sdkAgentActiveRef.current;
+        sdkAgentActiveRef.current = false;
+        if (!agentWasActive || rpcPromptPendingRef.current) break;
+
+        const sid = sessionIdRef.current;
+        const wasRunning = settleUiStage();
+        setIsCompacting(false);
+        if (sid) {
+          void loadSession(sid);
+          scheduleEventStreamClose(sid);
+        }
+        if (wasRunning) onAgentEnd?.();
         break;
+      }
+      case "prompt_done": {
+        const runId = promptRunIdRef.current;
+        const promptWasPending = rpcPromptPendingRef.current;
+        rpcPromptPendingRef.current = false;
+        optimisticUserMessageKeyRef.current = null;
+        const firstNotification = notifyPromptStage(runId);
+        if (!promptWasPending && !firstNotification) break;
+
+        const sid = sessionIdRef.current;
+        if (sid) void loadSession(sid);
+        // An extension can start another agent run before this RPC prompt has
+        // completed. Let its agent_settled event perform that next transition.
+        if (!sdkAgentActiveRef.current) {
+          settleUiStage();
+          if (sid) scheduleEventStreamClose(sid);
+        }
+        break;
+      }
       case "prompt_error":
         addNotice({ type: "error", message: (event.errorMessage as string | undefined) ?? "Command failed" });
         break;
@@ -996,11 +1164,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "auto_retry_end":
         setRetryInfo(null);
         break;
+      case "auto_compaction_start":
       case "compaction_start":
         setIsCompacting(true);
         setCompactError(null);
         setCompactResult(null);
         break;
+      case "auto_compaction_end":
       case "compaction_end":
         setIsCompacting(false);
         if (event.errorMessage) {
@@ -1015,15 +1185,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, handleExtensionUiRequest, loadSession, waitForPromptSettlement]);
+  }, [
+    addNotice,
+    cancelEventStreamGrace,
+    handleExtensionUiRequest,
+    loadSession,
+    notifyPromptStage,
+    onAgentEnd,
+    scheduleEventStreamClose,
+    settleUiStage,
+  ]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     const trimmedMessage = message.trim();
     if (!trimmedMessage && !images?.length) return;
-    if (agentRunning) return;
+    if (agentRunningRef.current || bashRunningRef.current) return;
     const isSlashCommandPrompt = !images?.length && trimmedMessage.startsWith("/");
     const promptRunId = promptRunIdRef.current + 1;
+    cancelEventStreamGrace();
+    rpcPromptPendingRef.current = true;
 
     const imageBlocks = images?.map((img) => ({ type: "image" as const, source: { type: "base64" as const, media_type: img.mimeType, data: img.data } }));
     const userMsg: AgentMessage = {
@@ -1045,8 +1226,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
 
+    let sentSessionId: string | null = null;
+    let promptRequestStarted = false;
     try {
-      let sentSessionId: string | null = null;
       if (isNew && newSessionCwd) {
         const selectedModel = newSessionModel;
         const existingSid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
@@ -1061,6 +1243,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             }
           }
           await ensureEventsConnected(sid);
+          promptRequestStarted = true;
           await sendAgentCommand(sid, {
             type: "prompt",
             message,
@@ -1071,6 +1254,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       } else if (session) {
         sentSessionId = session.id;
         await ensureEventsConnected(session.id);
+        promptRequestStarted = true;
         await sendAgentCommand(session.id, {
           type: "prompt",
           message,
@@ -1082,6 +1266,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
     } catch (e) {
       console.error("Failed to send message:", e);
+      // A failed POST may still have reached the server. Preserve SSE and let
+      // reconciliation settle it rather than hiding a real run.
+      if (promptRequestStarted && sentSessionId) {
+        void waitForPromptSettlement(sentSessionId, promptRunId);
+        return;
+      }
+      rpcPromptPendingRef.current = false;
+      closeEvents();
       if (e instanceof EventStreamConnectionError) {
         const optimisticKey = optimisticUserMessageKeyRef.current;
         if (optimisticKey) {
@@ -1100,7 +1292,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentPhase(null);
       dispatch({ type: "end" });
     }
-  }, [isNew, newSessionCwd, newSessionModel, session, agentRunning, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice]);
+  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;
@@ -1474,6 +1666,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           }
           loadTools(session.id);
           if (agentState.state?.isStreaming || agentState.state?.isPromptRunning) {
+            sdkAgentActiveRef.current = Boolean(agentState.state.isStreaming);
+            rpcPromptPendingRef.current = Boolean(agentState.state.isPromptRunning);
             agentRunningRef.current = true;
             setAgentRunning(true);
             setAgentPhase(agentState.state.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
@@ -1496,8 +1690,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       });
     }
     return () => {
-      eventSourceRef.current?.close();
-      eventSourceRef.current = null;
+      cancelEventStreamGrace();
+      closeEvents();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

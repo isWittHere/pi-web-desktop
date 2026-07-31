@@ -1,7 +1,7 @@
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { NextResponse } from "next/server";
 import { invalidateModelsCache } from "@/lib/models-cache";
-import { removeStoredCredentialIfType } from "@/lib/provider-credential-store";
+import { removeStoredCredentialIfType, storeProviderCredential } from "@/lib/provider-credential-store";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +26,12 @@ export async function POST(req: Request, { params }: Params) {
       return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
     }
     const modelRuntime = await ModelRuntime.create();
+    const apiKeyAuth = modelRuntime.getProvider(provider)?.auth.apiKey;
+    if (!apiKeyAuth?.login) {
+      throw new Error(`${provider} does not support API key login`);
+    }
     let keySubmitted = false;
-    await modelRuntime.login(provider, "api_key", {
+    const credential = await apiKeyAuth.login({
       notify: () => {},
       prompt: async (prompt) => {
         if (prompt.type === "select") {
@@ -42,6 +46,10 @@ export async function POST(req: Request, { params }: Params) {
         throw new Error(`${provider} requires additional authentication settings`);
       },
     });
+    // ModelRuntime.login() persists the credential and then performs an
+    // unbounded network catalog refresh. Store the returned credential
+    // directly so a slow catalog cannot leave the save request hanging.
+    await storeProviderCredential(provider, credential);
     invalidateModelsCache();
     return NextResponse.json({ success: true });
   } catch (error) {

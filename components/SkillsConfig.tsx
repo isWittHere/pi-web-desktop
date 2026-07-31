@@ -25,6 +25,12 @@ function sourceLabel(skill: Skill): "global" | "project" | "path" {
   return "path";
 }
 
+function skillGroupLabel(skill: Skill): string {
+  const source = sourceLabel(skill);
+  if (source === "path") return source;
+  return skill.install?.skillsShUrl ? `${source} / skills.sh` : source;
+}
+
 function updateKey(skill: Skill): string | null {
   return skill.install
     ? `${skill.install.scope}\0${skill.install.package}`
@@ -166,6 +172,12 @@ function SkillDetail({
           </span>
         )}
       </div>
+
+      {!enabled && (
+        <div style={{ marginTop: -12, color: "var(--text-dim)", fontSize: 12 }}>
+          {t("desktop.hiddenButInvocable")}
+        </div>
+      )}
 
       {skill.install?.skillsShUrl && (
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -708,6 +720,7 @@ export function SkillsConfig({
   const [updatingSkill, setUpdatingSkill] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [projectResourcesLoaded, setProjectResourcesLoaded] = useState(true);
+  const [dormantGroupsOpen, setDormantGroupsOpen] = useState<Record<string, boolean>>({});
 
   const loadSkills = useCallback(async () => {
     setLoading(true);
@@ -719,7 +732,13 @@ export function SkillsConfig({
       const list = d.skills ?? [];
       setSkills(list);
       setProjectResourcesLoaded(d.projectResourcesLoaded ?? true);
-      if (list.length > 0 && !selected) setSelected(list[0].filePath);
+      if (list.length > 0 && !selected) {
+        const initialSkill = list.find((skill) => !skill.disableModelInvocation) ?? list[0];
+        setSelected(initialSkill.filePath);
+        if (initialSkill.disableModelInvocation) {
+          setDormantGroupsOpen((current) => ({ ...current, [skillGroupLabel(initialSkill)]: true }));
+        }
+      }
       return list;
     } catch (e) {
       setError(String(e));
@@ -849,6 +868,9 @@ export function SkillsConfig({
             : s,
         ),
       );
+      if (next) {
+        setDormantGroupsOpen((current) => ({ ...current, [skillGroupLabel(skill)]: true }));
+      }
     } catch (e) {
       setSaveError(String(e));
     } finally {
@@ -948,45 +970,55 @@ export function SkillsConfig({
                 </div>
               ) : (
                 (() => {
-                  const groups: { label: string; skills: typeof skills }[] = [];
+                  const groups: { key: string; label: string; skills: typeof skills }[] = [];
                   const groupDefinitions = [
                     {
+                      key: "project / skills.sh",
                       label: `${t("desktop.project")} / skills.sh`,
                       matches: (skill: Skill) =>
                         sourceLabel(skill) === "project" &&
                         Boolean(skill.install?.skillsShUrl),
                     },
                     {
+                      key: "project",
                       label: t("desktop.project"),
                       matches: (skill: Skill) =>
                         sourceLabel(skill) === "project" &&
                         !skill.install?.skillsShUrl,
                     },
                     {
+                      key: "global / skills.sh",
                       label: `${t("desktop.global")} / skills.sh`,
                       matches: (skill: Skill) =>
                         sourceLabel(skill) === "global" &&
                         Boolean(skill.install?.skillsShUrl),
                     },
                     {
+                      key: "global",
                       label: t("desktop.global"),
                       matches: (skill: Skill) =>
                         sourceLabel(skill) === "global" &&
                         !skill.install?.skillsShUrl,
                     },
                     {
+                      key: "path",
                       label: t("desktop.path"),
                       matches: (skill: Skill) => sourceLabel(skill) === "path",
                     },
                   ];
-                  for (const { label, matches } of groupDefinitions) {
+                  for (const { key, label, matches } of groupDefinitions) {
                     const grpSkills = skills.filter(matches);
                     if (grpSkills.length > 0)
-                      groups.push({ label, skills: grpSkills });
+                      groups.push({ key, label, skills: grpSkills });
                   }
                   return groups.map(
-                    ({ label: grpLabel, skills: grpSkills }) => (
-                      <div key={grpLabel} style={{ marginBottom: 6 }}>
+                    ({ key: groupKey, label: grpLabel, skills: grpSkills }) => {
+                      const activeSkills = grpSkills.filter((skill) => !skill.disableModelInvocation);
+                      const dormantSkills = grpSkills.filter((skill) => skill.disableModelInvocation);
+                      const dormantOpen = dormantGroupsOpen[groupKey] ?? false;
+                      const displayedSkills = dormantOpen ? [...activeSkills, ...dormantSkills] : activeSkills;
+                      return (
+                      <div key={groupKey} style={{ marginBottom: 6 }}>
                         <div
                           style={{
                             padding: "4px 8px 3px",
@@ -999,7 +1031,32 @@ export function SkillsConfig({
                         >
                           {grpLabel}
                         </div>
-                        {grpSkills.map((skill) => {
+                        {dormantSkills.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setDormantGroupsOpen((current) => ({ ...current, [groupKey]: !dormantOpen }))}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                              width: "100%",
+                              padding: "4px 8px 3px",
+                              border: "none",
+                              background: "transparent",
+                              color: "var(--text-dim)",
+                              cursor: "pointer",
+                              fontSize: 10,
+                              fontWeight: 600,
+                              letterSpacing: "0.06em",
+                              textAlign: "left",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            <span style={{ fontSize: 8 }}>{dormantOpen ? "▾" : "▸"}</span>
+                            {t("desktop.dormant")} ({dormantSkills.length})
+                          </button>
+                        )}
+                        {displayedSkills.map((skill) => {
                           const isSelected =
                             !addMode && selected === skill.filePath;
                           const disabled = skill.disableModelInvocation;
@@ -1085,7 +1142,8 @@ export function SkillsConfig({
                           );
                         })}
                       </div>
-                    ),
+                      );
+                    },
                   );
                 })()
               )}

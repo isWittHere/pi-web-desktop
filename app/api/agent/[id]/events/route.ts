@@ -1,8 +1,30 @@
 import { resolveSessionPath } from "@/lib/session-reader";
-import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { getRpcSession, startRpcSession, type AgentEvent } from "@/lib/rpc-manager";
 
 export const dynamic = "force-dynamic";
+
+// These SDK events are not consumed by the web client and can be emitted for
+// every streamed chunk. Omitting them avoids serializing duplicate payloads.
+const OMITTED_EVENT_TYPES = new Set(["turn_start", "turn_end", "tool_execution_update"]);
+
+function toClientEvent(event: AgentEvent): AgentEvent | null {
+  if (OMITTED_EVENT_TYPES.has(event.type)) return null;
+  if (event.type === "message_update") {
+    const clientEvent = { ...event };
+    delete clientEvent.assistantMessageEvent;
+    return clientEvent;
+  }
+  if (event.type === "agent_end") {
+    // The desktop client uses these fields to show non-retryable provider
+    // failures, unlike upstream's web-only client which needs no end payload.
+    return {
+      type: "agent_end",
+      ...(event.willRetry !== undefined ? { willRetry: event.willRetry } : {}),
+      ...(event.messages !== undefined ? { messages: event.messages } : {}),
+    };
+  }
+  return event;
+}
 
 // GET /api/agent/[id]/events - SSE stream of agent events
 export async function GET(
@@ -18,9 +40,8 @@ export async function GET(
     if (!filePath) {
       return new Response("Session not found", { status: 404 });
     }
-    const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
     try {
-      ({ session } = await startRpcSession(id, filePath, cwd));
+      ({ session } = await startRpcSession(id, filePath, undefined));
     } catch (error) {
       return new Response(`Failed to start agent: ${error}`, { status: 500 });
     }
@@ -28,22 +49,24 @@ export async function GET(
 
   const stream = new ReadableStream({
     start(controller) {
+      const encoder = new TextEncoder();
       const encode = (data: unknown) => {
         const text = `data: ${JSON.stringify(data)}\n\n`;
-        controller.enqueue(new TextEncoder().encode(text));
+        controller.enqueue(encoder.encode(text));
       };
 
       // Send initial connected event
       encode({ type: "connected", sessionId: id });
 
       const unsubscribe = session.onEvent((event) => {
-        encode(event);
+        const clientEvent = toClientEvent(event);
+        if (clientEvent) encode(clientEvent);
       });
 
       // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s)
       const heartbeat = setInterval(() => {
         try {
-          controller.enqueue(new TextEncoder().encode(":\n\n"));
+          controller.enqueue(encoder.encode(":\n\n"));
         } catch {
           // controller already closed
         }

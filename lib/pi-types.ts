@@ -70,6 +70,7 @@ interface ExtensionRunnerLike {
     description?: string;
     sourceInfo: SlashCommandInfo["sourceInfo"];
   }>;
+  emit?(event: { type: "session_shutdown"; reason: "quit" }): Promise<void>;
   setUIContext?(uiContext?: unknown, mode?: "tui" | "rpc" | "json" | "print"): void;
 }
 
@@ -149,6 +150,8 @@ export interface AgentSessionLike {
   navigateTree(targetId: string, options?: { summarize?: boolean }): Promise<NavigateTreeResult>;
   setThinkingLevel(level: string): void;
   compact(customInstructions?: string): Promise<unknown>;
+  supportsThinking(): boolean;
+  dispose(): void;
   setSessionName(name: string): void;
   getSessionStats(): Omit<SessionStatsInfo, "sessionName">;
   getLastAssistantText(): string | undefined;

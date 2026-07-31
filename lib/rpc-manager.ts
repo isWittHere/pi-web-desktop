@@ -9,6 +9,7 @@ import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
+import { persistExplicitStartupPreferences } from "./startup-preferences";
 import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
 import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem } from "./types";
@@ -131,6 +132,7 @@ export class AgentSessionWrapper {
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
+  private shutdownPromise: Promise<void> | null = null;
   private _alive = true;
 
   constructor(public readonly inner: AgentSessionLike, public readonly cwd: string) {}
@@ -153,9 +155,11 @@ export class AgentSessionWrapper {
 
   start(): void {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
-      this.resetIdleTimer();
       if (event.type === "agent_end") {
         invalidateSessionListCache();
+      }
+      if (event.type === "agent_end" || event.type === "agent_settled" || event.type === "auto_compaction_end" || event.type === "compaction_end") {
+        this.resetIdleTimer();
       }
       this.emit(event);
     });
@@ -259,7 +263,9 @@ export class AgentSessionWrapper {
         this.resetIdleTimer();
         return;
       }
-      this.destroy();
+      void this.shutdown().catch((error) => {
+        console.error("[pi-web] failed to shut down idle session:", error instanceof Error ? error.message : error);
+      });
     }, 10 * 60 * 1000);
   }
 
@@ -320,9 +326,11 @@ export class AgentSessionWrapper {
           source: "rpc",
         }).then(() => {
           this.promptRunning = false;
+          this.resetIdleTimer();
           if (!streamingBehavior) this.emit({ type: "prompt_done" });
         }).catch((error) => {
           this.promptRunning = false;
+          this.resetIdleTimer();
           invalidateSessionListCache();
           this.emit({
             type: "prompt_error",
@@ -404,7 +412,7 @@ export class AgentSessionWrapper {
         const newSessionId = SessionManager.open(newSessionFile, sessionDir).getSessionId();
         cacheSessionPath(newSessionId, newSessionFile);
         invalidateSessionListCache();
-        this.destroy();
+        await this.shutdown();
         return { cancelled: false, newSessionId };
       }
 
@@ -560,6 +568,7 @@ export class AgentSessionWrapper {
           this.persistBashOnlySession();
           return result;
         } finally {
+          this.resetIdleTimer();
           invalidateSessionListCache();
         }
       }
@@ -584,7 +593,33 @@ export class AgentSessionWrapper {
     for (const id of Array.from(this.activeCustomUis.keys())) this.closeCustomUi(id, undefined);
     this.pendingUiResponses.clear();
     this.pendingUiRequests.clear();
-    this.onDestroyCallback?.();
+    try {
+      this.inner.dispose();
+    } finally {
+      this.onDestroyCallback?.();
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.shutdownPromise) return this.shutdownPromise;
+    if (!this._alive) return;
+
+    this.shutdownPromise = (async () => {
+      try {
+        try {
+          await this.waitForExtensionsBound();
+        } catch (error) {
+          console.error(
+            "[pi-web] extension binding failed before session shutdown:",
+            error instanceof Error ? error.message : error,
+          );
+        }
+        await this.inner.extensionRunner.emit?.({ type: "session_shutdown", reason: "quit" });
+      } finally {
+        this.destroy();
+      }
+    })();
+    return this.shutdownPromise;
   }
 
   private resolveExtensionUiResponse(response: ExtensionUiResponse): void {
@@ -939,10 +974,15 @@ declare global {
 function getRegistry(): Map<string, AgentSessionWrapper> {
   if (!globalThis.__piSessions) {
     globalThis.__piSessions = new Map();
-    const cleanup = () => globalThis.__piSessions?.forEach((s) => s.destroy());
-    process.once("exit", cleanup);
-    process.once("SIGINT", cleanup);
-    process.once("SIGTERM", cleanup);
+    const shutdownAll = () => Promise.allSettled(
+      Array.from(globalThis.__piSessions?.values() ?? [], (session) => session.shutdown()),
+    );
+    // `exit` handlers cannot await promises, so use the synchronous fallback
+    // only there. Signal handlers are graceful: wait for extension shutdown
+    // and SDK disposal before preserving Node's normal signal exit status.
+    process.once("exit", () => globalThis.__piSessions?.forEach((session) => session.destroy()));
+    process.once("SIGINT", () => { void shutdownAll().finally(() => process.exit(130)); });
+    process.once("SIGTERM", () => { void shutdownAll().finally(() => process.exit(143)); });
   }
   return globalThis.__piSessions;
 }
@@ -989,12 +1029,12 @@ export function hasBusyRpcSessionForCwd(cwd: string): boolean {
   );
 }
 
-export function destroyRpcSessionsForCwd(cwd: string): number {
+export async function destroyRpcSessionsForCwd(cwd: string): Promise<number> {
   const targetCwd = normalizeRpcCwd(cwd);
   const sessions = Array.from(getRegistry().values()).filter(
     (session) => normalizeRpcCwd(session.cwd) === targetCwd,
   );
-  for (const session of sessions) session.destroy();
+  await Promise.all(sessions.map((session) => session.shutdown()));
   return sessions.length;
 }
 
@@ -1015,7 +1055,7 @@ export function getRunningRpcSessionIds(): string[] {
 export async function startRpcSession(
   sessionId: string,
   sessionFile: string,
-  cwd: string,
+  cwd: string | undefined,
   options: RpcSessionStartOptions = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
   const { toolNames, initialModel, thinkingLevel } = options;
@@ -1028,15 +1068,19 @@ export async function startRpcSession(
   const inflight = locks.get(sessionId);
   if (inflight) return inflight;
 
-  const finishStartingSession = trackStartingSession(cwd);
+  let sessionManager: SessionManager;
+  if (sessionFile) {
+    sessionManager = SessionManager.open(sessionFile, undefined);
+  } else {
+    if (!cwd) throw new Error("cwd is required for a new session");
+    sessionManager = SessionManager.create(cwd, undefined);
+  }
+  const sessionCwd = sessionManager.getCwd();
+  const finishStartingSession = trackStartingSession(sessionCwd);
   const starting = (async () => {
     // Some extensions access the SDK's global theme even outside the terminal UI.
     initTheme();
     const agentDir = getAgentDir();
-
-    const sessionManager = sessionFile
-      ? SessionManager.open(sessionFile, undefined)
-      : SessionManager.create(cwd, undefined);
 
     // Determine which tools to pass based on requested toolNames.
     // Since v0.68.0, session creation expects string[] tool names instead of Tool[] instances.
@@ -1056,9 +1100,9 @@ export async function startRpcSession(
     // before the SDK restores the saved model from the session file.
     // Creating services imports project extensions for provider discovery, so
     // gate project resources before repository-controlled code can run.
-    const trustReloadOptions = projectTrustReloadOptions(cwd, agentDir);
+    const trustReloadOptions = projectTrustReloadOptions(sessionCwd, agentDir);
     const services = await createAgentSessionServices({
-      cwd,
+      cwd: sessionCwd,
       agentDir,
       ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
     });
@@ -1068,7 +1112,8 @@ export async function startRpcSession(
     );
     const defaultProvider = services.settingsManager.getDefaultProvider();
     const defaultModelId = services.settingsManager.getDefaultModel();
-    const initial = sessionFile
+    const hasExistingMessages = sessionManager.getBranch().some((entry) => entry.type === "message");
+    const initial = hasExistingMessages
       ? { scopedModels: [...scope.scopedModels] }
       : selectInitialModelScope(scope, {
         ...(initialModel ? { requestedModel: initialModel } : {}),
@@ -1086,6 +1131,20 @@ export async function startRpcSession(
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
     });
 
+    const persistedPreferences = await persistExplicitStartupPreferences(
+      services.settingsManager,
+      {
+        ...(initialModel ? { model: initialModel } : {}),
+        ...(thinkingLevel ? { thinkingLevel } : {}),
+      },
+      {
+        ...(inner.model ? { model: { provider: inner.model.provider, modelId: inner.model.id } } : {}),
+        thinkingLevel: inner.agent.state?.thinkingLevel as ThinkingLevel ?? "off",
+        supportsThinking: inner.supportsThinking(),
+      },
+    );
+    if (persistedPreferences.modelDefaultChanged) invalidateModelsCache();
+
     // If specific tool names were requested (non-empty), set the active tools to the
     // requested builtin coding tools PLUS all extension/package tools, so installed
     // extensions stay usable in pi-web just like in the `pi` CLI.
@@ -1093,7 +1152,7 @@ export async function startRpcSession(
       inner.setActiveToolsByName(withExtensionTools(inner, toolNames));
     }
 
-    const wrapper = new AgentSessionWrapper(inner, cwd);
+    const wrapper = new AgentSessionWrapper(inner, sessionCwd);
     // When all tools are disabled, clear the system prompt entirely.
     // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
     // keep this forced after extension resource discovery and reloads as well.

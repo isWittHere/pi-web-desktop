@@ -421,6 +421,7 @@ pre, code {
 /* Composer: matches the reference ChatInput's two-row, low-contrast form. */
 .chat-input-shell {
   position: relative;
+  min-width: 0;
   width: calc(100% + 20px);
   margin-left: -10px;
   overflow: visible;
@@ -495,6 +496,7 @@ pre, code {
 }
 .chat-input-editor-row {
   display: flex;
+  min-width: 0;
   align-items: stretch;
   gap: 8px;
   padding: 6px 12px;
@@ -665,6 +667,9 @@ pre, code {
 
 /* Chat markdown: compact enough for conversations, with a readable document hierarchy. */
 .markdown-body {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   font-size: 14px;
   line-height: 1.72;
   color: var(--text);
@@ -914,6 +919,9 @@ pre, code {
 
 .markdown-code-block {
   position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 12px 0;
   overflow: hidden;
   border-radius: 8px;
