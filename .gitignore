@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# Windows Turbopack bug - NUL device file leak
+nul
+
 # production
 /build
 /release

@@ -62,6 +62,7 @@ interface Props {
   thinkingLevelMap?: Record<string, string | null> | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   queuedMessages?: QueuedMessages | null;
+  inputHistory?: string[];
   onRecallQueue?: () => void;
   slashCommands?: SlashCommandInfo[];
   slashCommandsLoading?: boolean;
@@ -227,7 +228,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelScopeWarnings, onModelChange,
   compactResult, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
-  retryInfo, queuedMessages, onRecallQueue,
+  retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
   onBuiltinCommand,
   onAudioUnlock,
@@ -294,6 +295,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [atQuery, setAtQuery] = useState<AtQueryMatch | null>(null);
   const [atMenuOpen, setAtMenuOpen] = useState(false);
   const [atActiveIndex, setAtActiveIndex] = useState(0);
+  const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
+  const [historyActiveIndex, setHistoryActiveIndex] = useState(0);
   const [fileIndex, setFileIndex] = useState<{ cwd: string; entries: FileIndexEntry[]; truncated: boolean } | null>(null);
   const [fileIndexLoading, setFileIndexLoading] = useState(false);
   const [atServerResult, setAtServerResult] = useState<{ cwd: string; query: string; matches: FileIndexEntry[] } | null>(null);
@@ -310,6 +313,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const slashCommandsRequestedRef = useRef(false);
   const slashItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const atItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const historyItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const fileIndexMetaRef = useRef<{ cwd: string; fetchedAt: number } | null>(null);
   const fileIndexFetchingRef = useRef<string | null>(null);
   const draftKeyRef = useRef(draftKey);
@@ -692,6 +696,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     atItemRefs.current[atActiveIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [atActiveIndex, atMenuOpen]);
 
+  const applyHistoryInput = useCallback((text: string) => {
+    setValue(text);
+    setAtQuery(null);
+    setHistoryMenuOpen(false);
+    setHistoryActiveIndex(0);
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(text.length, text.length);
+      ta.style.height = "auto";
+      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    });
+  }, []);
+
   const applySlashCommand = useCallback((command: SlashCommandPaletteItem) => {
     const nextValue = `/${command.name} `;
     setValue(nextValue);
@@ -783,6 +802,49 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         return;
       }
 
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "i" && !isComposing && cwd) {
+        e.preventDefault();
+        const ta = e.currentTarget;
+        const start = ta.selectionStart ?? ta.value.length;
+        const end = ta.selectionEnd ?? start;
+        const before = ta.value.slice(0, start);
+        const after = ta.value.slice(end);
+        const separator = before && !/[\s@]$/.test(before) ? " " : "";
+        const nextValue = `${before}${separator}@${after}`;
+        const cursor = before.length + separator.length + 1;
+        setValue(nextValue);
+        setAtQuery(extractAtQuery(nextValue.slice(0, cursor)));
+        setAtMenuOpen(true);
+        requestAnimationFrame(() => {
+          ta.focus();
+          ta.setSelectionRange(cursor, cursor);
+        });
+        return;
+      }
+
+      if (historyMenuOpen && !isComposing) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setHistoryActiveIndex((index) => Math.min(Math.max(0, (inputHistory?.length ?? 0) - 1), index + 1));
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setHistoryActiveIndex((index) => Math.max(0, index - 1));
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setHistoryMenuOpen(false);
+          return;
+        }
+        if ((e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) && inputHistory?.[historyActiveIndex]) {
+          e.preventDefault();
+          applyHistoryInput(inputHistory[historyActiveIndex]);
+          return;
+        }
+      }
+
       if (slashMenuOpen && slashQuery !== null) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -841,6 +903,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
 
+      if (e.key === "ArrowUp" && !isComposing && !isStreaming && (inputHistory?.length ?? 0) > 0 && value.trim().length === 0) {
+        e.preventDefault();
+        setSlashMenuOpen(false);
+        setAtMenuOpen(false);
+        setHistoryActiveIndex(0);
+        setHistoryMenuOpen(true);
+        return;
+      }
+
       // Esc stops the agent when no slash/@ menu or IME composition is active.
       if (e.key === "Escape" && !isComposing && isStreaming && onAbort) {
         e.preventDefault();
@@ -863,7 +934,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
     },
-    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, inputShortcut]
+    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, inputShortcut, cwd, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value]
   );
 
   const handleInput = useCallback(() => {
@@ -881,6 +952,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const files = imageItems.map((item) => item.getAsFile()).filter((f): f is File => f !== null);
     processImageFiles(files);
   }, [processImageFiles]);
+
+  useEffect(() => {
+    if (historyActiveIndex >= (inputHistory?.length ?? 0)) {
+      setHistoryActiveIndex(Math.max(0, (inputHistory?.length ?? 0) - 1));
+    }
+  }, [historyActiveIndex, inputHistory]);
+
+  useEffect(() => {
+    historyItemRefs.current.length = inputHistory?.length ?? 0;
+  }, [inputHistory]);
+
+  useEffect(() => {
+    if (!historyMenuOpen) return;
+    historyItemRefs.current[historyActiveIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [historyActiveIndex, historyMenuOpen]);
 
   useEffect(() => {
     if (slashQuery === null) {
@@ -1143,6 +1229,43 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
         {/* Main input */}
         <div style={{ position: "relative" }}>
+          {historyMenuOpen && inputHistory.length > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: "calc(100% + 8px)",
+                zIndex: 120,
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
+                overflow: "hidden",
+                maxHeight: "min(38vh, 300px)",
+              }}
+            >
+              <div style={{ padding: "4px 8px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", color: "var(--text-dim)", fontSize: 11 }}>
+                <span>{t("desktop.inputHistory")}</span>
+                <span style={{ fontFamily: "var(--font-mono)" }}>{t("desktop.tabOrEnter")}</span>
+              </div>
+              <div style={{ maxHeight: "calc(min(38vh, 300px) - 24px)", overflowY: "auto", padding: 4 }}>
+                {inputHistory.map((item, index) => (
+                  <button
+                    key={`${index}:${item}`}
+                    ref={(node) => { historyItemRefs.current[index] = node; }}
+                    type="button"
+                    onMouseDown={(event) => { event.preventDefault(); applyHistoryInput(item); }}
+                    onMouseEnter={() => setHistoryActiveIndex(index)}
+                    style={{ width: "100%", display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 6px", border: "none", borderRadius: 5, background: index === historyActiveIndex ? "var(--bg-selected)" : "transparent", color: "var(--text)", cursor: "pointer", textAlign: "left" }}
+                  >
+                    <span style={{ flexShrink: 0, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11 }}>{index + 1}</span>
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{item}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {slashMenuOpen && slashQuery !== null && (
             <div
               style={{

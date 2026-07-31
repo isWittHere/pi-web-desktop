@@ -332,13 +332,15 @@ export function AppShell() {
     }
   }, [router, selectedSession]);
 
-  const handleOpenFile = useCallback((filePath: string, fileName: string, sourceSessionId?: string | null) => {
+  const handleOpenFile = useCallback((filePath: string, fileName: string, sourceOrOptions?: string | null | { initialDisplayMode?: "diff" }, options?: { initialDisplayMode?: "diff" }) => {
+    const sourceSessionId = typeof sourceOrOptions === "string" || sourceOrOptions === null ? sourceOrOptions : undefined;
+    const openOptions = typeof sourceOrOptions === "object" && sourceOrOptions !== null ? sourceOrOptions : options;
     const tabId = `file:${filePath}`;
     setFileTabs((prev) => {
       const existing = prev.find((t) => t.id === tabId);
-      if (!existing) return [...prev, { id: tabId, label: fileName, filePath, sourceSessionId }];
-      if (!sourceSessionId || existing.sourceSessionId === sourceSessionId) return prev;
-      return prev.map((t) => t.id === tabId ? { ...t, sourceSessionId } : t);
+      if (!existing) return [...prev, { id: tabId, label: fileName, filePath, sourceSessionId, initialDisplayMode: openOptions?.initialDisplayMode }];
+      if ((!sourceSessionId || existing.sourceSessionId === sourceSessionId) && (!openOptions?.initialDisplayMode || existing.initialDisplayMode === openOptions.initialDisplayMode)) return prev;
+      return prev.map((t) => t.id === tabId ? { ...t, sourceSessionId: sourceSessionId ?? t.sourceSessionId, initialDisplayMode: openOptions?.initialDisplayMode ?? t.initialDisplayMode } : t);
     });
     setActiveFileTabId(tabId);
     setRightPanelOpen(true);
@@ -653,6 +655,7 @@ export function AppShell() {
               filePath={activeFileTab.filePath}
               cwd={activeCwd ?? undefined}
               sourceSessionId={activeFileTab.sourceSessionId}
+              initialDisplayMode={activeFileTab.initialDisplayMode}
               onOpenFile={(filePath) => handleOpenFile(
                 filePath,
                 getFileName(filePath),

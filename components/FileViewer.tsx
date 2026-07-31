@@ -19,12 +19,15 @@ import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePat
 import { resolveLocalFileHref } from "@/lib/file-links";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { CodeBlock, MermaidBlock } from "@/components/MarkdownBody";
+import { parseUnifiedPatch } from "@/lib/patch";
+import type { GitFileDiffResponse } from "@/lib/git-types";
 
 interface Props {
   filePath: string;
   cwd?: string;
   sourceSessionId?: string | null;
   onOpenFile?: (filePath: string) => void;
+  initialDisplayMode?: "diff";
 }
 
 interface FileData {
@@ -308,6 +311,36 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
         diffIdx += seg.lines.length;
         return <div key={si}>{lines}</div>;
       })}
+    </div>
+  );
+}
+
+function GitDiffView({ patch }: { patch: string }) {
+  const files = parseUnifiedPatch(patch);
+  if (!files) return null;
+
+  return (
+    <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, minWidth: "max-content" }}>
+      {files.flatMap((file, fileIndex) => file.rows.map((row, rowIndex) => {
+        if (row.type === "hunk") {
+          return <div key={`${fileIndex}:${rowIndex}`} style={{ padding: "3px 12px", color: "var(--accent-blue)", background: "var(--bg-secondary)" }}>{row.text}</div>;
+        }
+        const cellStyle = (type: typeof row.left.type): React.CSSProperties => ({
+          flex: 1,
+          minWidth: 0,
+          padding: "0 10px",
+          whiteSpace: "pre",
+          background: type === "removed" ? "color-mix(in srgb, var(--accent-red) 14%, transparent)" : type === "added" ? "color-mix(in srgb, var(--accent-green) 14%, transparent)" : "transparent",
+        });
+        return (
+          <div key={`${fileIndex}:${rowIndex}`} style={{ display: "flex", minWidth: 0 }}>
+            <span style={{ width: 42, flexShrink: 0, paddingRight: 8, color: "var(--text-dim)", textAlign: "right", userSelect: "none", background: row.left.type === "removed" ? "color-mix(in srgb, var(--accent-red) 14%, transparent)" : "transparent" }}>{row.left.lineNo ?? ""}</span>
+            <span style={cellStyle(row.left.type)}>{row.left.text}</span>
+            <span style={{ width: 42, flexShrink: 0, paddingRight: 8, color: "var(--text-dim)", textAlign: "right", userSelect: "none", background: row.right.type === "added" ? "color-mix(in srgb, var(--accent-green) 14%, transparent)" : "transparent" }}>{row.right.lineNo ?? ""}</span>
+            <span style={cellStyle(row.right.type)}>{row.right.text}</span>
+          </div>
+        );
+      }))}
     </div>
   );
 }
@@ -685,7 +718,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
   );
 }
 
-export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
+export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDisplayMode }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
@@ -695,14 +728,15 @@ export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props
   if (isDocumentPreviewPath(filePath)) {
     return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} initialDisplayMode={initialDisplayMode} />;
 }
 
-function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
+function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDisplayMode }: Props) {
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
+  const [gitDiff, setGitDiff] = useState<GitFileDiffResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
@@ -711,6 +745,21 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
   const [watching, setWatching] = useState(false);
   const [changeCount, setChangeCount] = useState(0);
   const esRef = useRef<EventSource | null>(null);
+
+  const fetchGitDiff = useCallback(async (targetPath: string) => {
+    if (!cwd) {
+      setGitDiff(null);
+      return;
+    }
+    try {
+      const params = new URLSearchParams({ cwd, path: targetPath });
+      const response = await fetch(`/api/git/diff?${params.toString()}`);
+      const result = await response.json() as GitFileDiffResponse;
+      setGitDiff(response.ok && result.supported && typeof result.patch === "string" ? result : null);
+    } catch {
+      setGitDiff(null);
+    }
+  }, [cwd]);
 
   const fetchContent = useCallback((filePath: string, isRefresh = false) => {
     return fetch(getFileApiUrl(filePath, "read", sourceSessionId))
@@ -743,6 +792,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
     setError(null);
     setData(null);
     setPrevContent(null);
+    setGitDiff(null);
     setPreviewMode(false);
     setViewMode("source");
     setWrapLines(false);
@@ -755,8 +805,9 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
     }
 
     fetchContent(filePath).then((d) => {
-      if (d?.language === "markdown") setPreviewMode(true);
+      if (d?.language === "markdown" && initialDisplayMode !== "diff") setPreviewMode(true);
     }).finally(() => setLoading(false));
+    void fetchGitDiff(filePath);
 
     // Set up SSE watch
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
@@ -768,6 +819,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
 
     es.addEventListener("change", () => {
       fetchContent(filePath, true);
+      void fetchGitDiff(filePath);
     });
 
     es.addEventListener("error", () => {
@@ -782,17 +834,35 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
       es.close();
       esRef.current = null;
     };
-  }, [filePath, fetchContent, sourceSessionId]);
+  }, [filePath, fetchContent, fetchGitDiff, initialDisplayMode, sourceSessionId]);
 
   const normalizedMarkdown = useMemo(
     () => normalizeDisplayMath(data?.content ?? ""),
     [data?.content],
   );
+  const hasGitDiff = gitDiff?.supported === true && typeof gitDiff.patch === "string";
+
+  useEffect(() => {
+    if (initialDisplayMode === "diff" && hasGitDiff) setViewMode("diff");
+  }, [hasGitDiff, initialDisplayMode]);
+
+  const isDeletedGitDiff = hasGitDiff && gitDiff?.status === "deleted";
 
   if (loading) {
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 13 }}>
         {t("desktop.loadingFile")}
+      </div>
+    );
+  }
+
+  if (isDeletedGitDiff && !data) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+        <div style={{ padding: "5px 16px", borderBottom: "1px solid var(--border)", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11 }} title={filePath}>
+          {getRelativeFilePath(filePath, cwd)}
+        </div>
+        <div style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}><GitDiffView patch={gitDiff.patch!} /></div>
       </div>
     );
   }
@@ -811,7 +881,8 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
   const isMarkdown = data.language === "markdown";
   const markdownDirectory = getFileDirectory(filePath);
   const lines = data.content.split("\n");
-  const hasDiff = prevContent !== null && prevContent !== data.content;
+  const hasLiveDiff = prevContent !== null && prevContent !== data.content;
+  const hasDiff = hasLiveDiff || hasGitDiff;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -960,7 +1031,9 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile }: Props) {
       {/* Content area */}
       <div style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
         {viewMode === "diff" && hasDiff ? (
-          <DiffView oldContent={prevContent!} newContent={data.content} language={data.language} />
+          hasGitDiff
+            ? <GitDiffView patch={gitDiff.patch!} />
+            : <DiffView oldContent={prevContent!} newContent={data.content} language={data.language} />
         ) : isHtml && previewMode ? (
           <iframe
             srcDoc={data.content}

@@ -29,8 +29,9 @@
     "package.json"
   ],
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 -p 30141 --turbopack",
-    "dev:lan": "next dev -H 0.0.0.0 -p 30141 --turbopack",
+    "dev": "next dev -H 127.0.0.1 -p 30141 --webpack",
+    "dev:turbo": "next dev -H 127.0.0.1 -p 30141 --turbopack",
+    "dev:lan": "next dev -H 0.0.0.0 -p 30141 --webpack",
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 30141",
     "start:lan": "next start -H 0.0.0.0 -p 30141",
