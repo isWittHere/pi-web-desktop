@@ -4,6 +4,11 @@ import path from "path";
 export const UPLOAD_CONFLICT_STRATEGIES = ["error", "overwrite", "skip"] as const;
 export type UploadConflictStrategy = typeof UPLOAD_CONFLICT_STRATEGIES[number];
 
+export const MAX_UPLOAD_FILE_BYTES = 25 * 1024 * 1024;
+export const MAX_UPLOAD_TOTAL_BYTES = 100 * 1024 * 1024;
+// Multipart boundaries and headers are not file bytes, but must be bounded too.
+export const MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_TOTAL_BYTES + 1024 * 1024;
+
 const UPLOAD_CONFLICT_STRATEGY_SET = new Set<string>(UPLOAD_CONFLICT_STRATEGIES);
 
 export interface UploadTargetInspection {

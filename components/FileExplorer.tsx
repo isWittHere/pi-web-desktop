@@ -3,9 +3,8 @@
 import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { At, CaretRight, Check, DownloadSimple, Info, MinusCircle, Spinner, UploadSimple, Warning, X } from "@phosphor-icons/react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
-import { encodeFilePathForApi, getFileName, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
-import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
-import { useI18n } from "@/hooks/useI18n";
+import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
+
 
 interface FileEntry {
   name: string;
@@ -65,43 +64,7 @@ interface PendingConflict {
   nonReplaceable: string[];
 }
 
-async function fetchGitStatus(cwd: string): Promise<GitStatusResponse> {
-  const response = await fetch(`/api/git/status?${new URLSearchParams({ cwd }).toString()}`);
-  if (!response.ok) throw new Error(`Failed to load Git status (HTTP ${response.status})`);
-  return response.json() as Promise<GitStatusResponse>;
-}
 
-const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
-  modified: "#d6a84b",
-  added: "#4ade80",
-  deleted: "#f87171",
-  renamed: "#60a5fa",
-  untracked: "#4ade80",
-  conflict: "#f87171",
-};
-
-function ChangeRow({ status, cwd, onOpenFile }: {
-  status: GitFileStatus;
-  cwd: string;
-  onOpenFile: Props["onOpenFile"];
-}) {
-  const [hovered, setHovered] = useState(false);
-  const relativePath = getRelativeFilePath(status.filePath, cwd);
-  return (
-    <button
-      type="button"
-      onClick={() => onOpenFile(status.filePath, getFileName(status.filePath), { initialDisplayMode: "diff" })}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      title={status.filePath}
-      style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "0 8px", height: 24, border: "none", borderRadius: 4, background: hovered ? "var(--bg-hover)" : "transparent", color: "var(--text)", cursor: "pointer", textAlign: "left" }}
-    >
-      <span style={{ width: 14, flexShrink: 0, color: GIT_STATUS_COLORS[status.status], fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, textAlign: "center" }}>{status.code}</span>
-      <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.85 }}>{getFileIcon(getFileName(status.filePath), 13)}</span>
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontSize: 12 }}>{relativePath}</span>
-    </button>
-  );
-}
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
   const encoded = encodeFilePathForApi(dirPath);
@@ -391,11 +354,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   onAtMentions,
   onUploadBusyChange,
 }, ref) {
-  const { t } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>([]);
-  const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
-  const [gitLoading, setGitLoading] = useState(false);
-  const [changesExpanded, setChangesExpanded] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
@@ -518,20 +477,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
 
   useEffect(() => () => onUploadBusyChange?.(false), [onUploadBusyChange]);
 
-  const loadGitStatus = useCallback(async () => {
-    setGitLoading(true);
-    try {
-      setGitStatus(await fetchGitStatus(cwd));
-    } catch {
-      setGitStatus(null);
-    } finally {
-      setGitLoading(false);
-    }
-  }, [cwd]);
 
-  useEffect(() => {
-    void loadGitStatus();
-  }, [loadGitStatus, refreshKey, treeRefreshKey]);
 
   useEffect(() => {
     const cwdChanged = prevCwdRef.current !== cwd;
@@ -667,25 +613,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         </div>
       )}
 
-      {gitStatus?.isGitRepository && gitStatus.files.length > 0 && (
-        <section style={{ padding: "2px 4px 4px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ height: 26, padding: "0 6px", display: "flex", alignItems: "center", gap: 5 }}>
-            <button type="button" onClick={() => setChangesExpanded((expanded) => !expanded)} aria-expanded={changesExpanded} style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", padding: 0, fontSize: 11, fontWeight: 600 }}>
-              <CaretRight size={12} style={{ transform: changesExpanded ? "rotate(90deg)" : "none", transition: "transform 120ms ease" }} aria-hidden="true" />
-              <span>{t("desktop.quickChanges")}</span>
-              <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>{t("desktop.changedFiles", { count: gitStatus.files.length })}</span>
-            </button>
-            <span style={{ color: GIT_STATUS_COLORS.added, fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
-            <span style={{ color: GIT_STATUS_COLORS.deleted, fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
-            <button type="button" onClick={() => void loadGitStatus()} disabled={gitLoading} title={t("desktop.refresh")} aria-label={t("desktop.refresh")} style={{ width: 20, height: 20, padding: 0, border: "none", borderRadius: 4, background: "transparent", color: "var(--text-dim)", cursor: gitLoading ? "wait" : "pointer", opacity: gitLoading ? 0.55 : 1 }}>
-              <Spinner size={12} style={gitLoading ? { animation: "spin 0.8s linear infinite" } : undefined} aria-hidden="true" />
-            </button>
-          </div>
-          {changesExpanded && gitStatus.files.map((status) => (
-            <ChangeRow key={status.filePath} status={status} cwd={cwd} onOpenFile={onOpenFile} />
-          ))}
-        </section>
-      )}
+
 
       <div style={{ padding: "2px 4px" }}>
         {loading ? (

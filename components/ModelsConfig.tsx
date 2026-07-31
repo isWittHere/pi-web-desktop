@@ -828,7 +828,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
         setLoginState({
           phase: "error",
           message: res.status === 409
-            ? "Authentication state changed. Please refresh and try again."
+            ? t("desktop.modelsAuthenticationStateChanged")
             : (data?.error ?? `HTTP ${res.status}`),
         });
       } else {
@@ -839,7 +839,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
     } finally {
       onRefresh();
     }
-  }, [provider.id, onRefresh]);
+  }, [provider.id, onRefresh, t]);
 
   const submitCode = useCallback(async (token: string, code: string) => {
     if (!code.trim()) return;
@@ -1067,14 +1067,18 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
     try {
       const res = await fetch(`/api/auth/api-key/${encodeURIComponent(provider.id)}`, { method: "DELETE" });
       const d = await res.json() as { success?: boolean; error?: string };
-      if (!res.ok || d.error) setError(d.error ?? `HTTP ${res.status}`);
-      else onRefresh();
+      if (!res.ok || d.error) {
+        setError(res.status === 409
+          ? t("desktop.modelsAuthenticationStateChanged")
+          : (d.error ?? `HTTP ${res.status}`));
+      }
     } catch (e) {
       setError(String(e));
     } finally {
+      onRefresh();
       setRemoving(false);
     }
-  }, [provider.id, onRefresh]);
+  }, [provider.id, onRefresh, t]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

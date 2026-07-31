@@ -300,6 +300,7 @@ export const zhCNLocale = {
     "desktop.modelsLogin": "登录",
     "desktop.modelsDisconnect": "断开连接",
     "desktop.modelsConnectionLost": "连接已断开",
+    "desktop.modelsAuthenticationStateChanged": "认证状态已变化，请刷新后重试。",
     "desktop.modelsVerifying": "验证中…",
     "desktop.modelsContinuing": "正在继续…",
     "desktop.modelsServerError": "服务器错误 {status}",

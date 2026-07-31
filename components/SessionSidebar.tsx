@@ -6,6 +6,7 @@ import { ArrowClockwise, CaretDown, CaretRight, Check, Folder, GitBranch, Pencil
 import type { SessionInfo } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
+import { QuickChangesPanel } from "./QuickChangesPanel";
 
 declare global {
   interface Window {
@@ -1684,6 +1685,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </div>
           )}
         </div>
+      )}
+
+      {(selectedCwdProp || selectedCwd) && (
+        <QuickChangesPanel
+          cwd={selectedCwd ?? selectedCwdProp!}
+          refreshKey={explorerKey}
+          onOpenFile={onOpenFile ?? (() => {})}
+        />
       )}
     </div>
     </>

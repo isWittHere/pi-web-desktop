@@ -300,6 +300,7 @@ export const enLocale = {
     "desktop.modelsLogin": "Login",
     "desktop.modelsDisconnect": "Disconnect",
     "desktop.modelsConnectionLost": "Connection lost",
+    "desktop.modelsAuthenticationStateChanged": "Authentication state changed. Please refresh and try again.",
     "desktop.modelsVerifying": "Verifying…",
     "desktop.modelsContinuing": "Continuing…",
     "desktop.modelsServerError": "Server error {status}",

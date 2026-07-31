@@ -10,6 +10,18 @@ function secretsEqual(actual: string, expected: string): boolean {
   return timingSafeEqual(hashSecret(actual), hashSecret(expected));
 }
 
+export function credentialsMatch(
+  username: string,
+  password: string,
+  expectedPassword: string,
+  compareSecrets = secretsEqual,
+): boolean {
+  // Always evaluate both comparisons to avoid exposing which credential failed.
+  const usernameMatches = compareSecrets(username, PI_WEB_AUTH_USERNAME);
+  const passwordMatches = compareSecrets(password, expectedPassword);
+  return usernameMatches && passwordMatches;
+}
+
 export function isWebPasswordEnabled(
   password: string | undefined = process.env.PI_WEB_PASSWORD,
 ): password is string {
@@ -35,6 +47,9 @@ export function isValidBasicAuthorization(
 
   const separator = credentials.indexOf(":");
   if (separator === -1) return false;
-  return secretsEqual(credentials.slice(0, separator), PI_WEB_AUTH_USERNAME)
-    && secretsEqual(credentials.slice(separator + 1), password);
+  return credentialsMatch(
+    credentials.slice(0, separator),
+    credentials.slice(separator + 1),
+    password,
+  );
 }

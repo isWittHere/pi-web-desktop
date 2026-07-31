@@ -21,9 +21,14 @@ import { resolveDirentIsDirectory } from "@/lib/file-dirent";
 import { isFilePathReferencedBySession } from "@/lib/session-file-references";
 import {
   inspectUploadTargets,
+  MAX_UPLOAD_FILE_BYTES,
+  MAX_UPLOAD_REQUEST_BYTES,
+  MAX_UPLOAD_TOTAL_BYTES,
   parseUploadConflictStrategy,
   validateUploadFileNames,
 } from "@/lib/file-upload";
+import { parseFormDataWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
+import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -119,6 +124,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  if (!isApiRequestAllowed(request)) {
+    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+  }
+
   try {
     const { path: segments } = await params;
     const uploadDirectory = await getUploadDirectory(segments);
@@ -127,6 +136,9 @@ export async function POST(
     const type = request.nextUrl.searchParams.get("type") ?? "upload";
 
     if (type === "upload-check") {
+      if (!hasJsonContentType(request)) {
+        return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
+      }
       const body = await request.json().catch(() => null) as { fileNames?: unknown } | null;
       const fileNames = parseUploadFileNames(body?.fileNames);
       if (!fileNames) {
@@ -147,9 +159,26 @@ export async function POST(
     if (!strategy) {
       return NextResponse.json({ error: "Invalid conflict strategy" }, { status: 400 });
     }
+    if (!request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data;")) {
+      return NextResponse.json({ error: "Content-Type must be multipart/form-data" }, { status: 415 });
+    }
 
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await parseFormDataWithinLimit(request, MAX_UPLOAD_REQUEST_BYTES);
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        return NextResponse.json({ error: "Uploads must total 100MB or less" }, { status: 413 });
+      }
+      throw error;
+    }
     const files = formData.getAll("files").filter((entry): entry is File => typeof entry !== "string");
+    if (files.some((file) => file.size > MAX_UPLOAD_FILE_BYTES)) {
+      return NextResponse.json({ error: "Each upload must be 25MB or smaller" }, { status: 413 });
+    }
+    if (files.reduce((total, file) => total + file.size, 0) > MAX_UPLOAD_TOTAL_BYTES) {
+      return NextResponse.json({ error: "Uploads must total 100MB or less" }, { status: 413 });
+    }
     const fileNames = files.map((file) => file.name);
     const validationError = validateUploadFileNames(fileNames);
     if (validationError) {
