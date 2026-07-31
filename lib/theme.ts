@@ -495,11 +495,6 @@ export function listThemeSets(projectCwd?: string): ThemeSetInfo[] {
   return result;
 }
 
-/** Backwards-compat alias. */
-export function listThemes(projectCwd?: string): ThemeSetInfo[] {
-  return listThemeSets(projectCwd);
-}
-
 /** Convert a kebab-case theme name to a display-friendly title. */
 function themeNameToDisplay(name: string): string {
   return name

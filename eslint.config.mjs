@@ -16,7 +16,7 @@ const eslintConfig = [
   // Electron's main/preload processes intentionally use CommonJS so they can
   // run directly under Electron without a transpilation step.
   {
-    files: ["electron/**/*.js", "main.js"],
+    files: ["electron/**/*.js"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },

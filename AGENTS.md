@@ -27,7 +27,7 @@ This project began from upstream pi-web `v0.7.16`, but is now a deliberately div
 - Treat `ref-repos/` as read-only comparison material. It is never staged, committed, copied wholesale, or used as a replacement source tree.
 - Never overwrite local `package.json`: preserve Electron packaging/scripts, fonts, icons, and desktop release tooling while manually reconciling upstream runtime dependencies.
 - Treat `components/AppShell.tsx`, `SessionSidebar.tsx`, `ChatWindow.tsx`, `ChatInput.tsx`, `MarkdownBody.tsx`, `FileViewer.tsx`, `app/globals.css`, and `hooks/useTheme.ts` as high-conflict desktop assets. Apply targeted behavioral changes only.
-- i18n may align with upstream through a focused `lib/i18n` registry/provider/catalog migration. Do not replace local `AppShell` or settings UI to obtain it; preserve `app/layout.tsx` pre-hydration language bootstrap, existing `pi-language` migration, `data-language`, and all desktop-specific translations. Use a `useLanguage()` compatibility shim while call sites and namespaced keys migrate.
+- i18n may align with upstream through a focused `lib/i18n` registry/provider/catalog migration. Do not replace local `AppShell` or settings UI to obtain it; preserve `app/layout.tsx` pre-hydration language bootstrap, existing `pi-language` migration, `data-language`, and all desktop-specific translations. The migration is complete: all call sites use `useI18n()`; no `useLanguage()` shim remains.
 - Security updates must be adapted to the Electron server lifecycle. In particular, changing listener binding, Host/Origin validation, CORS, or `PI_WEB_PASSWORD` must be validated with `electron/main.js` readiness checks and BrowserWindow startup; never retain wildcard API CORS merely for LAN convenience.
 - Upstream UI enhancements such as resizable panels may be adopted only by manually integrating their interaction/accessibility behavior with the local title bar, responsive layout, CSS variables, and i18n.
 
@@ -136,7 +136,7 @@ pi-web-main/
 │   ├── useElectronWindow.ts      # Electron window controls bridge
 │   ├── useIsMobile.ts            # Responsive breakpoint hook
 │   ├── useKeyboardShortcuts.ts   # Global keyboard shortcuts
-│   ├── useLanguage.ts            # Legacy-compatible i18n hook (en / zh-CN)
+│   ├── useI18n.tsx               # i18n provider/hook (en / zh-CN)
 │   ├── useProcessDisplayMode.ts  # Process visualization preferences
 │   └── useTheme.ts              # Dark/light theme
 │
@@ -500,14 +500,14 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - **Border depth slider**: User-adjustable 0-100 range blends `--border`/`--border-hover` from invisible (matches bg) → theme default → max contrast (matches text). Uses `color-mix()`.
 - **View transitions**: `toggleTheme()` uses the View Transition API with a circular clip-path animation triggered from the click origin.
 - **System color scheme**: `useTheme` subscribes to `(prefers-color-scheme: dark)` media query for "system" mode.
-- **Layout inline script**: `app/layout.tsx` reads `pi-theme-mode`, `pi-theme`, runs migration from old per-mode keys (`pi-theme-dark`/`pi-theme-light`), and sets `data-theme-mode`/`data-theme-resolved-mode`/`dark` class before React hydration.
+- **Layout inline script**: `app/layout.tsx` reads `pi-theme-mode`, `pi-theme`, runs migration from old per-mode keys (`pi-theme-dark`/`pi-theme-light`), and sets `data-theme-mode`/`data-theme-resolved-mode`/`dark` class before React hydration. The per-mode-key migration is self-cleaning and idempotent; it may be dropped once no supported release writes the old keys.
 - **Built-in defaults**: `globals.css` provides `:root` (light) and `html.dark` (dark) CSS variable defaults. They act as fallback when no pi CLI theme is selected.
 
 ### i18n
 - Supports English (`en`) and 中文 (`zh-CN`).
 - Current language is bootstrapped before hydration by `app/layout.tsx`, which reads `pi-language`, applies `html.lang` and `data-language`, and prevents a visible language flash in Electron.
 - The target architecture is upstream-aligned `lib/i18n/` primitives (locale registry, provider, message catalogs, interpolation, locale-aware formatting) with local desktop adaptations.
-- During migration, read existing `pi-language` before `pi-locale`, preserve local desktop-only translations, and keep `useLanguage()` as a compatibility shim over `useI18n()` until all call sites and translation-key aliases are migrated.
+- i18n migration is complete: all call sites use `useI18n()`; the `useLanguage()` shim was removed. The `pi-language` → `pi-locale` localStorage migration in `app/layout.tsx` is a self-cleaning, idempotent upgrade path for pre-migration users; it may be dropped once no supported release writes the old key.
 - Any catalog change needs English/Chinese key-parity and call-site-resolution tests; do not import upstream AppShell or language-menu UI merely to adopt i18n.
 
 ### ref-repos

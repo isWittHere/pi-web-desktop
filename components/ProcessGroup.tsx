@@ -310,13 +310,6 @@ function mergeConsecutiveToolSteps(
   if (steps.length < 2) return steps;
 
   const toolSteps = steps.filter((s) => s.kind === "tool");
-  if (typeof console !== "undefined" && process.env.NODE_ENV === "development" && toolSteps.length >= 2) {
-    const withTones = toolSteps.map((s) => {
-      const enriched = enrichedToolLabel((s as Extract<Step, { kind: "tool" }>).block, ts);
-      return `${enriched.tone ?? "undefined"}:${enriched.displayLabel}`;
-    });
-    console.debug(`[ProcessGroup] merge input: ${toolSteps.length} tool steps, ${steps.length} total`, withTones);
-  }
 
   const result: Step[] = [];
   let i = 0;
@@ -422,13 +415,6 @@ function mergeConsecutiveToolSteps(
       label = `${typeLabel} ${shortTargets[0]}, ${shortTargets[1]}`;
     } else {
       label = `${typeLabel} ${shortTargets[0]} +${shortTargets.length - 1}`;
-    }
-
-    if (typeof console !== "undefined" && process.env.NODE_ENV === "development") {
-      console.debug(
-        `[ProcessGroup] merged ${count} ${currentTone} steps → "${label}"`,
-        targetLabels,
-      );
     }
 
     result.push({

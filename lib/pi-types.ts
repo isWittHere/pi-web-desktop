@@ -118,8 +118,6 @@ export interface AgentSessionLike {
   readonly sessionFile: string | undefined;
   readonly isStreaming: boolean;
   readonly isCompacting: boolean;
-  readonly autoCompactionEnabled: boolean;
-  readonly autoRetryEnabled: boolean;
   readonly model: ModelLike | undefined;
   readonly modelRuntime: { getModel: (provider: string, modelId: string) => ModelLike | undefined };
   readonly sessionManager: SessionManager;
@@ -154,8 +152,6 @@ export interface AgentSessionLike {
   setSessionName(name: string): void;
   getSessionStats(): Omit<SessionStatsInfo, "sessionName">;
   getLastAssistantText(): string | undefined;
-  setAutoCompactionEnabled(enabled: boolean): void;
-  setAutoRetryEnabled(enabled: boolean): void;
   steer(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<void>;
   followUp(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<void>;
   readonly pendingMessageCount: number;

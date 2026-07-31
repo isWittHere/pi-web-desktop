@@ -764,7 +764,7 @@ export function PluginsConfig({
                         textTransform: "uppercase",
                       }}
                     >
-                      {t(group.scope)}
+                      {t(`desktop.${group.scope}`)}
                     </div>
                     {group.packages.map((pkg) => {
                       const key = packageKey(pkg);

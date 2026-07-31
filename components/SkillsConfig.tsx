@@ -140,7 +140,7 @@ function SkillDetail({
               label === "project" ? "rgba(99,102,241,0.8)" : "var(--text-dim)",
           }}
         >
-          {t(label)}
+          {t(`desktop.${label}`)}
         </span>
         <span
           style={{
@@ -517,7 +517,7 @@ function AddSkillPanel({
                     s === "global" ? "1px solid var(--border)" : "none",
                 }}
               >
-                {t(s)}
+                {t(`desktop.${s}`)}
               </button>
             ))}
           </div>
