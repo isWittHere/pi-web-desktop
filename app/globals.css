@@ -1413,53 +1413,113 @@ span.linenumber {
   to   { stroke-dashoffset: 0;  opacity: 1; }
 }
 
-/* Desktop sidebar: animate width */
+/* Desktop workspace panels. Widths are supplied by useResizablePanel. */
+.workspace-panel-splitter {
+  display: none;
+}
+
 @media (min-width: 641px) {
   .sidebar-overlay-backdrop {
     display: none !important;
   }
+
   .sidebar-container {
     position: relative;
     overflow: hidden;
     transition: width 0.2s ease, min-width 0.2s ease;
   }
   .sidebar-container.sidebar-open {
-    width: 260px;
-    min-width: 260px;
+    width: var(--sidebar-width, 260px);
+    min-width: var(--sidebar-width, 260px);
   }
   .sidebar-container.sidebar-closed {
     width: 0;
     min-width: 0;
     border-right: none !important;
   }
-  /* keep inner content at fixed width so it doesn't reflow during animation */
   .sidebar-container > * {
-    width: 260px;
-    min-width: 260px;
+    width: var(--sidebar-width, 260px);
+    min-width: var(--sidebar-width, 260px);
   }
-}
 
-
-/* Right panel: animate width */
-@media (min-width: 641px) {
   .right-panel-container {
     overflow: hidden;
     transition: width 0.2s ease, min-width 0.2s ease;
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
-    width: 42%;
-    min-width: 300px;
+    width: var(--right-panel-width, clamp(360px, 42vw, 640px));
+    min-width: var(--right-panel-width, clamp(360px, 42vw, 640px));
   }
   .right-panel-container.right-panel-closed {
     width: 0;
     min-width: 0;
     border-left: none !important;
   }
-  /* keep inner content at fixed width so it doesn't reflow during animation */
   .right-panel-container > * {
-    width: 42vw;
-    min-width: 300px;
+    width: var(--right-panel-width, clamp(360px, 42vw, 640px));
+    min-width: var(--right-panel-width, clamp(360px, 42vw, 640px));
+  }
+
+  .workspace-panel-splitter {
+    display: block;
+    position: relative;
+    z-index: 201;
+    width: 9px;
+    margin: 0 -4px;
+    flex: 0 0 9px;
+    cursor: col-resize;
+    outline: none;
+    touch-action: none;
+  }
+  .workspace-panel-splitter::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 1px;
+    background: transparent;
+    content: "";
+    transition: background 0.12s ease;
+  }
+  .workspace-panel-splitter:hover::before,
+  .workspace-panel-splitter:focus-visible::before {
+    background: var(--accent);
+  }
+  .sidebar-container.panel-is-resizing,
+  .right-panel-container.panel-is-resizing {
+    transition: none;
+  }
+}
+
+/* A file preview should not make a narrow desktop chat column unusable. */
+@media (min-width: 641px) and (max-width: 959px) {
+  .right-panel-container.right-panel-open {
+    position: absolute;
+    z-index: 202;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(var(--right-panel-width, clamp(360px, 42vw, 640px)), calc(100% - 48px));
+    min-width: 0;
+    box-shadow: -8px 0 20px color-mix(in srgb, var(--text) 12%, transparent);
+  }
+  .right-panel-container.right-panel-open > * {
+    width: 100%;
+    min-width: 0;
+  }
+  .right-panel-splitter {
+    position: absolute;
+    z-index: 203;
+    top: 0;
+    right: min(var(--right-panel-width, clamp(360px, 42vw, 640px)), calc(100% - 48px));
+    bottom: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .workspace-panel-splitter {
+    display: none !important;
   }
 }
 

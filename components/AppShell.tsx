@@ -13,6 +13,17 @@ import { AppTitleBar } from "./AppTitleBar";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useResizablePanel } from "@/hooks/useResizablePanel";
+import {
+  getDefaultRightPanelWidth,
+  getRightPanelMaxWidth,
+  getSidebarMaxWidth,
+  RIGHT_PANEL_MAX_WIDTH,
+  RIGHT_PANEL_MIN_WIDTH,
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+} from "@/lib/panel-layout";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
@@ -121,6 +132,58 @@ export function AppShell() {
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
+  const rightPanelWidthRef = useRef(getDefaultRightPanelWidth(1366));
+  const getResponsiveRightPanelWidth = useCallback(
+    () => typeof window === "undefined" ? getDefaultRightPanelWidth(1366) : getDefaultRightPanelWidth(window.innerWidth),
+    [],
+  );
+  const getResponsiveSidebarMaxWidth = useCallback(
+    () => typeof window === "undefined" ? SIDEBAR_MAX_WIDTH : getSidebarMaxWidth({
+      viewportWidth: window.innerWidth,
+      rightPanelOpen,
+      rightPanelWidth: rightPanelWidthRef.current,
+    }),
+    [rightPanelOpen],
+  );
+  const getResponsiveRightPanelMaxWidth = useCallback(
+    () => typeof window === "undefined" ? RIGHT_PANEL_MAX_WIDTH : getRightPanelMaxWidth({
+      viewportWidth: window.innerWidth,
+      sidebarOpen,
+      sidebarWidth: sidebarWidthRef.current,
+    }),
+    [sidebarOpen],
+  );
+  const sidebarPanel = useResizablePanel({
+    ariaLabel: t("desktop.resizeSidebar"),
+    cssVariable: "--sidebar-width",
+    defaultWidth: SIDEBAR_DEFAULT_WIDTH,
+    getMaxWidth: getResponsiveSidebarMaxWidth,
+    growthDirection: "right",
+    maxWidth: SIDEBAR_MAX_WIDTH,
+    minWidth: SIDEBAR_MIN_WIDTH,
+    storageKey: "pi-sidebar-width",
+    widthRef: sidebarWidthRef,
+  });
+  const rightPanel = useResizablePanel({
+    ariaLabel: t("desktop.resizeFilePanel"),
+    cssVariable: "--right-panel-width",
+    defaultWidth: getDefaultRightPanelWidth(1366),
+    getDefaultWidth: getResponsiveRightPanelWidth,
+    getMaxWidth: getResponsiveRightPanelMaxWidth,
+    growthDirection: "left",
+    maxWidth: RIGHT_PANEL_MAX_WIDTH,
+    minWidth: RIGHT_PANEL_MIN_WIDTH,
+    storageKey: "pi-right-panel-width",
+    widthRef: rightPanelWidthRef,
+  });
+  const reclampSidebarWidth = sidebarPanel.reclampWidth;
+  const reclampRightPanelWidth = rightPanel.reclampWidth;
+  useEffect(() => {
+    if (!rightPanelOpen) return;
+    reclampSidebarWidth();
+    reclampRightPanelWidth();
+  }, [reclampRightPanelWidth, reclampSidebarWidth, rightPanelOpen]);
 
   // Same @mention format as the chat input's @ autocomplete, so the agent's
   // read tool resolves it the same way (it strips the @ prefix).
@@ -384,7 +447,16 @@ export function AppShell() {
         sessionTitle={sessionTitle}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
       />
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
+      <div
+        style={{
+          "--right-panel-width": `${rightPanel.width}px`,
+          flex: 1,
+          display: "flex",
+          overflow: "hidden",
+          minWidth: 0,
+          position: "relative",
+        } as React.CSSProperties}
+      >
       {/* Mobile overlay backdrop */}
       <div
         className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
@@ -402,18 +474,26 @@ export function AppShell() {
 
       {/* Left sidebar */}
       <div
-        className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
+        ref={sidebarPanel.panelRef}
+        className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarPanel.isResizing ? " panel-is-resizing" : ""}`}
         style={{
+          "--sidebar-width": `${sidebarPanel.width}px`,
           background: "var(--bg-panel)",
           borderRight: "1px solid var(--border)",
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
           zIndex: 200,
-        }}
+        } as React.CSSProperties}
       >
         {sidebarContent}
       </div>
+      {sidebarOpen && (
+        <div
+          {...sidebarPanel.separatorProps}
+          className="workspace-panel-splitter sidebar-panel-splitter"
+        />
+      )}
 
       {/* Center: chat */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
@@ -460,8 +540,15 @@ export function AppShell() {
       </div>
 
       {/* Right panel: file viewer — always mounted, width animated via CSS */}
+      {rightPanelOpen && (
+        <div
+          {...rightPanel.separatorProps}
+          className="workspace-panel-splitter right-panel-splitter"
+        />
+      )}
       <div
-        className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}`}
+        ref={rightPanel.panelRef}
+        className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanel.isResizing ? " panel-is-resizing" : ""}`}
         style={{
           display: "flex",
           flexDirection: "column",

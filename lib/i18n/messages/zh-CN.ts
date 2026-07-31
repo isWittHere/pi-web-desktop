@@ -45,6 +45,8 @@ export const zhCNLocale = {
     "desktop.switchToDark": "切换至深色模式",
     "desktop.showSidebar": "显示侧边栏",
     "desktop.hideSidebar": "隐藏侧边栏",
+    "desktop.resizeSidebar": "调整侧边栏宽度",
+    "desktop.resizeFilePanel": "调整文件面板宽度",
     "desktop.minimize": "最小化",
     "desktop.maximize": "最大化",
     "desktop.restore": "还原",
