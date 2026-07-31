@@ -139,7 +139,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const {
     loading, error, messages, entryIds, streamState,
-    agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -150,7 +150,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     branchTree, activeLeafId: branchActiveLeafId, handleLeafChange,
     sessionIdRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
-    handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
+    handleSend, executeBash, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
@@ -162,8 +162,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   // Register the abort handler for the global Esc shortcut
   useEffect(() => {
-    registerAbortHandler(agentRunning ? handleAbort : null);
-  }, [agentRunning, handleAbort]);
+    registerAbortHandler(agentRunning || bashRunning ? handleAbort : null);
+  }, [agentRunning, bashRunning, handleAbort]);
 
   // --- Scroll-edge fades ---
   // Display a fade only when more conversation content exists beyond that edge.
@@ -313,6 +313,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     <ChatInput
       ref={chatInputRef}
       onSend={handleSend}
+      onBash={executeBash}
       onAbort={handleAbort}
       onSteer={agentRunning ? handleSteer : undefined}
       onFollowUp={agentRunning ? handleFollowUp : undefined}
@@ -801,6 +802,24 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             {agentRunning && !streamState.streamingMessage && (
               <div className="py-2 text-[13px] text-text-muted">
                 <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t)}</span>
+              </div>
+            )}
+
+            {pendingBash && (
+              <MessageView
+                message={{
+                  role: "bashExecution",
+                  command: pendingBash.command,
+                  output: "",
+                  excludeFromContext: pendingBash.excludeFromContext,
+                }}
+                sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+              />
+            )}
+
+            {bashRunning && !pendingBash && (
+              <div className="py-2 text-[13px] text-text-muted">
+                <span className="animate-[pulse_1.5s_infinite]">{t("desktop.runningShellCommand")}</span>
               </div>
             )}
 

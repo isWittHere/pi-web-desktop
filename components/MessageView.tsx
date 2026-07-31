@@ -22,6 +22,7 @@ import type {
   UserMessage,
   AssistantMessage,
   CustomMessage,
+  BashExecutionMessage,
   ToolResultMessage,
   AssistantContentBlock,
   TextContent,
@@ -123,6 +124,9 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
       return <CompactionSummary content={(message as CustomMessage).content} />;
     }
     return <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} />;
+  }
+  if (message.role === "bashExecution") {
+    return <BashExecutionView message={message as BashExecutionMessage} sessionId={sessionId} />;
   }
   return null;
 }, (prev, next) => {
@@ -1203,6 +1207,71 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
           </pre>
         )}
       </div>
+    </div>
+  );
+}
+
+function BashExecutionView({ message, sessionId }: { message: BashExecutionMessage; sessionId?: string }) {
+  const { t } = useI18n();
+  const [fullOutput, setFullOutput] = useState<string | null>(null);
+  const [loadingFull, setLoadingFull] = useState(false);
+  const [fullError, setFullError] = useState<string | null>(null);
+  const isPending = !message.output && message.exitCode === undefined && !message.cancelled;
+  const isError = message.cancelled || (message.exitCode !== undefined && message.exitCode !== 0);
+  const fullOutputUrl = sessionId && message.fullOutputPath
+    ? `/api/agent/${encodeURIComponent(sessionId)}/bash-output?path=${encodeURIComponent(message.fullOutputPath)}`
+    : null;
+  const displayOutput = fullOutput ?? message.output;
+
+  const loadFullOutput = async () => {
+    if (!fullOutputUrl) return;
+    setLoadingFull(true);
+    setFullError(null);
+    try {
+      const response = await fetch(fullOutputUrl);
+      const data = await response.json() as { success?: boolean; data?: { output?: string }; error?: string };
+      if (!response.ok || !data.success) throw new Error(data.error ?? `HTTP ${response.status}`);
+      setFullOutput(data.data?.output ?? "");
+    } catch (error) {
+      setFullError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoadingFull(false);
+    }
+  };
+
+  const toolName = message.excludeFromContext ? "bash (local)" : "bash";
+  const block: ToolCallContent = {
+    type: "toolCall",
+    toolCallId: `bash-${message.timestamp ?? message.command}`,
+    toolName,
+    input: { command: message.command },
+  };
+  const result: ToolResultMessage | undefined = isPending ? undefined : {
+    role: "toolResult",
+    toolCallId: block.toolCallId,
+    toolName,
+    content: displayOutput ? [{ type: "text", text: displayOutput }] : [],
+    isError,
+    timestamp: message.timestamp,
+  };
+
+  return (
+    <div style={{ margin: "6px 0" }}>
+      <ToolCallBlock block={block} result={result} />
+      {message.truncated && fullOutputUrl && fullOutput === null && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+          <button
+            type="button"
+            onClick={() => void loadFullOutput()}
+            disabled={loadingFull}
+            style={{ padding: "3px 8px", border: "1px solid var(--border)", borderRadius: 4, background: "none", color: "var(--text-muted)", cursor: loadingFull ? "wait" : "pointer", fontSize: 11 }}
+          >
+            {loadingFull ? t("desktop.loading") : t("desktop.loadFullOutput")}
+          </button>
+          <a href={`${fullOutputUrl}&download=1`} style={{ fontSize: 11, color: "var(--accent)" }}>{t("desktop.download")}</a>
+        </div>
+      )}
+      {fullError && <div style={{ marginTop: 4, color: "var(--accent-red)", fontSize: 11 }}>{fullError}</div>}
     </div>
   );
 }

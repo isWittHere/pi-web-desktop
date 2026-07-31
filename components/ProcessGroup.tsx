@@ -95,9 +95,9 @@ function enrichedToolLabel(
     else iconName = "pencilSimpleLine";
 
     const typeKey =
-      kind === "create" ? "processStepFileCreate" :
-      kind === "delete" ? "processStepFileDelete" :
-      "processStepFileEdit";
+      kind === "create" ? "desktop.processStepFileCreate" :
+      kind === "delete" ? "desktop.processStepFileDelete" :
+      "desktop.processStepFileEdit";
     const typeLabel = ts(typeKey);
 
     const target = extractToolTarget({
@@ -115,7 +115,7 @@ function enrichedToolLabel(
 
   if (tone === "document_read") {
     iconName = "bookOpen";
-    const typeLabel = ts("processStepFileRead");
+    const typeLabel = ts("desktop.processStepFileRead");
     const target = extractToolTarget({
       toolName: block.toolName,
       label: typeof block.input.label === "string" ? block.input.label : undefined,
@@ -130,7 +130,7 @@ function enrichedToolLabel(
 
   if (tone === "document_search") {
     iconName = "magnifyingGlass";
-    const typeLabel = ts("processStepSearch");
+    const typeLabel = ts("desktop.processStepSearch");
     const pattern =
       typeof block.input.pattern === "string" ? block.input.pattern :
       typeof block.input.query === "string" ? block.input.query :
@@ -143,7 +143,7 @@ function enrichedToolLabel(
 
   if (tone === "directory_list") {
     iconName = "folder";
-    const typeLabel = ts("processStepList");
+    const typeLabel = ts("desktop.processStepList");
     const target = extractToolTarget({
       toolName: block.toolName,
       label: typeof block.input.label === "string" ? block.input.label : undefined,
@@ -158,7 +158,7 @@ function enrichedToolLabel(
 
   if (tone === "file_find") {
     iconName = "magnifyingGlass";
-    const typeLabel = ts("processStepFind");
+    const typeLabel = ts("desktop.processStepFind");
     const pattern =
       typeof block.input.pattern === "string" ? block.input.pattern :
       typeof block.input.glob === "string" ? block.input.glob :
@@ -179,49 +179,49 @@ function enrichedToolLabel(
       const shell = classifyShellCommand(command);
       if (shell.kind === "list") {
         iconName = "folder";
-        const typeLabel = ts("processStepList");
+        const typeLabel = ts("desktop.processStepList");
         const target = shell.argument ? ` ${shell.argument}` : "";
         return { displayLabel: `${typeLabel}${target}`, iconName, tone, typeLabel };
       }
       if (shell.kind === "search") {
         iconName = "magnifyingGlass";
-        const typeLabel = ts("processStepSearch");
+        const typeLabel = ts("desktop.processStepSearch");
         const query = shell.argument ? ` "${shell.argument.slice(0, 60)}"` : "";
         return { displayLabel: `${typeLabel}${query}`, iconName, tone, typeLabel };
       }
       if (shell.kind === "find") {
         iconName = "magnifyingGlass";
-        const typeLabel = ts("processStepFind");
+        const typeLabel = ts("desktop.processStepFind");
         const query = shell.argument ? ` "${shell.argument.slice(0, 60)}"` : "";
         return { displayLabel: `${typeLabel}${query}`, iconName, tone, typeLabel };
       }
       if (shell.kind === "read") {
         iconName = "bookOpen";
-        const typeLabel = ts("processStepRead");
+        const typeLabel = ts("desktop.processStepRead");
         const target = shell.argument ? ` ${shell.argument}` : "";
         return { displayLabel: `${typeLabel}${target}`, iconName, tone, typeLabel, target: shell.argument || undefined };
       }
       if (shell.kind === "fetch") {
         iconName = "download";
-        const typeLabel = ts("processStepFetch");
+        const typeLabel = ts("desktop.processStepFetch");
         const preview = shell.argument ? ` ${shell.argument.slice(0, 80)}` : "";
         return { displayLabel: `${typeLabel}${preview}`, iconName, tone, typeLabel };
       }
       if (shell.kind === "delete") {
         iconName = "trash";
-        const typeLabel = ts("processStepDelete");
+        const typeLabel = ts("desktop.processStepDelete");
         const target = shell.argument ? ` ${shell.argument}` : "";
         return { displayLabel: `${typeLabel}${target}`, iconName, tone, typeLabel };
       }
       if (shell.kind === "copy") {
         iconName = "copy";
-        const typeLabel = ts("processStepCopy");
+        const typeLabel = ts("desktop.processStepCopy");
         const target = shell.argument ? ` ${shell.argument}` : "";
         return { displayLabel: `${typeLabel}${target}`, iconName, tone, typeLabel };
       }
       // "run" fallback — use shell.binary + first non-flag argument instead of raw command
       iconName = "terminal";
-      const typeLabel = ts("processStepCommand");
+      const typeLabel = ts("desktop.processStepCommand");
       const preview = shell.argument
         ? `${shell.binary} ${shell.argument.length > 60 ? shell.argument.slice(0, 57) + "..." : shell.argument}`
         : shell.binary;
@@ -233,7 +233,7 @@ function enrichedToolLabel(
 
   if (tone === "todo_update") {
     iconName = "checklist";
-    const typeLabel = ts("processStepTodo");
+    const typeLabel = ts("desktop.processStepTodo");
     return { displayLabel: fallback, iconName, tone, typeLabel };
   }
 
@@ -257,7 +257,7 @@ export function buildProcessSteps(
     steps.push({
       kind: "thinking",
       id: pending.map((block) => block.id).join("+"),
-      label: ts("processStepThinking"),
+      label: ts("desktop.processStepThinking"),
       blocks: pending,
     });
     pending = [];
@@ -285,7 +285,7 @@ export function buildProcessSteps(
     if (block.type === "custom") {
       steps.push({ kind: "custom", id: block.id, label: formatCustomLabel(block.customType), block });
     } else if (block.type === "image") {
-      steps.push({ kind: "image", id: block.id, label: ts("processOutput"), block });
+      steps.push({ kind: "image", id: block.id, label: ts("desktop.processOutput"), block });
     }
   }
 
@@ -651,7 +651,7 @@ function StepContent({ step, cwd, onOpenFile, sessionId, ts }: {
   const src = imageSource(step.block);
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={ts("processOutput")} className="max-h-72 max-w-full rounded border border-border object-contain" />
+    <img src={src} alt={ts("desktop.processOutput")} className="max-h-72 max-w-full rounded border border-border object-contain" />
   ) : null;
 }
 

@@ -240,7 +240,7 @@ export function DisplayConfig() {
                   onMouseLeave={() => setHoveredTag(null)}
                 >
                   {opt.icon}
-                  {t(opt.value)}
+                  {t(`desktop.${opt.value}`)}
                 </button>
               );
             })}

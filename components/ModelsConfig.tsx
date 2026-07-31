@@ -12,6 +12,7 @@ import {
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon } from "@/components/ProviderIcon";
+import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,12 @@ type ModelTestState =
   | { phase: "testing" }
   | { phase: "success"; latencyMs?: number; status?: number; responseText?: string }
   | { phase: "error"; message: string; latencyMs?: number; status?: number };
+
+type ModelCatalogState =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "success"; recommendation: ModelCatalogRecommendation; appliedCount: number }
+  | { phase: "error"; message: string };
 
 type Selection =
   | { type: "provider"; name: string }
@@ -435,6 +442,29 @@ function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
   return { ...model, compat: Object.keys(rest).length ? rest : undefined };
 }
 
+function fillEmptyModelFields(model: ModelEntry, preset: ModelCatalogPreset): { model: ModelEntry; appliedCount: number } {
+  const next = { ...model };
+  let appliedCount = 0;
+  if (!model.name?.trim() && preset.name) { next.name = preset.name; appliedCount += 1; }
+  if (model.reasoning === undefined && preset.reasoning === true) { next.reasoning = true; appliedCount += 1; }
+  if (!model.input?.length && preset.input?.length) { next.input = [...preset.input]; appliedCount += 1; }
+  if (model.contextWindow === undefined && preset.contextWindow !== undefined) { next.contextWindow = preset.contextWindow; appliedCount += 1; }
+  if (model.maxTokens === undefined && preset.maxTokens !== undefined) { next.maxTokens = preset.maxTokens; appliedCount += 1; }
+  if (preset.cost) {
+    const cost = { ...(model.cost ?? {}) };
+    let changedCost = false;
+    for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) {
+      if (cost[key] === undefined && preset.cost[key] !== undefined) {
+        cost[key] = preset.cost[key];
+        changedCost = true;
+        appliedCount += 1;
+      }
+    }
+    if (changedCost) next.cost = cost;
+  }
+  return { model: next, appliedCount };
+}
+
 function ModelDetail({
   providerName,
   provider,
@@ -450,6 +480,9 @@ function ModelDetail({
 }) {
   const t = useModelTranslation();
   const [testState, setTestState] = useState<ModelTestState>({ phase: "idle" });
+  const [catalogState, setCatalogState] = useState<ModelCatalogState>({ phase: "idle" });
+  const catalogUndoRef = useRef<ModelEntry | null>(null);
+  const catalogRequestIdRef = useRef(0);
   const set = <K extends keyof ModelEntry>(k: K, v: ModelEntry[K]) => onChange({ ...model, [k]: v });
   const costVal = (k: keyof NonNullable<ModelEntry["cost"]>) => model.cost?.[k] !== undefined ? String(model.cost[k]) : "";
   const setCost = (k: keyof NonNullable<ModelEntry["cost"]>, v: string) => {
@@ -472,6 +505,47 @@ function ModelDetail({
   useEffect(() => {
     setTestState({ phase: "idle" });
   }, [providerName, provider.baseUrl, provider.api, provider.apiKey, model.id, model.api]);
+
+  useEffect(() => {
+    catalogRequestIdRef.current += 1;
+    catalogUndoRef.current = null;
+    setCatalogState({ phase: "idle" });
+  }, [providerName, provider.baseUrl, model.id]);
+
+  const handleCatalogFill = useCallback(async () => {
+    const modelId = model.id.trim();
+    if (!modelId || catalogState.phase === "loading") return;
+    const requestId = ++catalogRequestIdRef.current;
+    setCatalogState({ phase: "loading" });
+    try {
+      const params = new URLSearchParams({ modelId, provider: providerName });
+      if (provider.baseUrl?.trim()) params.set("baseUrl", provider.baseUrl.trim());
+      const response = await fetch(`/api/models-config/catalog?${params}`);
+      const data = await response.json() as { recommendation?: ModelCatalogRecommendation; error?: string };
+      if (requestId !== catalogRequestIdRef.current) return;
+      if (!response.ok || data.error || !data.recommendation) {
+        setCatalogState({ phase: "error", message: data.error ?? `HTTP ${response.status}` });
+        return;
+      }
+      const filled = fillEmptyModelFields(model, data.recommendation.preset);
+      if (filled.appliedCount > 0) {
+        catalogUndoRef.current = model;
+        onChange(filled.model);
+      }
+      setCatalogState({ phase: "success", recommendation: data.recommendation, appliedCount: filled.appliedCount });
+    } catch (error) {
+      if (requestId === catalogRequestIdRef.current) {
+        setCatalogState({ phase: "error", message: error instanceof Error ? error.message : String(error) });
+      }
+    }
+  }, [catalogState.phase, model, onChange, provider.baseUrl, providerName]);
+
+  const undoCatalogFill = () => {
+    if (!catalogUndoRef.current) return;
+    onChange(catalogUndoRef.current);
+    catalogUndoRef.current = null;
+    setCatalogState({ phase: "idle" });
+  };
 
   const handleTest = useCallback(async () => {
     if (!model.id.trim() || testState.phase === "testing") return;
@@ -571,6 +645,40 @@ function ModelDetail({
         <Field label={t("desktop.modelsIdRequired")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
         <Field label={t("desktop.modelsName")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("desktop.modelsDisplayName")} /></Field>
       </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 28 }}>
+        <button
+          type="button"
+          onClick={() => void handleCatalogFill()}
+          disabled={!model.id.trim() || catalogState.phase === "loading"}
+          style={{
+            padding: "4px 9px", border: "1px solid var(--border)", borderRadius: 4, background: "var(--bg-panel)",
+            color: !model.id.trim() || catalogState.phase === "loading" ? "var(--text-dim)" : "var(--text-muted)",
+            cursor: !model.id.trim() || catalogState.phase === "loading" ? "not-allowed" : "pointer", fontSize: 11,
+          }}
+        >
+          {catalogState.phase === "loading" ? t("desktop.modelsCatalogFilling") : t("desktop.modelsCatalogFill")}
+        </button>
+        <a href="https://models.dev" target="_blank" rel="noreferrer" style={{ color: "var(--text-dim)", fontSize: 10, textDecoration: "none" }}>
+          {t("desktop.modelsCatalogSource")}
+        </a>
+        {catalogUndoRef.current && (
+          <button type="button" onClick={undoCatalogFill} style={{ marginLeft: "auto", padding: "2px", border: "none", background: "none", color: "var(--accent)", cursor: "pointer", fontSize: 11 }}>
+            {t("desktop.modelsCatalogUndo")}
+          </button>
+        )}
+      </div>
+      {catalogState.phase !== "idle" && (
+        <div style={{ marginTop: -10, fontSize: 10, color: catalogState.phase === "error" ? "var(--accent-red)" : "var(--text-dim)" }}>
+          {catalogState.phase === "error"
+            ? catalogState.message
+            : catalogState.phase === "success"
+              ? catalogState.appliedCount > 0
+                ? t("desktop.modelsCatalogFilled", { count: catalogState.appliedCount })
+                : t("desktop.modelsCatalogNoEmptyFields")
+              : t("desktop.modelsCatalogFilling")}
+        </div>
+      )}
 
       <Field label={t("desktop.modelsApiOverride")}>
         <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />

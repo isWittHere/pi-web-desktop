@@ -165,7 +165,7 @@ function ScopeTag({ scope }: { scope: PluginScope }) {
         color: scope === "project" ? "rgba(99,102,241,0.85)" : "var(--text-dim)",
       }}
     >
-      {t(scope)}
+      {t(`desktop.${scope}`)}
     </span>
   );
 }
@@ -268,7 +268,7 @@ function SegmentedScope({
               fontSize: 12,
             }}
           >
-            {t(scope)}
+            {t(`desktop.${scope}`)}
           </button>
         );
       })}
