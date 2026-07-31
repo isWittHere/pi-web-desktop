@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_STATUS_MAX_BUFFER = 8 * 1024 * 1024;
 
+
 async function git(cwd: string, args: string[], maxBuffer = GIT_STATUS_MAX_BUFFER): Promise<string> {
   const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
     timeout: GIT_TIMEOUT_MS,
@@ -79,15 +80,36 @@ function countUntrackedTextLines(filePath: string): number {
   }
 }
 
+async function readIgnoredPaths(repositoryRoot: string): Promise<string[]> {
+  try {
+    const output = await git(repositoryRoot, [
+      "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z",
+    ]);
+    return output.split("\0").filter(Boolean).map((relative) =>
+      path.resolve(repositoryRoot, relative),
+    );
+  } catch {
+    return [];
+  }
+}
+
 export async function getGitStatus(cwd: string): Promise<GitStatusResponse> {
   const repositoryRoot = await findRepositoryRoot(cwd);
   if (!repositoryRoot) {
-    return { isGitRepository: false, repositoryRoot: null, files: [], additions: 0, deletions: 0 };
+    return {
+      isGitRepository: false,
+      repositoryRoot: null,
+      files: [],
+      additions: 0,
+      deletions: 0,
+      ignoredPaths: [],
+    };
   }
 
-  const [entries, trackedLineStats] = await Promise.all([
+  const [entries, trackedLineStats, ignoredPaths] = await Promise.all([
     readStatusEntries(repositoryRoot),
     readTrackedLineStats(repositoryRoot, cwd),
+    readIgnoredPaths(repositoryRoot),
   ]);
   const files = entries.flatMap((entry): GitFileStatus[] => {
     const filePath = path.resolve(repositoryRoot, entry.path);
@@ -104,12 +126,14 @@ export async function getGitStatus(cwd: string): Promise<GitStatusResponse> {
     0,
   );
 
+
   return {
     isGitRepository: true,
     repositoryRoot,
     files,
     additions: trackedLineStats.additions + untrackedAdditions,
     deletions: trackedLineStats.deletions,
+    ignoredPaths: ignoredPaths.filter((ignoredPath) => isWithinPath(cwd, ignoredPath)),
   };
 }
 

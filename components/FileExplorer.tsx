@@ -1,9 +1,10 @@
 "use client";
 
-import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useRef, useMemo } from "react";
 import { At, CaretRight, Check, DownloadSimple, Info, MinusCircle, Spinner, UploadSimple, Warning, X } from "@phosphor-icons/react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
+import type { GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
 
 
 interface FileEntry {
@@ -65,6 +66,62 @@ interface PendingConflict {
 }
 
 
+
+type ExplorerGitStatus = "added" | "modified" | "deleted";
+
+function gitPathKey(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/").replace(/\/+$/, "");
+  return /^[a-zA-Z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+}
+
+function toExplorerGitStatus(status: GitFileStatusKind): ExplorerGitStatus {
+  if (status === "added" || status === "untracked") return "added";
+  if (status === "deleted" || status === "conflict") return "deleted";
+  return "modified";
+}
+
+function gitStatusColor(status: ExplorerGitStatus | undefined): string {
+  if (status === "added") return "var(--git-status-added)";
+  if (status === "deleted") return "var(--git-status-deleted)";
+  if (status === "modified") return "var(--git-status-modified)";
+  return "var(--text)";
+}
+
+function gitStatusPriority(status: ExplorerGitStatus): number {
+  return status === "deleted" ? 3 : status === "added" ? 2 : 1;
+}
+
+function getNodeGitStatus(
+  pathKey: string,
+  isDirectory: boolean,
+  changedFiles: Map<string, ExplorerGitStatus>,
+): ExplorerGitStatus | undefined {
+  const directStatus = changedFiles.get(pathKey);
+  if (directStatus || !isDirectory) return directStatus;
+
+  let descendantStatus: ExplorerGitStatus | undefined;
+  for (const [changedPath, status] of changedFiles) {
+    if (!changedPath.startsWith(`${pathKey}/`)) continue;
+    if (!descendantStatus || gitStatusPriority(status) > gitStatusPriority(descendantStatus)) {
+      descendantStatus = status;
+    }
+  }
+  return descendantStatus;
+}
+
+function isIgnoredPath(pathKey: string, ignoredPaths: Set<string>): boolean {
+  if (ignoredPaths.has(pathKey)) return true;
+  for (const ignoredPath of ignoredPaths) {
+    if (pathKey.startsWith(`${ignoredPath}/`)) return true;
+  }
+  return false;
+}
+
+async function fetchGitStatus(cwd: string): Promise<GitStatusResponse> {
+  const response = await fetch(`/api/git/status?${new URLSearchParams({ cwd }).toString()}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Failed to load Git status (HTTP ${response.status})`);
+  return response.json() as Promise<GitStatusResponse>;
+}
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
   const encoded = encodeFilePathForApi(dirPath);
@@ -155,6 +212,8 @@ function TreeNode({
   onToggleExpanded,
   refreshToken,
   highlightedPaths,
+  ignoredPaths,
+  changedFiles,
 }: {
   node: FileNode;
   depth: number;
@@ -165,9 +224,14 @@ function TreeNode({
   onToggleExpanded: (fullPath: string, open: boolean) => void;
   refreshToken: string;
   highlightedPaths: Set<string>;
+  ignoredPaths: Set<string>;
+  changedFiles: Map<string, ExplorerGitStatus>;
 }) {
   const open = expandedPaths.has(node.fullPath);
   const highlighted = highlightedPaths.has(node.fullPath);
+  const pathKey = gitPathKey(node.fullPath);
+  const ignored = isIgnoredPath(pathKey, ignoredPaths);
+  const gitStatus = getNodeGitStatus(pathKey, node.isDir, changedFiles);
   const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
@@ -223,19 +287,36 @@ function TreeNode({
           background: hovered ? "var(--bg-hover)" : "transparent",
           borderRadius: 4,
           userSelect: "none",
+          opacity: ignored ? (hovered ? 0.72 : 0.5) : 1,
         }}
       >
         {node.isDir && (
           <CaretRight size={10} color="var(--text-dim)" weight="regular" style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.1s" }} aria-hidden="true" />
         )}
         {!node.isDir && <span style={{ width: 10, flexShrink: 0 }} />}
-        <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+        <span style={{ position: "relative", width: 14, height: 14, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
           {node.isDir ? <FolderIcon size={14} open={open} name={node.name} /> : getFileIcon(node.name, 14)}
+          {gitStatus && (
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: -1,
+                bottom: -1,
+                zIndex: 1,
+                width: 7,
+                height: 7,
+                border: "1px solid var(--bg-panel)",
+                borderRadius: "50%",
+                background: gitStatusColor(gitStatus),
+              }}
+            />
+          )}
         </span>
         <span
           style={{
             fontSize: 12,
-            color: "var(--text)",
+            color: gitStatusColor(gitStatus),
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -333,6 +414,8 @@ function TreeNode({
               onToggleExpanded={onToggleExpanded}
               refreshToken={refreshToken}
               highlightedPaths={highlightedPaths}
+              ignoredPaths={ignoredPaths}
+              changedFiles={changedFiles}
             />
           ))}
           {children.length === 0 && loaded && (
@@ -355,6 +438,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   onUploadBusyChange,
 }, ref) {
   const [roots, setRoots] = useState<FileNode[]>([]);
+  const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
@@ -369,6 +453,17 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const refreshToken = `${refreshKey ?? 0}:${treeRefreshKey}`;
   const uploadBusy = uploadPhase !== "idle";
+  const ignoredPaths = useMemo(
+    () => new Set((gitStatus?.ignoredPaths ?? []).map(gitPathKey)),
+    [gitStatus],
+  );
+  const changedFiles = useMemo(
+    () => new Map((gitStatus?.files ?? []).map((file) => [
+      gitPathKey(file.filePath),
+      toExplorerGitStatus(file.status),
+    ])),
+    [gitStatus],
+  );
 
   const handleToggleExpanded = useCallback((fullPath: string, open: boolean) => {
     setExpandedPaths((prev) => {
@@ -495,8 +590,15 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     setLoading(cwdChanged);
     setError(null);
     let cancelled = false;
-    fetchEntries(cwd)
-      .then((entries) => { if (!cancelled) setRoots(entries); })
+    Promise.all([
+      fetchEntries(cwd),
+      fetchGitStatus(cwd).catch(() => null),
+    ])
+      .then(([entries, status]) => {
+        if (cancelled) return;
+        setRoots(entries);
+        setGitStatus(status);
+      })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -633,6 +735,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               onToggleExpanded={handleToggleExpanded}
               refreshToken={refreshToken}
               highlightedPaths={highlightedPaths}
+              ignoredPaths={ignoredPaths}
+              changedFiles={changedFiles}
             />
           ))
         )}

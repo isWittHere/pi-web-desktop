@@ -20,6 +20,8 @@ export interface GitStatusResponse {
   files: GitFileStatus[];
   additions: number;
   deletions: number;
+  /** Absolute paths of files/directories ignored by .gitignore. */
+  ignoredPaths: string[];
 }
 
 export interface GitFileDiffResponse {

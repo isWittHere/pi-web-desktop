@@ -127,6 +127,8 @@ const THEME_CSS_VARS = [
   "--text", "--text-muted", "--text-dim",
   "--accent", "--accent-hover", "--accent-blue",
   "--accent-red", "--accent-green", "--accent-orange",
+  "--git-status-added", "--git-status-modified", "--git-status-deleted",
+  "--git-status-added-bg", "--git-status-modified-bg", "--git-status-deleted-bg",
   "--user-bg", "--assistant-bg", "--tool-bg",
   "--hatch-color",
 ];

@@ -201,6 +201,33 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
 }
 
+function contrastRatio(foreground: string, background: string): number {
+  const foregroundLum = relativeLuminance(foreground);
+  const backgroundLum = relativeLuminance(background);
+  return (Math.max(foregroundLum, backgroundLum) + 0.05) / (Math.min(foregroundLum, backgroundLum) + 0.05);
+}
+
+/**
+ * Preserve a theme status color's hue while making a modest contrast adjustment.
+ * Git status has redundant text, dot, and capsule-background signals, so 3:1
+ * keeps green and yellow distinguishable in light themes better than forcing
+ * every status color to normal-text 4.5:1 contrast.
+ */
+function ensureContrast(color: string, background: string, minimum = 3): string {
+  if (!hexToRgb(color) || !hexToRgb(background) || contrastRatio(color, background) >= minimum) {
+    return color;
+  }
+
+  const darkenForContrast = relativeLuminance(background) > relativeLuminance(color);
+  for (let step = 1; step <= 20; step += 1) {
+    const candidate = darkenForContrast
+      ? darken(color, step * 0.05)
+      : lighten(color, step * 0.05);
+    if (contrastRatio(candidate, background) >= minimum) return candidate;
+  }
+  return darkenForContrast ? "#000000" : "#ffffff";
+}
+
 // ─── pi CLI token → CSS variable mapping ────────────────────────────────────
 
 /**
@@ -235,6 +262,9 @@ function mapToCssVars(
   const success = colors.success || green;
   const error = colors.error || red;
   const warning = colors.warning || orange;
+  const gitAdded = colors.toolDiffAdded || success;
+  const gitDeleted = colors.toolDiffRemoved || error;
+  const gitModified = warning;
   const userMessageBg = colors.userMessageBg || bg1;
   const toolSuccessBg = colors.toolSuccessBg || bg1;
 
@@ -274,6 +304,16 @@ function mapToCssVars(
   css["--accent-red"] = error;
   css["--accent-green"] = success;
   css["--accent-orange"] = warning;
+
+  // Git status uses the theme's diff/semantic palette, adjusted only enough
+  // to keep its small text readable on the active panel background.
+  const gitStatusBackgroundWeight = isDark ? 0.24 : 0.18;
+  css["--git-status-added"] = ensureContrast(gitAdded, bg1);
+  css["--git-status-modified"] = ensureContrast(gitModified, bg1);
+  css["--git-status-deleted"] = ensureContrast(gitDeleted, bg1);
+  css["--git-status-added-bg"] = mix(bg1, gitAdded, gitStatusBackgroundWeight);
+  css["--git-status-modified-bg"] = mix(bg1, gitModified, gitStatusBackgroundWeight);
+  css["--git-status-deleted-bg"] = mix(bg1, gitDeleted, gitStatusBackgroundWeight);
 
   // Message bubbles
   css["--user-bg"] = userMessageBg;

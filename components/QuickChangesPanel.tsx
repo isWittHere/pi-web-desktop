@@ -14,12 +14,12 @@ interface Props {
 }
 
 const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
-  modified: "#d6a84b",
-  added: "#4ade80",
-  deleted: "#f87171",
-  renamed: "#60a5fa",
-  untracked: "#4ade80",
-  conflict: "#f87171",
+  modified: "var(--git-status-modified)",
+  added: "var(--git-status-added)",
+  deleted: "var(--git-status-deleted)",
+  renamed: "var(--git-status-modified)",
+  untracked: "var(--git-status-added)",
+  conflict: "var(--git-status-deleted)",
 };
 
 async function fetchGitStatus(cwd: string): Promise<GitStatusResponse> {
@@ -74,6 +74,15 @@ export function QuickChangesPanel({ cwd, refreshKey, onOpenFile }: Props) {
   }, [loadGitStatus, refreshKey]);
 
   const fileCount = gitStatus?.files.length ?? 0;
+  const changes = (gitStatus?.files ?? []).reduce(
+    (counts, file) => {
+      if (file.status === "added" || file.status === "untracked") counts.added += 1;
+      else if (file.status === "deleted" || file.status === "conflict") counts.deleted += 1;
+      else counts.modified += 1;
+      return counts;
+    },
+    { modified: 0, added: 0, deleted: 0 },
+  );
 
   return (
     <section
@@ -95,12 +104,19 @@ export function QuickChangesPanel({ cwd, refreshKey, onOpenFile }: Props) {
         >
           <CaretRight size={9} weight="regular" style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
           <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("desktop.quickChanges")}</span>
-          <span style={{ color: "var(--text-dim)", fontWeight: 400, letterSpacing: 0, textTransform: "none" }}>{t("desktop.changedFiles", { count: fileCount })}</span>
         </button>
-        {gitStatus?.isGitRepository && (
+        {gitStatus?.isGitRepository && fileCount > 0 && (
           <>
-            <span style={{ color: GIT_STATUS_COLORS.added, fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
-            <span style={{ color: GIT_STATUS_COLORS.deleted, fontFamily: "var(--font-mono)", fontSize: 11, marginLeft: 5 }}>-{gitStatus.deletions}</span>
+            <div
+              className="git-changes-indicator"
+              aria-label={`Changed files: ${changes.modified} modified, ${changes.added} added, ${changes.deleted} deleted`}
+            >
+              {changes.modified > 0 && <span className="git-changes-indicator-part git-changes-indicator-modified">{changes.modified}</span>}
+              {changes.added > 0 && <span className="git-changes-indicator-part git-changes-indicator-added">{changes.added}</span>}
+              {changes.deleted > 0 && <span className="git-changes-indicator-part git-changes-indicator-deleted">{changes.deleted}</span>}
+            </div>
+            <span style={{ marginLeft: 6, color: "var(--git-status-added)", fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
+            <span style={{ marginLeft: 5, color: "var(--git-status-deleted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
           </>
         )}
         <button
