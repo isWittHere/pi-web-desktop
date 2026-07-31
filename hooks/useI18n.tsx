@@ -47,11 +47,6 @@ function applyLocale(locale: Locale): void {
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(defaultLocale);
   const [hydrated, setHydrated] = useState(false);
-  const supportedLocales = useMemo(
-    () => getSupportedLocales().map((id) => getLocalePlugin(id)).filter((plugin): plugin is LocalePlugin => Boolean(plugin)),
-    [],
-  );
-  const messages = useMemo(() => getMessages(), []);
 
   useEffect(() => {
     const next = readInitialLocale();
@@ -60,16 +55,26 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     setHydrated(true);
   }, []);
 
+  const messages = useMemo(() => getMessages(), []);
+  const supportedLocales = useMemo(
+    () => getSupportedLocales().map((id) => getLocalePlugin(id)).filter((p): p is LocalePlugin => Boolean(p)),
+    [],
+  );
   const setLocale = useCallback((next: Locale) => {
     if (!getLocalePlugin(next)) return;
     setLocaleState(next);
     applyLocale(next);
   }, []);
+  const t = useCallback(
+    (key: string, params?: TranslationParams) => translateMessage(locale, key, messages, params),
+    [locale, messages],
+  );
+  const value = useMemo(() => ({ locale, setLocale, t, supportedLocales }), [locale, setLocale, t, supportedLocales]);
 
-  const t = useCallback((key: string, params?: TranslationParams) => translateMessage(locale, key, messages, params), [locale, messages]);
-  const value = useMemo(() => ({ locale: hydrated ? locale : defaultLocale, setLocale, t, supportedLocales }), [hydrated, locale, setLocale, t, supportedLocales]);
-
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+  // The server cannot read localStorage. Delay language-dependent UI until the
+  // client has resolved the persisted locale so SSR and hydration never compare
+  // different language trees.
+  return <I18nContext.Provider value={value}>{hydrated ? children : null}</I18nContext.Provider>;
 }
 
 export function useI18n(): I18nContextValue {

@@ -35,19 +35,26 @@ if (!fs.existsSync(nextDir)) {
   process.exit(1);
 }
 
-const nextArgs = ["start", "-p", port];
-if (hostname) nextArgs.push("-H", hostname);
+const nextArgs = ["start", "-p", port, "-H", hostname];
 
 // Always run next's JS entry with node directly — avoids .bin symlink issues
 // and path-with-spaces problems on Windows when shell: true is used.
 const child = spawn(process.execPath, [nextBin, ...nextArgs], {
   cwd: pkgDir,
   stdio: ["inherit", "pipe", "inherit"],
-  env: { ...process.env },
+  env: { ...process.env, PI_WEB_HOSTNAME: hostname },
 });
 
+if (hostname !== "127.0.0.1" && hostname !== "localhost" && hostname !== "::1") {
+  if (process.env.PI_WEB_PASSWORD) {
+    console.warn("Pi Web is exposed beyond loopback. HTTP Basic Auth does not encrypt credentials; use HTTPS or a trusted VPN.");
+  } else {
+    console.warn("Pi Web is exposed beyond loopback without authentication. Use only on a trusted network.");
+  }
+}
+
 let browserOpened = false;
-const url = `http://${hostname ?? "localhost"}:${port}`;
+const url = `http://${hostname}:${port}`;
 
 child.stdout.on("data", (chunk) => {
   const text = chunk.toString();

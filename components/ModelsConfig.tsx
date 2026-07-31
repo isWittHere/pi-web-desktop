@@ -20,6 +20,7 @@ interface OAuthProvider {
   name: string;
   usesCallbackServer: boolean;
   loggedIn: boolean;
+  supportsApiKey?: boolean;
 }
 
 interface ApiKeyProvider {
@@ -28,6 +29,7 @@ interface ApiKeyProvider {
   configured: boolean;
   source?: string;
   modelCount: number;
+  supportsOAuth?: boolean;
 }
 
 type OAuthLoginState =
@@ -711,9 +713,24 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
   }, [provider.id, onRefresh, t]);
 
   const handleLogout = useCallback(async () => {
-    await fetch(`/api/auth/logout/${encodeURIComponent(provider.id)}`, { method: "POST" });
-    setLoginState({ phase: "idle" });
-    onRefresh();
+    try {
+      const res = await fetch(`/api/auth/logout/${encodeURIComponent(provider.id)}`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null) as { error?: string } | null;
+        setLoginState({
+          phase: "error",
+          message: res.status === 409
+            ? "Authentication state changed. Please refresh and try again."
+            : (data?.error ?? `HTTP ${res.status}`),
+        });
+      } else {
+        setLoginState({ phase: "idle" });
+      }
+    } catch (error) {
+      setLoginState({ phase: "error", message: error instanceof Error ? error.message : String(error) });
+    } finally {
+      onRefresh();
+    }
   }, [provider.id, onRefresh]);
 
   const submitCode = useCallback(async (token: string, code: string) => {
@@ -1193,6 +1210,11 @@ export function ModelsConfig({
       .catch(() => {});
   }, []);
 
+  const refreshAuthenticationProviders = useCallback(() => {
+    loadOAuthProviders();
+    loadApiKeyProviders();
+  }, [loadOAuthProviders, loadApiKeyProviders]);
+
   useEffect(() => {
     fetch("/api/models-config")
       .then((r) => r.json())
@@ -1204,9 +1226,8 @@ export function ModelsConfig({
       })
       .catch(() => setConfig({ providers: {} }))
       .finally(() => setLoading(false));
-    loadOAuthProviders();
-    loadApiKeyProviders();
-  }, [loadOAuthProviders, loadApiKeyProviders]);
+    refreshAuthenticationProviders();
+  }, [refreshAuthenticationProviders]);
 
   const addCustomProvider = useCallback(() => {
     let finalName = "new-provider";
@@ -1315,12 +1336,12 @@ export function ModelsConfig({
     if (selection.type === "oauth") {
       const p = oauthProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <OAuthDetail key={p.id} provider={p} onRefresh={loadOAuthProviders} />;
+      return <OAuthDetail key={p.id} provider={p} onRefresh={refreshAuthenticationProviders} />;
     }
     if (selection.type === "apikey") {
       const p = apiKeyProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <ApiKeyDetail key={p.id} provider={p} onRefresh={loadApiKeyProviders} />;
+      return <ApiKeyDetail key={p.id} provider={p} onRefresh={refreshAuthenticationProviders} />;
     }
     if (selection.type === "provider") {
       const provider = config.providers?.[selection.name];

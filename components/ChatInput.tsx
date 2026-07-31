@@ -51,6 +51,7 @@ interface Props {
   isAutoModelSelection?: boolean;
   modelNames?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string }[];
+  modelScopeWarnings?: string[];
   onModelChange?: (provider: string, modelId: string) => void;
   compactResult?: CompactResultInfo | null;
   toolPreset?: "none" | "default" | "full";
@@ -223,7 +224,7 @@ function QueuedMessageRow({ kind, text, label }: { kind: "steer" | "follow-up"; 
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, onModelChange,
+  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelScopeWarnings, onModelChange,
   compactResult, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, onRecallQueue,
@@ -1005,6 +1006,23 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }}
       />
       <div style={{ maxWidth: 820, margin: "0 auto" }}>
+        {modelScopeWarnings && modelScopeWarnings.length > 0 && (
+          <div
+            role="status"
+            style={{
+              marginBottom: 8,
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid color-mix(in srgb, var(--accent-orange) 45%, var(--border))",
+              background: "color-mix(in srgb, var(--accent-orange) 9%, var(--bg-panel))",
+              color: "var(--text-muted)",
+              fontSize: 12,
+              lineHeight: 1.45,
+            }}
+          >
+            {modelScopeWarnings.join(" ")}
+          </div>
+        )}
         {/* Queued steering / follow-up messages (delivered by pi on upcoming turns) */}
         {((queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)) > 0 && (
           <div style={{

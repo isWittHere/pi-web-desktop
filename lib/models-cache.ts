@@ -4,6 +4,10 @@ export interface ModelsData {
   defaultModel: { provider: string; modelId: string } | null;
   thinkingLevels: Record<string, string[]>;
   thinkingLevelMaps: Record<string, Record<string, string | null>>;
+  /** `provider/modelId` → thinking level pinned by an enabledModels suffix. */
+  thinkingLevelPins: Record<string, string>;
+  /** Resolver diagnostics when an enabledModels pattern matched no model. */
+  modelScopeWarnings?: string[];
 }
 
 interface ModelsCacheState {

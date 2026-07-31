@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { existsSync } from "fs";
+import { randomUUID } from "crypto";
 import { allowFileRoot } from "@/lib/file-access";
 import { invalidateSessionListCache } from "@/lib/session-reader";
 import { startRpcSession } from "@/lib/rpc-manager";
-// POST /api/agent/new  body: { cwd: string; type: string; message?: string; ... }
-// Spawns a brand-new pi session. Most calls immediately send the first command;
-// type:"ensure_session" only creates the runtime so clients can query commands.
-// Returns { sessionId, data } where sessionId is pi's real session id.
+
+const THINKING_LEVELS = new Set<ThinkingLevel>([
+  "off", "minimal", "low", "medium", "high", "xhigh", "max",
+]);
+
+function parseThinkingLevel(value: unknown): ThinkingLevel | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "string" && THINKING_LEVELS.has(value as ThinkingLevel)) {
+    return value as ThinkingLevel;
+  }
+  throw new Error(`Invalid thinking level: ${String(value)}`);
+}
+
+// POST /api/agent/new body: { cwd, type, modelId?, provider?, thinkingLevel? }
+// Session startup receives the selected model and SDK-native scope atomically.
 export async function POST(req: Request) {
   try {
     const body = await req.json() as { cwd?: string; [key: string]: unknown };
@@ -19,36 +32,65 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Directory does not exist: ${cwd}` }, { status: 400 });
     }
 
-    // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
-    const { provider, modelId, toolNames, thinkingLevel, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; thinkingLevel?: string; [key: string]: unknown };
+    const { provider, modelId, toolNames, thinkingLevel, ...promptCommand } = command as {
+      provider?: string;
+      modelId?: string;
+      toolNames?: string[];
+      thinkingLevel?: unknown;
+      [key: string]: unknown;
+    };
+    if ((provider && !modelId) || (!provider && modelId)) {
+      throw new Error("provider and modelId must be provided together");
+    }
+    if (provider !== undefined && typeof provider !== "string") {
+      throw new Error("provider must be a string");
+    }
+    if (modelId !== undefined && typeof modelId !== "string") {
+      throw new Error("modelId must be a string");
+    }
+    if (toolNames !== undefined && (!Array.isArray(toolNames) || toolNames.some((name) => typeof name !== "string"))) {
+      throw new Error("toolNames must be an array of strings");
+    }
+    const explicitThinkingLevel = parseThinkingLevel(thinkingLevel);
 
-    const tempKey = `__new__${Date.now()}`;
-    const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames);
+    // startRpcSession coalesces matching in-flight keys. A UUID prevents two
+    // new requests in the same millisecond from accidentally sharing a session.
+    const temporaryKey = `__new__${randomUUID()}`;
+    const { session, realSessionId } = await startRpcSession(temporaryKey, "", cwd, {
+      ...(toolNames ? { toolNames } : {}),
+      ...(provider && modelId ? { initialModel: { provider, modelId } } : {}),
+      ...(explicitThinkingLevel ? { thinkingLevel: explicitThinkingLevel } : {}),
+    });
 
-    // Keep the files-route allowed-roots cache (see app/api/files/[...path]/route.ts)
-    // in sync so the new cwd is immediately readable via /api/files. Without this,
-    // a file request under a brand-new cwd would 403 for up to the cache TTL.
     allowFileRoot(cwd);
     invalidateSessionListCache();
 
-    // Apply pre-selected model before sending the prompt
-    if (provider && modelId) {
-      await session.send({ type: "set_model", provider, modelId });
-    }
-
-    // Apply pre-selected thinking level before sending the prompt
-    if (thinkingLevel) {
-      await session.send({ type: "set_thinking_level", level: thinkingLevel });
-    }
+    const state = await session.send({ type: "get_state" }) as {
+      model?: { id: string; provider: string };
+      thinkingLevel?: string;
+    };
+    const response = {
+      success: true,
+      sessionId: realSessionId,
+      model: state.model ? { provider: state.model.provider, modelId: state.model.id } : null,
+      thinkingLevel: state.thinkingLevel,
+    };
 
     if (promptCommand.type === "ensure_session") {
-      return NextResponse.json({ success: true, sessionId: realSessionId, data: null });
+      return NextResponse.json({ ...response, data: null });
     }
 
-    const result = await session.send(promptCommand);
-
-    return NextResponse.json({ success: true, sessionId: realSessionId, data: result });
+    return NextResponse.json({
+      ...response,
+      data: await session.send(promptCommand),
+    });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    const status = message.startsWith("Model is not available in the enabled scope")
+      || message.startsWith("Invalid thinking level")
+      || message.includes("must be")
+      ? 400
+      : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

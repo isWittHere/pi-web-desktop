@@ -14,7 +14,8 @@ const pkgRoot = path.join(process.resourcesPath, "app");
 const asarRoot = path.join(process.resourcesPath, "app.asar");
 const IS_DEV = !fs.existsSync(pkgRoot) && !fs.existsSync(asarRoot);
 
-const URL = `http://localhost:${PORT}`;
+const HOSTNAME = "127.0.0.1";
+const URL = `http://${HOSTNAME}:${PORT}`;
 
 let mainWindow = null;
 let serverProcess = null;
@@ -26,7 +27,11 @@ function waitForServer(timeoutMs = 30000) {
     const check = () => {
       http.get(`${URL}/api/home`, (res) => {
         res.resume();
-        resolve();
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve();
+          return;
+        }
+        reject(new Error(`Port ${PORT} responded with HTTP ${res.statusCode}`));
       }).on("error", () => {
         if (Date.now() - start > timeoutMs) {
           reject(new Error(`Server did not start within ${timeoutMs}ms`));
@@ -51,12 +56,17 @@ function startServer() {
     : path.join(pkgDir, "node_modules", "next", "dist", "bin", "next");
 
   const args = IS_DEV
-    ? ["dev", "-p", String(PORT), "--turbopack"]
-    : ["start", "-p", String(PORT)];
+    ? ["dev", "-H", HOSTNAME, "-p", String(PORT), "--turbopack"]
+    : ["start", "-H", HOSTNAME, "-p", String(PORT)];
 
+  // Desktop always serves only the local BrowserWindow. Do not forward an
+  // ambient PI_WEB_PASSWORD into that process: doing so would require exposing
+  // credentials to Chromium or forcing an interactive Basic Auth challenge.
+  const { PI_WEB_PASSWORD: _password, ...environment } = process.env;
+  void _password;
   const env = IS_DEV
-    ? { ...process.env, ELECTRON_RUNNING: "1" }
-    : { ...process.env, NODE_ENV: "production", ELECTRON_RUNNING: "1" };
+    ? { ...environment, ELECTRON_RUNNING: "1", PI_WEB_HOSTNAME: HOSTNAME }
+    : { ...environment, NODE_ENV: "production", ELECTRON_RUNNING: "1", PI_WEB_HOSTNAME: HOSTNAME };
 
   serverProcess = fork(nextBin, args, {
     cwd: pkgDir,

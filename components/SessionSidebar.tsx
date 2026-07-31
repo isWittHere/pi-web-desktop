@@ -277,9 +277,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
-  // Once the SSE stream has delivered a frame it is the source of truth for
-  // running state; late /api/sessions responses must not overwrite it.
-  const sseAuthoritativeRef = useRef(false);
+  // Once a lightweight running snapshot arrives it owns the dynamic state;
+  // late /api/sessions responses cannot revive an older embedded snapshot.
+  const runningSnapshotAuthoritativeRef = useRef(false);
   const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
@@ -291,9 +291,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { sessions: SessionInfo[]; runningSessionIds?: string[] };
       setAllSessions(data.sessions);
-      // Treat the fetched running set as an initial fallback only. Once SSE is
-      // live it owns this state, so a slow fetch can't revive a stale snapshot.
-      if (!sseAuthoritativeRef.current) {
+      // This is only an initial fallback. The dedicated snapshot route owns
+      // running state once it has responded, so a slow list reload stays stale.
+      if (!runningSnapshotAuthoritativeRef.current) {
         setRunningSessionIds(new Set(data.runningSessionIds ?? []));
       }
       // Drop unread markers for sessions that no longer exist (e.g. deleted).
@@ -330,24 +330,52 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, [unreadSessionIds]);
 
   useEffect(() => {
-    // Live running status via SSE — no polling. The server pushes the current
-    // set of running session ids whenever any session starts/stops working.
-    const source = new EventSource("/api/agent/running/events");
+    let active = true;
+    let controller: AbortController | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    source.onmessage = (e) => {
+    const poll = async () => {
+      if (!active || document.visibilityState !== "visible") return;
+      controller?.abort();
+      const currentController = new AbortController();
+      controller = currentController;
       try {
-        const data = JSON.parse(e.data) as { type?: string; runningSessionIds?: string[] };
-        if (data.type === "running") {
-          sseAuthoritativeRef.current = true;
-          setRunningSessionIds(new Set(data.runningSessionIds ?? []));
+        const response = await fetch("/api/agent/running", {
+          cache: "no-store",
+          signal: currentController.signal,
+        });
+        if (!response.ok || !active || controller !== currentController) return;
+        const data = await response.json() as { runningSessionIds?: string[] };
+        if (!active || controller !== currentController) return;
+        runningSnapshotAuthoritativeRef.current = true;
+        setRunningSessionIds(new Set(data.runningSessionIds ?? []));
+      } catch (error) {
+        if ((error as DOMException).name !== "AbortError") console.warn("Failed to poll running sessions", error);
+      } finally {
+        if (active && controller === currentController && document.visibilityState === "visible") {
+          timer = setTimeout(poll, 2500);
         }
-      } catch {
-        // ignore malformed frames
       }
     };
 
-    // On error EventSource auto-reconnects; keep the last known state meanwhile.
-    return () => source.close();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void poll();
+      } else {
+        controller?.abort();
+        if (timer) clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    void poll();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      active = false;
+      controller?.abort();
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
