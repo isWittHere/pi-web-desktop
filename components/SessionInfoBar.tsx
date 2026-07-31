@@ -138,7 +138,7 @@ export function SessionInfoBar({
       tooltipParts.push(`${translate("desktop.sessionInfoCacheWrite")}: ${t.cacheWrite.toLocaleString()}`);
     if (c > 0) tooltipParts.push(`${translate("desktop.sessionInfoCost")}: $${c.toFixed(4)}`);
   }
-  if (contextUsage?.contextWindow) {
+  if (contextUsage?.contextWindow && contextUsage.percent !== null) {
     const pct = contextUsage.percent;
     const used = contextUsage.tokens;
     tooltipParts.push(
@@ -326,7 +326,7 @@ export function SessionInfoBar({
               </span>
             )}
             {costStr && <span>{costStr}</span>}
-            {contextUsage?.contextWindow && (
+            {contextUsage?.contextWindow && contextUsage.percent !== null && (
               <span className="session-info-bar-token-chip" style={{ color: ctxColor }}>
                 {/* Pure donut chart — arc length = context usage %. Details are in the tooltip & stats popover. */}
                 <svg
@@ -424,7 +424,7 @@ export function SessionInfoBar({
                     if (tok.cacheWrite > 0) tokenRows.push([translate("desktop.sessionInfoCacheWrite"), tok.cacheWrite.toLocaleString()]);
                     tokenRows.push([translate("desktop.sessionInfoTotal"), tok.total.toLocaleString()]);
                     if (sessionStats.cost > 0) tokenRows.push([translate("desktop.sessionInfoCost"), `$${sessionStats.cost.toFixed(4)}`]);
-                    if (ctx?.contextWindow) {
+                    if (ctx?.contextWindow && ctx.percent !== null) {
                       const pct = ctx.percent;
                       const used = ctx.tokens;
                       tokenRows.push([

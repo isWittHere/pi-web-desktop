@@ -1,4 +1,4 @@
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import { lstatSync, readFileSync } from "fs";
 import path from "path";
 import { promisify } from "util";
@@ -80,14 +80,71 @@ function countUntrackedTextLines(filePath: string): number {
   }
 }
 
+function splitNullDelimited(output: string): string[] {
+  return output.split("\0").filter(Boolean);
+}
+
+function trackedDirectoryPaths(filePaths: string[]): string[] {
+  const directories = new Set<string>();
+  for (const filePath of filePaths) {
+    let directory = path.posix.dirname(filePath);
+    while (directory && directory !== ".") {
+      directories.add(directory);
+      directory = path.posix.dirname(directory);
+    }
+  }
+  return [...directories];
+}
+
+/**
+ * Match paths against ignore rules without Git's usual tracked-file exemption.
+ * The Explorer uses this to visually de-emphasize every path covered by a
+ * .gitignore rule, including files and directories that were tracked before
+ * the rule was added.
+ */
+async function checkIgnoredPaths(repositoryRoot: string, paths: string[]): Promise<string[]> {
+  if (paths.length === 0) return [];
+
+  return new Promise((resolve) => {
+    const child = spawn("git", ["-C", repositoryRoot, "check-ignore", "--no-index", "--stdin", "-z"], {
+      env: { ...process.env, LC_ALL: "C" },
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+    let output = "";
+    let settled = false;
+    const finish = (matched: string[]) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(matched);
+    };
+    const timeout = setTimeout(() => {
+      child.kill();
+      finish([]);
+    }, GIT_TIMEOUT_MS);
+
+    child.stdout.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+    child.once("error", () => finish([]));
+    // Exit code 1 only means none of the submitted paths matched an ignore rule.
+    child.once("close", () => finish(splitNullDelimited(output)));
+    child.stdin.end(`${paths.join("\0")}\0`);
+  });
+}
+
 async function readIgnoredPaths(repositoryRoot: string): Promise<string[]> {
   try {
-    const output = await git(repositoryRoot, [
-      "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z",
+    const [trackedOutput, ignoredOutput] = await Promise.all([
+      git(repositoryRoot, ["ls-files", "--cached", "-z"]),
+      git(repositoryRoot, ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]),
     ]);
-    return output.split("\0").filter(Boolean).map((relative) =>
-      path.resolve(repositoryRoot, relative),
-    );
+    const trackedPaths = splitNullDelimited(trackedOutput);
+    const candidates = new Set([
+      ...trackedPaths,
+      ...trackedDirectoryPaths(trackedPaths),
+      ...splitNullDelimited(ignoredOutput).map((filePath) => filePath.replace(/\/+$/, "")),
+    ]);
+    const ignoredPaths = await checkIgnoredPaths(repositoryRoot, [...candidates]);
+    return ignoredPaths.map((relative) => path.resolve(repositoryRoot, relative));
   } catch {
     return [];
   }
