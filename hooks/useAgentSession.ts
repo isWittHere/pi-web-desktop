@@ -878,13 +878,32 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setAgentPhase({ kind: "waiting_model" });
         dispatch({ type: "start" });
         break;
-      case "agent_end":
+      case "agent_end": {
         // agent_end can occur before retry, compaction, or extension follow-up
         // work. Keep the logical prompt and its SSE connection alive until the
         // server emits prompt_done and reports an idle state.
         if (!agentRunningRef.current) break;
+        // Terminal provider failures (HTTP 400/403, quota errors, retries
+        // exhausted) surface only as an assistant message with stopReason
+        // "error" + errorMessage — pi-cli prints them inline, but the web UI
+        // used to swallow them into an invisible empty bubble. willRetry
+        // separates retryable errors (429/5xx currently being auto-retried,
+        // which keep showing the retry line) from terminal ones; only the
+        // latter get an error notice.
+        if (event.willRetry !== true) {
+          const failedMessages = (event.messages as AgentMessage[] | undefined) ?? [];
+          for (let i = failedMessages.length - 1; i >= 0; i--) {
+            const m = failedMessages[i];
+            if (m?.role !== "assistant") continue;
+            if (m.stopReason === "error" && m.errorMessage) {
+              addNotice({ type: "error", message: m.errorMessage });
+            }
+            break;
+          }
+        }
         if (sessionIdRef.current) void loadSession(sessionIdRef.current);
         break;
+      }
       case "prompt_done":
         if (!agentRunningRef.current || !sessionIdRef.current) break;
         void waitForPromptSettlement(sessionIdRef.current, promptRunIdRef.current);

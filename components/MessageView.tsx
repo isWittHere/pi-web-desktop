@@ -15,6 +15,7 @@ import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/Check";
 import { CopyIcon } from "@phosphor-icons/react/Copy";
 import { DatabaseIcon } from "@phosphor-icons/react/Database";
+import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
 import { GitForkIcon } from "@phosphor-icons/react/GitFork";
 import { useI18n } from "@/hooks/useI18n";
 import type {
@@ -451,7 +452,10 @@ function AssistantMessageView({
     return n.toLocaleString();
   };
 
-  if (blocks.length === 0 && !isStreaming) return null;
+  const failureMessage = message.stopReason === "error" && message.errorMessage
+    ? message.errorMessage
+    : null;
+  if (blocks.length === 0 && !isStreaming && !failureMessage) return null;
 
   return (
     <div
@@ -495,6 +499,12 @@ function AssistantMessageView({
       )}
 
       <div className="chat-assistant-content">
+        {failureMessage && (
+          <div className="chat-assistant-error" role="alert">
+            <WarningCircleIcon size={13} weight="bold" />
+            <span>{failureMessage}</span>
+          </div>
+        )}
         {blockItems.map(({ block, originalIndex }) => (
           <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
         ))}
