@@ -205,8 +205,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         newNodes.every(
           (n, i) =>
             Math.abs(n.topRatio - prev[i].topRatio) < 1e-6 &&
-            Math.abs(n.heightRatio - prev[i].heightRatio) < 1e-6 &&
-            n.index === prev[i].index,
+            Math.abs(n.heightRatio - prev[i].heightRatio) < 1e-6,
         )
       ) {
         return;
