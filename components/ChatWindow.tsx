@@ -355,7 +355,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const aboveEditorWidgets = extensionWidgets.filter((widget) => widget.placement !== "belowEditor");
   const belowEditorWidgets = extensionWidgets.filter((widget) => widget.placement === "belowEditor");
-  const activePhaseLabel = phaseLabel(agentPhase, t);
+  const activePhaseLabel = isCompacting ? t("desktop.compacting") : phaseLabel(agentPhase, t);
 
   if (loading) {
     return (
@@ -807,7 +807,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             })()}
 
 
-            {agentRunning && !streamState.streamingMessage && activePhaseLabel && (
+            {activePhaseLabel && (isCompacting || (agentRunning && !streamState.streamingMessage)) && (
               <div className="py-2 text-[13px] text-text-muted">
                 <span className="animate-[pulse_1.5s_infinite]">{activePhaseLabel}</span>
               </div>
