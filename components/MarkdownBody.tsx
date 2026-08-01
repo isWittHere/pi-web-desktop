@@ -4,14 +4,13 @@ import { memo, useEffect, useMemo, useRef, useState, type MouseEvent, type React
 import { Check, Copy } from "@phosphor-icons/react";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { copyText } from "@/lib/clipboard";
 import { resolveLocalFileHref } from "@/lib/file-links";
 import { splitStableParts } from "@/lib/markdown-incremental";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { prismTheme } from "@/lib/prism-theme";
 
 
 
@@ -259,7 +258,6 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
 
 export function CodeBlock({ code, lang, headerAction, isStreaming }: { code: string; lang: string; headerAction?: ReactNode; isStreaming?: boolean }) {
   const { t } = useI18n();
-  const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
 
@@ -329,7 +327,7 @@ export function CodeBlock({ code, lang, headerAction, isStreaming }: { code: str
       ) : (
         <SyntaxHighlighter
           language={lang || "text"}
-          style={isDark ? vscDarkPlus : vs}
+          style={prismTheme}
           showLineNumbers={false}
           customStyle={{
             margin: 0,

@@ -309,8 +309,6 @@ function mergeConsecutiveToolSteps(
 ): Step[] {
   if (steps.length < 2) return steps;
 
-  const toolSteps = steps.filter((s) => s.kind === "tool");
-
   const result: Step[] = [];
   let i = 0;
 

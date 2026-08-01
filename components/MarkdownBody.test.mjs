@@ -93,3 +93,16 @@ test("non-streaming render is unchanged: no split, no streaming pre", () => {
   // Prism highlights the single code block as before.
   assert.match(html, /token[^>]*>[^<]*let/);
 });
+
+test("Prism token colors follow theme CSS variables", async () => {
+  const themeSource = await readFile(new URL("../lib/prism-theme.ts", import.meta.url), "utf8");
+  const markdownSource = await readFile(new URL("./MarkdownBody.tsx", import.meta.url), "utf8");
+  const fileViewerSource = await readFile(new URL("./FileViewer.tsx", import.meta.url), "utf8");
+
+  assert.match(themeSource, /keyword: \{ color: "var\(--accent\)" \}/);
+  assert.match(themeSource, /string: \{ color: "var\(--accent-orange\)" \}/);
+  for (const source of [markdownSource, fileViewerSource]) {
+    assert.match(source, /style=\{prismTheme\}/);
+    assert.doesNotMatch(source, /react-syntax-highlighter\/dist\/cjs\/styles\/prism/);
+  }
+});
