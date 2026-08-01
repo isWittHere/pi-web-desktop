@@ -760,8 +760,17 @@ export function ProcessGroup({
   const updateShadows = useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
-    setShowTopShadow(element.scrollTop > 0);
-    setShowBottomShadow(element.scrollHeight - element.scrollTop - element.clientHeight > 1);
+    // Functional bail-outs: ResizeObserver/scroll fire at high frequency while
+    // a step grows; committing the same shadow values would schedule a render
+    // every time and nest into the streaming update batch.
+    setShowTopShadow((prev) => {
+      const next = element.scrollTop > 0;
+      return prev === next ? prev : next;
+    });
+    setShowBottomShadow((prev) => {
+      const next = element.scrollHeight - element.scrollTop - element.clientHeight > 1;
+      return prev === next ? prev : next;
+    });
   }, []);
 
   const handleProcessUserScroll = useCallback(() => {

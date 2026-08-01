@@ -65,13 +65,24 @@ export function createStreamUpdateScheduler<T>(
     }
   };
 
-  const commitPending = (timestamp: number) => {
+  const commitPending = (timestamp: number, deferToMicrotask: boolean) => {
     if (!pending || destroyed) return;
     const value = pendingValue as T;
     pending = false;
     pendingValue = undefined;
     lastCommitAt = timestamp;
-    commit(value);
+    const doCommit = () => {
+      if (!destroyed) commit(value);
+    };
+    if (deferToMicrotask && typeof queueMicrotask === "function") {
+      // Defer past the current callback stack: dispatching a React state
+      // update directly from a rAF/setTimeout callback can nest into a
+      // concurrent render pass and trip React's "Maximum update depth
+      // exceeded" guard on large streaming sessions.
+      queueMicrotask(doCommit);
+    } else {
+      doCommit();
+    }
   };
 
   const scheduleFrame = () => {
@@ -80,7 +91,7 @@ export function createStreamUpdateScheduler<T>(
       const elapsed = lastCommitAt === null ? minIntervalMs : now() - lastCommitAt;
       timerHandle = setTimer(() => {
         timerHandle = null;
-        commitPending(now());
+        commitPending(now(), true);
         scheduleFrame();
       }, Math.max(0, minIntervalMs - elapsed));
       return;
@@ -98,7 +109,7 @@ export function createStreamUpdateScheduler<T>(
         return;
       }
 
-      commitPending(timestamp);
+      commitPending(timestamp, true);
       scheduleFrame();
     });
   };
@@ -113,7 +124,7 @@ export function createStreamUpdateScheduler<T>(
     flush() {
       if (destroyed || !pending) return;
       cancelScheduledWork();
-      commitPending(now());
+      commitPending(now(), false);
       scheduleFrame();
     },
     reset() {
