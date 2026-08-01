@@ -80,9 +80,29 @@ function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceS
 }
 
 type DiffLine =
-  | { type: "unchanged"; text: string; lineNo: number }
-  | { type: "removed"; text: string; lineNo: number }
-  | { type: "added"; text: string; lineNo: number };
+  | { type: "unchanged"; text: string }
+  | { type: "removed"; text: string }
+  | { type: "added"; text: string };
+
+type DiffBlockKind = "delete" | "add" | "edit";
+
+// Diff colors come from the active pi CLI theme palette via the git-status
+// CSS variables — the same set used by the quick-changes indicator — so they
+// stay in sync with the theme JSON's diff/semantic colors.
+// The left indicator bar expresses the change-block type: pure deletions are
+// red, pure additions green, edits (removed + added) yellow.
+const DIFF_BLOCK_BORDER: Record<DiffBlockKind, string> = {
+  delete: "3px solid var(--git-status-deleted)",
+  add: "3px solid var(--git-status-added)",
+  edit: "3px solid var(--git-status-modified)",
+};
+// Row backgrounds stay red for removed lines and green for added lines; the
+// yellow is reserved for the indicator bar above.
+const DIFF_REMOVED_BG = "var(--git-status-deleted-bg)";
+const DIFF_ADDED_BG = "var(--git-status-added-bg)";
+// Added lines show their new-file line number in green, replacing the +/-
+// prefix; deleted lines show no line number at all.
+const DIFF_ADD_NUMBER_COLOR = "var(--git-status-added)";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -131,22 +151,22 @@ function diffLines(oldLines: string[], newLines: string[]): DiffLine[] {
           while (cx > prevX && cy > prevY) {
             cx--;
             cy--;
-            result.unshift({ type: "unchanged", text: oldLines[cx], lineNo: cx + 1 });
+            result.unshift({ type: "unchanged", text: oldLines[cx] });
           }
           if (dd > 0) {
             if (cx > prevX) {
               cx--;
-              result.unshift({ type: "removed", text: oldLines[cx], lineNo: cx + 1 });
+              result.unshift({ type: "removed", text: oldLines[cx] });
             } else {
               cy--;
-              result.unshift({ type: "added", text: newLines[cy], lineNo: cy + 1 });
+              result.unshift({ type: "added", text: newLines[cy] });
             }
           }
         }
         while (cx > 0 && cy > 0) {
           cx--;
           cy--;
-          result.unshift({ type: "unchanged", text: oldLines[cx], lineNo: cx + 1 });
+          result.unshift({ type: "unchanged", text: oldLines[cx] });
         }
         return result;
       }
@@ -154,12 +174,12 @@ function diffLines(oldLines: string[], newLines: string[]): DiffLine[] {
   }
   // Fallback: treat all as replaced
   return [
-    ...oldLines.map((t, i) => ({ type: "removed" as const, text: t, lineNo: i + 1 })),
-    ...newLines.map((t, i) => ({ type: "added" as const, text: t, lineNo: i + 1 })),
+    ...oldLines.map((t) => ({ type: "removed" as const, text: t })),
+    ...newLines.map((t) => ({ type: "added" as const, text: t })),
   ];
 }
 
-function DiffView({ oldContent, newContent }: { oldContent: string; newContent: string; language: string }) {
+function DiffView({ oldContent, newContent }: { oldContent: string; newContent: string }) {
   const { t } = useI18n();
   const oldLines = oldContent.split("\n");
   const newLines = newContent.split("\n");
@@ -218,7 +238,7 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
   let diffIdx = 0;
 
   return (
-    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6 }}>
+    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.6, minWidth: "max-content" }}>
       {segments.map((seg, si) => {
         if (seg.hidden) {
           const result = (
@@ -239,31 +259,50 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
           diffIdx += seg.count;
           return result;
         }
-        const lines = seg.lines.map((line, li) => {
-          const idx = diffIdx + li;
-          const newLno = newLineNos[idx];
-          const bg =
-            line.type === "added"
-              ? "rgba(0,200,80,0.12)"
-              : line.type === "removed"
-              ? "rgba(240,60,60,0.14)"
-              : "transparent";
-          const prefix =
-            line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
-          const prefixColor =
-            line.type === "added" ? "#4ade80" : line.type === "removed" ? "#f87171" : "var(--text-dim)";
+        // Group consecutive changed lines into delete / add / edit blocks;
+        // context lines break the block. Edited blocks render all removed
+        // lines first, then all added lines.
+        const out: Array<{
+          key: string;
+          kind: "context" | "removed" | "added";
+          text: string;
+          lineNo: number | null;
+          block: DiffBlockKind | null;
+        }> = [];
+        let removed: Array<{ key: string; text: string }> = [];
+        let added: Array<{ key: string; text: string; lineNo: number | null }> = [];
+        const flushBlock = () => {
+          if (removed.length || added.length) {
+            const block: DiffBlockKind = removed.length && added.length ? "edit" : removed.length ? "delete" : "add";
+            for (const r of removed) out.push({ key: r.key, kind: "removed", text: r.text, lineNo: null, block });
+            for (const a of added) out.push({ key: a.key, kind: "added", text: a.text, lineNo: a.lineNo, block });
+            removed = [];
+            added = [];
+          }
+        };
+        seg.lines.forEach((line, li) => {
+          if (line.type === "unchanged") {
+            flushBlock();
+            out.push({ key: `${si}:${li}`, kind: "context", text: line.text, lineNo: newLineNos[diffIdx + li], block: null });
+          } else if (line.type === "removed") {
+            removed.push({ key: `${si}:${li}`, text: line.text });
+          } else {
+            added.push({ key: `${si}:${li}`, text: line.text, lineNo: newLineNos[diffIdx + li] });
+          }
+        });
+        flushBlock();
 
+        const rendered = out.map((row) => {
+          const bg = row.kind === "removed" ? DIFF_REMOVED_BG : row.kind === "added" ? DIFF_ADDED_BG : "transparent";
+          const borderLeft = row.block ? DIFF_BLOCK_BORDER[row.block] : "3px solid transparent";
+          const numberColor = row.kind === "added" ? DIFF_ADD_NUMBER_COLOR : "var(--text-dim)";
           return (
             <div
-              key={li}
+              key={row.key}
               style={{
                 display: "flex",
                 background: bg,
-                borderLeft: line.type === "added"
-                  ? "3px solid #4ade80"
-                  : line.type === "removed"
-                  ? "3px solid #f87171"
-                  : "3px solid transparent",
+                borderLeft,
               }}
             >
               <span
@@ -271,45 +310,23 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
                   minWidth: 44,
                   padding: "0 8px 0 16px",
                   textAlign: "right",
-                  color: "var(--text-dim)",
+                  color: numberColor,
                   userSelect: "none",
                   fontSize: 11,
                   lineHeight: 1.6,
-                  borderRight: "1px solid var(--border)",
-                  background: "var(--bg-panel)",
                   flexShrink: 0,
                 }}
               >
-                {line.type === "removed" ? line.lineNo : newLno || ""}
+                {row.lineNo ?? ""}
               </span>
-              <span
-                style={{
-                  minWidth: 16,
-                  padding: "0 6px",
-                  color: prefixColor,
-                  userSelect: "none",
-                  flexShrink: 0,
-                  fontWeight: 600,
-                }}
-              >
-                {prefix}
-              </span>
-              <span
-                style={{
-                  flex: 1,
-                  padding: "0 8px 0 0",
-                  whiteSpace: "pre",
-                  color: "var(--text)",
-                  overflowX: "auto",
-                }}
-              >
-                {line.text || "\u00a0"}
+              <span style={{ flex: 1, minWidth: 0, padding: "0 8px 0 0", whiteSpace: "pre", color: "var(--text)" }}>
+                {row.text || "\u00a0"}
               </span>
             </div>
           );
         });
         diffIdx += seg.lines.length;
-        return <div key={si}>{lines}</div>;
+        return <div key={si}>{rendered}</div>;
       })}
     </div>
   );
@@ -319,28 +336,105 @@ function GitDiffView({ patch }: { patch: string }) {
   const files = parseUnifiedPatch(patch);
   if (!files) return null;
 
+  // Flatten the split (side-by-side) representation into unified rows like
+  // `git diff`. Consecutive changed lines form one block, classified as
+  // delete / add / edit:
+  //   delete: only removed lines  -> red
+  //   add:    only added lines    -> green
+  //   edit:   removed + added     -> yellow, with all removed lines rendered
+  //                                  first, then all added lines
+  // Deleted lines show no line number; added lines show their new-file line
+  // number in green, replacing the +/- prefix.
+  type Row = {
+    key: string;
+    kind: "hunk" | "context" | "removed" | "added";
+    text: string;
+    lineNo: number | null;
+    block: DiffBlockKind | null;
+  };
+  const rows: Row[] = [];
+  let removed: Array<{ key: string; text: string }> = [];
+  let added: Array<{ key: string; text: string; lineNo: number | null }> = [];
+  const flushBlock = () => {
+    if (removed.length || added.length) {
+      const block: DiffBlockKind = removed.length && added.length ? "edit" : removed.length ? "delete" : "add";
+      for (const r of removed) rows.push({ key: r.key, kind: "removed", text: r.text, lineNo: null, block });
+      for (const a of added) rows.push({ key: a.key, kind: "added", text: a.text, lineNo: a.lineNo, block });
+      removed = [];
+      added = [];
+    }
+  };
+  files.forEach((file, fileIndex) => {
+    file.rows.forEach((row, rowIndex) => {
+      if (row.type === "hunk") {
+        flushBlock();
+        rows.push({ key: `${fileIndex}:${rowIndex}:h`, kind: "hunk", text: row.text, lineNo: null, block: null });
+        return;
+      }
+      const { left, right } = row;
+      if (left.type === "context" && right.type === "context") {
+        flushBlock();
+        rows.push({ key: `${fileIndex}:${rowIndex}:c`, kind: "context", text: left.text, lineNo: right.lineNo, block: null });
+        return;
+      }
+      if (left.type === "removed") {
+        removed.push({ key: `${fileIndex}:${rowIndex}:l`, text: left.text });
+      }
+      if (right.type === "added") {
+        added.push({ key: `${fileIndex}:${rowIndex}:r`, text: right.text, lineNo: right.lineNo });
+      }
+    });
+  });
+  flushBlock();
+
   return (
     <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, minWidth: "max-content" }}>
-      {files.flatMap((file, fileIndex) => file.rows.map((row, rowIndex) => {
-        if (row.type === "hunk") {
-          return <div key={`${fileIndex}:${rowIndex}`} style={{ padding: "3px 12px", color: "var(--accent-blue)", background: "var(--bg-secondary)" }}>{row.text}</div>;
+      {rows.map((row) => {
+        if (row.kind === "hunk") {
+          return (
+            <div key={row.key}>
+              {/* Leave one blank line above and below each hunk header so the
+                  abbreviated summary reads as a gap between the surrounding
+                  diff rows. */}
+              <div style={{ height: "1.55em" }} />
+              <div style={{ padding: "3px 12px", color: "var(--accent-blue)", background: "var(--bg-secondary)" }}>
+                {row.text}
+              </div>
+              <div style={{ height: "1.55em" }} />
+            </div>
+          );
         }
-        const cellStyle = (type: typeof row.left.type): React.CSSProperties => ({
-          flex: 1,
-          minWidth: 0,
-          padding: "0 10px",
-          whiteSpace: "pre",
-          background: type === "removed" ? "color-mix(in srgb, var(--accent-red) 14%, transparent)" : type === "added" ? "color-mix(in srgb, var(--accent-green) 14%, transparent)" : "transparent",
-        });
+        const bg = row.kind === "removed" ? DIFF_REMOVED_BG : row.kind === "added" ? DIFF_ADDED_BG : "transparent";
+        const borderLeft = row.block ? DIFF_BLOCK_BORDER[row.block] : "3px solid transparent";
+        const numberColor = row.kind === "added" ? DIFF_ADD_NUMBER_COLOR : "var(--text-dim)";
         return (
-          <div key={`${fileIndex}:${rowIndex}`} style={{ display: "flex", minWidth: 0 }}>
-            <span style={{ width: 42, flexShrink: 0, paddingRight: 8, color: "var(--text-dim)", textAlign: "right", userSelect: "none", background: row.left.type === "removed" ? "color-mix(in srgb, var(--accent-red) 14%, transparent)" : "transparent" }}>{row.left.lineNo ?? ""}</span>
-            <span style={cellStyle(row.left.type)}>{row.left.text}</span>
-            <span style={{ width: 42, flexShrink: 0, paddingRight: 8, color: "var(--text-dim)", textAlign: "right", userSelect: "none", background: row.right.type === "added" ? "color-mix(in srgb, var(--accent-green) 14%, transparent)" : "transparent" }}>{row.right.lineNo ?? ""}</span>
-            <span style={cellStyle(row.right.type)}>{row.right.text}</span>
+          <div
+            key={row.key}
+            style={{
+              display: "flex",
+              background: bg,
+              borderLeft,
+            }}
+          >
+            <span
+              style={{
+                width: 44,
+                flexShrink: 0,
+                padding: "0 8px 0 16px",
+                textAlign: "right",
+                color: numberColor,
+                userSelect: "none",
+                fontSize: 11,
+              }}
+            >
+              {row.lineNo ?? ""}
+            </span>
+            <span style={{ flex: 1, minWidth: 0, padding: "0 8px 0 0", whiteSpace: "pre", color: "var(--text)" }}>
+              {row.text || "\u00a0"}
+            </span>
           </div>
         );
-      }))}
+      })}
     </div>
   );
 }
@@ -948,7 +1042,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
                 fontWeight: viewMode === "diff" ? 600 : 400,
               }}
             >
-              {t("desktop.diff")} {changeCount > 0 && <span style={{ color: "#4ade80", marginLeft: 2 }}>+{changeCount}</span>}
+              {t("desktop.diff")} {changeCount > 0 && <span style={{ color: "var(--git-status-added)", marginLeft: 2 }}>+{changeCount}</span>}
             </button>
           </div>
         )}
@@ -1033,7 +1127,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
         {viewMode === "diff" && hasDiff ? (
           hasGitDiff
             ? <GitDiffView patch={gitDiff.patch!} />
-            : <DiffView oldContent={prevContent!} newContent={data.content} language={data.language} />
+            : <DiffView oldContent={prevContent!} newContent={data.content} />
         ) : isHtml && previewMode ? (
           <iframe
             srcDoc={data.content}
