@@ -124,7 +124,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     if ((message as CustomMessage).customType === "compaction") {
       return <CompactionSummary content={(message as CustomMessage).content} />;
     }
-    return <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} />;
+    return <CustomMessageView message={message as CustomMessage} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} />;
   }
   if (message.role === "bashExecution") {
     return <BashExecutionView message={message as BashExecutionMessage} sessionId={sessionId} />;
@@ -590,13 +590,14 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent
   return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</MarkdownBody>;
 }
 
-export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false, cwd, onOpenFile, className }: {
+export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false, isStreaming, cwd, onOpenFile, className }: {
   block: ThinkingContent;
   duration?: number;
   sessionId?: string;
   entryId?: string;
   blockIndex: number;
   contentOnly?: boolean;
+  isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   className?: string;
@@ -634,6 +635,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
         sessionId={sessionId}
         entryId={entryId}
         blockIndex={blockIndex}
+        isStreaming={isStreaming}
         cwd={cwd}
         onOpenFile={onOpenFile}
         className={className}
@@ -664,11 +666,12 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
   );
 }
 
-function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpenFile, className }: {
+function ThinkingContentBody({ block, sessionId, entryId, blockIndex, isStreaming, cwd, onOpenFile, className }: {
   block: ThinkingContent;
   sessionId?: string;
   entryId?: string;
   blockIndex: number;
+  isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   className?: string;
@@ -702,7 +705,7 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpe
   if (error) return <div className="text-xs text-red-400">{error}</div>;
 
   return (
-    <MarkdownBody cwd={cwd} onOpenFile={onOpenFile} className={className}>
+    <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} className={className}>
       {block.deferred ? (content ?? "") : block.thinking}
     </MarkdownBody>
   );
@@ -1058,7 +1061,7 @@ function PairedResult({ text, isEmpty, isError, processStyle = false }: {
 
 
 
-function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessage; cwd?: string; onOpenFile?: (filePath: string) => void }) {
+function CustomMessageView({ message, isStreaming, cwd, onOpenFile }: { message: CustomMessage; isStreaming?: boolean; cwd?: string; onOpenFile?: (filePath: string) => void }) {
   const { t } = useI18n();
   const isHiddenDisplay = message.display === false;
   const [contentExpanded, setContentExpanded] = useState(!isHiddenDisplay);
@@ -1127,7 +1130,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                 })}
               </div>
             )}
-            {text ? <MarkdownBody className="markdown-custom-message" cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody> : <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("desktop.noMessage")}</span>}
+            {text ? <MarkdownBody className="markdown-custom-message" isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody> : <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("desktop.noMessage")}</span>}
           </div>
         ) : (
           <button
