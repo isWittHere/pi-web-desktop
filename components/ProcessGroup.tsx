@@ -741,7 +741,17 @@ export function ProcessGroup({
       if (hasUserSelectedTabRef.current && currentTab < steps.length) return currentTab;
       return steps.length - 1;
     });
-    if (isStreaming) setStepStates({ [latest.id]: true });
+    if (isStreaming) {
+      // `steps` is rebuilt from render-time block arrays, so its reference may
+      // change even while the latest step is unchanged. Preserve the current
+      // "only the latest step is open" behavior without scheduling a render
+      // when that state is already in place.
+      setStepStates((current) => {
+        const isLatestOnlyOpen =
+          current[latest.id] === true && Object.keys(current).length === 1;
+        return isLatestOnlyOpen ? current : { [latest.id]: true };
+      });
+    }
   }, [isStreaming, steps]);
 
   const updateShadows = useCallback(() => {

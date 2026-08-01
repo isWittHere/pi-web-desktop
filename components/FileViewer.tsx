@@ -441,7 +441,6 @@ function GitDiffView({ patch }: { patch: string }) {
 
 function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
@@ -455,7 +454,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
     setSize(null);
     setNaturalSize(null);
     setError(null);
-    setWatching(false);
 
     if (esRef.current) {
       esRef.current.close();
@@ -465,7 +463,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
 
-    es.addEventListener("connected", () => setWatching(true));
     es.addEventListener("change", (e) => {
       try {
         const d = JSON.parse((e as MessageEvent).data) as { size?: number };
@@ -473,8 +470,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
       } catch { /* ignore */ }
       setBust((b) => b + 1);
     });
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
 
     return () => {
       es.close();
@@ -507,22 +502,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
         <span style={{ marginLeft: "auto" }}>{ext || t("desktop.image")}</span>
         {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
         {formatSizeStr && <span>{formatSizeStr}</span>}
-        <span
-          title={watching ? t("desktop.liveSyncActive") : t("desktop.notWatching")}
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: watching ? "#4ade80" : "var(--border)",
-              display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
-            }}
-          />
-          {watching ? t("desktop.live") : t("desktop.static")}
-        </span>
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
       <div
@@ -575,7 +554,6 @@ function formatDuration(seconds: number): string {
 
 function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
@@ -589,7 +567,6 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
     setSize(null);
     setDuration(null);
     setError(null);
-    setWatching(false);
 
     if (esRef.current) {
       esRef.current.close();
@@ -599,7 +576,6 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
 
-    es.addEventListener("connected", () => setWatching(true));
     es.addEventListener("change", (e) => {
       try {
         const d = JSON.parse((e as MessageEvent).data) as { size?: number };
@@ -609,8 +585,6 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
       setError(null);
       setBust((b) => b + 1);
     });
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
 
     return () => {
       es.close();
@@ -641,22 +615,6 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
         <span style={{ marginLeft: "auto" }}>{ext || t("desktop.audio")}</span>
         {duration != null && <span>{formatDuration(duration)}</span>}
         {size != null && <span>{formatSize(size)}</span>}
-        <span
-          title={watching ? t("desktop.liveSyncActive") : t("desktop.notWatching")}
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: watching ? "#4ade80" : "var(--border)",
-              display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
-            }}
-          />
-          {watching ? t("desktop.live") : t("desktop.static")}
-        </span>
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
       <div
@@ -692,7 +650,6 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
 
 function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -708,7 +665,6 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
     setBust(0);
     setSize(null);
     setError(null);
-    setWatching(false);
 
     if (esRef.current) {
       esRef.current.close();
@@ -731,7 +687,6 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
 
-    es.addEventListener("connected", () => setWatching(true));
     es.addEventListener("change", (e) => {
       try {
         const d = JSON.parse((e as MessageEvent).data) as { size?: number };
@@ -746,8 +701,6 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
       setError(null);
       setBust((b) => b + 1);
     });
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
 
     return () => {
       es.close();
@@ -776,22 +729,6 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
         <span style={{ marginLeft: "auto" }}>{ext === "docx" ? t("desktop.docxPreview") : "pdf"}</span>
         {size != null && <span>{formatSize(size)}</span>}
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-        <span
-          title={watching ? t("desktop.liveSyncActive") : t("desktop.notWatching")}
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)", flexShrink: 0 }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: watching ? "#4ade80" : "var(--border)",
-              display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
-            }}
-          />
-          {watching ? t("desktop.live") : t("desktop.static")}
-        </span>
       </div>
       <div style={{ flex: 1, minHeight: 0, background: "var(--bg-panel)" }}>
         {error ? (
@@ -836,7 +773,6 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
   const [previewMode, setPreviewMode] = useState(false);
   const [viewMode, setViewMode] = useState<"source" | "diff">("source");
   const [wrapLines, setWrapLines] = useState(false);
-  const [watching, setWatching] = useState(false);
   const [changeCount, setChangeCount] = useState(0);
   const esRef = useRef<EventSource | null>(null);
 
@@ -891,7 +827,6 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
     setViewMode("source");
     setWrapLines(false);
     setChangeCount(0);
-    setWatching(false);
 
     if (esRef.current) {
       esRef.current.close();
@@ -907,22 +842,10 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
 
-    es.addEventListener("connected", () => {
-      setWatching(true);
-    });
-
     es.addEventListener("change", () => {
       fetchContent(filePath, true);
       void fetchGitDiff(filePath);
     });
-
-    es.addEventListener("error", () => {
-      setWatching(false);
-    });
-
-    es.onerror = () => {
-      setWatching(false);
-    };
 
     return () => {
       es.close();
@@ -1000,24 +923,6 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
         <span style={{ marginLeft: "auto" }}>{data.language}</span>
         {viewMode === "source" && <span>{t("desktop.lines", { count: lines.length })}</span>}
         <span>{formatSize(data.size)}</span>
-
-        {/* Live watch indicator */}
-        <span
-          title={watching ? t("desktop.liveSyncActive") : t("desktop.notWatching")}
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: watching ? "#4ade80" : "var(--border)",
-              display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
-            }}
-          />
-          {watching ? t("desktop.live") : t("desktop.static")}
-        </span>
 
         {/* Diff / Source toggle — shown only when there are changes */}
         {hasDiff && (
