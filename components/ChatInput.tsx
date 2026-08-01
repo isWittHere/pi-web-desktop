@@ -21,6 +21,7 @@ import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/Check";
 import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
 import { LightningIcon } from "@phosphor-icons/react/Lightning";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/MagnifyingGlass";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/PaperPlaneTilt";
 import { PlusIcon } from "@phosphor-icons/react/Plus";
 import { SquareIcon } from "@phosphor-icons/react/Square";
@@ -301,6 +302,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [modelSearch, setModelSearch] = useState("");
   const [favorites, setFavorites] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem("pi-favorite-models");
@@ -339,6 +341,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const modelDropdownPanelRef = useRef<HTMLDivElement>(null);
+  const modelSearchRef = useRef<HTMLInputElement>(null);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
   const thinkingDropdownRef = useRef<HTMLDivElement>(null);
   const controlsMenuRef = useRef<HTMLDivElement>(null);
@@ -1117,6 +1120,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   useEffect(() => {
     if (!isMobile) setControlsMenuOpen(false);
   }, [isMobile]);
+
+  // Every time the model dropdown expands, focus the search input so the
+  // user can start typing a filter immediately.
+  useEffect(() => {
+    if (modelDropdownOpen) modelSearchRef.current?.focus();
+  }, [modelDropdownOpen]);
 
 
 
@@ -1957,6 +1966,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     onClick={(e) => {
                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                       setModelDropdownRect({ top: rect.top, left: rect.left, width: rect.width });
+                      if (!modelDropdownOpen) setModelSearch("");
                       setModelDropdownOpen((v) => !v);
                     }}
                     disabled={isStreaming}
@@ -2025,7 +2035,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       const match = modelOptions.find((o) => o.provider === provider && o.modelId === modelId);
                       if (match) favModels.push(match);
                     }
-                    const hasFavs = favModels.length > 0;
+
+                    // Model search filter — matches name, model id, and provider.
+                    const searchQuery = modelSearch.trim().toLowerCase();
+                    const isSearching = searchQuery.length > 0;
+                    const matchesQuery = (opt: ModelOption) =>
+                      opt.name.toLowerCase().includes(searchQuery) ||
+                      opt.modelId.toLowerCase().includes(searchQuery) ||
+                      opt.provider.toLowerCase().includes(searchQuery);
+                    const favModelsFiltered = isSearching ? favModels.filter(matchesQuery) : favModels;
+                    const hasFavs = favModelsFiltered.length > 0;
+                    const filteredGroups = isSearching
+                      ? modelsByProvider
+                          .map((group) => ({ ...group, options: group.options.filter(matchesQuery) }))
+                          .filter((group) => group.options.length > 0)
+                      : modelsByProvider;
+                    const hasAnyResults = hasFavs || filteredGroups.length > 0;
 
                     return (
                       <div ref={modelDropdownPanelRef} className="chat-input-model-dropdown" style={{
@@ -2034,8 +2059,55 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       ...panelPos,
                       zIndex: 2000, background: "var(--bg-panel)", border: "1px solid var(--border)",
                       borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
-                      overflow: "hidden", maxHeight: maxH, overflowY: "auto",
+                      overflow: "hidden", maxHeight: maxH,
+                      display: "flex", flexDirection: "column",
                       }}>
+                      {/* Search area — pinned above the list, separated by a divider */}
+                      <div style={{ borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                          <MagnifyingGlassIcon
+                            size={13}
+                            color="var(--text-dim)"
+                            style={{ position: "absolute", left: 12, pointerEvents: "none" }}
+                          />
+                          <input
+                            ref={modelSearchRef}
+                            value={modelSearch}
+                            onChange={(e) => setModelSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                if (modelSearch) {
+                                  setModelSearch("");
+                                } else {
+                                  setModelDropdownOpen(false);
+                                }
+                              } else if (e.key === "ArrowDown") {
+                                const firstRow = modelDropdownPanelRef.current?.querySelector<HTMLButtonElement>(".model-row button");
+                                if (firstRow) {
+                                  e.preventDefault();
+                                  firstRow.focus();
+                                }
+                              }
+                            }}
+                            placeholder={t("desktop.searchModels")}
+                            aria-label={t("desktop.searchModels")}
+                            style={{
+                              width: "100%",
+                              padding: "5px 12px 5px 34px",
+                              background: "transparent",
+                              border: "none",
+                              outline: "none",
+                              color: "var(--text)",
+                              fontSize: 12,
+                              fontFamily: "var(--font-mono)",
+                            }}
+                            onFocus={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                            onBlur={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          />
+                        </div>
+                      </div>
+                      {/* Scrollable results */}
+                      <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
                       {/* Favorites group — at top, always expanded */}
                       {hasFavs && (
                         <div>
@@ -2046,7 +2118,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           }}>
                             {t("desktop.favorites")}
                           </div>
-                          {favModels.map((opt) => {
+                          {favModelsFiltered.map((opt) => {
                             const isActive = opt.modelId === model?.modelId && opt.provider === model?.provider;
                             const isFav = favorites.has(`${opt.provider}:${opt.modelId}`);
                             return (
@@ -2100,8 +2172,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </div>
                       )}
                       {/* Provider groups — clickable headers, default collapsed */}
-                      {modelsByProvider.map((group, gi) => {
-                        const isExpanded = expandedProviders.has(group.provider);
+                      {filteredGroups.map((group, gi) => {
+                        const isExpanded = isSearching || expandedProviders.has(group.provider);
                         const caret = !isExpanded
                           ? <CaretRightIcon size={10} color="var(--text-dim)" />
                           : <CaretDownIcon size={10} color="var(--text-dim)" />;
@@ -2177,6 +2249,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </div>
                         );
                       })}
+                      {/* No matches while searching */}
+                      {isSearching && !hasAnyResults && (
+                        <div style={{ padding: "14px 12px", textAlign: "center", fontSize: 12, color: "var(--text-dim)" }}>
+                          {t("desktop.noModelsMatch")}
+                        </div>
+                      )}
+                      </div>
                     </div>
                     );
                   })()}

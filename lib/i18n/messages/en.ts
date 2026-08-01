@@ -322,6 +322,8 @@ export const enLocale = {
     "desktop.modelsSelectProviderOrModel": "Select a provider or model",
     "desktop.modelsClose": "Close models",
     "desktop.modelsSave": "Save",
+    "desktop.searchModels": "Search models…",
+    "desktop.noModelsMatch": "No matching models",
     "desktop.global": "global",
     "desktop.project": "project",
     "desktop.path": "path",
