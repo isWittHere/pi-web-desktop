@@ -10,14 +10,30 @@ const jiti = createJiti(import.meta.url, {
   tsconfigPaths: true,
 });
 const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
+const { I18nContext } = await jiti.import("@/hooks/useI18n");
+
+const i18nValue = {
+  locale: "en",
+  setLocale() {},
+  t: (key) => key,
+  supportedLocales: [],
+};
 
 function renderMarkdown(markdown, isStreaming = false) {
   return renderToStaticMarkup(
-    React.createElement(MarkdownBody, {
-      cwd: "/home/me/project",
-      isStreaming,
-      onOpenFile() {},
-    }, markdown),
+    React.createElement(
+      I18nContext.Provider,
+      { value: i18nValue },
+      React.createElement(
+        MarkdownBody,
+        {
+          cwd: "/home/me/project",
+          isStreaming,
+          onOpenFile() {},
+        },
+        markdown,
+      ),
+    ),
   );
 }
 
@@ -45,4 +61,35 @@ test("defers Prism highlighting while a code block is streaming", async () => {
   assert.match(codeBlockSource, /isStreaming \? \(/);
   assert.match(codeBlockSource, /<pre className="markdown-code-streaming"><code>\{code\}<\/code><\/pre>/);
   assert.match(codeBlockSource, /\) : \(\s*<SyntaxHighlighter/s);
+});
+
+test("streaming split: closed code block is highlighted, growing tail uses plain pre", () => {
+  const html = renderMarkdown(
+    "stable para\n\n```ts\nconst x = 1;\n```\n\ngrowing tail",
+    true,
+  );
+  // The stable part (closed fence) renders with Prism tokens immediately...
+  assert.match(html, /<p>stable para<\/p>/);
+  assert.match(html, /token[^>]*>[^<]*const/);
+  // ...while the growing tail stays a plain paragraph.
+  assert.match(html, /<p>growing tail<\/p>/);
+  // The tail has no code block, so no streaming <pre> appears.
+  assert.doesNotMatch(html, /markdown-code-streaming/);
+});
+
+test("streaming split: unterminated fence stays a streaming pre", () => {
+  const html = renderMarkdown(
+    "before\n\n```ts\nconst x = 1;\nconst y =",
+    true,
+  );
+  assert.match(html, /<p>before<\/p>/);
+  assert.match(html, /markdown-code-streaming/);
+  assert.doesNotMatch(html, /token[^>]*>[^<]*const y/);
+});
+
+test("non-streaming render is unchanged: no split, no streaming pre", () => {
+  const html = renderMarkdown("a\n\n```js\nlet z = 1;\n```\n\nb");
+  assert.doesNotMatch(html, /markdown-code-streaming/);
+  // Prism highlights the single code block as before.
+  assert.match(html, /token[^>]*>[^<]*let/);
 });
