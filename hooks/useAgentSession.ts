@@ -1116,7 +1116,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (msg) {
           queueStreamUpdate(normalizeToolCalls(msg as AgentMessage));
         }
-        setAgentPhase(null);
+        // Functional bail-out: only commit a change when the phase differs.
+        // Without it, every streaming event schedules a phase update that
+        // re-renders the whole chat tree while a long thinking block grows.
+        setAgentPhase((prev) => (prev === null ? prev : null));
         break;
       }
       case "message_end": {
