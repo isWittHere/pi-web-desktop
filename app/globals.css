@@ -266,6 +266,13 @@ pre, code {
 .chat-assistant-message {
   margin-bottom: 22px;
 }
+/* Chromium can skip paint/layout work for old chat turns. Keep the live
+   streaming message fully realized so its growing height never uses a hint. */
+.chat-user-message,
+.chat-assistant-message:not(.is-streaming) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
 .chat-assistant-meta {
   display: flex;
   align-items: center;
@@ -926,6 +933,20 @@ pre, code {
   overflow: hidden;
   border-radius: 8px;
   background: var(--bg-secondary);
+}
+.markdown-code-streaming {
+  margin: 0;
+  padding: 10px 16px;
+  overflow-x: auto;
+  background: var(--bg-secondary);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre;
+}
+.markdown-code-streaming code {
+  font-family: inherit;
 }
 .markdown-code-header {
   display: flex;

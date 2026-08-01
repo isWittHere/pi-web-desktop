@@ -459,7 +459,7 @@ function AssistantMessageView({
 
   return (
     <div
-      className="chat-assistant-message"
+      className={["chat-assistant-message", isStreaming ? "is-streaming" : ""].filter(Boolean).join(" ")}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

@@ -48,7 +48,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
               if (lang === "mermaid") {
                 return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
               }
-              return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
+              return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} isStreaming={isStreaming} />;
             }
             return (
               <code
@@ -171,7 +171,7 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
   );
 
   if (!showPreview || isStreaming) {
-    return <CodeBlock code={code} lang="mermaid" headerAction={previewButton} />;
+    return <CodeBlock code={code} lang="mermaid" headerAction={previewButton} isStreaming={isStreaming} />;
   }
 
   const body =
@@ -193,7 +193,7 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
   );
 }
 
-export function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; headerAction?: ReactNode }) {
+export function CodeBlock({ code, lang, headerAction, isStreaming }: { code: string; lang: string; headerAction?: ReactNode; isStreaming?: boolean }) {
   const { t } = useI18n();
   const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
@@ -257,23 +257,30 @@ export function CodeBlock({ code, lang, headerAction }: { code: string; lang: st
           {copied ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />}
         </button>
       </div>
-      <SyntaxHighlighter
-        language={lang || "text"}
-        style={isDark ? vscDarkPlus : vs}
-        showLineNumbers={false}
-        customStyle={{
-          margin: 0,
-          padding: "10px 16px",
-          fontSize: 13,
-          lineHeight: 1.65,
-          borderRadius: 0,
-          border: "none",
-          background: "var(--bg-secondary)",
-        }}
-        codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
-      >
-        {code}
-      </SyntaxHighlighter>
+      {isStreaming ? (
+        // Prism tokenization is synchronous and grows with the whole unfinished
+        // block. Preserve readable source while streaming, then highlight once
+        // the final message replaces this transient view.
+        <pre className="markdown-code-streaming"><code>{code}</code></pre>
+      ) : (
+        <SyntaxHighlighter
+          language={lang || "text"}
+          style={isDark ? vscDarkPlus : vs}
+          showLineNumbers={false}
+          customStyle={{
+            margin: 0,
+            padding: "10px 16px",
+            fontSize: 13,
+            lineHeight: 1.65,
+            borderRadius: 0,
+            border: "none",
+            background: "var(--bg-secondary)",
+          }}
+          codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
+        >
+          {code}
+        </SyntaxHighlighter>
+      )}
     </div>
   );
 }

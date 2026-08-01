@@ -77,3 +77,25 @@ test("prompt completion uses one settlement state machine", () => {
   assert.match(sendSource, /if \(promptRequestStarted && sentSessionId\)/);
   assert.match(sendSource, /void waitForPromptSettlement\(sentSessionId, promptRunId\)/);
 });
+
+test("coalesces streaming message snapshots and drops stale queued updates", () => {
+  const agentStartSource = source.slice(
+    source.indexOf('case "agent_start"'),
+    source.indexOf('case "agent_end"'),
+  );
+  const updatesSource = source.slice(
+    source.indexOf('case "message_start"'),
+    source.indexOf('case "tool_execution_start"'),
+  );
+  const agentEndSource = source.slice(
+    source.indexOf('case "agent_end"'),
+    source.indexOf('case "agent_settled"'),
+  );
+
+  assert.match(source, /createStreamUpdateScheduler\(\(message\) => \{\s*dispatch\(\{ type: "update", message \}\)/s);
+  assert.match(updatesSource, /queueStreamUpdate\(normalizeToolCalls\(msg as AgentMessage\)\)/);
+  assert.doesNotMatch(updatesSource, /dispatch\(\{ type: "update"/);
+  assert.match(agentStartSource, /resetStreamUpdates\(\)/);
+  assert.match(agentEndSource, /resetStreamUpdates\(\)/);
+  assert.match(updatesSource, /resetStreamUpdates\(\);\s*dispatch\(\{ type: "reset"/s);
+});

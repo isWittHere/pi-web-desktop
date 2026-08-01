@@ -13,6 +13,7 @@ import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import type { SessionStatsInfo } from "@/lib/pi-types";
+import { createStreamUpdateScheduler, type StreamUpdateScheduler } from "@/lib/stream-update-scheduler";
 
 export interface SessionData {
   sessionId: string;
@@ -405,6 +406,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const optimisticUserMessageKeyRef = useRef<string | null>(null);
   const newSessionModelOverrideRef = useRef<SelectedModel | null>(null);
   const thinkingLevelOverrideRef = useRef<ThinkingLevelOption | null>(null);
+  const streamUpdateSchedulerRef = useRef<StreamUpdateScheduler<Partial<AgentMessage>> | null>(null);
+  if (!streamUpdateSchedulerRef.current) {
+    streamUpdateSchedulerRef.current = createStreamUpdateScheduler((message) => {
+      dispatch({ type: "update", message });
+    });
+  }
+
+  const resetStreamUpdates = useCallback(() => {
+    streamUpdateSchedulerRef.current?.reset();
+  }, []);
+
+  const queueStreamUpdate = useCallback((message: Partial<AgentMessage>) => {
+    streamUpdateSchedulerRef.current?.enqueue(message);
+  }, []);
 
   const setToolPresetState = opts.setToolPreset ?? setToolPreset;
 
@@ -810,6 +825,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [addNotice, opts.chatInputRef]);
 
   const settleUiStage = useCallback(() => {
+    resetStreamUpdates();
     const wasRunning = agentRunningRef.current;
     agentRunningRef.current = false;
     setAgentRunning(false);
@@ -817,7 +833,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setRetryInfo(null);
     dispatch({ type: "end" });
     return wasRunning;
-  }, []);
+  }, [resetStreamUpdates]);
 
   const notifyPromptStage = useCallback((runId: number) => {
     if (notifiedPromptRunIdRef.current === runId) return false;
@@ -998,6 +1014,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleAgentEvent = useCallback((event: AgentEvent) => {
     switch (event.type) {
       case "agent_start":
+        resetStreamUpdates();
         cancelEventStreamGrace();
         sdkAgentActiveRef.current = true;
         agentRunningRef.current = true;
@@ -1006,6 +1023,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "start" });
         break;
       case "agent_end": {
+        resetStreamUpdates();
         // Multiple agent_end events may precede retry, compaction, queued
         // extension work, or agent_settled. Keep the SSE stream alive; the
         // grace window owns eventual connection teardown.
@@ -1096,7 +1114,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           break;
         }
         if (msg) {
-          dispatch({ type: "update", message: normalizeToolCalls(msg as AgentMessage) });
+          queueStreamUpdate(normalizeToolCalls(msg as AgentMessage));
         }
         setAgentPhase(null);
         break;
@@ -1128,6 +1146,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         } else if (completed) {
           setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
         }
+        resetStreamUpdates();
         dispatch({ type: "reset" });
         setAgentPhase({ kind: "waiting_model" });
         break;
@@ -1194,6 +1213,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onAgentEnd,
     scheduleEventStreamClose,
     settleUiStage,
+    queueStreamUpdate,
+    resetStreamUpdates,
   ]);
   handleAgentEventRef.current = handleAgentEvent;
 
@@ -1204,6 +1225,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const isSlashCommandPrompt = !images?.length && trimmedMessage.startsWith("/");
     const promptRunId = promptRunIdRef.current + 1;
     cancelEventStreamGrace();
+    resetStreamUpdates();
     rpcPromptPendingRef.current = true;
 
     const imageBlocks = images?.map((img) => ({ type: "image" as const, source: { type: "base64" as const, media_type: img.mimeType, data: img.data } }));
@@ -1292,7 +1314,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentPhase(null);
       dispatch({ type: "end" });
     }
-  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents]);
+  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, resetStreamUpdates]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;
@@ -1690,11 +1712,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       });
     }
     return () => {
+      // Do not destroy here: React Strict Mode intentionally runs effect
+      // cleanup once during development before mounting the real effect.
+      // Resetting still prevents an unmounted session from committing stale UI.
+      resetStreamUpdates();
       cancelEventStreamGrace();
       closeEvents();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [resetStreamUpdates]);
 
   useEffect(() => {
     onSystemPromptChange?.(systemPrompt);

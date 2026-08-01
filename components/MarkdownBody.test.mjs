@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFile } from "node:fs/promises";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, {
@@ -10,10 +11,11 @@ const jiti = createJiti(import.meta.url, {
 });
 const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
 
-function renderMarkdown(markdown) {
+function renderMarkdown(markdown, isStreaming = false) {
   return renderToStaticMarkup(
     React.createElement(MarkdownBody, {
       cwd: "/home/me/project",
+      isStreaming,
       onOpenFile() {},
     }, markdown),
   );
@@ -34,4 +36,13 @@ test("keeps local file markdown links in the app", () => {
 
   assert.match(html, /<a (?=[^>]*href="components\/MarkdownBody\.tsx")[^>]*>file<\/a>/);
   assert.doesNotMatch(html, /target=|rel=|\snode=/);
+});
+
+test("defers Prism highlighting while a code block is streaming", async () => {
+  const source = await readFile(new URL("./MarkdownBody.tsx", import.meta.url), "utf8");
+  const codeBlockSource = source.slice(source.indexOf("export function CodeBlock"));
+
+  assert.match(codeBlockSource, /isStreaming \? \(/);
+  assert.match(codeBlockSource, /<pre className="markdown-code-streaming"><code>\{code\}<\/code><\/pre>/);
+  assert.match(codeBlockSource, /\) : \(\s*<SyntaxHighlighter/s);
 });
