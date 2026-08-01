@@ -160,6 +160,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
 
   // --- 节流 DOM 测量（仅消息变化/尺寸变化时触发，最多 150ms 一次）---
   const measureThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nodesRef = useRef<NodeInfo[]>([]);
   const measureNodes = useCallback(() => {
     // 节流：150ms 内忽略重复调用
     if (measureThrottleRef.current) return;
@@ -194,6 +195,22 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
           });
         }
       }
+      // Commit only when measurements actually changed. Without this guard a
+      // dense session feeds a setState → re-render → minimap width change →
+      // container reflow → ResizeObserver → re-measure loop that ends in a
+      // "Maximum update depth exceeded" renderer crash.
+      const prev = nodesRef.current;
+      if (
+        prev.length === newNodes.length &&
+        newNodes.every(
+          (n, i) =>
+            Math.abs(n.topRatio - prev[i].topRatio) < 1e-6 &&
+            Math.abs(n.heightRatio - prev[i].heightRatio) < 1e-6,
+        )
+      ) {
+        return;
+      }
+      nodesRef.current = newNodes;
       setNodes(newNodes);
     }, 150);
   }, [scrollContainer, messageRefs]);

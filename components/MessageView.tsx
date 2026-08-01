@@ -124,7 +124,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     if ((message as CustomMessage).customType === "compaction") {
       return <CompactionSummary content={(message as CustomMessage).content} />;
     }
-    return <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} />;
+    return <CustomMessageView message={message as CustomMessage} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} />;
   }
   if (message.role === "bashExecution") {
     return <BashExecutionView message={message as BashExecutionMessage} sessionId={sessionId} />;
@@ -459,7 +459,7 @@ function AssistantMessageView({
 
   return (
     <div
-      className="chat-assistant-message"
+      className={["chat-assistant-message", isStreaming ? "is-streaming" : ""].filter(Boolean).join(" ")}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -590,13 +590,14 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent
   return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</MarkdownBody>;
 }
 
-export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false, cwd, onOpenFile, className }: {
+export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false, isStreaming, cwd, onOpenFile, className }: {
   block: ThinkingContent;
   duration?: number;
   sessionId?: string;
   entryId?: string;
   blockIndex: number;
   contentOnly?: boolean;
+  isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   className?: string;
@@ -634,6 +635,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
         sessionId={sessionId}
         entryId={entryId}
         blockIndex={blockIndex}
+        isStreaming={isStreaming}
         cwd={cwd}
         onOpenFile={onOpenFile}
         className={className}
@@ -664,11 +666,12 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex,
   );
 }
 
-function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpenFile, className }: {
+function ThinkingContentBody({ block, sessionId, entryId, blockIndex, isStreaming, cwd, onOpenFile, className }: {
   block: ThinkingContent;
   sessionId?: string;
   entryId?: string;
   blockIndex: number;
+  isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   className?: string;
@@ -702,22 +705,29 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, cwd, onOpe
   if (error) return <div className="text-xs text-red-400">{error}</div>;
 
   return (
-    <MarkdownBody cwd={cwd} onOpenFile={onOpenFile} className={className}>
+    <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} className={className}>
       {block.deferred ? (content ?? "") : block.thinking}
     </MarkdownBody>
   );
 }
 
-export function ToolCallBlock({ block, result, duration, processStyle = false }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; processStyle?: boolean }) {
+// Large tool outputs are rendered as plain text; cap the initial render and
+// let the user opt into the full payload so expanding a 45K result stays snappy.
+const RESULT_PREVIEW_CHARS = 8000;
+
+export const ToolCallBlock = memo(function ToolCallBlock({ block, result, duration, processStyle = false }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; processStyle?: boolean }) {
   const [expanded, setExpanded] = useState(false);
-  const inputStr = JSON.stringify(block.input, null, 2);
+  const inputStr = useMemo(() => JSON.stringify(block.input, null, 2), [block.input]);
   const isEditTool = isEditToolName(block.toolName);
   const resultDiff = result && !result.isError ? getResultDiff(result) : null;
 
   // Result display
-  const resultText = result
-    ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
-    : null;
+  const resultText = useMemo(
+    () => (result
+      ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
+      : null),
+    [result],
+  );
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
 
@@ -770,7 +780,7 @@ export function ToolCallBlock({ block, result, duration, processStyle = false }:
       )}
     </div>
   );
-}
+});
 
 interface ResultDiff {
   text: string;
@@ -1026,7 +1036,10 @@ function PairedResult({ text, isEmpty, isError, processStyle = false }: {
   processStyle?: boolean;
 }) {
   const { t } = useI18n();
+  const [showFull, setShowFull] = useState(false);
   const border = processStyle ? "var(--border)" : isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)";
+  const truncated = !isEmpty && text.length > RESULT_PREVIEW_CHARS && !showFull;
+  const displayText = truncated ? text.slice(0, RESULT_PREVIEW_CHARS) : text;
   return (
     <div
       style={{
@@ -1050,15 +1063,33 @@ function PairedResult({ text, isEmpty, isError, processStyle = false }: {
           opacity: isEmpty ? 0.6 : 1,
         }}
       >
-        {isEmpty ? t("desktop.noOutput") : text}
+        {isEmpty ? t("desktop.noOutput") : displayText}
       </pre>
+      {truncated && (
+        <button
+          onClick={() => setShowFull(true)}
+          style={{
+            display: "block",
+            margin: "6px 8px 8px",
+            padding: "4px 10px",
+            border: "1px solid var(--border)",
+            borderRadius: 5,
+            background: "transparent",
+            color: "var(--text-dim)",
+            fontSize: 11,
+            cursor: "pointer",
+          }}
+        >
+          {t("desktop.loadFullOutput")}
+        </button>
+      )}
     </div>
   );
 }
 
 
 
-function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessage; cwd?: string; onOpenFile?: (filePath: string) => void }) {
+function CustomMessageView({ message, isStreaming, cwd, onOpenFile }: { message: CustomMessage; isStreaming?: boolean; cwd?: string; onOpenFile?: (filePath: string) => void }) {
   const { t } = useI18n();
   const isHiddenDisplay = message.display === false;
   const [contentExpanded, setContentExpanded] = useState(!isHiddenDisplay);
@@ -1127,7 +1158,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                 })}
               </div>
             )}
-            {text ? <MarkdownBody className="markdown-custom-message" cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody> : <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("desktop.noMessage")}</span>}
+            {text ? <MarkdownBody className="markdown-custom-message" isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody> : <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("desktop.noMessage")}</span>}
           </div>
         ) : (
           <button

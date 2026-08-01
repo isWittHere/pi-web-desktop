@@ -165,12 +165,53 @@ function createWindow() {
   });
 
   const sendMaximizedState = () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("window:maximized-changed", mainWindow.isMaximized());
+    try {
+      if (
+        mainWindow &&
+        !mainWindow.isDestroyed() &&
+        mainWindow.webContents &&
+        !mainWindow.webContents.isDestroyed()
+      ) {
+        mainWindow.webContents.send("window:maximized-changed", mainWindow.isMaximized());
+      }
+    } catch (err) {
+      // A dead renderer must not let a maximize IPC error mask the real
+      // crash cause — log it and move on.
+      console.error("[Electron] sendMaximizedState failed:", err);
     }
   };
   mainWindow.on("maximize", sendMaximizedState);
   mainWindow.on("unmaximize", sendMaximizedState);
+
+  // ── Renderer diagnostics ──────────────────────────────────────────────
+  // Surface renderer crashes and console errors from the main process so
+  // black screens / DevTools disconnects can be attributed from evidence
+  // (reason + exitCode + console output) instead of guesswork.
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    console.error(
+      "[Electron] Renderer process gone:",
+      JSON.stringify({ reason: details.reason, exitCode: details.exitCode, details }),
+    );
+  });
+
+  mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    console.error(
+      "[Electron] did-fail-load:",
+      JSON.stringify({ errorCode, errorDescription, validatedURL }),
+    );
+  });
+
+  // `console-message` moved to an event-object API; the legacy positional
+  // arguments are deprecated. Accept both so this works on any Electron.
+  mainWindow.webContents.on("console-message", (event, legacyLevel, legacyMessage, legacyLine, legacySourceId) => {
+    const level = typeof event.level === "number" ? event.level : legacyLevel;
+    const message = event.message ?? legacyMessage;
+    const lineNumber = event.lineNumber ?? legacyLine;
+    const sourceId = event.sourceId ?? legacySourceId;
+    if (level >= 3) {
+      console.error(`[Renderer console] ${message} (${sourceId}:${lineNumber})`);
+    }
+  });
 
   mainWindow.loadURL(URL);
 

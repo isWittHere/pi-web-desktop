@@ -15,7 +15,7 @@ interface I18nContextValue {
   supportedLocales: LocalePlugin[];
 }
 
-const I18nContext = createContext<I18nContextValue | null>(null);
+export const I18nContext = createContext<I18nContextValue | null>(null);
 
 function getMessages(): Record<Locale, Record<string, string>> {
   const en = getLocalePlugin("en");

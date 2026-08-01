@@ -3,10 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo, type MouseEvent } from "react";
 import { DownloadSimple } from "@phosphor-icons/react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import ReactMarkdown from "react-markdown";
-import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import {
   DOCX_PREVIEW_MAX_BYTES,
@@ -18,6 +15,7 @@ import {
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { resolveLocalFileHref } from "@/lib/file-links";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { prismTheme } from "@/lib/prism-theme";
 import { CodeBlock, MermaidBlock } from "@/components/MarkdownBody";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
@@ -763,7 +761,6 @@ export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initial
 }
 
 function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDisplayMode }: Props) {
-  const { isDark } = useTheme();
   const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
@@ -1128,7 +1125,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
         ) : (
           <SyntaxHighlighter
             language={data.language === "text" ? "plaintext" : data.language}
-            style={isDark ? vscDarkPlus : vs}
+            style={prismTheme}
             showLineNumbers
             lineNumberStyle={{
               color: "var(--text-dim)",

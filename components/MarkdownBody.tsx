@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { copyText } from "@/lib/clipboard";
 import { resolveLocalFileHref } from "@/lib/file-links";
+import { splitStableParts } from "@/lib/markdown-incremental";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { prismTheme } from "@/lib/prism-theme";
 
 
 
@@ -22,90 +22,153 @@ interface MarkdownBodyProps {
   onOpenFile?: (filePath: string) => void;
 }
 
+interface MarkdownComponentsOptions {
+  isStreaming?: boolean;
+  cwd?: string;
+  onOpenFile?: (filePath: string) => void;
+}
+
+function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownComponentsOptions): Components {
+  return {
+    h1({ children }: React.ComponentProps<'h1'>) {
+      return <h1 id={headingId(children)} className="scroll-mt-24 text-xl font-semibold mt-4 mb-2 text-(--text)">{children}</h1>
+    },
+    h2({ children }: React.ComponentProps<'h2'>) {
+      return <h2 id={headingId(children)} className="scroll-mt-24 text-lg font-semibold mt-3 mb-2 text-(--text)">{children}</h2>
+    },
+    h3({ children }: React.ComponentProps<'h3'>) {
+      return <h3 id={headingId(children)} className="scroll-mt-24 text-base font-semibold mt-3 mb-1 text-(--text)">{children}</h3>
+    },
+    code({ className, children, ...props }: React.ComponentProps<'code'> & ExtraProps) {
+      const lang = className?.replace("language-", "").toLowerCase() ?? "";
+      const raw = String(children);
+      const isBlock = className?.includes("language-") || raw.includes("\n");
+      if (isBlock) {
+        if (lang === "mermaid") {
+          return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
+        }
+        return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} isStreaming={isStreaming} />;
+      }
+      return (
+        <code
+          className="inline max-w-full whitespace-normal break-words [overflow-wrap:anywhere] align-baseline bg-(--bg-secondary) border border-(--border) px-1.5 py-0.5 text-xs font-mono text-(--accent-blue)"
+          {...props}
+        >
+          {children}
+        </code>
+      );
+    },
+    pre({ children }: React.ComponentProps<'pre'> & ExtraProps) {
+      return <>{children}</>;
+    },
+    a({ href, children, ...props }: React.ComponentProps<'a'> & ExtraProps) {
+      // `node` is react-markdown metadata, not a DOM attribute.
+      delete props.node;
+      const linkClass = "text-(--accent-blue) underline underline-offset-2 hover:text-(--accent-blue)/80";
+      const filePath = onOpenFile ? resolveLocalFileHref(href, cwd) : null;
+      const openFile = onOpenFile;
+      if (!filePath || !openFile) {
+        return (
+          <a href={href} {...props} className={linkClass} target="_blank" rel="noopener noreferrer">
+            {children}
+          </a>
+        );
+      }
+
+      const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+        if (event.defaultPrevented || event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const target = event.currentTarget.getAttribute("target");
+        if (target && target !== "_self") return;
+        event.preventDefault();
+        openFile(filePath);
+      };
+
+      return (
+        <a href={href} {...props} className={linkClass} onClick={handleClick}>
+          {children}
+        </a>
+      );
+    },
+    table({ children }: React.ComponentProps<'table'> & ExtraProps) {
+      return (
+        <div className="my-3 rounded-lg overflow-hidden border border-(--border)">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse [&_tr:last-child>td]:border-b-0">
+              {children}
+            </table>
+          </div>
+        </div>
+      );
+    },
+  };
+}
+
+/**
+ * One stable Markdown chunk. React.memo skips re-render while the chunk text
+ * is unchanged (reference-equal via the interning cache in splitStableParts),
+ * so the remark/rehype pipeline only runs for the streaming tail chunk.
+ * Stable chunks are marked non-streaming: their closed code blocks get Prism
+ * highlighting immediately instead of waiting for the whole message to end.
+ */
+const MarkdownPart = memo(function MarkdownPart({ text, isStreaming, cwd, onOpenFile }: {
+  text: string;
+  isStreaming?: boolean;
+  cwd?: string;
+  onOpenFile?: (filePath: string) => void;
+}) {
+  const normalized = useMemo(() => normalizeDisplayMath(text), [text]);
+  const components = useMemo(
+    () => buildMarkdownComponents({ isStreaming, cwd, onOpenFile }),
+    [isStreaming, cwd, onOpenFile],
+  );
+  return (
+    <ReactMarkdown
+      remarkPlugins={markdownRemarkPlugins}
+      rehypePlugins={markdownRehypePlugins}
+      components={components}
+    >
+      {normalized}
+    </ReactMarkdown>
+  );
+});
+
 export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
+  // Interning map: stable chunk text stays reference-stable so MarkdownPart
+  // memo comparisons hit with === and skip the parse/render work entirely.
+  const partCacheRef = useRef<Map<string, string>>(new Map());
+  const parts = useMemo(
+    () => splitStableParts(normalizedMarkdown, partCacheRef.current),
+    [normalizedMarkdown],
+  );
+  const streamingSplit = isStreaming && parts.length > 1;
+  const components = useMemo(
+    () => buildMarkdownComponents({ isStreaming, cwd, onOpenFile }),
+    [isStreaming, cwd, onOpenFile],
+  );
 
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>
-      <ReactMarkdown
-        remarkPlugins={markdownRemarkPlugins}
-        rehypePlugins={markdownRehypePlugins}
-        components={{
-          h1({ children }: React.ComponentProps<'h1'>) {
-            return <h1 id={headingId(children)} className="scroll-mt-24 text-xl font-semibold mt-4 mb-2 text-(--text)">{children}</h1>
-          },
-          h2({ children }: React.ComponentProps<'h2'>) {
-            return <h2 id={headingId(children)} className="scroll-mt-24 text-lg font-semibold mt-3 mb-2 text-(--text)">{children}</h2>
-          },
-          h3({ children }: React.ComponentProps<'h3'>) {
-            return <h3 id={headingId(children)} className="scroll-mt-24 text-base font-semibold mt-3 mb-1 text-(--text)">{children}</h3>
-          },
-          code({ className, children, ...props }) {
-            const lang = className?.replace("language-", "").toLowerCase() ?? "";
-            const raw = String(children);
-            const isBlock = className?.includes("language-") || raw.includes("\n");
-            if (isBlock) {
-              if (lang === "mermaid") {
-                return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
-              }
-              return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
-            }
-            return (
-              <code
-                className="inline max-w-full whitespace-normal break-words [overflow-wrap:anywhere] align-baseline bg-(--bg-secondary) border border-(--border) px-1.5 py-0.5 text-xs font-mono text-(--accent-blue)"
-                {...props}
-              >
-                {children}
-              </code>
-            );
-          },
-          pre({ children }) {
-            return <>{children}</>;
-          },
-          a({ href, children, ...props }) {
-            // `node` is react-markdown metadata, not a DOM attribute.
-            delete props.node;
-            const linkClass = "text-(--accent-blue) underline underline-offset-2 hover:text-(--accent-blue)/80";
-            const filePath = onOpenFile ? resolveLocalFileHref(href, cwd) : null;
-            const openFile = onOpenFile;
-            if (!filePath || !openFile) {
-              return (
-                <a href={href} {...props} className={linkClass} target="_blank" rel="noopener noreferrer">
-                  {children}
-                </a>
-              );
-            }
-
-            const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-              if (event.defaultPrevented || event.button !== 0) return;
-              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-              const target = event.currentTarget.getAttribute("target");
-              if (target && target !== "_self") return;
-              event.preventDefault();
-              openFile(filePath);
-            };
-
-            return (
-              <a href={href} {...props} className={linkClass} onClick={handleClick}>
-                {children}
-              </a>
-            );
-          },
-          table({ children }) {
-            return (
-              <div className="my-3 rounded-lg overflow-hidden border border-(--border)">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse [&_tr:last-child>td]:border-b-0">
-                    {children}
-                  </table>
-                </div>
-              </div>
-            );
-          },
-        }}
-      >
-        {normalizedMarkdown}
-      </ReactMarkdown>
+      {streamingSplit ? (
+        parts.map((part) => (
+          <MarkdownPart
+            key={part.id}
+            text={part.text}
+            isStreaming={part.tail ? isStreaming : false}
+            cwd={cwd}
+            onOpenFile={onOpenFile}
+          />
+        ))
+      ) : (
+        <ReactMarkdown
+          remarkPlugins={markdownRemarkPlugins}
+          rehypePlugins={markdownRehypePlugins}
+          components={components}
+        >
+          {normalizedMarkdown}
+        </ReactMarkdown>
+      )}
     </div>
   );
 }
@@ -171,7 +234,7 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
   );
 
   if (!showPreview || isStreaming) {
-    return <CodeBlock code={code} lang="mermaid" headerAction={previewButton} />;
+    return <CodeBlock code={code} lang="mermaid" headerAction={previewButton} isStreaming={isStreaming} />;
   }
 
   const body =
@@ -193,9 +256,8 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
   );
 }
 
-export function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; headerAction?: ReactNode }) {
+export function CodeBlock({ code, lang, headerAction, isStreaming }: { code: string; lang: string; headerAction?: ReactNode; isStreaming?: boolean }) {
   const { t } = useI18n();
-  const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
 
@@ -257,23 +319,30 @@ export function CodeBlock({ code, lang, headerAction }: { code: string; lang: st
           {copied ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />}
         </button>
       </div>
-      <SyntaxHighlighter
-        language={lang || "text"}
-        style={isDark ? vscDarkPlus : vs}
-        showLineNumbers={false}
-        customStyle={{
-          margin: 0,
-          padding: "10px 16px",
-          fontSize: 13,
-          lineHeight: 1.65,
-          borderRadius: 0,
-          border: "none",
-          background: "var(--bg-secondary)",
-        }}
-        codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
-      >
-        {code}
-      </SyntaxHighlighter>
+      {isStreaming ? (
+        // Prism tokenization is synchronous and grows with the whole unfinished
+        // block. Preserve readable source while streaming, then highlight once
+        // the final message replaces this transient view.
+        <pre className="markdown-code-streaming"><code>{code}</code></pre>
+      ) : (
+        <SyntaxHighlighter
+          language={lang || "text"}
+          style={prismTheme}
+          showLineNumbers={false}
+          customStyle={{
+            margin: 0,
+            padding: "10px 16px",
+            fontSize: 13,
+            lineHeight: 1.65,
+            borderRadius: 0,
+            border: "none",
+            background: "var(--bg-secondary)",
+          }}
+          codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
+        >
+          {code}
+        </SyntaxHighlighter>
+      )}
     </div>
   );
 }

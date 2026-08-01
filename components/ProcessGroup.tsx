@@ -309,8 +309,6 @@ function mergeConsecutiveToolSteps(
 ): Step[] {
   if (steps.length < 2) return steps;
 
-  const toolSteps = steps.filter((s) => s.kind === "tool");
-
   const result: Step[] = [];
   let i = 0;
 
@@ -574,21 +572,22 @@ function imageSource(block: Extract<ProcessContentBlock, { type: "image" }>): st
   return `data:${source.media_type ?? "image/png"};base64,${source.data}`;
 }
 
-function StepContent({ step, cwd, onOpenFile, sessionId, ts }: {
+function StepContent({ step, cwd, onOpenFile, sessionId, ts, isStreaming }: {
   step: Step;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   sessionId?: string;
   ts: BuildLabelFn;
+  isStreaming: boolean;
 }) {
   if (step.kind === "thinking") {
-    return <ProcessNarrative blocks={step.blocks} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
+    return <ProcessNarrative blocks={step.blocks} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} isStreaming={isStreaming} />;
   }
   if (step.kind === "tool") {
     return (
       <div className="space-y-2">
         {step.leadBlocks.length > 0 && (
-          <ProcessNarrative blocks={step.leadBlocks} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />
+          <ProcessNarrative blocks={step.leadBlocks} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} isStreaming={isStreaming} />
         )}
         <ToolCallBlock
           block={{
@@ -611,7 +610,7 @@ function StepContent({ step, cwd, onOpenFile, sessionId, ts }: {
           <div key={block.id}>
             {step.leadBlocks[idx] && step.leadBlocks[idx].length > 0 && (
               <div className="mb-2">
-                <ProcessNarrative blocks={step.leadBlocks[idx]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />
+                <ProcessNarrative blocks={step.leadBlocks[idx]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} isStreaming={isStreaming} />
               </div>
             )}
             <ToolCallBlock
@@ -631,7 +630,7 @@ function StepContent({ step, cwd, onOpenFile, sessionId, ts }: {
     );
   }
   if (step.kind === "custom") {
-    return <MessageView message={step.block.message} cwd={cwd} onOpenFile={onOpenFile} />;
+    return <MessageView message={step.block.message} cwd={cwd} onOpenFile={onOpenFile} isStreaming={isStreaming} />;
   }
 
   const src = imageSource(step.block);
@@ -641,17 +640,18 @@ function StepContent({ step, cwd, onOpenFile, sessionId, ts }: {
   ) : null;
 }
 
-function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId }: {
+function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId, isStreaming }: {
   blocks: Array<Extract<ProcessContentBlock, { type: "thinking" | "text" }>>;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   sessionId?: string;
+  isStreaming: boolean;
 }) {
   return (
     <div className="space-y-2 pr-2">
       {blocks.map((block) =>
         block.type === "text" ? (
-          <MarkdownBody key={block.id} cwd={cwd} onOpenFile={onOpenFile} className="!text-text-dim">
+          <MarkdownBody key={block.id} cwd={cwd} onOpenFile={onOpenFile} className="!text-text-dim" isStreaming={isStreaming}>
             {block.text}
           </MarkdownBody>
         ) : (
@@ -665,6 +665,7 @@ function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId }: {
             cwd={cwd}
             onOpenFile={onOpenFile}
             className="!text-text-dim"
+            isStreaming={isStreaming}
           />
         ),
       )}
@@ -757,8 +758,17 @@ export function ProcessGroup({
   const updateShadows = useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
-    setShowTopShadow(element.scrollTop > 0);
-    setShowBottomShadow(element.scrollHeight - element.scrollTop - element.clientHeight > 1);
+    // Functional bail-outs: ResizeObserver/scroll fire at high frequency while
+    // a step grows; committing the same shadow values would schedule a render
+    // every time and nest into the streaming update batch.
+    setShowTopShadow((prev) => {
+      const next = element.scrollTop > 0;
+      return prev === next ? prev : next;
+    });
+    setShowBottomShadow((prev) => {
+      const next = element.scrollHeight - element.scrollTop - element.clientHeight > 1;
+      return prev === next ? prev : next;
+    });
   }, []);
 
   const handleProcessUserScroll = useCallback(() => {
@@ -900,7 +910,7 @@ export function ProcessGroup({
           {singleThinking ? (
             <div className="relative mt-2">
               <div ref={scrollRef} className="max-h-[280px] overflow-y-auto pr-2">
-                <StepContent step={steps[0]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} />
+                <StepContent step={steps[0]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} isStreaming={isStreaming} />
               </div>
               {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
               {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
@@ -965,7 +975,7 @@ export function ProcessGroup({
                         </button>
                         {open && hasContent && (
                           <div className="ml-5 mt-1.5 overflow-hidden">
-                            <StepContent step={step} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} />
+                            <StepContent step={step} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} isStreaming={isStreaming} />
                           </div>
                         )}
                       </div>
@@ -1035,7 +1045,7 @@ export function ProcessGroup({
               </div>
               <div className="relative mt-2">
                 <div ref={scrollRef} className="max-h-[280px] overflow-y-auto pr-2">
-                  {steps[activeTab] && <StepContent step={steps[activeTab]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} />}
+                  {steps[activeTab] && <StepContent step={steps[activeTab]} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} isStreaming={isStreaming} />}
                 </div>
                 {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
                 {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
