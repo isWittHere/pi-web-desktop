@@ -141,7 +141,6 @@ export const zhCNLocale = {
     "desktop.inputHistory": "输入历史",
     "desktop.quickChanges": "快速变更",
     "desktop.changedFiles": "{count} 个变更文件",
-    "desktop.notAGitRepository": "不是 Git 仓库",
     "desktop.imageAttachmentsCannotQueue": "Agent 运行时无法将图片附件加入队列",
     "desktop.injectMessageNow": "中断当前运行并立即注入此消息",
     "desktop.queueMessageAfterFinish": "在 Agent 完成后将此消息加入队列",

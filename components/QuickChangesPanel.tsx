@@ -73,8 +73,12 @@ export function QuickChangesPanel({ cwd, refreshKey, onOpenFile }: Props) {
     void loadGitStatus();
   }, [loadGitStatus, refreshKey]);
 
-  const fileCount = gitStatus?.files.length ?? 0;
-  const changes = (gitStatus?.files ?? []).reduce(
+  // 仅当存在实际更改时显示该栏目（非 Git 仓库或没有更改时不渲染）
+  if (!gitStatus?.isGitRepository || gitStatus.files.length === 0) {
+    return null;
+  }
+
+  const changes = gitStatus.files.reduce(
     (counts, file) => {
       if (file.status === "added" || file.status === "untracked") counts.added += 1;
       else if (file.status === "deleted" || file.status === "conflict") counts.deleted += 1;
@@ -105,20 +109,16 @@ export function QuickChangesPanel({ cwd, refreshKey, onOpenFile }: Props) {
           <CaretRight size={9} weight="regular" style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
           <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("desktop.quickChanges")}</span>
         </button>
-        {gitStatus?.isGitRepository && fileCount > 0 && (
-          <>
-            <div
-              className="git-changes-indicator"
-              aria-label={`Changed files: ${changes.modified} modified, ${changes.added} added, ${changes.deleted} deleted`}
-            >
-              {changes.modified > 0 && <span className="git-changes-indicator-part git-changes-indicator-modified">{changes.modified}</span>}
-              {changes.added > 0 && <span className="git-changes-indicator-part git-changes-indicator-added">{changes.added}</span>}
-              {changes.deleted > 0 && <span className="git-changes-indicator-part git-changes-indicator-deleted">{changes.deleted}</span>}
-            </div>
-            <span style={{ marginLeft: 6, color: "var(--git-status-added)", fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
-            <span style={{ marginLeft: 5, color: "var(--git-status-deleted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
-          </>
-        )}
+        <div
+          className="git-changes-indicator"
+          aria-label={`Changed files: ${changes.modified} modified, ${changes.added} added, ${changes.deleted} deleted`}
+        >
+          {changes.modified > 0 && <span className="git-changes-indicator-part git-changes-indicator-modified">{changes.modified}</span>}
+          {changes.added > 0 && <span className="git-changes-indicator-part git-changes-indicator-added">{changes.added}</span>}
+          {changes.deleted > 0 && <span className="git-changes-indicator-part git-changes-indicator-deleted">{changes.deleted}</span>}
+        </div>
+        <span style={{ marginLeft: 6, color: "var(--git-status-added)", fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
+        <span style={{ marginLeft: 5, color: "var(--git-status-deleted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
         <button
           type="button"
           onClick={() => void loadGitStatus()}
@@ -132,17 +132,9 @@ export function QuickChangesPanel({ cwd, refreshKey, onOpenFile }: Props) {
       </div>
       {open && (
         <div style={{ minHeight: 0, maxHeight: "min(35vh, 280px)", overflowY: "auto", overflowX: "hidden", padding: "2px 4px 4px" }}>
-          {!gitStatus ? (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("desktop.loading")}</div>
-          ) : !gitStatus.isGitRepository ? (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("desktop.notAGitRepository")}</div>
-          ) : fileCount === 0 ? (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("desktop.noChanges")}</div>
-          ) : (
-            gitStatus.files.map((status) => (
-              <ChangeRow key={status.filePath} status={status} cwd={cwd} onOpenFile={onOpenFile} />
-            ))
-          )}
+          {gitStatus.files.map((status) => (
+            <ChangeRow key={status.filePath} status={status} cwd={cwd} onOpenFile={onOpenFile} />
+          ))}
         </div>
       )}
     </section>
