@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Moon, PaintBrush, Sun, Monitor } from "@phosphor-icons/react";
+import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import type { ThemeSetInfo } from "@/lib/theme";
@@ -53,6 +53,9 @@ function SectionLabel({ icon, label, actions }: { icon: React.ReactNode; label: 
 }
 
 const textActionButtonStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
   padding: 0,
   border: 0,
   background: "transparent",
@@ -60,6 +63,16 @@ const textActionButtonStyle: React.CSSProperties = {
   fontSize: 11,
   cursor: "pointer",
   whiteSpace: "nowrap",
+};
+
+/** Underline the label while hovering a text action button. */
+const underlineOnHover = {
+  onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.textDecoration = "underline";
+  },
+  onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.textDecoration = "none";
+  },
 };
 
 function ConfigSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
@@ -171,10 +184,22 @@ export function DisplayConfig() {
           label={t("desktop.colorScheme")}
           actions={
             <>
-              <button type="button" onClick={openThemeFolder} style={textActionButtonStyle}>
+              <button
+                type="button"
+                onClick={openThemeFolder}
+                style={textActionButtonStyle}
+                {...underlineOnHover}
+              >
+                <Link size={12} weight="regular" aria-hidden="true" />
                 {t("desktop.openThemeFolder")}
               </button>
-              <button type="button" onClick={openThemeDocs} style={textActionButtonStyle}>
+              <button
+                type="button"
+                onClick={openThemeDocs}
+                style={textActionButtonStyle}
+                {...underlineOnHover}
+              >
+                <ArrowSquareOut size={12} weight="regular" aria-hidden="true" />
                 {t("desktop.learnPiThemes")}
               </button>
             </>

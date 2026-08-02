@@ -31,7 +31,7 @@ This project began from upstream pi-web `v0.7.16`, but is now a deliberately div
 - Security updates must be adapted to the Electron server lifecycle. In particular, changing listener binding, Host/Origin validation, CORS, or `PI_WEB_PASSWORD` must be validated with `electron/main.js` readiness checks and BrowserWindow startup; never retain wildcard API CORS merely for LAN convenience.
 - Upstream UI enhancements such as resizable panels may be adopted only by manually integrating their interaction/accessibility behavior with the local title bar, responsive layout, CSS variables, and i18n.
 
-For the current upstream target and phased acceptance criteria, see `.myLastChat/MLC_上游v0.8.5合并规划与架构准则.md`.
+Keep upstream-comparison notes outside the public repository; `ref-repos/` is intentionally ignored and local-only.
 
 ---
 
@@ -39,7 +39,7 @@ For the current upstream target and phased acceptance criteria, see `.myLastChat
 
 | Category | Technology | Version |
 |----------|-----------|---------|
-| **Runtime** | Node.js / Next.js | Next 16.2.9 |
+| **Runtime** | Node.js / Next.js | Next 16.2.12 |
 | **UI Library** | React | ^19.2.4 |
 | **Language** | TypeScript | ^5 |
 | **Styling** | Tailwind CSS | ^4.2.2 |
@@ -50,11 +50,11 @@ For the current upstream target and phased acceptance criteria, see `.myLastChat
 | **Document Preview** | mammoth (DOCX) | ^1.12.0 |
 | **Icons** | Phosphor Icons, LobeHub icons | |
 | **Fonts** | IA Writer Quattro, Lilex (mono) | |
-| **Desktop** | Electron + electron-builder | ^43.1.1 / ^26.15.3 |
+| **Desktop** | Electron + electron-builder | ^43.2.0 / ^26.15.3 |
 | **Linting** | ESLint (eslint-config-next) | ^9 |
-| **SDK** | @earendil-works/pi-coding-agent | ^0.80.10 |
-| **SDK** | @earendil-works/pi-ai | ^0.80.10 |
-| **SDK** | @earendil-works/pi-tui | ^0.80.10 |
+| **SDK** | @earendil-works/pi-coding-agent | 0.83.0 |
+| **SDK** | @earendil-works/pi-ai | 0.83.0 |
+| **SDK** | @earendil-works/pi-tui | 0.83.0 |
 | **Package Manager** | npm (package-lock.json present) | |
 
 ---
@@ -202,15 +202,12 @@ pi-web-main/
 │   ├── gruvbox-dark.json         # Built-in pi CLI theme (Gruvbox Dark)
 │   └── pi-original.svg           # Pi logo
 │
-├── main.js                       # ⚠️ Legacy electron entry (superseded by electron/main.js)
 ├── global.d.ts                   # Ambient type declarations for Electron bridge
-├── next.config.ts                # Next.js config (CORS, externals, env vars)
-├── tailwind.config.ts            # Tailwind CSS configuration
-├── postcss.config.mjs            # PostCSS config (Tailwind plugin)
+├── next.config.ts                # Next.js config (externals and version env vars)
+├── postcss.config.mjs            # Tailwind PostCSS plugin
 ├── tsconfig.json                 # TypeScript config (strict, bundler resolution)
-├── eslint.config.mjs             # ESLint config (Next.js core-web-vitals + typescript)
-├── package.json                  # Dependencies, scripts, electron-builder config
-├── bun.lock                      # Bun lockfile (historical)
+├── eslint.config.mjs             # Next.js core-web-vitals + TypeScript lint config
+├── package.json                  # Dependencies, scripts, Electron Builder config
 └── package-lock.json             # npm lockfile
 ```
 
@@ -228,7 +225,7 @@ pi-web-main/
   - `react-hooks/immutability`: off
   - `react-hooks/refs`: off
   - `react-hooks/set-state-in-effect`: off
-- **Ignored directories**: `ref-repos/` (reference repos, never committed)
+- **Ignored local directories**: `.myLastChat/` and `ref-repos/` (never committed)
 
 ### File Organization
 - **API routes**: Next.js App Router route handlers in `app/api/`, one `route.ts` per endpoint
@@ -252,7 +249,7 @@ pi-web-main/
 - Tests use plain `.mjs` files (not TypeScript)
 - Co-located with source files
 - Focus on pure logic in `lib/` (rpc-manager, session-reader, normalize, etc.)
-- Run with node directly or via similar test runner
+- Run all tests with `npm test`
 
 ### Documentation
 - Code comments explain *why*, not *what*
@@ -268,7 +265,6 @@ pi-web-main/
 |------|---------|
 | `next.config.ts` | Next.js config: server external packages (pi SDK), CORS headers, version env vars |
 | `tsconfig.json` | TypeScript: strict mode, bundler resolution, `@/*` paths, ES2017 target |
-| `tailwind.config.ts` | Tailwind: scans `pages/`, `components/`, `app/` |
 | `postcss.config.mjs` | PostCSS: `@tailwindcss/postcss` plugin |
 | `eslint.config.mjs` | ESLint: Next.js configs + custom rule overrides |
 | `package.json` | Dependencies, scripts, electron-builder packaging config |
@@ -510,12 +506,11 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - i18n migration is complete: all call sites use `useI18n()`; the `useLanguage()` shim was removed. The `pi-language` → `pi-locale` localStorage migration in `app/layout.tsx` is a self-cleaning, idempotent upgrade path for pre-migration users; it may be dropped once no supported release writes the old key.
 - Any catalog change needs English/Chinese key-parity and call-site-resolution tests; do not import upstream AppShell or language-menu UI merely to adopt i18n.
 
-### ref-repos
-- `ref-repos/` directory contains reference source code for development
-- It is comparison-only: inspect and selectively reimplement required behavior in the local architecture; never use it for a wholesale source-tree or component replacement.
-- **Never commit** to git; explicitly inspect `git status` before staging upstream-integration work.
-- Excluded from TypeScript compilation in `tsconfig.json`
-- Excluded from ESLint in `eslint.config.mjs`
+### Local reference material
+- `ref-repos/` is comparison-only material and is intentionally ignored by Git.
+- Inspect and selectively reimplement needed behavior in the local architecture; never copy an entire component or source tree.
+- `.myLastChat/` contains local working notes and is also intentionally ignored.
+- Check `git status` before staging upstream-integration work.
 
 ---
 

@@ -22,8 +22,11 @@ interface Props {
   explorerRefreshKey?: number;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   onAtMentions?: (relativePaths: string[]) => void;
-  workspaceControlsHost?: HTMLElement | null;
-  /** Hide title-bar workspace controls on the empty welcome page. */
+  workspaceControlsHosts?: {
+    title?: HTMLElement | null;
+    welcome?: HTMLElement | null;
+  };
+  /** Hide both workspace controls on the empty welcome page. */
   showWorkspaceControls?: boolean;
 }
 
@@ -247,7 +250,7 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHost, showWorkspaceControls = true }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -255,6 +258,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string>("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [workspaceProjectDropdownOpen, setWorkspaceProjectDropdownOpen] = useState<"title" | "welcome" | null>(null);
+  const [workspaceWorktreeDropdownOpen, setWorkspaceWorktreeDropdownOpen] = useState<"title" | "welcome" | null>(null);
   const [projectFilter, setProjectFilter] = useState("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathValue, setCustomPathValue] = useState("");
@@ -262,6 +267,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [customPathValidating, setCustomPathValidating] = useState(false);
   const customPathInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Wrapper nodes of the two workspace-control portals (title bar / welcome).
+  // One ref per location: it contains both dropdowns of that location, so a
+  // single outside-click check covers the project and worktree menus.
+  const workspaceDropdownRefs = useRef<Record<"title" | "welcome", HTMLDivElement | null>>({ title: null, welcome: null });
   // Worktree switcher state
   const [worktreeState, setWorktreeState] = useState<WorktreeState | null>(null);
   const [wtDropdownOpen, setWtDropdownOpen] = useState(false);
@@ -533,6 +542,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       setCustomPathOpen(false);
       setCustomPathValue("");
       setDropdownOpen(false);
+      setWorkspaceProjectDropdownOpen(null);
     } catch (e) {
       setCustomPathError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -574,6 +584,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         setCustomPathValue("");
         setCustomPathError(null);
         setDropdownOpen(false);
+        setWorkspaceProjectDropdownOpen(null);
       }
     } catch {
       // ignore
@@ -599,6 +610,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       setWtNewOpen(false);
       setWtNewBranch("");
       setWtDropdownOpen(false);
+      setWorkspaceWorktreeDropdownOpen(null);
       // Optimistically register the new worktree so projectRootFor() resolves
       // it to the main repo before the refetch lands (keeps AppShell from
       // treating the new cwd as a different project).
@@ -646,23 +658,27 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
   }, [worktreeState, wtBusy, selectedCwd]);
 
-  // Close dropdowns on outside click
+  // Close dropdowns on outside click — the project and worktree menus of the
+  // sidebar and of both workspace-control portals all share one rule.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-        setProjectFilter("");
-        setCustomPathOpen(false);
-        setCustomPathValue("");
-        setCustomPathError(null);
-      }
-      if (wtDropdownRef.current && !wtDropdownRef.current.contains(e.target as Node)) {
-        setWtDropdownOpen(false);
-        setWtNewOpen(false);
-        setWtNewBranch("");
-        setWtError(null);
-        setWtConfirmRemove(null);
-      }
+      const target = e.target as Node;
+      const inAnyDropdown = dropdownRef.current?.contains(target)
+        || wtDropdownRef.current?.contains(target)
+        || Object.values(workspaceDropdownRefs.current).some((node) => node?.contains(target));
+      if (inAnyDropdown) return;
+      setDropdownOpen(false);
+      setWorkspaceProjectDropdownOpen(null);
+      setWtDropdownOpen(false);
+      setWorkspaceWorktreeDropdownOpen(null);
+      setProjectFilter("");
+      setCustomPathOpen(false);
+      setCustomPathValue("");
+      setCustomPathError(null);
+      setWtNewOpen(false);
+      setWtNewBranch("");
+      setWtError(null);
+      setWtConfirmRemove(null);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -742,6 +758,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     setCustomPathValue("");
     setCustomPathError(null);
     setDropdownOpen(false);
+    setWorkspaceProjectDropdownOpen(null);
   };
   const projectSearch = (
     <div style={{ borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
@@ -753,7 +770,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               if (projectFilter) setProjectFilter("");
-              else setDropdownOpen(false);
+              else {
+                setDropdownOpen(false);
+                setWorkspaceProjectDropdownOpen(null);
+              }
             }
           }}
           placeholder={t("desktop.searchProjects")}
@@ -817,147 +837,158 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const compactWorktreeLabel = currentWt
     ? (currentWt.branch ?? pathBaseName(currentWt.path))
     : inactiveWorktreeSelector?.label;
-  const isLargeWorkspaceControl = false;
-  const workspaceControls = workspaceControlsHost && showWorkspaceControls ? (
-    <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: isLargeWorkspaceControl ? 6 : 2, height: isLargeWorkspaceControl ? "auto" : "100%", minWidth: 0, width: isLargeWorkspaceControl ? "100%" : undefined }}>
-      <div ref={dropdownRef} style={{ position: "relative", minWidth: 0, width: isLargeWorkspaceControl ? "fit-content" : undefined, maxWidth: isLargeWorkspaceControl ? "min(100%, 560px)" : undefined }}>
-        <button
-          className="app-no-drag app-titlebar-context-control"
-          onClick={() => setDropdownOpen((v) => !v)}
-          title={selectedProject ?? selectedCwd ?? t("desktop.selectProject")}
-          aria-label={t("desktop.selectProject")}
-          aria-expanded={dropdownOpen}
-          style={{
-            height: isLargeWorkspaceControl ? 48 : 36,
-            width: isLargeWorkspaceControl ? "100%" : undefined,
-            maxWidth: isLargeWorkspaceControl ? "100%" : 260,
-            minWidth: 0,
-            display: "flex",
-            alignItems: "center",
-            gap: isLargeWorkspaceControl ? 10 : 6,
-            padding: isLargeWorkspaceControl ? "0 12px" : "0 8px",
-            background: dropdownOpen ? "var(--bg-selected)" : "none",
-            border: "none",
-            borderRadius: isLargeWorkspaceControl ? 8 : 0,
-            color: dropdownOpen ? "var(--text)" : selectedCwd ? (isLargeWorkspaceControl ? "var(--text)" : "var(--text-muted)") : "var(--text-dim)",
-            cursor: "pointer",
-            fontSize: isLargeWorkspaceControl ? 24 : 12,
-            fontWeight: 500,
-            fontFamily: "var(--font-mono)",
-            lineHeight: 1,
-            letterSpacing: 0,
-            textAlign: "left",
-            transition: "background 0.12s, color 0.12s, border-color 0.12s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--bg-hover)";
-            e.currentTarget.style.color = selectedCwd ? "var(--text)" : "var(--text-muted)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = dropdownOpen ? "var(--bg-selected)" : "none";
-            e.currentTarget.style.color = dropdownOpen ? "var(--text)" : selectedCwd ? "var(--text-muted)" : "var(--text-dim)";
-          }}
-        >
-          <PathLabel text={compactProjectLabel} style={{ flex: 1, minWidth: 0, color: "inherit", direction: "ltr", fontFamily: "inherit" }} />
-          <CaretDown size={12} weight="regular" style={{ flexShrink: 0, transition: "transform 0.12s", transform: dropdownOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />
-        </button>
-        <AnimatedDropdown open={dropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(38vh, 300px)" }}>
-          {projectSearch}
-          {projectList}
-          {projectActions}
-        </AnimatedDropdown>
-      </div>
-
-      {(showWorktreeSwitcher || inactiveWorktreeSelector) && (
-        <div ref={wtDropdownRef} style={{ position: "relative", minWidth: 0 }}>
+  const hasWorkspaceControlsHosts = Boolean(workspaceControlsHosts?.title || workspaceControlsHosts?.welcome);
+  const workspaceControls = (location: "title" | "welcome") => {
+    const isLargeWorkspaceControl = location === "welcome";
+    const isProjectDropdownOpen = workspaceProjectDropdownOpen === location;
+    const isWorktreeDropdownOpen = workspaceWorktreeDropdownOpen === location;
+    return showWorkspaceControls ? (
+      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: isLargeWorkspaceControl ? 6 : 2, height: isLargeWorkspaceControl ? "auto" : "100%", minWidth: 0, width: isLargeWorkspaceControl ? "100%" : undefined }}>
+        <div style={{ position: "relative", minWidth: 0, width: isLargeWorkspaceControl ? "fit-content" : undefined, maxWidth: isLargeWorkspaceControl ? "min(100%, 560px)" : undefined }}>
           <button
             className="app-no-drag app-titlebar-context-control"
-            onClick={() => { if (showWorktreeSwitcher) setWtDropdownOpen((v) => !v); }}
-            aria-label={t("desktop.switchWorktree")}
-            aria-expanded={showWorktreeSwitcher ? wtDropdownOpen : undefined}
-            aria-disabled={!showWorktreeSwitcher}
-            tabIndex={showWorktreeSwitcher ? 0 : -1}
-            title={showWorktreeSwitcher && currentWt ? t("desktop.switchWorktreeWithPath", { path: currentWt.path }) : inactiveWorktreeSelector?.title}
+            onClick={() => setWorkspaceProjectDropdownOpen((open) => open === location ? null : location)}
+            title={selectedProject ?? selectedCwd ?? t("desktop.selectProject")}
+            aria-label={t("desktop.selectProject")}
+            aria-expanded={isProjectDropdownOpen}
             style={{
-              height: 36,
-              maxWidth: 220,
+              height: isLargeWorkspaceControl ? 48 : 36,
+              width: isLargeWorkspaceControl ? "100%" : undefined,
+              maxWidth: isLargeWorkspaceControl ? "100%" : 260,
               minWidth: 0,
               display: "flex",
               alignItems: "center",
-              gap: 6,
-              padding: "0 8px",
-              background: wtDropdownOpen ? "var(--bg-selected)" : "none",
+              gap: isLargeWorkspaceControl ? 10 : 6,
+              padding: isLargeWorkspaceControl ? "0 12px" : "0 8px",
+              background: isProjectDropdownOpen ? "var(--bg-selected)" : "none",
               border: "none",
-              color: wtDropdownOpen ? "var(--text)" : showWorktreeSwitcher ? "var(--text-muted)" : "var(--text-dim)",
-              cursor: showWorktreeSwitcher ? "pointer" : "default",
-              fontSize: 12,
+              borderRadius: isLargeWorkspaceControl ? 8 : 0,
+              color: isProjectDropdownOpen ? "var(--text)" : selectedCwd ? (isLargeWorkspaceControl ? "var(--text)" : "var(--text-muted)") : "var(--text-dim)",
+              cursor: "pointer",
+              fontSize: isLargeWorkspaceControl ? 24 : 12,
               fontWeight: 500,
               fontFamily: "var(--font-mono)",
               lineHeight: 1,
               letterSpacing: 0,
-              opacity: showWorktreeSwitcher ? 1 : 0.82,
-              transition: "background 0.12s, color 0.12s",
+              textAlign: "left",
+              transition: "background 0.12s, color 0.12s, border-color 0.12s",
             }}
             onMouseEnter={(e) => {
-              if (!showWorktreeSwitcher) return;
               e.currentTarget.style.background = "var(--bg-hover)";
-              e.currentTarget.style.color = "var(--text)";
+              e.currentTarget.style.color = selectedCwd ? "var(--text)" : "var(--text-muted)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = wtDropdownOpen ? "var(--bg-selected)" : "none";
-              e.currentTarget.style.color = wtDropdownOpen ? "var(--text)" : showWorktreeSwitcher ? "var(--text-muted)" : "var(--text-dim)";
+              e.currentTarget.style.background = isProjectDropdownOpen ? "var(--bg-selected)" : "none";
+              e.currentTarget.style.color = isProjectDropdownOpen ? "var(--text)" : selectedCwd ? "var(--text-muted)" : "var(--text-dim)";
             }}
           >
-            <GitBranch size={16} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
-            <PathLabel text={compactWorktreeLabel ?? ""} style={{ flex: 1, minWidth: 0, color: "inherit", direction: "ltr", fontFamily: "inherit" }} />
-            {showWorktreeSwitcher && <CaretDown size={12} weight="regular" style={{ flexShrink: 0, transition: "transform 0.12s", transform: wtDropdownOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />}
+            <PathLabel text={compactProjectLabel} style={{ flex: 1, minWidth: 0, color: "inherit", direction: "ltr", fontFamily: "inherit" }} />
+            <CaretDown size={12} weight="regular" style={{ flexShrink: 0, transition: "transform 0.12s", transform: isProjectDropdownOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />
           </button>
-          <AnimatedDropdown open={showWorktreeSwitcher && wtDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden" }}>
-            <div style={{ maxHeight: "min(40vh, 300px)", overflowY: "auto" }}>
-              {worktreeState?.worktrees.map((wt) => {
-                const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
-                return (
-                  <button key={wt.path} onClick={() => { setSelectedCwd(wt.path); setWtDropdownOpen(false); setWtError(null); }} title={wt.path} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "var(--bg)", border: "none", borderBottom: "1px solid var(--border)", color: isCurrent ? "var(--text)" : "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11, fontFamily: "var(--font-mono)" }}>
-                    {isCurrent ? <Check size={10} color="var(--accent)" weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" /> : <span style={{ width: 10, flexShrink: 0 }} />}
-                    <PathLabel text={wt.branch ?? displayCwd(wt.path, homeDir)} style={{ flex: 1 }} />
-                    {wt.isMain && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("desktop.main")}</span>}
-                  </button>
-                );
-              })}
-            </div>
-            {!wtNewOpen ? (
-              <button onClick={(e) => { e.stopPropagation(); setWtNewOpen(true); setWtError(null); setTimeout(() => wtNewInputRef.current?.focus(), 0); }} title={t("desktop.createWorktree")} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11 }}>
-                <span>{t("desktop.newWorktree")}</span>
-              </button>
-            ) : (
-              <div style={{ padding: "6px 8px" }}>
-                <input
-                  ref={wtNewInputRef}
-                  value={wtNewBranch}
-                  onChange={(e) => { setWtNewBranch(e.target.value); setWtError(null); }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); void handleCreateWorktree(); }
-                    if (e.key === "Escape") { setWtNewOpen(false); setWtNewBranch(""); setWtError(null); }
-                  }}
-                  placeholder={t("desktop.branchName")}
-                  style={{ width: "100%", fontSize: 11, fontFamily: "var(--font-mono)", padding: "5px 8px", border: "1px solid var(--accent)", borderRadius: 5, outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }}
-                />
-                <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
-                  <button onClick={() => void handleCreateWorktree()} disabled={wtBusy || !wtNewBranch.trim()} style={{ flex: 1, padding: "4px 0", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: wtBusy || !wtNewBranch.trim() ? "not-allowed" : "pointer", opacity: wtBusy || !wtNewBranch.trim() ? 0.65 : 1 }}>{wtBusy ? t("desktop.creating") : t("desktop.create")}</button>
-                  <button onClick={() => { setWtNewOpen(false); setWtNewBranch(""); setWtError(null); }} style={{ flex: 1, padding: "4px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer" }}>{t("desktop.cancel")}</button>
-                </div>
-                {wtError && <div style={{ marginTop: 5, color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>{wtError}</div>}
-              </div>
-            )}
+          <AnimatedDropdown open={isProjectDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(38vh, 300px)" }}>
+            {projectSearch}
+            {projectList}
+            {projectActions}
           </AnimatedDropdown>
         </div>
-      )}
-    </div>
-  ) : null;
+
+        {(showWorktreeSwitcher || inactiveWorktreeSelector) && (
+          <div style={{ position: "relative", minWidth: 0 }}>
+            <button
+              className="app-no-drag app-titlebar-context-control"
+              onClick={() => { if (showWorktreeSwitcher) setWorkspaceWorktreeDropdownOpen((open) => open === location ? null : location); }}
+              aria-label={t("desktop.switchWorktree")}
+              aria-expanded={showWorktreeSwitcher ? isWorktreeDropdownOpen : undefined}
+              aria-disabled={!showWorktreeSwitcher}
+              tabIndex={showWorktreeSwitcher ? 0 : -1}
+              title={showWorktreeSwitcher && currentWt ? t("desktop.switchWorktreeWithPath", { path: currentWt.path }) : inactiveWorktreeSelector?.title}
+              style={{
+                height: 36,
+                maxWidth: 220,
+                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "0 8px",
+                background: isWorktreeDropdownOpen ? "var(--bg-selected)" : "none",
+                border: "none",
+                color: isWorktreeDropdownOpen ? "var(--text)" : showWorktreeSwitcher ? "var(--text-muted)" : "var(--text-dim)",
+                cursor: showWorktreeSwitcher ? "pointer" : "default",
+                fontSize: 12,
+                fontWeight: 500,
+                fontFamily: "var(--font-mono)",
+                lineHeight: 1,
+                letterSpacing: 0,
+                opacity: showWorktreeSwitcher ? 1 : 0.82,
+                transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                if (!showWorktreeSwitcher) return;
+                e.currentTarget.style.background = "var(--bg-hover)";
+                e.currentTarget.style.color = "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = isWorktreeDropdownOpen ? "var(--bg-selected)" : "none";
+                e.currentTarget.style.color = isWorktreeDropdownOpen ? "var(--text)" : showWorktreeSwitcher ? "var(--text-muted)" : "var(--text-dim)";
+              }}
+            >
+              <GitBranch size={16} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
+              <PathLabel text={compactWorktreeLabel ?? ""} style={{ flex: 1, minWidth: 0, color: "inherit", direction: "ltr", fontFamily: "inherit" }} />
+              {showWorktreeSwitcher && <CaretDown size={12} weight="regular" style={{ flexShrink: 0, transition: "transform 0.12s", transform: isWorktreeDropdownOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />}
+            </button>
+            <AnimatedDropdown open={showWorktreeSwitcher && isWorktreeDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden" }}>
+              <div style={{ maxHeight: "min(40vh, 300px)", overflowY: "auto" }}>
+                {worktreeState?.worktrees.map((wt) => {
+                  const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
+                  return (
+                    <button key={wt.path} onClick={() => { setSelectedCwd(wt.path); setWtDropdownOpen(false); setWorkspaceWorktreeDropdownOpen(null); setWtError(null); }} title={wt.path} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "var(--bg)", border: "none", borderBottom: "1px solid var(--border)", color: isCurrent ? "var(--text)" : "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11, fontFamily: "var(--font-mono)" }}>
+                      {isCurrent ? <Check size={10} color="var(--accent)" weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" /> : <span style={{ width: 10, flexShrink: 0 }} />}
+                      <PathLabel text={wt.branch ?? displayCwd(wt.path, homeDir)} style={{ flex: 1 }} />
+                      {wt.isMain && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("desktop.main")}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              {!wtNewOpen ? (
+                <button onClick={(e) => { e.stopPropagation(); setWtNewOpen(true); setWtError(null); setTimeout(() => wtNewInputRef.current?.focus(), 0); }} title={t("desktop.createWorktree")} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11 }}>
+                  <span>{t("desktop.newWorktree")}</span>
+                </button>
+              ) : (
+                <div style={{ padding: "6px 8px" }}>
+                  <input
+                    ref={wtNewInputRef}
+                    value={wtNewBranch}
+                    onChange={(e) => { setWtNewBranch(e.target.value); setWtError(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); void handleCreateWorktree(); }
+                      if (e.key === "Escape") { setWtNewOpen(false); setWtNewBranch(""); setWtError(null); }
+                    }}
+                    placeholder={t("desktop.branchName")}
+                    style={{ width: "100%", fontSize: 11, fontFamily: "var(--font-mono)", padding: "5px 8px", border: "1px solid var(--accent)", borderRadius: 5, outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }}
+                  />
+                  <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
+                    <button onClick={() => void handleCreateWorktree()} disabled={wtBusy || !wtNewBranch.trim()} style={{ flex: 1, padding: "4px 0", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: wtBusy || !wtNewBranch.trim() ? "not-allowed" : "pointer", opacity: wtBusy || !wtNewBranch.trim() ? 0.65 : 1 }}>{wtBusy ? t("desktop.creating") : t("desktop.create")}</button>
+                    <button onClick={() => { setWtNewOpen(false); setWtNewBranch(""); setWtError(null); }} style={{ flex: 1, padding: "4px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer" }}>{t("desktop.cancel")}</button>
+                  </div>
+                  {wtError && <div style={{ marginTop: 5, color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>{wtError}</div>}
+                </div>
+              )}
+            </AnimatedDropdown>
+          </div>
+        )}
+      </div>
+    ) : null;
+  };
 
   return (
     <>
-      {workspaceControlsHost && workspaceControls ? createPortal(workspaceControls, workspaceControlsHost) : null}
+      {(Object.entries(workspaceControlsHosts ?? {}) as Array<["title" | "welcome", HTMLElement | null | undefined]>).map(([location, host]) => host && createPortal(
+        <div ref={(node) => { workspaceDropdownRefs.current[location] = node; }}>
+          {workspaceControls(location)}
+        </div>,
+        host,
+        location,
+      ))}
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
       <div style={{ flexShrink: 0 }}>
@@ -1033,7 +1064,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         </div>
 
         {/* CWD picker */}
-        {!workspaceControlsHost && <div ref={dropdownRef} style={{ position: "relative" }}>
+        {!hasWorkspaceControlsHosts && <div ref={dropdownRef} style={{ position: "relative" }}>
           <button
             onClick={() => setDropdownOpen((v) => !v)}
             title={selectedProject ?? selectedCwd ?? ""}
@@ -1110,7 +1141,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             switching between worktrees of one project keeps the row mounted
             instead of flickering while data refetches: all worktrees of a
             project share the same list anyway. */}
-        {!workspaceControlsHost && showWorktreeSwitcher && (() => {
+        {!hasWorkspaceControlsHosts && showWorktreeSwitcher && (() => {
           if (!worktreeState) return null;
           const currentWt = worktreeState.worktrees.find((w) => w.path === selectedCwd)
             ?? worktreeState.worktrees.find((w) => w.isMain);
@@ -1366,7 +1397,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </div>
           );
         })()}
-        {!workspaceControlsHost && inactiveWorktreeSelector && (
+        {!hasWorkspaceControlsHosts && inactiveWorktreeSelector && (
           <button
             type="button"
             aria-disabled="true"

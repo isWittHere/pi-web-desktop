@@ -38,6 +38,7 @@ interface Props {
   onSessionStatsPanelOpen?: () => void;
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
   onOpenFile?: (filePath: string) => void;
+  onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
   onViewFullHistory?: () => void;
   systemPrompt: string | null;
 }
@@ -111,7 +112,7 @@ function withAssistantBlocks(
 
 
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onViewFullHistory, systemPrompt }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt }: Props) {
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
   const isMobile = useIsMobile();
   const { t } = useI18n();
@@ -459,22 +460,33 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               </svg>
             </div>
 
-            {/* Version information */}
+            {/* Header: workspace picker + version info */}
             <div
               style={{
-                display: "flex",
-                justifyContent: "flex-end",
                 padding: "0 34px 6px 7px",
                 paddingRight: isMobile ? 16 : 34,
               }}
             >
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                  web <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
-                </span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                  pi <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
-                </span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <div
+                  ref={onWorkspaceControlsHostChange}
+                  style={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1, minHeight: 48 }}
+                />
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                    web <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                    pi <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
+                  </span>
+                </div>
               </div>
             </div>
 

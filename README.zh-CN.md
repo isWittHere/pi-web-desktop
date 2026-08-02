@@ -1,46 +1,75 @@
-# pi-web
+# Pi Web Desktop
 
 [English](./README.md)
 
-[pi 编程智能体](https://github.com/badlogic/pi-mono) 的本地网页界面。它会读取本机的 pi 会话文件，在浏览器里提供会话管理、实时对话、模型配置、技能管理和项目文件预览。
+<p align="center">
+  <img src="./public/favicon.svg" alt="Pi Web Desktop" width="128" />
+</p>
 
-## 快速开始
+## 项目来源与目标
 
-**无需安装，直接运行：**
+本项目基于上游 [pi-web](https://github.com/agegr/pi-web) 的 `v0.7.16` 版本继续开发，是面向 [pi 编程智能体](https://github.com/badlogic/pi-mono) 的桌面应用客户端。
 
-```bash
-npx @agegr/pi-web@latest
+项目保留 pi-web 的本地会话、模型、技能和文件工作区能力，并为桌面端重新设计了窗口、侧边栏、会话过程展示、文件预览与主题切换等交互。
+
+## 使用方式
+
+请从本项目 GitHub Releases 下载与你的系统匹配的桌面安装包或便携版，安装或解压后直接启动应用。
+
+## 主要改进
+
+- **优化的桌面 UI/UX**：改进界面的信息层次、窗口与侧栏交互、视觉样式和工作区组织，让会话、项目和文件信息更容易浏览。
+- **增强的 Markdown 与过程展示**：针对 Markdown、工具调用和长会话优化阅读样式；提供独特的多步骤分组 UI、两种过程视图模式，以及更易定位上下文的改良会话导航条。
+- **PI-TUI 主题兼容**：读取并适配 pi / PI-TUI 的主题 JSON 文件，可在应用中选择自定义主题并保留深浅色模式体验。
+- **桌面工作区能力**：支持会话浏览与分支、Git worktree、项目文件预览、模型与技能配置，并与原生目录选择、窗口控制和系统托盘交互结合。
+
+## 截图
+
+主界面（左深色、右浅色）：
+
+![主界面：会话、项目和文件浏览](./docs/screenshots/home.png)
+
+对话界面（左深色、右浅色）：
+
+![对话与多步骤过程分组](./docs/screenshots/chat.png)
+
+按工具调用分组的多步骤展示：
+
+![多步骤过程分组展示](./docs/screenshots/blocks.png)
+
+文件差异预览：
+
+![文件 diff 预览](./docs/screenshots/diff.png)
+
+## 主题
+
+Pi Web Desktop 兼容 pi 的主题 JSON 格式。主题字段、颜色变量与完整格式请参见 [pi 官方主题文档](https://pi.dev/docs/latest/themes)。
+
+### 放置主题文件
+
+将 `.json` 主题文件放到全局主题目录：`~/.pi/agent/themes/`
+
+应用会优先使用所选项目可见的主题集合；在设置中选择主题后，可根据当前深浅色模式加载对应变体。
+
+### 命名规则
+
+主题按基础名称组织，使用 `-dark.json` 与 `-light.json` 后缀识别深色和浅色变体：
+
+```text
+gruvbox-dark.json
+gruvbox-light.json
 ```
 
-**或全局安装后使用：**
+以上两个文件组成名称为 `gruvbox` 的主题组。建议总是为同一主题提供成对的深色与浅色文件，以便在深色、浅色与系统模式之间获得一致体验。单个 `主题名.json` 也可以使用，但缺少对应变体时，应用只能回退到该文件或另一侧变体。
 
-```bash
-npm install -g @agegr/pi-web
-pi-web
-```
+仓库在 [`docs/themes/`](./docs/themes/) 附带以下可直接参考或复制的主题文件：
 
-启动后打开 [http://localhost:30141](http://localhost:30141)。命令行版本会在服务就绪后尝试自动打开浏览器。
+- `gruvbox-dark.json` / `gruvbox-light.json`
+- `solarized-dark.json` / `solarized-light.json`
 
-**可选参数：**
+## 与上游 pi-web 的关系
 
-```bash
-pi-web --port 8080              # 自定义端口
-pi-web --hostname 127.0.0.1     # 仅本机访问
-pi-web -p 8080 -H 127.0.0.1     # 组合使用
-pi-web --no-open                # 不自动打开浏览器
-
-PORT=8080 pi-web                # 也支持环境变量
-PI_WEB_NO_OPEN=1 pi-web         # 适用于后台服务或开机自启
-```
-
-## 功能介绍
-
-- **把历史工作接回来**：打开网页就能按项目找到以前的 pi 对话，不必在终端里翻文件或记住会话路径。
-- **放心试不同方向**：可以从某条历史消息重新开始，也可以复制出一条独立的新路线，探索方案时不怕弄乱原来的对话。
-- **跨分支工作**：在侧边栏切换 Git worktree，让新会话和 Explorer 跟随你选择的 checkout。
-- **边聊边看项目文件**：左侧浏览项目文件，右侧打开源码、文档、图片、音频和 PDF；文件变化会自动刷新，适合边让 agent 改边检查结果。
-- **随时掌握会话状态**：在顶部就能看到上下文占用、花费、压缩结果和系统提示，长会话不再像黑箱。
-- **少离开当前界面**：模型、登录/API key、模型测试和技能开关都能在网页里处理，配置 agent 时不用在多个工具之间来回切换。
+本项目是上游 pi-web `v0.7.16` 的桌面化派生版本，而不是上游的镜像或官方替代品。我们会在适合本项目架构和桌面体验的前提下选择性吸收上游改进，但**不保证完全复现上游功能，也不保证与上游版本或功能更新完全同步**。
 
 ## 注意事项
 
@@ -50,6 +79,7 @@ PI_WEB_NO_OPEN=1 pi-web         # 适用于后台服务或开机自启
 - **文件访问**：文件浏览和预览面向当前选择的项目目录，以及会话中已出现过的工作目录。
 - **Git worktree**：什么时候显示切换器、新建目录在哪里、删除会影响什么，见 [pi-web 里的 Worktree](./docs/worktrees.zh-CN.md)。
 - **Fork 与会话内分支不同**：Fork 会创建新的 `.jsonl` 文件；“Edit from here” 是同一会话文件里的分支。
+- **网络访问**：默认仅监听 `127.0.0.1`。如需绑定局域网地址，请设置 `PI_WEB_PASSWORD`，并配合 HTTPS 或可信 VPN；HTTP Basic Auth 不会加密凭据。
 
 ## 开发
 
@@ -65,9 +95,12 @@ npm run dev
 ```bash
 node_modules/.bin/tsc --noEmit
 npm run lint
+npm test
 ```
 
 开发时不要运行 `next build` / `npm run build`，它会写入 `.next/`，容易影响正在运行的 dev server。发布流程再执行构建。
+
+
 
 ## 项目结构
 
@@ -107,6 +140,4 @@ hooks/
   useAudio.ts         # 完成提示音
   useDragDrop.ts      # 图片拖拽
   useTheme.ts         # 主题切换
-bin/
-  pi-web.js           # npm CLI 入口
 ```

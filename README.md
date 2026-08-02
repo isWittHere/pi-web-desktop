@@ -1,50 +1,75 @@
-# pi-web
+# Pi Web Desktop
 
 [中文文档](./README.zh-CN.md)
 
-Local web UI for the [pi coding agent](https://github.com/badlogic/pi-mono). pi-web reads your local pi session files and gives you a browser workspace for session browsing, real-time chat, model configuration, skill management, and project file preview.
+<p align="center">
+  <img src="./public/favicon.svg" alt="Pi Web Desktop" width="128" />
+</p>
 
-![Pi Web shows the same pi session with structured Markdown, tool calls, and project navigation beside the CLI](https://raw.githubusercontent.com/agegr/pi-web/main/docs/screenshot2.png)
+## Origin and purpose
 
-The same pi session in CLI and pi-web: structured tool calls, readable Markdown, session browsing, and cleaner results.
+Pi Web Desktop is developed from the `v0.7.16` branch of upstream [pi-web](https://github.com/agegr/pi-web). It is a desktop application client for the [pi coding agent](https://github.com/badlogic/pi-mono).
 
-## Quick Start
+The project keeps pi-web's local session, model, skill, and file-workspace capabilities, and reworks windows, sidebars, process display, file preview, and theme switching for a desktop workflow.
 
-**Run without installing:**
+## Using the desktop app
 
-```bash
-npx @agegr/pi-web@latest
+Download the installer or portable build for your platform from this project's GitHub Releases, then install or extract it and launch the application. 
+
+## Highlights
+
+- **Refined desktop UI/UX**: clearer information hierarchy, improved workspace and sidebar interactions, and a more polished visual system for sessions, projects, and files.
+- **Enhanced Markdown and process display**: improved reading styles for Markdown, tool calls, and long conversations; a distinctive multi-step group UI, two process-display modes, and an improved session navigator for orienting within context.
+- **PI-TUI theme compatibility**: loads and adapts pi / PI-TUI theme JSON files, with custom theme selection across dark and light modes.
+- **Desktop workspace integration**: session browsing and branching, Git worktrees, project-file preview, and model/skill configuration work alongside native folder selection, window controls, and tray interactions.
+
+## Screenshots
+
+Main workspace (dark on the left, light on the right):
+
+![Main workspace: sessions, projects, and file explorer](./docs/screenshots/home.png)
+
+Chat with multi-step process groups (dark on the left, light on the right):
+
+![Chat with process groups](./docs/screenshots/chat.png)
+
+Process steps grouped by tool call:
+
+![Multi-step process groups](./docs/screenshots/blocks.png)
+
+File diff preview:
+
+![File diff preview](./docs/screenshots/diff.png)
+
+## Themes
+
+Pi Web Desktop supports pi theme JSON files. Refer to the [official pi theme documentation](https://pi.dev/docs/latest/themes) for the complete format, color variables, and field definitions.
+
+### Theme locations
+
+Place `.json` theme files in `~/.pi/agent/themes/`
+
+After selecting a theme in the app, the appropriate variant is resolved for the active light or dark mode.
+
+### Naming and variants
+
+Themes are grouped by base name. The `-dark.json` and `-light.json` suffixes identify the dark and light variants:
+
+```text
+gruvbox-dark.json
+gruvbox-light.json
 ```
 
-**Or install globally:**
+These files form one `gruvbox` theme set. Providing paired dark and light files is recommended so dark, light, and system modes remain consistent. A single `theme-name.json` file is also supported, but the app must fall back to that file or the opposite variant when a matching variant is unavailable.
 
-```bash
-npm install -g @agegr/pi-web
-pi-web
-```
+[`docs/themes/`](./docs/themes/) contains complete example pairs that can be copied or used as references:
 
-Then open [http://localhost:30141](http://localhost:30141). The CLI will try to open the browser automatically after the server is ready.
+- `gruvbox-dark.json` / `gruvbox-light.json`
+- `solarized-dark.json` / `solarized-light.json`
 
-**Options:**
+## Relationship to upstream pi-web
 
-```bash
-pi-web --port 8080              # custom port
-pi-web --hostname 127.0.0.1     # local access only
-pi-web -p 8080 -H 127.0.0.1     # combine options
-pi-web --no-open                # do not open the browser automatically
-
-PORT=8080 pi-web                # environment variable is also supported
-PI_WEB_NO_OPEN=1 pi-web         # useful when running as a background service
-```
-
-## Features
-
-- **Pick work back up**: browse previous pi conversations by project without digging through terminal history or session paths.
-- **Try different directions safely**: continue from an earlier message or fork a session into a separate route.
-- **Work across branches**: switch Git worktrees from the sidebar so new sessions and the Explorer follow the checkout you choose.
-- **Chat beside the project**: browse files on the left and preview source, docs, images, audio, and PDFs on the right while the agent works.
-- **See session state clearly**: context usage, cost, compaction state, and system prompt details are visible from the top bar.
-- **Configure less from the terminal**: manage models, login/API keys, model tests, and skill switches from the web UI.
+This repository is a desktop-focused derivative of upstream pi-web `v0.7.16`, not an upstream mirror or an official replacement. Upstream improvements may be adopted selectively when they fit this project's architecture and desktop experience. **It does not guarantee complete feature parity with upstream pi-web or full synchronization with upstream releases and changes.**
 
 ## Notes
 
@@ -54,6 +79,7 @@ PI_WEB_NO_OPEN=1 pi-web         # useful when running as a background service
 - **File access**: file browsing and preview are scoped to the selected project directory and working directories that appear in sessions.
 - **Git worktrees**: see [Worktrees in pi-web](./docs/worktrees.md) for when the switcher appears, how new worktrees are created, and what removal does.
 - **Forks vs in-session branches**: Fork creates a new `.jsonl` file. "Edit from here" creates another branch inside the same session file.
+- **Network access**: pi-web listens on `127.0.0.1` by default. If you bind it to a LAN address, set `PI_WEB_PASSWORD` and use HTTPS or a trusted VPN; HTTP Basic Auth does not encrypt credentials.
 
 ## Development
 
@@ -69,9 +95,12 @@ Common checks:
 ```bash
 node_modules/.bin/tsc --noEmit
 npm run lint
+npm test
 ```
 
 Avoid running `next build` / `npm run build` during local development. It writes to `.next/` and can interfere with the dev server; leave builds for release work.
+
+
 
 ## Project Structure
 
@@ -111,6 +140,4 @@ hooks/
   useAudio.ts         # completion sound
   useDragDrop.ts      # image drag/drop
   useTheme.ts         # theme switching
-bin/
-  pi-web.js           # npm CLI entrypoint
 ```
