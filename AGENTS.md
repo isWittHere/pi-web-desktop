@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**pi-web** (`@agegr/pi-web`) is a web-based UI for the [pi coding agent](https://github.com/badlogic/pi-mono). It provides a browser workspace for session browsing, real-time chat, model configuration, skill management, and project file preview — all powered by the pi SDK (`@earendil-works/pi-coding-agent`).
+**pi-web** (`@iswitthere/pi-web-desktop`) is a web-based UI for the [pi coding agent](https://github.com/badlogic/pi-mono). It provides a browser workspace for session browsing, real-time chat, model configuration, skill management, and project file preview — all powered by the pi SDK (`@earendil-works/pi-coding-agent`).
 
 - **Purpose**: Give pi users a visual alternative to the CLI with session browsing, file exploration, and settings management.
 - **Target Audience**: Developers using pi as their coding agent who want a richer UI.
@@ -271,7 +271,7 @@ pi-web-main/
 | `electron/main.js` | Electron main process: frameless window, tray, server lifecycle |
 | `electron/preload.js` | Context bridge: window controls IPC, directory picker |
 | `global.d.ts` | Ambient types for `window.electron` and `window.piDesktop` |
-| `bin/pi-web.js` | CLI entry point (`npx @agegr/pi-web`) |
+| `bin/pi-web.js` | CLI entry point (`npx @iswitthere/pi-web-desktop`) |
 | `app/layout.tsx` | Root layout: fonts, theme mode/name migration & init, i18n init (inline script before hydration) |
 | `app/page.tsx` | Entry: renders `<AppShell />` inside `<Suspense>` |
 | `app/globals.css` | Global styles + CSS variables (see below) |

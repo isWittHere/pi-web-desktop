@@ -1,14 +1,14 @@
 {
-  "name": "@agegr/pi-web",
+  "name": "@iswitthere/pi-web-desktop",
   "version": "0.7.16",
-  "description": "Web UI for the pi coding agent",
-  "homepage": "https://github.com/agegr/pi-web#readme",
+  "description": "Electron desktop app for the pi coding agent",
+  "homepage": "https://github.com/isWittHere/pi-web-desktop#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/agegr/pi-web.git"
+    "url": "git+https://github.com/isWittHere/pi-web-desktop.git"
   },
   "bugs": {
-    "url": "https://github.com/agegr/pi-web/issues"
+    "url": "https://github.com/isWittHere/pi-web-desktop/issues"
   },
   "license": "MIT",
   "main": "electron/main.js",
@@ -87,7 +87,7 @@
     "typescript": "^5"
   },
   "build": {
-    "appId": "com.agegr.pi-web",
+    "appId": "com.iswitthere.pi-web-desktop",
     "productName": "Pi Web",
     "directories": {
       "output": "release"
