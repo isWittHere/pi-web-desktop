@@ -40,16 +40,27 @@ function tagStyle(active: boolean, hovered: boolean, disabled?: boolean): React.
   };
 }
 
-function SectionLabel({ icon, label }: { icon: React.ReactNode; label: string }) {
+function SectionLabel({ icon, label, actions }: { icon: React.ReactNode; label: string; actions?: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, width: "100%" }}>
       <span style={{ color: "var(--text-dim)", display: "inline-flex", flexShrink: 0 }}>{icon}</span>
       <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
         {label}
       </span>
+      {actions && <span style={{ display: "inline-flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>{actions}</span>}
     </div>
   );
 }
+
+const textActionButtonStyle: React.CSSProperties = {
+  padding: 0,
+  border: 0,
+  background: "transparent",
+  color: "var(--accent)",
+  fontSize: 11,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
 
 function ConfigSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
@@ -134,6 +145,17 @@ export function DisplayConfig() {
     setMode(m);
   }, [setMode]);
 
+  const openThemeFolder = useCallback(() => {
+    window.piDesktop?.openThemeFolder();
+  }, []);
+
+  const openThemeDocs = useCallback(() => {
+    if (window.piDesktop) {
+      window.piDesktop.openThemeDocs();
+      return;
+    }
+    window.open("https://pi.dev/docs/latest/themes", "_blank", "noopener,noreferrer");
+  }, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
@@ -144,7 +166,20 @@ export function DisplayConfig() {
       {/* ── Theme ── */}
       <ConfigSection title={t("desktop.theme")} description={t("desktop.themeDescription")}>
         {/* Color Scheme */}
-        <SectionLabel icon={<PaintBrush size={14} weight="fill" />} label={t("desktop.colorScheme")} />
+        <SectionLabel
+          icon={<PaintBrush size={14} weight="fill" />}
+          label={t("desktop.colorScheme")}
+          actions={
+            <>
+              <button type="button" onClick={openThemeFolder} style={textActionButtonStyle}>
+                {t("desktop.openThemeFolder")}
+              </button>
+              <button type="button" onClick={openThemeDocs} style={textActionButtonStyle}>
+                {t("desktop.learnPiThemes")}
+              </button>
+            </>
+          }
+        />
         {loading ? (
           <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("desktop.loadingThemes")}</span>
         ) : (

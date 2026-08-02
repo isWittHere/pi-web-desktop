@@ -18,5 +18,7 @@ interface Window {
   // Existing bridge from SessionSidebar (declared there too — merged here centrally)
   piDesktop?: {
     selectDirectory: () => Promise<string | null>;
+    openThemeFolder: () => Promise<string>;
+    openThemeDocs: () => Promise<void>;
   };
 }

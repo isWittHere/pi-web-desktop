@@ -2101,8 +2101,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                               fontSize: 12,
                               fontFamily: "var(--font-mono)",
                             }}
-                            onFocus={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                            onBlur={(e) => { e.currentTarget.style.background = "transparent"; }}
                           />
                         </div>
                       </div>

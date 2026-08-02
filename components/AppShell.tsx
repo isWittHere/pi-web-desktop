@@ -67,8 +67,6 @@ export function AppShell() {
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
   const [titleWorkspaceControlsHost, setTitleWorkspaceControlsHost] = useState<HTMLDivElement | null>(null);
-  const [welcomeWorkspaceControlsHost, setWelcomeWorkspaceControlsHost] = useState<HTMLDivElement | null>(null);
-  const workspaceControlsHost = welcomeWorkspaceControlsHost ?? titleWorkspaceControlsHost;
 
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
 
@@ -451,8 +449,10 @@ export function AppShell() {
         explorerRefreshKey={explorerRefreshKey}
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
-        workspaceControlsHost={workspaceControlsHost}
-        workspaceControlsSize={welcomeWorkspaceControlsHost ? "large" : "compact"}
+        workspaceControlsHost={titleWorkspaceControlsHost}
+        // Keep the title bar empty until a project is actually active. This
+        // also covers the initial welcome screen before sessions finish loading.
+        showWorkspaceControls={Boolean(activeCwd ?? selectedSession?.cwd ?? newSessionCwd)}
       />
 
     </>
@@ -593,7 +593,6 @@ export function AppShell() {
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
               onOpenFile={handleOpenLinkedFile}
-              onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
               onViewFullHistory={handleViewFullHistory}
               systemPrompt={systemPrompt}
             />

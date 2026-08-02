@@ -16,3 +16,10 @@ contextBridge.exposeInMainWorld("electron", {
     },
   },
 });
+
+// Desktop workspace picker bridge — native OS folder dialog.
+contextBridge.exposeInMainWorld("piDesktop", {
+  selectDirectory: () => ipcRenderer.invoke("dialog:select-directory"),
+  openThemeFolder: () => ipcRenderer.invoke("shell:open-theme-folder"),
+  openThemeDocs: () => ipcRenderer.invoke("shell:open-theme-docs"),
+});

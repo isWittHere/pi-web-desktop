@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage, shell } = require("electron");
 const { fork } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -244,6 +244,33 @@ ipcMain.on("window:close", (event) => {
 
 ipcMain.handle("window:is-maximized", (event) => {
   return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false;
+});
+
+// Open the native OS folder-picker dialog. Used by the workspace selector's
+// "Select folder" action so users browse instead of typing a path.
+ipcMain.handle("dialog:select-directory", async (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(window, {
+    title: "Select folder",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle("shell:open-theme-folder", async () => {
+  const themeDirectory = path.join(app.getPath("home"), ".pi", "agent", "themes");
+  try {
+    fs.mkdirSync(themeDirectory, { recursive: true });
+    return await shell.openPath(themeDirectory);
+  } catch (error) {
+    console.error("[Electron] Failed to open Pi theme folder:", error);
+    return error instanceof Error ? error.message : String(error);
+  }
+});
+
+ipcMain.handle("shell:open-theme-docs", () => {
+  return shell.openExternal("https://pi.dev/docs/latest/themes");
 });
 
 async function bootstrap() {
