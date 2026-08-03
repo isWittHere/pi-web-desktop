@@ -271,6 +271,19 @@ function QueuedMessageRow({ kind, text, label }: { kind: "steer" | "follow-up"; 
   );
 }
 
+// Pinned at the top of the model / thinking / tools dropdowns while the
+// agent is running: config changes apply from the next turn, not to the
+// response currently streaming.
+function NextTurnBanner() {
+  const { t } = useI18n();
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 11, color: "var(--accent)", borderBottom: "1px solid var(--border)", background: "var(--bg-subtle)" }}>
+      <ClockIcon size={12} weight="bold" aria-hidden="true" />
+      {t("desktop.configAppliesNextTurn")}
+    </div>
+  );
+}
+
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelScopeWarnings, onModelChange,
   compactResult, toolPreset, onToolPresetChange,
@@ -1916,12 +1929,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                     overflow: "hidden", minWidth: 200, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
                   }}>
-                    {isStreaming && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 11, color: "var(--accent)", borderBottom: "1px solid var(--border)", background: "var(--bg-subtle)" }}>
-                        <ClockIcon size={12} weight="bold" aria-hidden="true" />
-                        {t("desktop.configAppliesNextTurn")}
-                      </div>
-                    )}
+                    {isStreaming && <NextTurnBanner />}
                     {THINKING_LEVELS.filter((lvl) => {
                       if (!availableThinkingLevels) return true;
                       if (lvl === "auto") return true;
@@ -2095,12 +2103,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                     overflow: "hidden", minWidth: 120, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
                   }}>
-                    {isStreaming && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 11, color: "var(--accent)", borderBottom: "1px solid var(--border)", background: "var(--bg-subtle)" }}>
-                        <ClockIcon size={12} weight="bold" aria-hidden="true" />
-                        {t("desktop.configAppliesNextTurn")}
-                      </div>
-                    )}
+                    {isStreaming && <NextTurnBanner />}
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = (toolPreset ?? "default") === preset;
@@ -2237,12 +2240,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       overflow: "hidden", maxHeight: maxH,
                       display: "flex", flexDirection: "column",
                       }}>
-                      {isStreaming && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 11, color: "var(--accent)", borderBottom: "1px solid var(--border)", background: "var(--bg-subtle)" }}>
-                          <ClockIcon size={12} weight="bold" aria-hidden="true" />
-                          {t("desktop.configAppliesNextTurn")}
-                        </div>
-                      )}
+                      {isStreaming && <NextTurnBanner />}
                       {/* Search area — pinned above the list, separated by a divider */}
                       <div style={{ borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
                         <div style={{ position: "relative", display: "flex", alignItems: "center" }}>

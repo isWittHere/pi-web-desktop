@@ -1402,6 +1402,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         await sendAgentCommand(sid, { type: "set_model", provider, modelId });
       } catch (e) {
         console.error("Failed to set model:", e);
+        addNotice({
+          type: "error",
+          message: e instanceof Error ? e.message : `Failed to set model: ${String(e)}`,
+        });
       }
       return;
     }
