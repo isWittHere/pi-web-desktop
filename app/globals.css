@@ -455,8 +455,15 @@ pre, code {
   pointer-events: none;
 }
 .chat-input-shell > :not(.chat-input-streaming-overlay) {
+  /* Position the editor row and toolbar above the streaming overlay
+     without assigning a z-index. A z-index here would create a stacking
+     context that traps the fixed-position dropdown menus (model /
+     thinking / tools, z-index 2000+) inside the toolbar's z-index: 1
+     layer, letting the floating steer/follow-up and maximize buttons
+     (z-index 4, shell-level) paint over them while the agent runs. The
+     overlay stays beneath all content anyway: z-index 0 / auto positioned
+     boxes share a paint layer and later siblings win. */
   position: relative;
-  z-index: 1;
 }
 /* Drag handle straddling the composer's top border. Must stay after the
    `.chat-input-shell > :not(.chat-input-streaming-overlay)` rule so its
