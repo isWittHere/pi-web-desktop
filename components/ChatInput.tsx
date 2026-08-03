@@ -1635,9 +1635,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             className={`chat-input-resize-handle${inputHeightResizer.isResizing ? " is-resizing" : ""}`}
           />
           {isStreaming && <div className="chat-input-streaming-overlay hatch-45" aria-hidden="true" />}
-          {isStreaming && (onSteer || onFollowUp) && (
-            <div className="chat-input-streaming-actions">
-              {onSteer && (
+          {/* Floating queue/maximize controls above the composer's top-right
+              corner. The steer/follow-up buttons only appear while the agent
+              runs; the maximize toggle is always available. */}
+          <div className="chat-input-streaming-actions">
+              {isStreaming && onSteer && (
                 <button
                   type="button"
                   className="chat-input-streaming-action chat-input-streaming-action-steer"
@@ -1649,7 +1651,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <ArrowElbowUpLeftIcon size={15} />
                 </button>
               )}
-              {onFollowUp && (
+              {isStreaming && onFollowUp && (
                 <button
                   type="button"
                   className="chat-input-streaming-action"
@@ -1677,8 +1679,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               >
                 {manualHeight !== null ? <ArrowsInIcon size={15} /> : <ArrowsOutIcon size={15} />}
               </button>
-            </div>
-          )}
+          </div>
           <div className="chat-input-editor-row" style={{ borderColor: bashMode ? "var(--tool-bg)" : undefined }}>
           <textarea
             ref={textareaRef}
@@ -2333,41 +2334,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   })()}
                 </div>
             )}
-
-            {/* Maximize / restore the composer height — always available (the
-                streaming queue row has a duplicate while the agent runs). */}
-            <button
-              type="button"
-              onClick={() => {
-                if (manualHeight !== null) {
-                  inputHeightResizer.resetHeight();
-                } else {
-                  inputHeightResizer.setHeight(getMaxManualHeight());
-                }
-              }}
-              title={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
-              aria-label={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
-              aria-pressed={manualHeight !== null}
-              style={{
-                flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                width: 24, height: 24, padding: 0,
-                background: "none", border: "none",
-                borderRadius: 6,
-                color: manualHeight !== null ? "var(--accent)" : "var(--text-muted)",
-                cursor: "pointer",
-                transition: "background 0.12s, color 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = manualHeight !== null ? "var(--accent)" : "var(--text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "none";
-                e.currentTarget.style.color = manualHeight !== null ? "var(--accent)" : "var(--text-muted)";
-              }}
-            >
-              {manualHeight !== null ? <ArrowsInIcon size={14} /> : <ArrowsOutIcon size={14} />}
-            </button>
 
             {!isStreaming && (
               <button
