@@ -490,16 +490,20 @@ pre, code {
   content: "";
   position: absolute;
   top: 4px;
-  left: 10px;
-  right: 10px;
+  left: 0;
+  right: 0;
   height: 1px;
-  background: transparent;
-  transition: background 0.12s;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.12s;
+  /* fade the ends of the highlight bar */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 18%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 18%, #000 82%, transparent 100%);
 }
 .chat-input-shell > .chat-input-resize-handle:hover::before,
 .chat-input-shell > .chat-input-resize-handle:focus-visible::before,
 .chat-input-shell > .chat-input-resize-handle.is-resizing::before {
-  background: var(--accent);
+  opacity: 1;
 }
 .chat-input-streaming-action {
   display: flex;
