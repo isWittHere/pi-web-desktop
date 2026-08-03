@@ -10,10 +10,13 @@ import {
 } from "@/lib/file-fuzzy";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useResizableHeight } from "@/hooks/useResizableHeight";
 import { useI18n } from "@/hooks/useI18n";
 import { ArrowBendUpLeftIcon } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowElbowUpLeftIcon } from "@phosphor-icons/react/ArrowElbowUpLeft";
+import { ArrowsInIcon } from "@phosphor-icons/react/ArrowsIn";
+import { ArrowsOutIcon } from "@phosphor-icons/react/ArrowsOut";
 import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
 
 import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
@@ -88,6 +91,17 @@ const TOOL_PRESETS = ["off", "default", "full"] as const;
 const TOOL_PRESET_MAP: Record<"off" | "default" | "full", "none" | "default" | "full"> = { off: "none", default: "default", full: "full" };
 const COMPOSITION_END_ENTER_GRACE_MS = 100;
 const MODEL_OPTION_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+// Content-driven textarea growth is capped at this (existing behavior). The
+// manual resize ceiling is separate and lives in MANUAL_MAX_HEIGHT_*.
+const AUTO_MAX_HEIGHT = 200;
+// Manual resize floor: the composer's natural single-line height.
+const MIN_MANUAL_HEIGHT_DESKTOP = 104;
+const MIN_MANUAL_HEIGHT_MOBILE = 80;
+// Manual resize ceiling: fixed cap plus a fraction of the viewport height.
+const MANUAL_MAX_HEIGHT_CAP = 480;
+const MANUAL_MAX_HEIGHT_FRACTION = 0.55;
+const INPUT_HEIGHT_STORAGE_KEY = "pi-chat-input-height";
 
 function compareModelOptions(a: ModelOption, b: ModelOption): number {
   return MODEL_OPTION_COLLATOR.compare(a.name || a.modelId, b.name || b.modelId)
@@ -360,6 +374,42 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   valueRef.current = value;
   attachedImagesRef.current = attachedImages;
 
+  // Manual input-box height: drag the top border of the composer shell to
+  // resize it (see .chat-input-resize-handle). `height` stays null in the
+  // default content-driven mode and becomes a fixed pixel value once the
+  // user takes manual control (drag, maximize toggle, or persisted value).
+  const inputShellRef = useRef<HTMLDivElement>(null);
+  const manualModeRef = useRef(false);
+  const minManualHeight = isMobile ? MIN_MANUAL_HEIGHT_MOBILE : MIN_MANUAL_HEIGHT_DESKTOP;
+  const getMaxManualHeight = useCallback(() => {
+    if (typeof window === "undefined") return MANUAL_MAX_HEIGHT_CAP;
+    return Math.max(
+      minManualHeight,
+      Math.min(MANUAL_MAX_HEIGHT_CAP, Math.floor(window.innerHeight * MANUAL_MAX_HEIGHT_FRACTION)),
+    );
+  }, [minManualHeight]);
+  const inputHeightResizer = useResizableHeight({
+    ariaLabel: t("desktop.resizeInput"),
+    minHeight: minManualHeight,
+    getMaxHeight: getMaxManualHeight,
+    storageKey: INPUT_HEIGHT_STORAGE_KEY,
+    targetRef: inputShellRef,
+  });
+  const manualHeight = inputHeightResizer.height;
+  const manualMode = manualHeight !== null;
+  manualModeRef.current = manualMode;
+
+  // All content-driven textarea sizing funnels through this helper. In manual
+  // mode the shell has a fixed height and the textarea fills it (flex stretch
+  // + internal scroll), so auto-resizing must not fight the user's size.
+  const applyAutoHeight = useCallback(() => {
+    if (manualModeRef.current) return;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, AUTO_MAX_HEIGHT)}px`;
+  }, []);
+
   useImperativeHandle(ref, () => ({
     insertIfEmpty(text: string) {
       const ta = textareaRef.current;
@@ -370,8 +420,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       requestAnimationFrame(() => {
         if (!ta) return;
         ta.focus();
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+        applyAutoHeight();
       });
     },
     prependText(text: string) {
@@ -387,8 +436,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         if (!ta) return;
         ta.focus();
         ta.setSelectionRange(combined.length, combined.length);
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+        applyAutoHeight();
       });
     },
     insertText(text: string) {
@@ -410,8 +458,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         const pos = start + sep.length + text.length;
         ta.setSelectionRange(pos, pos);
         ta.focus();
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+        applyAutoHeight();
       });
     },
     addImages(files: File[]) {
@@ -482,7 +529,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (draftKey) clearDraft(draftKey);
     if (draftKeyRef.current && draftKeyRef.current !== draftKey) clearDraft(draftKeyRef.current);
     clearImages();
-    if (textareaRef.current) {
+    if (!manualModeRef.current && textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
   }, [clearImages, draftKey]);
@@ -517,11 +564,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [draftKey]);
 
   useEffect(() => {
+    applyAutoHeight();
+  }, [applyAutoHeight, value]);
+
+  // Switching between auto and fixed manual height: fixed mode lets flex
+  // stretch fill the shell (clear any stale inline height), auto mode
+  // re-applies the content-driven height.
+  useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
-    ta.style.height = "auto";
-    if (value) ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-  }, [value]);
+    if (manualMode) {
+      ta.style.height = "";
+    } else {
+      applyAutoHeight();
+    }
+  }, [applyAutoHeight, manualMode]);
 
   useEffect(() => {
     const handler = () => {
@@ -731,10 +788,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (!el) return;
       el.focus();
       el.setSelectionRange(newPos, newPos);
-      el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+      applyAutoHeight();
     });
-  }, [atQuery, value]);
+  }, [applyAutoHeight, atQuery, value]);
 
   useEffect(() => {
     if (atActiveIndex >= atMatches.length) {
@@ -761,10 +817,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (!ta) return;
       ta.focus();
       ta.setSelectionRange(text.length, text.length);
-      ta.style.height = "auto";
-      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+      applyAutoHeight();
     });
-  }, []);
+  }, [applyAutoHeight]);
 
   const applySlashCommand = useCallback((command: SlashCommandPaletteItem) => {
     const nextValue = `/${command.name} `;
@@ -776,10 +831,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (!ta) return;
       ta.focus();
       ta.setSelectionRange(nextValue.length, nextValue.length);
-      ta.style.height = "auto";
-      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+      applyAutoHeight();
     });
-  }, []);
+  }, [applyAutoHeight]);
 
   const sendQueued = useCallback((mode: "steer" | "followup") => {
     const msg = value.trim();
@@ -993,11 +1047,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   );
 
   const handleInput = useCallback(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-  }, []);
+    applyAutoHeight();
+  }, [applyAutoHeight]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData?.items ?? []);
@@ -1562,10 +1613,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             );
           })()}
           <div
-            className={`chat-input-shell ${isStreaming && (onSteer || onFollowUp) ? "is-streaming" : ""}`}
+            ref={inputShellRef}
+            className={`chat-input-shell${isStreaming && (onSteer || onFollowUp) ? " is-streaming" : ""}${manualMode ? " is-manual-height" : ""}`}
             onClick={(e) => {
               const target = e.target as HTMLElement;
-              if (!target.closest("button, input, select, [role=button]")) textareaRef.current?.focus();
+              if (!target.closest("button, input, select, [role=button], [role=separator]")) textareaRef.current?.focus();
             }}
             style={{
               display: "flex",
@@ -1573,9 +1625,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               alignItems: "stretch",
               gap: 0,
               padding: 0,
+              height: manualHeight !== null ? `${manualHeight}px` : undefined,
               transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
             } as React.CSSProperties}
           >
+          {/* Drag handle on the top border — resize the composer vertically */}
+          <div
+            {...inputHeightResizer.separatorProps}
+            className={`chat-input-resize-handle${inputHeightResizer.isResizing ? " is-resizing" : ""}`}
+          />
           {isStreaming && <div className="chat-input-streaming-overlay hatch-45" aria-hidden="true" />}
           {isStreaming && (onSteer || onFollowUp) && (
             <div className="chat-input-streaming-actions">
@@ -1603,6 +1661,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <SortDescendingIcon size={15} />
                 </button>
               )}
+              {/* Maximize / restore the composer height to the manual ceiling */}
+              <button
+                type="button"
+                className="chat-input-streaming-action"
+                onClick={() => {
+                  if (manualHeight !== null) {
+                    inputHeightResizer.resetHeight();
+                  } else {
+                    inputHeightResizer.setHeight(getMaxManualHeight());
+                  }
+                }}
+                title={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
+                aria-label={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
+              >
+                {manualHeight !== null ? <ArrowsInIcon size={15} /> : <ArrowsOutIcon size={15} />}
+              </button>
             </div>
           )}
           <div className="chat-input-editor-row" style={{ borderColor: bashMode ? "var(--tool-bg)" : undefined }}>
@@ -1645,8 +1719,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               outline: "none",
               resize: "none",
               color: "var(--text)",
-              minHeight: 24,
-              maxHeight: 200,
+              minHeight: manualMode ? 0 : 24,
+              maxHeight: manualMode ? "none" : AUTO_MAX_HEIGHT,
               padding: 0,
               overflow: "auto",
             }}

@@ -458,10 +458,10 @@ pre, code {
   position: relative;
   z-index: 1;
 }
-/* Streaming queue controls float from the composer’s top-right corner. */
+/* Streaming queue controls float from the composer's top-right corner. */
 .chat-input-shell > .chat-input-streaming-actions {
   position: absolute;
-  z-index: 2;
+  z-index: 4; /* above the resize handle (z-index 3) where the row overlaps it */
   top: -22px;
   right: 20px;
   display: flex;
@@ -471,6 +471,35 @@ pre, code {
   border-radius: 7px;
   background: var(--bg-panel);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+/* Drag handle straddling the composer's top border. Must stay after the
+   `.chat-input-shell > :not(.chat-input-streaming-overlay)` rule so its
+   absolute positioning and z-index win the specificity tie. */
+.chat-input-shell > .chat-input-resize-handle {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 9px;
+  z-index: 3;
+  cursor: row-resize;
+  touch-action: none;
+  outline: none;
+}
+.chat-input-shell > .chat-input-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 10px;
+  right: 10px;
+  height: 1px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.chat-input-shell > .chat-input-resize-handle:hover::before,
+.chat-input-shell > .chat-input-resize-handle:focus-visible::before,
+.chat-input-shell > .chat-input-resize-handle.is-resizing::before {
+  background: var(--accent);
 }
 .chat-input-streaming-action {
   display: flex;
@@ -516,6 +545,15 @@ pre, code {
 .chat-input-textarea::placeholder {
   color: var(--text-dim);
   opacity: 1;
+}
+/* Fixed-height manual mode: the editor row fills the shell and the textarea
+   scrolls inside it instead of auto-growing. */
+.chat-input-shell.is-manual-height .chat-input-editor-row {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.chat-input-shell.is-manual-height .chat-input-textarea {
+  min-height: 0 !important; /* override the desktop 50px floor so it shrinks */
 }
 .chat-input-toolbar {
   min-height: 32px;
