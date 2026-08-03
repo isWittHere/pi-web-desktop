@@ -1625,7 +1625,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               alignItems: "stretch",
               gap: 0,
               padding: 0,
-              height: manualHeight !== null ? `${manualHeight}px` : undefined,
+              height: manualMode ? `${manualHeight}px` : undefined,
               transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
             } as React.CSSProperties}
           >
@@ -1635,14 +1635,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             className={`chat-input-resize-handle${inputHeightResizer.isResizing ? " is-resizing" : ""}`}
           />
           {isStreaming && <div className="chat-input-streaming-overlay hatch-45" aria-hidden="true" />}
-          {/* Floating controls above the composer's top-right corner. The
-              steer/follow-up buttons form one group and only appear while the
-              agent runs; the maximize toggle is a separate group that is
-              always available. Styled inline so visual tweaks hot-reload in
-              the Electron dev setup (Turbopack does not recompile
-              globals.css there). */}
+          {/* Floating controls above the composer's top-right corner: the
+              steer/follow-up group only appears while the agent runs; the
+              maximize group is always available. Styled inline because
+              Turbopack does not hot-reload globals.css in the Electron dev
+              setup — inline tweaks ride the JS HMR instead. */}
           <div
-            className="chat-input-streaming-actions"
             style={{
               position: "absolute",
               zIndex: 4, // above the resize handle (z-index 3)
@@ -1651,94 +1649,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               display: "flex",
               alignItems: "stretch",
               gap: 6,
-              // Explicitly neutralize the pre-inline CSS pill chrome so a
-              // stale compiled stylesheet cannot wrap the groups in a box.
-              border: "none",
-              background: "transparent",
-              boxShadow: "none",
-              overflow: "visible",
             }}
           >
-              {(isStreaming && (onSteer || onFollowUp)) && (
-                <div
-                  className="chat-input-streaming-actions-group"
-                  style={{
-                    display: "flex",
-                    alignItems: "stretch",
-                    overflow: "hidden",
-                    border: "1px solid color-mix(in srgb, var(--border) 62%, transparent)",
-                    borderRadius: 7,
-                    background: "var(--bg-panel)",
-                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.07)",
-                  }}
-                >
-                  {isStreaming && onSteer && (
-                    <button
-                      type="button"
-                      className="chat-input-streaming-action chat-input-streaming-action-steer"
-                      onClick={() => sendQueued("steer")}
-                      disabled={!canQueueStreamingMessage}
-                      title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.injectMessageNow")}
-                      aria-label={t("desktop.steer")}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        width: 36, height: 28, padding: 0,
-                        border: 0,
-                        background: "transparent",
-                        color: canQueueStreamingMessage ? "var(--accent)" : "var(--text-dim)",
-                        cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
-                        opacity: canQueueStreamingMessage ? 1 : 0.55,
-                        transition: "background 0.12s, color 0.12s",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!canQueueStreamingMessage) return;
-                        e.currentTarget.style.background = "var(--bg-hover)";
-                        e.currentTarget.style.color = "var(--text)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                        e.currentTarget.style.color = canQueueStreamingMessage ? "var(--accent)" : "var(--text-dim)";
-                      }}
-                    >
-                      <ArrowElbowUpLeftIcon size={15} />
-                    </button>
-                  )}
-                  {isStreaming && onFollowUp && (
-                    <button
-                      type="button"
-                      className="chat-input-streaming-action"
-                      onClick={() => sendQueued("followup")}
-                      disabled={!canQueueStreamingMessage}
-                      title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.queueMessageAfterFinish")}
-                      aria-label={t("desktop.followUp")}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        width: 36, height: 28, padding: 0,
-                        border: 0,
-                        borderLeft: "1px solid color-mix(in srgb, var(--border) 62%, transparent)",
-                        background: "transparent",
-                        color: canQueueStreamingMessage ? "var(--text-muted)" : "var(--text-dim)",
-                        cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
-                        opacity: canQueueStreamingMessage ? 1 : 0.55,
-                        transition: "background 0.12s, color 0.12s",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!canQueueStreamingMessage) return;
-                        e.currentTarget.style.background = "var(--bg-hover)";
-                        e.currentTarget.style.color = "var(--text)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                        e.currentTarget.style.color = canQueueStreamingMessage ? "var(--text-muted)" : "var(--text-dim)";
-                      }}
-                    >
-                      <SortDescendingIcon size={15} />
-                    </button>
-                  )}
-                </div>
-              )}
+            {(isStreaming && (onSteer || onFollowUp)) && (
               <div
-                className="chat-input-streaming-actions-group"
                 style={{
                   display: "flex",
                   alignItems: "stretch",
@@ -1749,40 +1663,113 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   boxShadow: "0 1px 3px rgba(0, 0, 0, 0.07)",
                 }}
               >
-                {/* Maximize / restore the composer height to the manual ceiling */}
-                <button
-                  type="button"
-                  className="chat-input-streaming-action"
-                  onClick={() => {
-                    if (manualHeight !== null) {
-                      inputHeightResizer.resetHeight();
-                    } else {
-                      inputHeightResizer.setHeight(getMaxManualHeight());
-                    }
-                  }}
-                  title={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
-                  aria-label={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    width: 36, height: 28, padding: 0,
-                    border: 0,
-                    background: "transparent",
-                    color: manualHeight !== null ? "var(--accent)" : "var(--text-muted)",
-                    cursor: "pointer",
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = manualHeight !== null ? "var(--accent)" : "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = manualHeight !== null ? "var(--accent)" : "var(--text-muted)";
-                  }}
-                >
-                  {manualHeight !== null ? <ArrowsInIcon size={15} /> : <ArrowsOutIcon size={15} />}
-                </button>
+                {isStreaming && onSteer && (
+                  <button
+                    type="button"
+                    onClick={() => sendQueued("steer")}
+                    disabled={!canQueueStreamingMessage}
+                    title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.injectMessageNow")}
+                    aria-label={t("desktop.steer")}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 36, height: 28, padding: 0,
+                      border: 0,
+                      background: "transparent",
+                      color: canQueueStreamingMessage ? "var(--accent)" : "var(--text-dim)",
+                      cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
+                      opacity: canQueueStreamingMessage ? 1 : 0.55,
+                      transition: "background 0.12s, color 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!canQueueStreamingMessage) return;
+                      e.currentTarget.style.background = "var(--bg-hover)";
+                      e.currentTarget.style.color = "var(--text)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = canQueueStreamingMessage ? "var(--accent)" : "var(--text-dim)";
+                    }}
+                  >
+                    <ArrowElbowUpLeftIcon size={15} />
+                  </button>
+                )}
+                {isStreaming && onFollowUp && (
+                  <button
+                    type="button"
+                    onClick={() => sendQueued("followup")}
+                    disabled={!canQueueStreamingMessage}
+                    title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.queueMessageAfterFinish")}
+                    aria-label={t("desktop.followUp")}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 36, height: 28, padding: 0,
+                      border: 0,
+                      borderLeft: "1px solid color-mix(in srgb, var(--border) 62%, transparent)",
+                      background: "transparent",
+                      color: canQueueStreamingMessage ? "var(--text-muted)" : "var(--text-dim)",
+                      cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
+                      opacity: canQueueStreamingMessage ? 1 : 0.55,
+                      transition: "background 0.12s, color 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!canQueueStreamingMessage) return;
+                      e.currentTarget.style.background = "var(--bg-hover)";
+                      e.currentTarget.style.color = "var(--text)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = canQueueStreamingMessage ? "var(--text-muted)" : "var(--text-dim)";
+                    }}
+                  >
+                    <SortDescendingIcon size={15} />
+                  </button>
+                )}
               </div>
+            )}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "stretch",
+                overflow: "hidden",
+                border: "1px solid color-mix(in srgb, var(--border) 62%, transparent)",
+                borderRadius: 7,
+                background: "var(--bg-panel)",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.07)",
+              }}
+            >
+              {/* Maximize / restore the composer height to the manual ceiling */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (manualHeight !== null) {
+                    inputHeightResizer.resetHeight();
+                  } else {
+                    inputHeightResizer.setHeight(getMaxManualHeight());
+                  }
+                }}
+                title={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
+                aria-label={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 36, height: 28, padding: 0,
+                  border: 0,
+                  background: "transparent",
+                  color: manualHeight !== null ? "var(--accent)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = manualHeight !== null ? "var(--accent)" : "var(--text)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = manualHeight !== null ? "var(--accent)" : "var(--text-muted)";
+                }}
+              >
+                {manualHeight !== null ? <ArrowsInIcon size={15} /> : <ArrowsOutIcon size={15} />}
+              </button>
+            </div>
           </div>
           <div className="chat-input-editor-row" style={{ borderColor: bashMode ? "var(--tool-bg)" : undefined }}>
           <textarea
