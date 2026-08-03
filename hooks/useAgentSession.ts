@@ -1412,8 +1412,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setCurrentModelOverride({ provider, modelId });
     } catch (e) {
       console.error("Failed to set model:", e);
+      addNotice({
+        type: "error",
+        message: e instanceof Error ? e.message : `Failed to set model: ${String(e)}`,
+      });
     }
-  }, [isNew, setNewSessionModel]);
+  }, [isNew, setNewSessionModel, addNotice]);
 
   const handleCompact = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -1635,8 +1639,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       await sendAgentCommand(sid, { type: "set_thinking_level", level });
     } catch (e) {
       console.error("Failed to set thinking level:", e);
+      addNotice({
+        type: "error",
+        message: e instanceof Error ? e.message : `Failed to set thinking level: ${String(e)}`,
+      });
     }
-  }, []);
+  }, [addNotice]);
 
   const handleToolPresetChange = useCallback(async (preset: "none" | "default" | "full") => {
     const toolNames = getToolNamesForPreset(preset);
@@ -1647,8 +1655,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       await sendAgentCommand(sid, { type: "set_tools", toolNames });
     } catch (e) {
       console.error("Failed to set tools:", e);
+      addNotice({
+        type: "error",
+        message: e instanceof Error ? e.message : `Failed to set tool preset: ${String(e)}`,
+      });
     }
-  }, [setToolPresetState]);
+  }, [setToolPresetState, addNotice]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;

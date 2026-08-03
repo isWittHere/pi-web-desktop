@@ -20,6 +20,7 @@ import { ArrowsOutIcon } from "@phosphor-icons/react/ArrowsOut";
 import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
 
 import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
+import { ClockIcon } from "@phosphor-icons/react/Clock";
 import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/Check";
 import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
@@ -1864,12 +1865,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             >
               <PlusIcon size={14} />
             </button>
-            {!isStreaming && onThinkingLevelChange && (
+            {onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} className="chat-input-toolbar-thinking" style={{ position: "relative" }}>
                 <button
-                  onClick={(e) => { if (isStreaming) return; const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setThinkingDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setThinkingDropdownOpen((v) => !v); }}
-                  disabled={isStreaming}
-                  title={t("desktop.changeReasoningLevel", { level: thinkingDisplayLabel })}
+                  onClick={(e) => { const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setThinkingDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setThinkingDropdownOpen((v) => !v); }}
+                  title={isStreaming ? t("desktop.changeReasoningLevelWhileRunning", { level: thinkingDisplayLabel }) : t("desktop.changeReasoningLevel", { level: thinkingDisplayLabel })}
                   aria-label={t("desktop.reasoningLevel")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
@@ -1880,13 +1880,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     border: "none",
                     borderRadius: 6,
                     color: (thinkingLevel ?? "auto") === "off" ? "var(--text-dim)" : "var(--accent)",
-                    cursor: isStreaming ? "not-allowed" : "pointer",
+                    cursor: "pointer",
                     fontSize: 12,
-                    opacity: isStreaming ? 0.5 : 1,
                     transition: "background 0.12s, color 0.12s",
                   }}
                   onMouseEnter={(e) => {
-                    if (isStreaming) return;
                     e.currentTarget.style.background = "var(--bg-hover)";
                   }}
                   onMouseLeave={(e) => {
@@ -1895,6 +1893,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 >
                   <ThinkingLevelIcon level={thinkingLevel ?? "auto"} />
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
+                  {isStreaming && <ClockIcon size={11} weight="bold" color="var(--accent)" aria-hidden="true" />}
                   <CaretDownIcon
                     size={11}
                     weight="bold"
@@ -1917,6 +1916,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                     overflow: "hidden", minWidth: 200, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
                   }}>
+                    {isStreaming && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 11, color: "var(--accent)", borderBottom: "1px solid var(--border)", background: "var(--bg-subtle)" }}>
+                        <ClockIcon size={12} weight="bold" aria-hidden="true" />
+                        {t("desktop.configAppliesNextTurn")}
+                      </div>
+                    )}
                     {THINKING_LEVELS.filter((lvl) => {
                       if (!availableThinkingLevels) return true;
                       if (lvl === "auto") return true;
@@ -2036,12 +2041,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 backdropFilter: "blur(10px)",
               } : null),
             }}>
-            {!isStreaming && onToolPresetChange && (
+            {onToolPresetChange && (
               <div ref={toolDropdownRef} className="chat-input-toolbar-tools" style={{ position: "relative" }}>
                 <button
-                  onClick={(e) => { if (isStreaming) return; const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setToolDropdownOpen((v) => !v); }}
-                  disabled={isStreaming}
-                  title={t("desktop.changeToolPreset", { preset: toolPresetLabel })}
+                  onClick={(e) => { const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setToolDropdownOpen((v) => !v); }}
+                  title={isStreaming ? t("desktop.changeToolPresetWhileRunning", { preset: toolPresetLabel }) : t("desktop.changeToolPreset", { preset: toolPresetLabel })}
                   aria-label={t("desktop.toolPreset")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
@@ -2052,13 +2056,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     border: "none",
                     borderRadius: 6,
                     color: "var(--text-muted)",
-                    cursor: isStreaming ? "not-allowed" : "pointer",
+                    cursor: "pointer",
                     fontSize: 12,
-                    opacity: isStreaming ? 0.5 : 1,
                     transition: "background 0.12s, color 0.12s",
                   }}
                   onMouseEnter={(e) => {
-                    if (isStreaming) return;
                     e.currentTarget.style.background = "var(--bg-hover)";
                     e.currentTarget.style.color = "var(--text)";
                   }}
@@ -2068,6 +2070,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                 >
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
+                  {isStreaming && <ClockIcon size={11} weight="bold" color="var(--accent)" aria-hidden="true" />}
                   <CaretDownIcon
                     size={11}
                     weight="bold"
@@ -2092,6 +2095,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                     overflow: "hidden", minWidth: 120, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
                   }}>
+                    {isStreaming && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 11, color: "var(--accent)", borderBottom: "1px solid var(--border)", background: "var(--bg-subtle)" }}>
+                        <ClockIcon size={12} weight="bold" aria-hidden="true" />
+                        {t("desktop.configAppliesNextTurn")}
+                      </div>
+                    )}
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = (toolPreset ?? "default") === preset;
@@ -2125,7 +2134,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             )}
 
-            {/* Model selector — visible always, disabled during streaming */}
+            {/* Model selector — always interactive; changes apply from the next turn while streaming */}
             {modelOptions.length > 0 && currentName && onModelChange && (
                 <div ref={dropdownRef} className="chat-input-toolbar-model" style={{ position: "relative", flex: isMobile ? "1 1 auto" : undefined, minWidth: 0 }}>
                   <button
@@ -2135,7 +2144,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       if (!modelDropdownOpen) setModelSearch("");
                       setModelDropdownOpen((v) => !v);
                     }}
-                    disabled={isStreaming}
+                    title={isStreaming ? t("desktop.changeModelWhileRunning") : t("desktop.changeModel")}
+                    aria-label={t("desktop.changeModel")}
                     style={{
                       display: "flex", alignItems: "center", gap: 6,
                       justifyContent: isMobile ? "flex-start" : undefined,
@@ -2148,13 +2158,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       border: "none",
                       borderRadius: 6,
                       color: "var(--text-muted)",
-                      cursor: isStreaming ? "not-allowed" : "pointer",
+                      cursor: "pointer",
                       fontSize: 12,
-                      opacity: isStreaming ? 0.5 : 1,
                       transition: "background 0.12s, color 0.12s",
                     }}
                     onMouseEnter={(e) => {
-                      if (isStreaming) return;
                       e.currentTarget.style.background = "var(--bg-hover)";
                       e.currentTarget.style.color = "var(--text)";
                     }}
@@ -2165,6 +2173,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   >
                     <ProviderIcon id={model?.provider ?? "unknown"} size={14} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
+                    {isStreaming && <ClockIcon size={11} weight="bold" color="var(--accent)" aria-hidden="true" />}
                     <CaretDownIcon
                       size={11}
                       weight="bold"
@@ -2228,6 +2237,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       overflow: "hidden", maxHeight: maxH,
                       display: "flex", flexDirection: "column",
                       }}>
+                      {isStreaming && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 11, color: "var(--accent)", borderBottom: "1px solid var(--border)", background: "var(--bg-subtle)" }}>
+                          <ClockIcon size={12} weight="bold" aria-hidden="true" />
+                          {t("desktop.configAppliesNextTurn")}
+                        </div>
+                      )}
                       {/* Search area — pinned above the list, separated by a divider */}
                       <div style={{ borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
                         <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
