@@ -458,20 +458,6 @@ pre, code {
   position: relative;
   z-index: 1;
 }
-/* Streaming queue controls float from the composer's top-right corner. */
-.chat-input-shell > .chat-input-streaming-actions {
-  position: absolute;
-  z-index: 4; /* above the resize handle (z-index 3) where the row overlaps it */
-  top: -22px;
-  right: 20px;
-  display: flex;
-  align-items: stretch;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg-panel);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
-}
 /* Drag handle straddling the composer's top border. Must stay after the
    `.chat-input-shell > :not(.chat-input-streaming-overlay)` rule so its
    absolute positioning and z-index win the specificity tie. */
@@ -504,35 +490,6 @@ pre, code {
 .chat-input-shell > .chat-input-resize-handle:focus-visible::before,
 .chat-input-shell > .chat-input-resize-handle.is-resizing::before {
   opacity: 1;
-}
-.chat-input-streaming-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-left: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-}
-.chat-input-streaming-action:first-child {
-  border-left: 0;
-}
-.chat-input-streaming-action:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-.chat-input-streaming-action:disabled {
-  color: var(--text-dim);
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-.chat-input-streaming-action-steer {
-  color: var(--accent);
 }
 .chat-input-editor-row {
   display: flex;
@@ -616,10 +573,6 @@ pre, code {
   }
   .chat-input-toolbar {
     padding: 6px 12px;
-  }
-
-  .chat-input-shell > .chat-input-streaming-actions {
-    right: 12px;
   }
 }
 
