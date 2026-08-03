@@ -2334,6 +2334,41 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </div>
             )}
 
+            {/* Maximize / restore the composer height — always available (the
+                streaming queue row has a duplicate while the agent runs). */}
+            <button
+              type="button"
+              onClick={() => {
+                if (manualHeight !== null) {
+                  inputHeightResizer.resetHeight();
+                } else {
+                  inputHeightResizer.setHeight(getMaxManualHeight());
+                }
+              }}
+              title={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
+              aria-label={manualHeight !== null ? t("desktop.restoreInputHeight") : t("desktop.maximizeInput")}
+              aria-pressed={manualHeight !== null}
+              style={{
+                flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                width: 24, height: 24, padding: 0,
+                background: "none", border: "none",
+                borderRadius: 6,
+                color: manualHeight !== null ? "var(--accent)" : "var(--text-muted)",
+                cursor: "pointer",
+                transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--bg-hover)";
+                e.currentTarget.style.color = manualHeight !== null ? "var(--accent)" : "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "none";
+                e.currentTarget.style.color = manualHeight !== null ? "var(--accent)" : "var(--text-muted)";
+              }}
+            >
+              {manualHeight !== null ? <ArrowsInIcon size={14} /> : <ArrowsOutIcon size={14} />}
+            </button>
+
             {!isStreaming && (
               <button
                 type="button"
