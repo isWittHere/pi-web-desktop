@@ -1685,7 +1685,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         width: 36, height: 28, padding: 0,
                         border: 0,
                         background: "transparent",
-                        color: "var(--accent)",
+                        color: canQueueStreamingMessage ? "var(--accent)" : "var(--text-dim)",
                         cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                         opacity: canQueueStreamingMessage ? 1 : 0.55,
                         transition: "background 0.12s, color 0.12s",
@@ -1697,7 +1697,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.background = "transparent";
-                        e.currentTarget.style.color = "var(--accent)";
+                        e.currentTarget.style.color = canQueueStreamingMessage ? "var(--accent)" : "var(--text-dim)";
                       }}
                     >
                       <ArrowElbowUpLeftIcon size={15} />
@@ -1717,7 +1717,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         border: 0,
                         borderLeft: "1px solid color-mix(in srgb, var(--border) 62%, transparent)",
                         background: "transparent",
-                        color: "var(--text-muted)",
+                        color: canQueueStreamingMessage ? "var(--text-muted)" : "var(--text-dim)",
                         cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                         opacity: canQueueStreamingMessage ? 1 : 0.55,
                         transition: "background 0.12s, color 0.12s",
@@ -1729,7 +1729,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.background = "transparent";
-                        e.currentTarget.style.color = "var(--text-muted)";
+                        e.currentTarget.style.color = canQueueStreamingMessage ? "var(--text-muted)" : "var(--text-dim)";
                       }}
                     >
                       <SortDescendingIcon size={15} />
