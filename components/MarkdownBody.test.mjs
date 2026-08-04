@@ -94,6 +94,25 @@ test("non-streaming render is unchanged: no split, no streaming pre", () => {
   assert.match(html, /token[^>]*>[^<]*let/);
 });
 
+test("multi-line inline code span stays inline, not a block <div>", () => {
+  // CommonMark code spans may legally span lines inside a paragraph; the old
+  // content heuristic (raw.includes("\n")) turned this into a CodeBlock,
+  // putting <div>s inside the <p> and breaking HTML nesting/hydration.
+  // remark collapses the span's line breaks to spaces when rendering.
+  const html = renderMarkdown("考虑 `multi\nline` span");
+  assert.match(html, /<p>考虑 <code[^>]*>multi line<\/code> span<\/p>/);
+  assert.doesNotMatch(html, /markdown-code-block/);
+  assert.doesNotMatch(html, /\snode=/);
+});
+
+test("fenced blocks render as blocks while inline spans stay inline", () => {
+  const html = renderMarkdown("```js\nconst a = 1;\n```\n\ninline `x\ny` tail");
+  // Real block position (inside <pre>) still produces the block UI...
+  assert.match(html, /markdown-code-block/);
+  // ...and the multi-line inline span inside the paragraph stays inline.
+  assert.match(html, /<p>inline <code[^>]*>x y<\/code> tail<\/p>/);
+});
+
 test("Prism token colors follow theme CSS variables", async () => {
   const themeSource = await readFile(new URL("../lib/prism-theme.ts", import.meta.url), "utf8");
   const markdownSource = await readFile(new URL("./MarkdownBody.tsx", import.meta.url), "utf8");

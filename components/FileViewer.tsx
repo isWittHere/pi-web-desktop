@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useMemo, type MouseEvent } from "react";
+import { useEffect, useState, useRef, useCallback, useContext, useMemo, type MouseEvent } from "react";
 import { DownloadSimple } from "@phosphor-icons/react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import ReactMarkdown from "react-markdown";
@@ -16,7 +16,7 @@ import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePat
 import { resolveLocalFileHref } from "@/lib/file-links";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { prismTheme } from "@/lib/prism-theme";
-import { CodeBlock, MermaidBlock } from "@/components/MarkdownBody";
+import { CodeBlock, MarkdownCodeContext, MermaidBlock } from "@/components/MarkdownBody";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
 
@@ -1055,10 +1055,12 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
                 h3({ children }: React.ComponentProps<'h3'>) {
                   return <h3 id={headingId(children)}>{children}</h3>
                 },
-                code({ className, children, ...props }) {
+                code: function CodeElement({ className, children, ...props }) {
+                  // `node` is react-markdown metadata, never a DOM attribute.
+                  delete props.node;
                   const lang = className?.replace("language-", "").toLowerCase() ?? "";
                   const raw = String(children);
-                  const isBlock = className?.includes("language-") || raw.includes("\n");
+                  const isBlock = useContext(MarkdownCodeContext);
                   if (isBlock) {
                     if (lang === "mermaid") {
                       return <MermaidBlock code={raw.replace(/\n$/, "")} />;
@@ -1074,8 +1076,10 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
                     </code>
                   );
                 },
-                pre({ children }) {
-                  return <>{children}</>;
+                pre: function PreElement({ children }) {
+                  // Mark real code blocks: `code` reads this context to decide
+                  // block vs inline (newlines in inline code spans are legal).
+                  return <MarkdownCodeContext.Provider value>{children}</MarkdownCodeContext.Provider>;
                 },
                 a({ href, children, ...props }) {
                   delete props.node;

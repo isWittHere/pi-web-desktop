@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -28,6 +28,15 @@ interface MarkdownComponentsOptions {
   onOpenFile?: (filePath: string) => void;
 }
 
+/**
+ * True while rendering the children of a markdown <pre> element, i.e. a real
+ * block code element. Lets the `code` component decide block vs inline from
+ * the tree structure instead of content heuristics: CommonMark code spans may
+ * legally span multiple lines inside a <p>, so a newline in the raw text does
+ * not prove block position (rendering a <div> there breaks HTML nesting).
+ */
+export const MarkdownCodeContext = createContext(false);
+
 function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownComponentsOptions): Components {
   return {
     h1({ children }: React.ComponentProps<'h1'>) {
@@ -39,10 +48,12 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
     h3({ children }: React.ComponentProps<'h3'>) {
       return <h3 id={headingId(children)} className="scroll-mt-24 text-base font-semibold mt-3 mb-1 text-(--text)">{children}</h3>
     },
-    code({ className, children, ...props }: React.ComponentProps<'code'> & ExtraProps) {
+    code: function CodeElement({ className, children, ...props }: React.ComponentProps<'code'> & ExtraProps) {
+      // `node` is react-markdown metadata, never a DOM attribute.
+      delete props.node;
       const lang = className?.replace("language-", "").toLowerCase() ?? "";
       const raw = String(children);
-      const isBlock = className?.includes("language-") || raw.includes("\n");
+      const isBlock = useContext(MarkdownCodeContext);
       if (isBlock) {
         if (lang === "mermaid") {
           return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
@@ -58,8 +69,11 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
         </code>
       );
     },
-    pre({ children }: React.ComponentProps<'pre'> & ExtraProps) {
-      return <>{children}</>;
+    pre: function PreElement({ children }: React.ComponentProps<'pre'> & ExtraProps) {
+      // react-markdown wraps every fenced/indented code block in <pre>; inline
+      // code spans live directly inside <p>/<li>. Announce the block position so
+      // `code` can render block UI without guessing from the raw text.
+      return <MarkdownCodeContext.Provider value>{children}</MarkdownCodeContext.Provider>;
     },
     a({ href, children, ...props }: React.ComponentProps<'a'> & ExtraProps) {
       // `node` is react-markdown metadata, not a DOM attribute.
