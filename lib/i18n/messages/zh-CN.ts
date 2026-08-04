@@ -249,7 +249,7 @@ export const zhCNLocale = {
     "desktop.delete": "删除",
     "desktop.rename": "重命名",
     "desktop.draft": "草稿",
-    "desktop.untitledDraft": "未命名草稿",
+    "desktop.newSessionDraft": "新会话",
     "desktop.expandForks": "展开分支",
     "desktop.collapseForks": "折叠分支",
     "desktop.messagesCount": "{count} 条消息",

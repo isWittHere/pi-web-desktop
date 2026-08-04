@@ -249,7 +249,7 @@ export const enLocale = {
     "desktop.delete": "Delete",
     "desktop.rename": "Rename",
     "desktop.draft": "Draft",
-    "desktop.untitledDraft": "Untitled draft",
+    "desktop.newSessionDraft": "New session",
     "desktop.expandForks": "Expand forks",
     "desktop.collapseForks": "Collapse forks",
     "desktop.messagesCount": "{count} msgs",

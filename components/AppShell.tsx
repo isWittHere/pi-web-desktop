@@ -28,7 +28,7 @@ import {
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
-import { clearDraft } from "@/lib/draft-store";
+import { clearDraft, getDraft } from "@/lib/draft-store";
 import {
   createDraftSession,
   loadDraftSessions,
@@ -60,10 +60,27 @@ export function AppShell() {
   // draft key so typed text is keyed to the draft).
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const activeDraftIdRef = useRef<string | null>(null);
-  const draftSessionsRef = useRef<DraftSession[]>(draftSessions);
   useEffect(() => { activeDraftIdRef.current = activeDraftId; }, [activeDraftId]);
-  useEffect(() => { draftSessionsRef.current = draftSessions; }, [draftSessions]);
   useEffect(() => { saveDraftSessions(draftSessions); }, [draftSessions]);
+
+  // An empty new session is not a meaningful draft. Drop drafts that never
+  // received any typed content on startup (they only clutter the list).
+  useEffect(() => {
+    setDraftSessions((prev) => {
+      const meaningful = prev.filter((d) => getDraft(d.id) !== null);
+      return meaningful.length === prev.length ? prev : meaningful;
+    });
+  }, []);
+
+  // Drop the currently open draft when it never got any content (typed text
+  // or attached images). Used when leaving a draft for another session.
+  const cleanupEmptyActiveDraft = useCallback(() => {
+    const id = activeDraftIdRef.current;
+    if (!id) return;
+    if (getDraft(id)) return; // has content — keep it
+    setDraftSessions((prev) => removeDraftSession(prev, id));
+    clearDraft(id);
+  }, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
@@ -239,6 +256,8 @@ export function AppShell() {
     if (selectedSession && (selectedSession.projectRoot ?? selectedSession.cwd) === newProject) {
       return;
     }
+    // Leaving the draft for another project: an empty draft is meaningless.
+    cleanupEmptyActiveDraft();
     // Close any session that belongs to a different project — it no longer
     // matches the selected project directory.
     setSelectedSession(null);
@@ -249,7 +268,7 @@ export function AppShell() {
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
     setActiveTopPanel(null);
-  }, [selectedSession]);
+  }, [selectedSession, cleanupEmptyActiveDraft]);
 
   // Update browser tab title when workspace changes
   useEffect(() => {
@@ -258,6 +277,8 @@ export function AppShell() {
   }, [activeCwd]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+    // Leaving a draft for a real session — drop it if it never got content.
+    cleanupEmptyActiveDraft();
     setActiveDraftId(null);
     setNewSessionCwd(null);
     setSelectedSession(session);
@@ -276,21 +297,17 @@ export function AppShell() {
     if (!isRestore) {
       router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
     }
-  }, [router, isMobile]);
+  }, [router, isMobile, cleanupEmptyActiveDraft]);
 
   const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
-    // If a draft for this cwd is already open, refocus it (the typed text and
-    // the draft row stay) instead of stacking a duplicate draft.
-    const activeDraft = activeDraftIdRef.current
-      ? draftSessionsRef.current.find((d) => d.id === activeDraftIdRef.current && d.cwd === cwd)
-      : undefined;
-    if (!activeDraft) {
-      // Register a client-side draft so the session shows up in the sidebar
-      // list right away — pi has not created anything yet.
-      const draft = createDraftSession(cwd);
-      setDraftSessions((prev) => [draft, ...prev]);
-      setActiveDraftId(draft.id);
-    }
+    // An empty draft is meaningless: drop the current one (if it never got
+    // content) before starting a new session.
+    cleanupEmptyActiveDraft();
+    // Register a client-side draft so the session shows up in the sidebar
+    // list right away — pi has not created anything yet.
+    const draft = createDraftSession(cwd);
+    setDraftSessions((prev) => [draft, ...prev]);
+    setActiveDraftId(draft.id);
     setSelectedSession(null);
     setNewSessionCwd(cwd);
     setSessionKey((k) => k + 1);
@@ -298,7 +315,7 @@ export function AppShell() {
     setActiveTopPanel(null);
     if (isMobile) setSidebarOpen(false);
     router.replace("/", { scroll: false });
-  }, [router, isMobile]);
+  }, [router, isMobile, cleanupEmptyActiveDraft]);
 
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
@@ -362,6 +379,19 @@ export function AppShell() {
 
   // Reopen a draft in the composer (from a sidebar click).
   const handleSelectDraft = useCallback((draft: DraftSession) => {
+    const wasActive = activeDraftIdRef.current === draft.id;
+    // Leaving a draft for another session — drop it if it never got content.
+    cleanupEmptyActiveDraft();
+    if (wasActive && !getDraft(draft.id)) {
+      // The open draft was empty and got cleaned up — nothing to reopen.
+      setActiveDraftId(null);
+      setNewSessionCwd(null);
+      setSessionKey((k) => k + 1);
+      setSystemPrompt(null);
+      setActiveTopPanel(null);
+      router.replace("/", { scroll: false });
+      return;
+    }
     setActiveDraftId(draft.id);
     setSelectedSession(null);
     setNewSessionCwd(draft.cwd);
@@ -370,7 +400,7 @@ export function AppShell() {
     setActiveTopPanel(null);
     if (isMobile) setSidebarOpen(false);
     router.replace("/", { scroll: false });
-  }, [router, isMobile]);
+  }, [router, isMobile, cleanupEmptyActiveDraft]);
 
   const handleDeleteDraft = useCallback((draftId: string) => {
     setDraftSessions((prev) => removeDraftSession(prev, draftId));

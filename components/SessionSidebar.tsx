@@ -1806,7 +1806,7 @@ function SessionItem({
   const renameMeasureRef = useRef<HTMLSpanElement>(null);
 
   const title = session.name
-    || (session.isDraft ? t("desktop.untitledDraft") : session.firstMessage.slice(0, 50))
+    || (session.isDraft ? t("desktop.newSessionDraft") : session.firstMessage.slice(0, 50))
     || session.id.slice(0, 12);
 
   // A two-pixel overlay gives the otherwise native one-pixel input caret a
