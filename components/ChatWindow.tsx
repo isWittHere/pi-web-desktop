@@ -154,7 +154,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     isNew,
     branchTree, activeLeafId: branchActiveLeafId, handleLeafChange,
     sessionIdRef, messagesEndRef, scrollContainerRef,
-    lastUserMsgRef,
+    lastUserMsgRef, initialScrollDoneRef,
     handleSend, executeBash, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
@@ -190,6 +190,10 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
 
   const scrollToBottomAfterProcessExpansion = useCallback(() => {
     window.requestAnimationFrame(() => {
+      // On a fresh mount the initial scroll is deferred until the running
+      // state is known and performs a single positioning; skip the early
+      // auto-expand reposition so it cannot cause a double scroll jump.
+      if (!initialScrollDoneRef.current) return;
       const container = scrollContainerRef.current;
       if (!container) return;
       // While running, a full-viewport reserve spacer sits below the message
@@ -202,7 +206,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
       });
       updateChatFades();
     });
-  }, [scrollContainerRef, updateChatFades, agentRunning]);
+  }, [scrollContainerRef, updateChatFades, agentRunning, initialScrollDoneRef]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;

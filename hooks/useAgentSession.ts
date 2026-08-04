@@ -347,6 +347,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
+  // Set once the mount-time session/state load completes. The initial scroll
+  // waits for this so it performs exactly one positioning after the running
+  // state is known — no re-positioning flicker on session select.
+  const [mountCheckDone, setMountCheckDone] = useState(false);
   const [agentRunning, setAgentRunning] = useState(false);
   const [bashRunning, setBashRunning] = useState(false);
   const [pendingBash, setPendingBash] = useState<{ command: string; excludeFromContext: boolean } | null>(null);
@@ -1723,13 +1727,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             setAgentRunning(true);
             setAgentPhase(agentState.state.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
             dispatch({ type: "start" });
-            // The initial mount scroll ran before the running state was known
-            // (no live tail / reserve spacer yet), so it targeted the file
-            // snapshot. Now that the agent is known to still be running,
-            // re-anchor the viewport so the continuing output is visible —
-            // otherwise it ends up just outside the viewport and no later
-            // streaming event moves it back.
-            window.requestAnimationFrame(() => scrollToBottom("instant"));
             void connectEvents(session.id);
             if (!agentState.state.isStreaming && agentState.state.isPromptRunning) {
               void waitForPromptSettlement(session.id);
@@ -1745,6 +1742,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (agentState.state.extensionWidgets !== undefined) setExtensionWidgets(agentState.state.extensionWidgets ?? []);
           if (agentState.state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(agentState.state.queuedMessages));
         }
+        // The deferred initial scroll (see scroll effect) fires once this
+        // flag is set: by now the running state has been applied, so it lands
+        // at the correct position (reserve spacer present if still running)
+        // exactly once, without re-positioning flicker.
+        setMountCheckDone(true);
       });
     }
     return () => {
@@ -1795,14 +1797,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         pendingScrollToUserRef.current = false;
         initialScrollDoneRef.current = true;
         scrollUserMsgToTop();
-      } else if (!initialScrollDoneRef.current) {
+      } else if (!initialScrollDoneRef.current && mountCheckDone) {
+        // Single deferred initial scroll: mountCheckDone is set only after
+        // the running state has been applied, so this lands at the correct
+        // position exactly once (no re-positioning flicker on session select).
         initialScrollDoneRef.current = true;
         scrollToBottom("instant");
       } else if (!agentRunningRef.current && completionScrollAllowedRef.current) {
         scrollToBottom("smooth");
       }
     }
-  }, [messages.length, agentRunning, scrollToBottom, scrollUserMsgToTop]);
+  }, [messages.length, agentRunning, mountCheckDone, scrollToBottom, scrollUserMsgToTop]);
 
   // Load model list
   useEffect(() => {
