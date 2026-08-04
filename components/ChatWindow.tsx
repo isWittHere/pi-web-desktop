@@ -188,26 +188,14 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     setShowChatBottomFade(remaining > 1);
   }, [scrollContainerRef]);
 
-  const scrollToBottomAfterProcessExpansion = useCallback(() => {
-    window.requestAnimationFrame(() => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-      // Position at the message list end rather than the reserve spacer so the
-      // streaming output stays visible when the session is running.
-      const spacerHeight = agentRunning ? container.clientHeight : 0;
-      container.scrollTop = Math.max(0, container.scrollHeight - spacerHeight - container.clientHeight);
-      updateChatFades();
-    });
-  }, [scrollContainerRef, updateChatFades, agentRunning]);
-
   // --- Open-positioning: never show a scroll from the top ---
   // On open, the message list is rendered hidden (visibility: hidden, layout
   // preserved) behind the "loading session" overlay and positioned by a
   // layout effect before the browser paints. Layout-affecting post-mount
-  // effects (auto-expanded process steps, reserve spacer, running state)
-  // commit while still hidden and each commit re-positions. Once the layout
-  // has had a few frames to settle, the overlay lifts and the session appears
-  // already at its final position — no scroll motion, no flash.
+  // effects (reserve spacer, running state) commit while still hidden and
+  // each commit re-positions. Once the layout has had a few frames to settle,
+  // the overlay lifts and the session appears already at its final position
+  // — no scroll motion, no flash.
   const [openPositioning, setOpenPositioning] = useState(true);
 
   useLayoutEffect(() => {
@@ -226,8 +214,8 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
       setOpenPositioning(false);
       return;
     }
-    // Give post-mount layout effects (auto-expand, spacer) a few frames to
-    // commit and be re-positioned while the session is still hidden.
+    // Give post-mount layout effects (reserve spacer, running state) a few
+    // frames to commit and be re-positioned while the session is still hidden.
     let cancelled = false;
     const raf = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -878,8 +866,6 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
                       <ProcessGroup
                         blocks={processBlocks}
                         isStreaming={false}
-                        defaultExpanded={!finalAnswerMessage}
-                        onAutoExpanded={finalAnswerMessage ? undefined : scrollToBottomAfterProcessExpansion}
                         cwd={messageCwd}
                         onOpenFile={onOpenFile}
                         sessionId={session?.id ?? sessionIdRef.current ?? undefined}

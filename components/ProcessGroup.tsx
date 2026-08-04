@@ -38,8 +38,6 @@ import { getFileIcon } from "./FileIcons";
 interface ProcessGroupProps {
   blocks: ProcessContentBlock[];
   isStreaming: boolean;
-  defaultExpanded?: boolean;
-  onAutoExpanded?: () => void;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   sessionId?: string;
@@ -690,8 +688,6 @@ function stepHasContent(step: Step): boolean {
 export function ProcessGroup({
   blocks,
   isStreaming,
-  defaultExpanded = false,
-  onAutoExpanded,
   cwd,
   onOpenFile,
   sessionId,
@@ -699,7 +695,7 @@ export function ProcessGroup({
   const { t } = useI18n();
   const ts: BuildLabelFn = useCallback((key: string) => t(key as Parameters<typeof t>[0]), [t]);
   const steps = useMemo(() => buildProcessSteps(blocks, ts, isStreaming), [blocks, ts, isStreaming]);
-  const [areaExpanded, setAreaExpanded] = useState(isStreaming || defaultExpanded);
+  const [areaExpanded, setAreaExpanded] = useState(isStreaming);
   const [stepStates, setStepStates] = useState<Record<string, boolean>>({});
   const { displayMode, setDisplayMode } = useProcessDisplayMode();
   const [activeTab, setActiveTab] = useState(0);
@@ -708,7 +704,6 @@ export function ProcessGroup({
   const scrollRef = useRef<HTMLDivElement>(null);
   const wasStreamingRef = useRef(false);
   const hasUserSelectedTabRef = useRef(false);
-  const hasAppliedDefaultExpansionRef = useRef(false);
   const userScrolledUpRef = useRef(false);
   const ignoreProgrammaticScrollUntilRef = useRef(0);
 
@@ -725,15 +720,6 @@ export function ProcessGroup({
     wasStreamingRef.current = false;
     return () => window.clearTimeout(timer);
   }, [isStreaming]);
-
-  useEffect(() => {
-    if (defaultExpanded && !isStreaming && !hasAppliedDefaultExpansionRef.current && steps.length > 0) {
-      const latest = steps[steps.length - 1];
-      hasAppliedDefaultExpansionRef.current = true;
-      setStepStates({ [latest.id]: true });
-      window.requestAnimationFrame(() => onAutoExpanded?.());
-    }
-  }, [defaultExpanded, isStreaming, onAutoExpanded, steps]);
 
   useEffect(() => {
     if (steps.length === 0) return;
