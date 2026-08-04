@@ -6,7 +6,7 @@ import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { collectProcessContentBlocks, splitAssistantContentBlocks } from "@/lib/process-content";
 import { MessageView } from "./MessageView";
-import { ProcessGroup } from "./ProcessGroup";
+import { ProcessGroup, buildProcessSteps } from "./ProcessGroup";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { SessionInfoBar } from "./SessionInfoBar";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
@@ -308,6 +308,53 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
 
+  // Live step label for the streaming-actions row: mirrors the render loop's
+  // live-tail derivation so the composer shows the current step name
+  // (thinking / editing / reading / executing / outputting…).
+  const currentStepLabel = useMemo(() => {
+    // Compaction runs outside a prompt (agentRunning stays false), so it must
+    // be checked before the running/streaming early-out.
+    if (isCompacting) return t("desktop.compacting" as Parameters<typeof t>[0]);
+    if (!agentRunning && !streamState.isStreaming) return null;
+    const stepLabelTs = (key: string) => t(key as Parameters<typeof t>[0]);
+
+    const toolResultsMap = new Map<string, ToolResultMessage>();
+    for (const msg of messages) {
+      if (msg.role === "toolResult") {
+        toolResultsMap.set((msg as ToolResultMessage).toolCallId, msg as ToolResultMessage);
+      }
+    }
+    let lastUserIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") { lastUserIdx = i; break; }
+    }
+
+    const processIndices: number[] = [];
+    for (let i = lastUserIdx + 1; i < messages.length; i++) {
+      if (hasDisplayableProcessMessage(messages[i])) processIndices.push(i);
+    }
+    let processBlocks = collectProcessContentBlocks(messages, entryIds, processIndices, toolResultsMap);
+
+    let hasStreamingAnswer = false;
+    if (streamState.streamingMessage?.role === "assistant") {
+      const streamingAssistant = streamState.streamingMessage as AssistantMessage;
+      const streamingContent = splitAssistantContentBlocks(streamingAssistant, {
+        messageIndex: messages.length,
+        toolResults: toolResultsMap,
+        isStreaming: true,
+      });
+      processBlocks = processBlocks.concat(streamingContent.processBlocks);
+      hasStreamingAnswer = splitFinalAssistantBlocks(streamingAssistant, { isStreaming: true }).answerBlocks.length > 0;
+    }
+
+    const steps = buildProcessSteps(processBlocks, stepLabelTs, true);
+    if (steps.length === 0) {
+      return phaseLabel(agentPhase, t) ?? null;
+    }
+    if (hasStreamingAnswer) return t("desktop.sessionStatusOutput" as Parameters<typeof t>[0]);
+    return steps[steps.length - 1].label;
+  }, [agentRunning, streamState, messages, entryIds, agentPhase, isCompacting, t]);
+
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
     : null;
@@ -326,6 +373,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onFollowUp={agentRunning ? handleFollowUp : undefined}
       onPromptWithStreamingBehavior={agentRunning ? handlePromptWithStreamingBehavior : undefined}
       isStreaming={agentRunning}
+      stepLabel={currentStepLabel}
       model={displayModelValue}
       isAutoModelSelection={isAutoModelSelection}
       modelNames={modelNames}

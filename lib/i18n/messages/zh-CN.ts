@@ -496,6 +496,7 @@ export const zhCNLocale = {
     "desktop.processCustomsCount": "{count} 个事件",
     "desktop.processCompleted": "处理完成",
     "desktop.processOutput": "处理输出",
+    "desktop.sessionStatusOutput": "输出结果",
     "desktop.processTabMode": "标签页模式",
     "desktop.processTimelineMode": "时间线模式",
     "desktop.processFailedStep": "失败",

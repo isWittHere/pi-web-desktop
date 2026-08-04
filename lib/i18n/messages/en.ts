@@ -496,6 +496,7 @@ export const enLocale = {
     "desktop.processCustomsCount": "{count} events",
     "desktop.processCompleted": "Process complete",
     "desktop.processOutput": "Process output",
+    "desktop.sessionStatusOutput": "Outputting",
     "desktop.processTabMode": "Tab mode",
     "desktop.processTimelineMode": "Timeline mode",
     "desktop.processFailedStep": "failed",

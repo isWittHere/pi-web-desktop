@@ -54,6 +54,8 @@ interface Props {
   onFollowUp?: (message: string, images?: AttachedImage[]) => void;
   onPromptWithStreamingBehavior?: (message: string, behavior: "steer" | "followUp", images?: AttachedImage[]) => void;
   isStreaming: boolean;
+  /** Current agent step name (thinking / editing / reading / executing…) shown in the streaming-actions row */
+  stepLabel?: string | null;
   model?: { provider: string; modelId: string } | null;
   isAutoModelSelection?: boolean;
   modelNames?: Record<string, string>;
@@ -91,6 +93,18 @@ export interface ChatInputHandle {
 const TOOL_PRESETS = ["off", "default", "full"] as const;
 const TOOL_PRESET_MAP: Record<"off" | "default" | "full", "none" | "default" | "full"> = { off: "none", default: "default", full: "full" };
 const COMPOSITION_END_ENTER_GRACE_MS = 100;
+// Step pill lyric-roll: one viewport line per label, old text slides up while
+// the new one slides in from below. Keep STEP_LINE_H in sync with the pill height.
+const STEP_LINE_H = 28;
+const STEP_ROLL_MS = 220;
+// Step pill geometry: horizontal padding and border width (per side) that the
+// measured label width must be padded by to size the pill.
+const STEP_PILL_PAD_X = 10;
+const STEP_PILL_BORDER = 1;
+// The visible label is kept for this long after stepLabel goes null so the
+// collapse animation still shows the text while the pill shrinks. Must stay
+// above STEP_ROLL_MS (the width-transition beat) to cover the whole collapse.
+const STEP_LABEL_GRACE_MS = 300;
 const MODEL_OPTION_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 // Content-driven textarea growth is capped at this (existing behavior). The
@@ -285,7 +299,7 @@ function NextTurnBanner() {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelScopeWarnings, onModelChange,
+  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, stepLabel, model, isAutoModelSelection, modelNames, modelList, modelScopeWarnings, onModelChange,
   compactResult, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
@@ -298,6 +312,62 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
+
+  // Step pill: measure its natural width so the independent status button can
+  // animate its width when the label appears, changes, or disappears. The
+  // visible label is kept for a short grace period after stepLabel goes null
+  // so the collapse animation still shows the text while it shrinks.
+  const measureStepSpanRef = useRef<HTMLSpanElement | null>(null);
+  const [stepLabelWidth, setStepLabelWidth] = useState(0);
+  const [visibleStepLabel, setVisibleStepLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (stepLabel) {
+      setVisibleStepLabel(stepLabel);
+    } else {
+      const timer = window.setTimeout(() => setVisibleStepLabel(null), STEP_LABEL_GRACE_MS);
+      return () => window.clearTimeout(timer);
+    }
+  }, [stepLabel]);
+
+  // Lyric-style vertical roll: when the step label changes, the old text
+  // slides up out of the pill while the new text slides in from below. The
+  // transition runs on the same stack element (transform 0 -> -STEP_LINE_H),
+  // so a single state update kicks off the animation; the settle update that
+  // drops the outgoing line runs with transition disabled to avoid a jump.
+  const [stepRoll, setStepRoll] = useState<{ current: string | null; next: string | null; offset: number }>({ current: null, next: null, offset: 0 });
+  const stepRollTimerRef = useRef<number | null>(null);
+  const stepPillMaxWidth = isMobile ? 120 : 220;
+  useEffect(() => {
+    const label = visibleStepLabel;
+    setStepRoll((prev) => {
+      if (prev.current === label) return prev;
+      if (label === null) return { current: null, next: null, offset: 0 };
+      if (prev.current === null) return { current: label, next: null, offset: 0 };
+      return { current: prev.current, next: label, offset: -STEP_LINE_H };
+    });
+    if (label === null) return;
+    stepRollTimerRef.current = window.setTimeout(() => {
+      stepRollTimerRef.current = null;
+      setStepRoll((prev) => (prev.next ? { current: prev.next, next: null, offset: 0 } : prev));
+    }, STEP_ROLL_MS);
+    return () => {
+      if (stepRollTimerRef.current !== null) window.clearTimeout(stepRollTimerRef.current);
+    };
+  }, [visibleStepLabel]);
+
+  // The pill width settles on the *incoming* label so the width transition and
+  // the lyric roll start and end together. A hidden, position:fixed span (out
+  // of the width chain, so its measurement cannot feed back into the pill
+  // width) reports the natural text width; clamp to the pill cap and add
+  // padding + border (wrapper is border-box).
+  useEffect(() => {
+    const label = stepRoll.next ?? visibleStepLabel;
+    if (!label) return;
+    const el = measureStepSpanRef.current;
+    if (!el) return;
+    const width = Math.min(el.offsetWidth, stepPillMaxWidth - STEP_PILL_PAD_X * 2) + (STEP_PILL_PAD_X + STEP_PILL_BORDER) * 2;
+    setStepLabelWidth((prev) => (Math.abs(prev - width) > 1 ? width : prev));
+  }, [visibleStepLabel, stepRoll, stepPillMaxWidth]);
   // Thinking levels are model-facing identifiers, so keep their labels in English.
   const thinkingLevelLabels: Record<typeof THINKING_LEVELS[number], string> = {
     auto: "auto",
@@ -1665,6 +1735,78 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               gap: 6,
             }}
           >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "stretch",
+                overflow: "hidden",
+                width: stepLabel ? stepLabelWidth : 0,
+                opacity: stepLabel ? 1 : 0,
+                marginRight: stepLabel ? 0 : -6,
+                border: "1px solid color-mix(in srgb, var(--border) 62%, transparent)",
+                borderRadius: 7,
+                background: "var(--bg-panel)",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.07)",
+                // Width animates on the same beat as the lyric roll and settles
+                // directly on the incoming label's width (measured out-of-chain),
+                // so both finish together and no trailing width animation runs
+                // after the text switch.
+                transition: `width ${STEP_ROLL_MS}ms cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease, margin-right ${STEP_ROLL_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+              }}
+            >
+              {visibleStepLabel && (
+                <button
+                  type="button"
+                  title={visibleStepLabel}
+                  aria-label={visibleStepLabel}
+                  style={{
+                    display: "flex", alignItems: "center",
+                    flexShrink: 0,
+                    width: "100%",
+                    maxWidth: stepPillMaxWidth, height: STEP_LINE_H, padding: `0 ${STEP_PILL_PAD_X}px`,
+                    border: 0,
+                    background: "transparent",
+                    color: "var(--text-muted)",
+                    cursor: "default",
+                    fontSize: 12,
+                    lineHeight: 1,
+                  }}
+                >
+                  <div style={{ position: "relative", overflow: "hidden", height: STEP_LINE_H, width: "100%" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        transform: `translateY(${stepRoll.offset}px)`,
+                        transition: stepRoll.next !== null
+                          ? `transform ${STEP_ROLL_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`
+                          : "none",
+                      }}
+                    >
+                      {stepRoll.current !== null && (
+                        <span style={{ height: STEP_LINE_H, display: "flex", alignItems: "center", justifyContent: "flex-end", whiteSpace: "nowrap", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {stepRoll.current}
+                        </span>
+                      )}
+                      {stepRoll.next !== null && (
+                        <span style={{ height: STEP_LINE_H, display: "flex", alignItems: "center", justifyContent: "flex-end", whiteSpace: "nowrap", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {stepRoll.next}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+            {/* Hidden, out-of-flow measuring span: reports the natural label
+                width without being affected by the pill's animated width. */}
+            <span
+              ref={measureStepSpanRef}
+              aria-hidden="true"
+              style={{ position: "fixed", visibility: "hidden", pointerEvents: "none", whiteSpace: "nowrap", fontSize: 12, lineHeight: 1 }}
+            >
+              {stepRoll.next ?? visibleStepLabel ?? ""}
+            </span>
             {(isStreaming && (onSteer || onFollowUp)) && (
               <div
                 style={{
