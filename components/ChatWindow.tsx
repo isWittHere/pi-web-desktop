@@ -202,6 +202,18 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     if (!openPositioning) return;
     const container = scrollContainerRef.current;
     if (!container) return;
+    if (agentRunning) {
+      // Opening a running session: anchor the last user message at the top of
+      // the viewport, matching the post-send auto-scroll, so the current turn
+      // (steps + streaming output) is visible below it.
+      const userMsg = lastUserMsgRef.current;
+      if (userMsg) {
+        const userMsgTop = userMsg.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+        container.scrollTop = Math.max(0, userMsgTop - 16);
+        updateChatFades();
+        return;
+      }
+    }
     const spacerHeight = agentRunning ? container.clientHeight : 0;
     container.scrollTop = Math.max(0, container.scrollHeight - spacerHeight - container.clientHeight);
     updateChatFades();
