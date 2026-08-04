@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ArrowClockwise, CaretDown, CaretRight, Check, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
 import type { SessionInfo } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
+import { getDraft } from "@/lib/draft-store";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { QuickChangesPanel } from "./QuickChangesPanel";
@@ -459,18 +460,21 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Draft rows are merged with server sessions: they appear under their cwd's
   // project, sorted by their modifiedAt timestamp. Real sessions dedupe by id.
-  const draftRows = useMemo(() => {
-    if (!draftSessions || draftSessions.length === 0) return [] as SessionRow[];
-    return draftSessions.map((d) => ({
-      ...draftToSessionInfo(d),
-      projectRoot: projectRootFor(d.cwd) ?? d.cwd,
-      isDraft: true,
-    }));
-  }, [draftSessions, projectRootFor]);
-  const allRows = useMemo<SessionRow[]>(
-    () => [...draftRows, ...allSessions],
-    [draftRows, allSessions],
-  );
+  // The content preview is read from the draft store on each render so a draft
+  // row reflects the latest typed text after a refresh/switch (the draft store
+  // is not React state, so it cannot participate in memo deps).
+  const draftRows: SessionRow[] = draftSessions && draftSessions.length > 0
+    ? draftSessions.map((d) => {
+        const draftText = getDraft(d.id)?.value ?? "";
+        return {
+          ...draftToSessionInfo(d),
+          firstMessage: draftText,
+          projectRoot: projectRootFor(d.cwd) ?? d.cwd,
+          isDraft: true,
+        };
+      })
+    : [];
+  const allRows: SessionRow[] = [...draftRows, ...allSessions];
 
   // Notify parent only when the effective cwd actually changes (not when
   // projectRootFor identity changes due to session/worktree refreshes).
@@ -531,7 +535,13 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
-    if (allRows.length === 0) return;
+    // Drafts and server sessions both contribute rows; build the combined list
+    // here (not in render) so the effect deps stay stable references.
+    const rows: SessionRow[] = [
+      ...(draftSessions ?? []).map((d) => ({ ...draftToSessionInfo(d), isDraft: true as const })),
+      ...allSessions,
+    ];
+    if (rows.length === 0) return;
 
     if (selectedCwd === null) {
       // If restoring a session, set cwd to match that session
@@ -547,10 +557,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         onInitialRestoreDone?.();
       }
       // Include drafts so a project that only has drafts is still selected.
-      const projects = getRecentProjects(allRows);
+      const projects = getRecentProjects(rows);
       if (projects.length > 0) setSelectedCwd(projects[0]);
     }
-  }, [allRows, allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
+  }, [draftSessions, allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
 
   const commitCustomPath = useCallback(async (candidate?: string) => {
     const path = (candidate ?? customPathValue).trim();
@@ -1816,7 +1826,9 @@ function SessionItem({
   const renameMeasureRef = useRef<HTMLSpanElement>(null);
 
   const title = session.name
-    || (session.isDraft ? t("desktop.newSessionDraft") : session.firstMessage.slice(0, 50))
+    || (session.isDraft
+        ? (session.firstMessage.slice(0, 50) || t("desktop.newSessionDraft"))
+        : session.firstMessage.slice(0, 50))
     || session.id.slice(0, 12);
 
   // A two-pixel overlay gives the otherwise native one-pixel input caret a
