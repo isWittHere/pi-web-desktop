@@ -123,11 +123,23 @@ export async function GET(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
+    const searchParams = new URL(req.url).searchParams;
+    // Meta-only probe: proves whether the session file has changed since a
+    // cached snapshot was taken (mtime), without parsing the session file.
+    // Used by the client session cache to skip the full reload when fresh.
+    if (searchParams.has("meta")) {
+      try {
+        const modified = statSync(filePath).mtime.toISOString();
+        return NextResponse.json({ sessionId: id, exists: true, modified });
+      } catch {
+        return NextResponse.json({ sessionId: id, exists: false, modified: null });
+      }
+    }
+
     const sm = SessionManager.open(filePath);
     const entries = sm.getEntries() as never;
     const leafId = sm.getLeafId();
     const tree = projectTreeForResponse(sm.getTree());
-    const searchParams = new URL(req.url).searchParams;
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
     const context = buildSessionContext(entries, leafId, { deferThinking, deferToolResultImages });
