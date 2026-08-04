@@ -302,7 +302,12 @@ export function AppShell() {
             openWelcomeDraft(cwd, projectKey);
             return;
           }
+          // Selecting the session must remount the chat with the session
+          // present: useAgentSession loads content in a mount-only effect, so
+          // the null-session welcome mount from the switch would never load
+          // the restored session's messages.
           setSelectedSession(s);
+          setSessionKey((k) => k + 1);
           if (new URLSearchParams(window.location.search).get("session") !== s.id) {
             router.replace(`?session=${encodeURIComponent(s.id)}`, { scroll: false });
           }
