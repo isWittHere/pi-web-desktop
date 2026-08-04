@@ -1779,8 +1779,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         initialScrollDoneRef.current = true;
         scrollUserMsgToTop();
       } else if (!initialScrollDoneRef.current) {
+        // ChatWindow positions the initial viewport pre-paint in a layout
+        // effect while the session is hidden behind the loading overlay;
+        // there is nothing to scroll here.
         initialScrollDoneRef.current = true;
-        scrollToBottom("instant");
       } else if (!agentRunningRef.current && completionScrollAllowedRef.current) {
         scrollToBottom("smooth");
       }

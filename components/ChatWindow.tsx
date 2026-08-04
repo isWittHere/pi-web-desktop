@@ -1,6 +1,6 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
@@ -192,10 +192,55 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     window.requestAnimationFrame(() => {
       const container = scrollContainerRef.current;
       if (!container) return;
-      container.scrollTop = container.scrollHeight;
+      // Position at the message list end rather than the reserve spacer so the
+      // streaming output stays visible when the session is running.
+      const spacerHeight = agentRunning ? container.clientHeight : 0;
+      container.scrollTop = Math.max(0, container.scrollHeight - spacerHeight - container.clientHeight);
       updateChatFades();
     });
-  }, [scrollContainerRef, updateChatFades]);
+  }, [scrollContainerRef, updateChatFades, agentRunning]);
+
+  // --- Open-positioning: never show a scroll from the top ---
+  // On open, the message list is rendered hidden (visibility: hidden, layout
+  // preserved) behind the "loading session" overlay and positioned by a
+  // layout effect before the browser paints. Layout-affecting post-mount
+  // effects (auto-expanded process steps, reserve spacer, running state)
+  // commit while still hidden and each commit re-positions. Once the layout
+  // has had a few frames to settle, the overlay lifts and the session appears
+  // already at its final position — no scroll motion, no flash.
+  const [openPositioning, setOpenPositioning] = useState(true);
+
+  useLayoutEffect(() => {
+    if (!openPositioning) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const spacerHeight = agentRunning ? container.clientHeight : 0;
+    container.scrollTop = Math.max(0, container.scrollHeight - spacerHeight - container.clientHeight);
+    updateChatFades();
+  });
+
+  useEffect(() => {
+    if (!openPositioning) return;
+    if (loading) return;
+    if (messages.length === 0) {
+      setOpenPositioning(false);
+      return;
+    }
+    // Give post-mount layout effects (auto-expand, spacer) a few frames to
+    // commit and be re-positioned while the session is still hidden.
+    let cancelled = false;
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) setOpenPositioning(false);
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [loading, messages.length, openPositioning, agentRunning]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -465,6 +510,12 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
         </div>
       )}
 
+      {openPositioning && messages.length > 0 && (
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-[var(--bg)] text-text-muted">
+          {t("desktop.loadingSession")}
+        </div>
+      )}
+
       {extensionDialog && (
         <ExtensionDialog
           request={extensionDialog}
@@ -602,7 +653,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
           </div>
         </div>
         <div className="relative flex-1 min-h-0 min-w-0">
-          <div ref={scrollContainerRef} className="h-full min-w-0 overflow-x-hidden overflow-y-auto pt-4 [scrollbar-width:none]">
+          <div ref={scrollContainerRef} className={`h-full min-w-0 overflow-x-hidden overflow-y-auto pt-4 [scrollbar-width:none]${openPositioning ? " invisible" : ""}`}>
             <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
             <div style={{ width: "100%", minWidth: 0, maxWidth: 820, margin: "0 auto" }}>
               <ExtensionStatusBar statuses={extensionStatuses} />
