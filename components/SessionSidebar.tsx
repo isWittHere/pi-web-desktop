@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowClockwise, CaretDown, CaretRight, Check, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
+import { ArrowClockwise, CaretDown, CaretRight, Check, CircleDashed, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
 import type { SessionInfo } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
@@ -1979,6 +1979,25 @@ function SessionItem({
               }}
               title={isRunning ? `${title} · ${t("desktop.agentRunning")}` : isUnread ? `${title} · ${t("desktop.newActivity")}` : title}
             >
+              {/* Draft placeholder icon — same slot as the running/unread
+                  indicators, aligned with the title text line. */}
+              {session.isDraft && (
+                <span
+                  title={t("desktop.unsent")}
+                  aria-label={t("desktop.unsent")}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    color: "var(--text-dim)",
+                  }}
+                >
+                  <CircleDashed size={14} weight="regular" aria-hidden="true" />
+                </span>
+              )}
               {isRunning ? <RunningSessionIndicator /> : isUnread ? <UnreadSessionIndicator /> : null}
               {renaming ? (
                 <div
@@ -2063,29 +2082,6 @@ function SessionItem({
                   {title}
                 </span>
               )}
-              {/* Draft badge — unsent sessions are marked so users can tell
-                  them apart from real (persisted) sessions. */}
-              {session.isDraft && (
-                <span
-                  title={t("desktop.draft")}
-                  style={{
-                    flexShrink: 0,
-                    fontSize: 9,
-                    fontWeight: 600,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    color: "var(--text-dim)",
-                    background: "color-mix(in srgb, var(--accent) 16%, var(--bg))",
-                    border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border))",
-                    borderRadius: 4,
-                    padding: "1px 5px",
-                    lineHeight: 1.4,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {t("desktop.draft")}
-                </span>
-              )}
               {/* Collapse toggle — always visible when has children */}
               {hasChildren && (
                 <button
@@ -2152,7 +2148,9 @@ function SessionItem({
             {/* Metadata row */}
             <div style={{ marginTop: 2, display: "flex", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
               <span title={session.modified}>{formatRelativeTime(session.modified, t)}</span>
-              <span>{t("desktop.messagesCount", { count: session.messageCount })}</span>
+              {session.isDraft
+                ? <span>{t("desktop.unsent")}</span>
+                : <span>{t("desktop.messagesCount", { count: session.messageCount })}</span>}
               {session.worktreeBranch && (
                 <span
                   title={t("desktop.worktree", { cwd: session.cwd })}

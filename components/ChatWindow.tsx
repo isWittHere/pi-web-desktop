@@ -653,7 +653,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
           </div>
         </div>
         <div className="relative flex-1 min-h-0 min-w-0">
-          <div ref={scrollContainerRef} className={`h-full min-w-0 overflow-x-hidden overflow-y-auto pt-4 [scrollbar-width:none]${openPositioning ? " invisible" : ""}`}>
+          <div ref={scrollContainerRef} className={`chat-scroll-container h-full min-w-0 overflow-x-hidden overflow-y-auto pt-4${openPositioning ? " invisible" : ""}`} style={{ scrollbarWidth: "none" }}>
             <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
             <div style={{ width: "100%", minWidth: 0, maxWidth: 820, margin: "0 auto" }}>
               <ExtensionStatusBar statuses={extensionStatuses} />

@@ -229,6 +229,18 @@ body {
   background: var(--text-dim);
 }
 
+/* Chat message list scroll container: the scrollbar is hidden on purpose —
+   the right-edge minimap is the designated scroll-position indicator. The
+   Tailwind arbitrary class [scrollbar-width:none] is unreliable here (Turbopack
+   does not always emit it), so the rule lives in plain CSS and is backed by an
+   inline scrollbarWidth style on the element. */
+.chat-scroll-container {
+  scrollbar-width: none;
+}
+.chat-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
 :root {
   --font-mono: 'Lilex', "zedMono Fallback", 'JetBrains Mono', 'Fira Code', 'Consolas', ui-monospace, 'PingFang SC', 'Microsoft YaHei', monospace;
 }

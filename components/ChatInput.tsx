@@ -447,6 +447,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [fileIndex, setFileIndex] = useState<{ cwd: string; entries: FileIndexEntry[]; truncated: boolean } | null>(null);
   const [fileIndexLoading, setFileIndexLoading] = useState(false);
   const [atServerResult, setAtServerResult] = useState<{ cwd: string; query: string; matches: FileIndexEntry[] } | null>(null);
+  // Whether the composer textarea currently holds focus. Drives the
+  // conditional visibility of the floating maximize/restore button above the
+  // input box — it only appears while the user is typing-focused.
+  const [inputFocused, setInputFocused] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -1760,9 +1764,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {isStreaming && <div className="chat-input-streaming-overlay hatch-45" aria-hidden="true" />}
           {/* Floating controls above the composer's top-right corner: the
               steer/follow-up group only appears while the agent runs; the
-              maximize group is always available. Styled inline because
-              Turbopack does not hot-reload globals.css in the Electron dev
-              setup — inline tweaks ride the JS HMR instead. */}
+              maximize group appears only while the input box is focused.
+              Styled inline because Turbopack does not hot-reload globals.css
+              in the Electron dev setup — inline tweaks ride the JS HMR instead. */}
           <div
             style={{
               position: "absolute",
@@ -1921,6 +1925,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 )}
               </div>
             )}
+            {inputFocused && (
             <div
               style={{
                 display: "flex",
@@ -1932,9 +1937,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.07)",
               }}
             >
-              {/* Maximize / restore the composer height to the manual ceiling */}
+              {/* Maximize / restore the composer height to the manual ceiling.
+                  onMouseDown preventDefault keeps focus in the textarea so blur
+                  does not hide this button before the click registers. */}
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   if (manualHeight !== null) {
                     inputHeightResizer.resetHeight();
@@ -1965,6 +1973,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 {manualHeight !== null ? <ArrowsInIcon size={15} /> : <ArrowsOutIcon size={15} />}
               </button>
             </div>
+            )}
           </div>
           <div className="chat-input-editor-row" style={{ borderColor: bashMode ? "var(--tool-bg)" : undefined }}>
           <textarea
@@ -1991,6 +2000,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
             onInput={handleInput}
             onPaste={handlePaste}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             placeholder={
               isStreaming && (onSteer || onFollowUp)
                 ? t("desktop.steerOrQueueFollowUp")

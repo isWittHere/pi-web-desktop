@@ -256,6 +256,7 @@ export const zhCNLocale = {
     "desktop.expandForks": "展开分支",
     "desktop.collapseForks": "折叠分支",
     "desktop.messagesCount": "{count} 条消息",
+    "desktop.unsent": "未发送",
     "desktop.worktree": "工作树：{cwd}",
     "desktop.justNow": "刚刚",
     "desktop.minutesAgo": "{count} 分钟前",

@@ -256,6 +256,7 @@ export const enLocale = {
     "desktop.expandForks": "Expand forks",
     "desktop.collapseForks": "Collapse forks",
     "desktop.messagesCount": "{count} msgs",
+    "desktop.unsent": "Not sent",
     "desktop.worktree": "Worktree: {cwd}",
     "desktop.justNow": "just now",
     "desktop.minutesAgo": "{count}m ago",
