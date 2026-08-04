@@ -397,7 +397,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     prompt: t("desktop.prompts"),
     skill: t("desktop.commandSkills"),
   };
-  const [value, setValue] = useState("");
+  // Drafts are restored synchronously from the draft store so a remount
+  // (every session switch remounts ChatWindow via key={sessionKey}) shows the
+  // saved text immediately. The window guard keeps SSR deterministic (no
+  // window → always empty); on the client the store is localStorage-backed
+  // and returns the persisted draft. Restoring via effect is NOT safe: the
+  // save effect would run on mount with the pre-restore empty value and
+  // delete the persisted draft (isEmptyDraft removes the key) before the
+  // restore effect re-reads it.
+  const [value, setValue] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return draftKey ? getDraft(draftKey)?.value ?? "" : "";
+  });
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [modelSearch, setModelSearch] = useState("");
@@ -413,7 +424,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [thinkingDropdownRect, setThinkingDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
-  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => {
+    if (typeof window === "undefined") return [];
+    return draftKey ? getDraft(draftKey)?.images.map(draftImageToAttachedImage) ?? [] : [];
+  });
   const trimmedValue = value.trimStart();
   const bashMode = attachedImages.length === 0 && trimmedValue.startsWith("!");
   const bashExcluded = bashMode && trimmedValue.startsWith("!!");
@@ -455,6 +469,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const attachedImagesRef = useRef(attachedImages);
   valueRef.current = value;
   attachedImagesRef.current = attachedImages;
+  // The draft key whose state has been restored into the editor. Drafts are
+  // only saved once restored, so the mount-time empty value cannot overwrite a
+  // persisted draft before it is loaded (effects in the same commit share the
+  // old value snapshot).
+  const draftRestoredRef = useRef<string | null>(null);
+  // The editor content the restore effect last loaded from the store. The save
+  // effect skips when the editor still matches this snapshot — the store
+  // already holds exactly that content, so writing it again would be a no-op
+  // at best and a data-loss hazard at worst: React StrictMode (dev, enabled by
+  // default in Next App Router) re-runs mount effects, and a stale empty value
+  // in the re-run would delete the draft before the restore effect re-reads it.
+  const restoredSnapshotRef = useRef<{ value: string; imageCount: number } | null>(null);
 
   // Manual input-box height: drag the top border of the composer shell to
   // resize it (see .chat-input-resize-handle). `height` stays null in the
@@ -617,18 +643,24 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [clearImages, draftKey]);
 
   useEffect(() => {
-    if (!draftKey || draftKeyRef.current !== draftKey) return;
-    setDraft(draftKey, {
-      value,
-      images: attachedImages.map(imageToDraftImage),
-    });
+    if (!draftKey || draftRestoredRef.current !== draftKey) return;
+    const snapshot = restoredSnapshotRef.current;
+    const images = attachedImages.map(imageToDraftImage);
+    // Skip while the editor still holds the restored content unchanged: the
+    // store already has it. Any modification (typed text, cleared text,
+    // added/removed images) takes over and saves immediately.
+    if (snapshot && snapshot.value === value && snapshot.imageCount === images.length) return;
+    restoredSnapshotRef.current = null;
+    setDraft(draftKey, { value, images });
   }, [attachedImages, draftKey, value]);
 
+  // Restore the draft for the current key on mount and when the key changes,
+  // and persist the previous key's state when switching away. This runs AFTER
+  // the save effect so the first save is deferred until restoration marks the
+  // key as restored (draftRestoredRef).
   useEffect(() => {
     const previousDraftKey = draftKeyRef.current;
-    if (previousDraftKey === draftKey) return;
-
-    if (previousDraftKey) {
+    if (previousDraftKey && previousDraftKey !== draftKey && draftRestoredRef.current === previousDraftKey) {
       setDraft(previousDraftKey, {
         value: valueRef.current,
         images: attachedImagesRef.current.map(imageToDraftImage),
@@ -637,26 +669,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
     const draft = draftKey ? getDraft(draftKey) : null;
     draftKeyRef.current = draftKey;
+    draftRestoredRef.current = draftKey ?? null;
+    restoredSnapshotRef.current = draft
+      ? { value: draft.value, imageCount: draft.images.length }
+      : { value: "", imageCount: 0 };
     setValue(draft?.value ?? "");
     setAtQuery(null);
     setAttachedImages((prev) => {
       prev.forEach(revokeImagePreview);
       return draft?.images.map(draftImageToAttachedImage) ?? [];
-    });
-  }, [draftKey]);
-
-  // Restore a persisted draft after mount. The draft store now reads
-  // localStorage, so it must be loaded in an effect (not the useState
-  // initializer) — otherwise the server-rendered markup and the hydrated
-  // client disagree on the initial value.
-  useEffect(() => {
-    if (!draftKey || draftKeyRef.current !== draftKey) return;
-    const draft = getDraft(draftKey);
-    if (!draft) return;
-    setValue(draft.value);
-    setAttachedImages((prev) => {
-      prev.forEach(revokeImagePreview);
-      return draft.images.map(draftImageToAttachedImage);
     });
   }, [draftKey]);
 
