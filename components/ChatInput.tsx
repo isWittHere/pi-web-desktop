@@ -397,7 +397,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     prompt: t("desktop.prompts"),
     skill: t("desktop.commandSkills"),
   };
-  const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
+  const [value, setValue] = useState("");
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [modelSearch, setModelSearch] = useState("");
@@ -413,9 +413,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [thinkingDropdownRect, setThinkingDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
-  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
-    draftKey ? getDraft(draftKey)?.images.map(draftImageToAttachedImage) ?? [] : []
-  ));
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const trimmedValue = value.trimStart();
   const bashMode = attachedImages.length === 0 && trimmedValue.startsWith("!");
   const bashExcluded = bashMode && trimmedValue.startsWith("!!");
@@ -644,6 +642,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     setAttachedImages((prev) => {
       prev.forEach(revokeImagePreview);
       return draft?.images.map(draftImageToAttachedImage) ?? [];
+    });
+  }, [draftKey]);
+
+  // Restore a persisted draft after mount. The draft store now reads
+  // localStorage, so it must be loaded in an effect (not the useState
+  // initializer) — otherwise the server-rendered markup and the hydrated
+  // client disagree on the initial value.
+  useEffect(() => {
+    if (!draftKey || draftKeyRef.current !== draftKey) return;
+    const draft = getDraft(draftKey);
+    if (!draft) return;
+    setValue(draft.value);
+    setAttachedImages((prev) => {
+      prev.forEach(revokeImagePreview);
+      return draft.images.map(draftImageToAttachedImage);
     });
   }, [draftKey]);
 

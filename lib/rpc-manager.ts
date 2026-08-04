@@ -289,6 +289,37 @@ export class AgentSessionWrapper {
     cacheSessionPath(this.inner.sessionId, sessionFile);
   }
 
+  /**
+   * Persist a new session's file the moment its first prompt is sent.
+   *
+   * Pi defers the first flush until an assistant message exists, which keeps
+   * a brand-new session invisible in the disk-backed session list until the
+   * model's first response. Flushing here (header, plus any entries already
+   * buffered — usually just the header at this point) closes that gap: the
+   * session appears in the sidebar as soon as the message is sent, marked
+   * running, while the SDK appends the user/assistant messages afterwards
+   * through its normal append path (flushed === true).
+   */
+  private persistPromptSession(): void {
+    const manager = this.inner.sessionManager;
+    const sessionFile = manager.getSessionFile();
+    if (!sessionFile || existsSync(sessionFile)) return;
+
+    const header = manager.getHeader();
+    if (!header) return;
+
+    const content = [header, ...manager.getEntries()]
+      .map((entry) => JSON.stringify(entry))
+      .join("\n") + "\n";
+    writeFileSync(sessionFile, content, { encoding: "utf8", flag: "wx" });
+
+    // Mark the SDK manager as flushed so subsequent _persist calls take the
+    // appendFileSync path (mirrors persistBashOnlySession).
+    (manager as unknown as { flushed: boolean }).flushed = true;
+    cacheSessionPath(this.inner.sessionId, sessionFile);
+    invalidateSessionListCache();
+  }
+
   onEvent(listener: EventListener): () => void {
     this.listeners.push(listener);
     for (const event of this.pendingUiRequests.values()) listener(event);
@@ -338,6 +369,9 @@ export class AgentSessionWrapper {
           });
           if (!streamingBehavior) this.emit({ type: "prompt_done" });
         });
+        // Make the new session visible in the disk-backed list immediately:
+        // pi defers its first file flush until an assistant message exists.
+        this.persistPromptSession();
         return null;
       }
 

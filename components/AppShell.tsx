@@ -28,6 +28,15 @@ import {
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
+import { clearDraft } from "@/lib/draft-store";
+import {
+  createDraftSession,
+  loadDraftSessions,
+  removeDraftSession,
+  renameDraftSession,
+  saveDraftSessions,
+  type DraftSession,
+} from "@/lib/draft-sessions";
 import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -44,6 +53,17 @@ export function AppShell() {
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   // When user clicks +, we only store the cwd — no fake session id
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null);
+  // Unsent "draft" sessions shown in the sidebar list (pure client-side, pi
+  // knows nothing about them until the first message is sent).
+  const [draftSessions, setDraftSessions] = useState<DraftSession[]>(() => loadDraftSessions());
+  // The draft currently open in the composer (its id doubles as the ChatInput
+  // draft key so typed text is keyed to the draft).
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const activeDraftIdRef = useRef<string | null>(null);
+  const draftSessionsRef = useRef<DraftSession[]>(draftSessions);
+  useEffect(() => { activeDraftIdRef.current = activeDraftId; }, [activeDraftId]);
+  useEffect(() => { draftSessionsRef.current = draftSessions; }, [draftSessions]);
+  useEffect(() => { saveDraftSessions(draftSessions); }, [draftSessions]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
@@ -238,6 +258,7 @@ export function AppShell() {
   }, [activeCwd]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+    setActiveDraftId(null);
     setNewSessionCwd(null);
     setSelectedSession(session);
     setSessionKey((k) => k + 1);
@@ -258,6 +279,18 @@ export function AppShell() {
   }, [router, isMobile]);
 
   const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
+    // If a draft for this cwd is already open, refocus it (the typed text and
+    // the draft row stay) instead of stacking a duplicate draft.
+    const activeDraft = activeDraftIdRef.current
+      ? draftSessionsRef.current.find((d) => d.id === activeDraftIdRef.current && d.cwd === cwd)
+      : undefined;
+    if (!activeDraft) {
+      // Register a client-side draft so the session shows up in the sidebar
+      // list right away — pi has not created anything yet.
+      const draft = createDraftSession(cwd);
+      setDraftSessions((prev) => [draft, ...prev]);
+      setActiveDraftId(draft.id);
+    }
     setSelectedSession(null);
     setNewSessionCwd(cwd);
     setSessionKey((k) => k + 1);
@@ -293,6 +326,15 @@ export function AppShell() {
     setNewSessionCwd(null);
     setSelectedSession(session);
     setRefreshKey((k) => k + 1);
+    // The draft has been promoted to a real session: drop the draft record.
+    // The server already persisted the session file on the prompt command, so
+    // the next list refresh shows the real row.
+    const draftId = activeDraftIdRef.current;
+    if (draftId) {
+      setDraftSessions((prev) => removeDraftSession(prev, draftId));
+      clearDraft(draftId);
+    }
+    setActiveDraftId(null);
     hydrateSelectedSession(session.id);
     router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
   }, [router, hydrateSelectedSession]);
@@ -318,10 +360,41 @@ export function AppShell() {
     setInitialSessionRestored(true);
   }, []);
 
+  // Reopen a draft in the composer (from a sidebar click).
+  const handleSelectDraft = useCallback((draft: DraftSession) => {
+    setActiveDraftId(draft.id);
+    setSelectedSession(null);
+    setNewSessionCwd(draft.cwd);
+    setSessionKey((k) => k + 1);
+    setSystemPrompt(null);
+    setActiveTopPanel(null);
+    if (isMobile) setSidebarOpen(false);
+    router.replace("/", { scroll: false });
+  }, [router, isMobile]);
+
+  const handleDeleteDraft = useCallback((draftId: string) => {
+    setDraftSessions((prev) => removeDraftSession(prev, draftId));
+    clearDraft(draftId);
+    // If the deleted draft was the open composer, close the chat area.
+    if (activeDraftIdRef.current === draftId) {
+      setActiveDraftId(null);
+      setNewSessionCwd(null);
+      setSessionKey((k) => k + 1);
+      setSystemPrompt(null);
+      setActiveTopPanel(null);
+      router.replace("/", { scroll: false });
+    }
+  }, [router]);
+
+  const handleRenameDraft = useCallback((draftId: string, name: string) => {
+    setDraftSessions((prev) => renameDraftSession(prev, draftId, name));
+  }, []);
+
   const handleSessionDeleted = useCallback((sessionId: string) => {
     setRefreshKey((k) => k + 1);
     if (selectedSession?.id === sessionId) {
       const cwd = selectedSession.cwd;
+      setActiveDraftId(null);
       setSelectedSession(null);
       setNewSessionCwd(cwd ?? null);
       setSessionKey((k) => k + 1);
@@ -440,6 +513,10 @@ export function AppShell() {
         selectedSessionId={selectedSession?.id ?? null}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
+        draftSessions={draftSessions}
+        onSelectDraft={handleSelectDraft}
+        onDeleteDraft={handleDeleteDraft}
+        onRenameDraft={handleRenameDraft}
         initialSessionId={initialSessionId}
         onInitialRestoreDone={handleInitialRestoreDone}
         refreshKey={refreshKey}
@@ -588,6 +665,7 @@ export function AppShell() {
               key={sessionKey}
               session={selectedSession}
               newSessionCwd={effectiveNewSessionCwd}
+              newSessionDraftId={activeDraftId}
               onAgentEnd={handleAgentEnd}
               onSessionCreated={handleSessionCreated}
               onSessionForked={handleSessionForked}

@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ArrowClockwise, CaretDown, CaretRight, Check, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
 import type { SessionInfo } from "@/lib/types";
+import type { DraftSession } from "@/lib/draft-sessions";
+import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { QuickChangesPanel } from "./QuickChangesPanel";
@@ -12,6 +14,11 @@ interface Props {
   selectedSessionId: string | null;
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
   onNewSession?: (sessionId: string, cwd: string) => void;
+  /** Client-side unsent drafts rendered alongside real sessions. */
+  draftSessions?: DraftSession[];
+  onSelectDraft?: (draft: DraftSession) => void;
+  onDeleteDraft?: (draftId: string) => void;
+  onRenameDraft?: (draftId: string, name: string) => void;
   initialSessionId?: string | null;
   onInitialRestoreDone?: () => void;
   refreshKey?: number;
@@ -199,12 +206,17 @@ function AnimatedDropdown({ open, children, style }: { open: boolean; children: 
 
 
 
+/** A sidebar row: a real server session, or a client-side draft flagged isDraft. */
+interface SessionRow extends SessionInfo {
+  isDraft?: boolean;
+}
+
 interface SessionTreeNode {
-  session: SessionInfo;
+  session: SessionRow;
   children: SessionTreeNode[];
 }
 
-function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
+function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
   const byId = new Map<string, SessionTreeNode>();
   for (const s of sessions) {
     byId.set(s.id, { session: s, children: [] });
@@ -250,7 +262,7 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -442,6 +454,21 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     return match?.projectRoot ?? cwd;
   }, [worktreeState, allSessions]);
 
+  // Draft rows are merged with server sessions: they appear under their cwd's
+  // project, sorted by their modifiedAt timestamp. Real sessions dedupe by id.
+  const draftRows = useMemo(() => {
+    if (!draftSessions || draftSessions.length === 0) return [] as SessionRow[];
+    return draftSessions.map((d) => ({
+      ...draftToSessionInfo(d),
+      projectRoot: projectRootFor(d.cwd) ?? d.cwd,
+      isDraft: true,
+    }));
+  }, [draftSessions, projectRootFor]);
+  const allRows = useMemo<SessionRow[]>(
+    () => [...draftRows, ...allSessions],
+    [draftRows, allSessions],
+  );
+
   // Notify parent only when the effective cwd actually changes (not when
   // projectRootFor identity changes due to session/worktree refreshes).
   const lastNotifiedCwdRef = useRef<string | null>(null);
@@ -501,7 +528,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
-    if (allSessions.length === 0) return;
+    if (allRows.length === 0) return;
 
     if (selectedCwd === null) {
       // If restoring a session, set cwd to match that session
@@ -516,10 +543,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         // Session not found — notify parent so it can show the placeholder
         onInitialRestoreDone?.();
       }
-      const projects = getRecentProjects(allSessions);
+      // Include drafts so a project that only has drafts is still selected.
+      const projects = getRecentProjects(allRows);
       if (projects.length > 0) setSelectedCwd(projects[0]);
     }
-  }, [allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
+  }, [allRows, allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
 
   const commitCustomPath = useCallback(async (candidate?: string) => {
     const path = (candidate ?? customPathValue).trim();
@@ -688,10 +716,17 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // Done on the click path (not via the selectedCwd prop sync) so it also
   // works when the prop value won't change — e.g. re-clicking the already
   // open session after manually switching worktrees.
-  const handleSelectSessionFromList = useCallback((s: SessionInfo) => {
+  const handleSelectSessionFromList = useCallback((s: SessionRow) => {
+    if (s.isDraft) {
+      const draft = draftSessions?.find((d) => d.id === s.id);
+      if (draft) {
+        onSelectDraft?.(draft);
+        return;
+      }
+    }
     if (s.cwd) setSelectedCwd(s.cwd);
     onSelectSession(s);
-  }, [onSelectSession]);
+  }, [onSelectSession, onSelectDraft, draftSessions]);
 
   const handleNewSession = useCallback(() => {
     if (!selectedCwd) return;
@@ -703,7 +738,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     onNewSession?.(tempId, selectedCwd);
   }, [selectedCwd, onNewSession]);
 
-  const recentProjects = getRecentProjects(allSessions);
+  const recentProjects = getRecentProjects(allRows);
   const visibleProjects = projectFilter.trim()
     ? recentProjects.filter((p) => p.toLowerCase().includes(projectFilter.trim().toLowerCase()))
     : recentProjects;
@@ -711,8 +746,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // Sessions of every worktree in the selected project are shown together
   const selectedProject = projectRootFor(selectedCwd);
   const filteredSessions = selectedProject
-    ? allSessions.filter((s) => (s.projectRoot ?? s.cwd) === selectedProject)
-    : allSessions;
+    ? allRows.filter((s) => (s.projectRoot ?? s.cwd) === selectedProject)
+    : allRows;
   const showWorktreeSwitcher = Boolean(
     worktreeState?.isGit
     && worktreeState.isTopLevel
@@ -1462,6 +1497,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 onSessionDeleted?.(id);
                 loadSessions();
               }}
+              onDeleteDraft={onDeleteDraft}
+              onRenameDraft={onRenameDraft}
               depth={0}
             />
           ))}
@@ -1592,15 +1629,19 @@ function SessionTreeItem({
   onSelectSession,
   onRenamed,
   onSessionDeleted,
+  onDeleteDraft,
+  onRenameDraft,
   depth,
 }: {
   node: SessionTreeNode;
   selectedSessionId: string | null;
   runningSessionIds: Set<string>;
   unreadSessionIds: Set<string>;
-  onSelectSession: (s: SessionInfo) => void;
+  onSelectSession: (s: SessionRow) => void;
   onRenamed?: () => void;
   onSessionDeleted?: (id: string) => void;
+  onDeleteDraft?: (id: string) => void;
+  onRenameDraft?: (id: string, name: string) => void;
   depth: number;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -1628,6 +1669,8 @@ function SessionTreeItem({
           onClick={() => onSelectSession(node.session)}
           onRenamed={onRenamed}
           onDeleted={(id) => onSessionDeleted?.(id)}
+          onDeleteDraft={onDeleteDraft}
+          onRenameDraft={onRenameDraft}
           depth={depth}
           hasChildren={hasChildren}
           collapsed={collapsed}
@@ -1646,6 +1689,8 @@ function SessionTreeItem({
               onSelectSession={onSelectSession}
               onRenamed={onRenamed}
               onSessionDeleted={onSessionDeleted}
+              onDeleteDraft={onDeleteDraft}
+              onRenameDraft={onRenameDraft}
               depth={depth + 1}
             />
           ))}
@@ -1728,18 +1773,22 @@ function SessionItem({
   onClick,
   onRenamed,
   onDeleted,
+  onDeleteDraft,
+  onRenameDraft,
   depth = 0,
   hasChildren = false,
   collapsed = false,
   onToggleCollapse,
 }: {
-  session: SessionInfo;
+  session: SessionRow;
   isSelected: boolean;
   isRunning?: boolean;
   isUnread?: boolean;
   onClick: () => void;
   onRenamed?: () => void;
   onDeleted?: (id: string) => void;
+  onDeleteDraft?: (id: string) => void;
+  onRenameDraft?: (id: string, name: string) => void;
   depth?: number;
   hasChildren?: boolean;
   collapsed?: boolean;
@@ -1756,7 +1805,9 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const renameMeasureRef = useRef<HTMLSpanElement>(null);
 
-  const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
+  const title = session.name
+    || (session.isDraft ? t("desktop.untitledDraft") : session.firstMessage.slice(0, 50))
+    || session.id.slice(0, 12);
 
   // A two-pixel overlay gives the otherwise native one-pixel input caret a
   // clearer visual weight while the title is edited in place.
@@ -1776,6 +1827,10 @@ function SessionItem({
     const name = renameValue.trim();
     setRenaming(false);
     if (name === (session.name ?? "")) return;
+    if (session.isDraft) {
+      onRenameDraft?.(session.id, name);
+      return;
+    }
     try {
       await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
         method: "PATCH",
@@ -1786,7 +1841,7 @@ function SessionItem({
     } catch {
       // ignore
     }
-  }, [renameValue, session.id, session.name, onRenamed]);
+  }, [renameValue, session.id, session.name, session.isDraft, onRenamed, onRenameDraft]);
 
   const handleDeleteClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1797,13 +1852,17 @@ function SessionItem({
     e.stopPropagation();
     setConfirmDelete(false);
     setDeleting(true);
+    if (session.isDraft) {
+      onDeleteDraft?.(session.id);
+      return;
+    }
     try {
       await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, { method: "DELETE" });
       onDeleted?.(session.id);
     } catch {
       setDeleting(false);
     }
-  }, [session.id, onDeleted]);
+  }, [session.id, session.isDraft, onDeleted, onDeleteDraft]);
 
   const handleDeleteCancel = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1841,7 +1900,9 @@ function SessionItem({
         /* ── Delete confirmation: same height, two flat buttons ── */
         <>
           <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {t("desktop.deleteSession", { title: `“${title.slice(0, 22)}${title.length > 22 ? "…" : ""}”` })}
+            {session.isDraft
+              ? t("desktop.deleteDraft", { title: `“${title.slice(0, 22)}${title.length > 22 ? "…" : ""}”` })
+              : t("desktop.deleteSession", { title: `“${title.slice(0, 22)}${title.length > 22 ? "…" : ""}”` })}
           </div>
           <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
             <button
@@ -1978,6 +2039,29 @@ function SessionItem({
               ) : (
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
                   {title}
+                </span>
+              )}
+              {/* Draft badge — unsent sessions are marked so users can tell
+                  them apart from real (persisted) sessions. */}
+              {session.isDraft && (
+                <span
+                  title={t("desktop.draft")}
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "var(--text-dim)",
+                    background: "color-mix(in srgb, var(--accent) 16%, var(--bg))",
+                    border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border))",
+                    borderRadius: 4,
+                    padding: "1px 5px",
+                    lineHeight: 1.4,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {t("desktop.draft")}
                 </span>
               )}
               {/* Collapse toggle — always visible when has children */}
