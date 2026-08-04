@@ -17,10 +17,10 @@ interface Props {
    *  session, so selectedSessionId alone never matches them). */
   selectedDraftId?: string | null;
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
-  onNewSession?: (sessionId: string, cwd: string) => void;
+  onNewSession?: (sessionId: string, cwd: string, projectRoot?: string | null) => void;
   /** Client-side unsent drafts rendered alongside real sessions. */
   draftSessions?: DraftSession[];
-  onSelectDraft?: (draft: DraftSession) => void;
+  onSelectDraft?: (draft: DraftSession, projectRoot?: string | null) => void;
   onDeleteDraft?: (draftId: string) => void;
   onRenameDraft?: (draftId: string, name: string) => void;
   initialSessionId?: string | null;
@@ -733,7 +733,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     if (s.isDraft) {
       const draft = draftSessions?.find((d) => d.id === s.id);
       if (draft) {
-        onSelectDraft?.(draft);
+        onSelectDraft?.(draft, s.projectRoot);
         return;
       }
     }
@@ -748,8 +748,8 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     const tempId = typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-    onNewSession?.(tempId, selectedCwd);
-  }, [selectedCwd, onNewSession]);
+    onNewSession?.(tempId, selectedCwd, projectRootFor(selectedCwd));
+  }, [selectedCwd, onNewSession, projectRootFor]);
 
   const recentProjects = getRecentProjects(allRows);
   const visibleProjects = projectFilter.trim()

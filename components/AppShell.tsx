@@ -37,6 +37,7 @@ import {
   saveDraftSessions,
   type DraftSession,
 } from "@/lib/draft-sessions";
+import { clearLastOpen, getLastOpen, setLastOpen, workspaceKeyOf } from "@/lib/workspace-memory";
 import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -240,6 +241,83 @@ export function AppShell() {
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !searchParams.get("session"));
   // Suppresses sessionKey bump in handleCwdChange during the initial URL restore
   const suppressCwdBumpRef = useRef(false);
+  // Guards the async session restore: a lookup started by an earlier workspace
+  // switch must not land after the user already switched somewhere else.
+  const workspaceRestoreTokenRef = useRef(0);
+
+  // Open the new-session composer backed by a real draft row, matching the
+  // "+" flow. Used when switching to a workspace with no remembered context.
+  const openWelcomeDraft = useCallback((cwd: string, projectKey: string) => {
+    const draft = createDraftSession(cwd);
+    setDraftSessions((prev) => [draft, ...prev]);
+    setActiveDraftId(draft.id);
+    setNewSessionCwd(cwd);
+    setLastOpen(projectKey, { kind: "draft", id: draft.id });
+    // A draft is not URL-representable — drop a stale ?session= so a refresh
+    // does not yank back to the previous workspace's session.
+    if (new URLSearchParams(window.location.search).has("session")) {
+      router.replace("/", { scroll: false });
+    }
+  }, [router]);
+
+  // Restore the workspace's last open context after switching to it. Called
+  // from handleCwdChange once the outgoing context has been reset. A draft
+  // reopens synchronously; a session is looked up against the live list so a
+  // deleted session falls back to a fresh welcome draft.
+  const restoreWorkspaceContext = useCallback((cwd: string, projectKey: string) => {
+    const token = ++workspaceRestoreTokenRef.current;
+    const lastOpen = getLastOpen(projectKey);
+    if (lastOpen?.kind === "draft") {
+      const draft = draftSessions.find((d) => d.id === lastOpen.id);
+      if (draft) {
+        setActiveDraftId(draft.id);
+        setNewSessionCwd(draft.cwd);
+        setLastOpen(projectKey, { kind: "draft", id: draft.id });
+        if (new URLSearchParams(window.location.search).has("session")) {
+          router.replace("/", { scroll: false });
+        }
+      } else {
+        clearLastOpen(projectKey);
+        openWelcomeDraft(cwd, projectKey);
+      }
+      return;
+    }
+    if (lastOpen?.kind === "session") {
+      void fetch("/api/sessions")
+        .then((r) => (r.ok ? (r.json() as Promise<{ sessions: SessionInfo[] }>) : null))
+        .then((d) => {
+          if (token !== workspaceRestoreTokenRef.current) return; // stale switch
+          const s = d?.sessions.find((x) => x.id === lastOpen.id);
+          if (!s) {
+            // The list loaded but the remembered session is gone — forget it.
+            // When the list itself failed (d === null) keep the memory so a
+            // later switch retries the restore.
+            if (d) clearLastOpen(projectKey);
+            openWelcomeDraft(cwd, projectKey);
+            return;
+          }
+          if ((s.projectRoot ?? s.cwd) !== projectKey) {
+            // Defensive: the remembered session drifted out of this workspace.
+            clearLastOpen(projectKey);
+            openWelcomeDraft(cwd, projectKey);
+            return;
+          }
+          setSelectedSession(s);
+          if (new URLSearchParams(window.location.search).get("session") !== s.id) {
+            router.replace(`?session=${encodeURIComponent(s.id)}`, { scroll: false });
+          }
+        })
+        .catch(() => {
+          // Network hiccup: keep the remembered session for a later retry.
+          if (token === workspaceRestoreTokenRef.current) {
+            openWelcomeDraft(cwd, projectKey);
+            setLastOpen(projectKey, { kind: "session", id: lastOpen.id });
+          }
+        });
+      return;
+    }
+    openWelcomeDraft(cwd, projectKey);
+  }, [draftSessions, router, openWelcomeDraft]);
 
   const handleCwdChange = useCallback((cwd: string | null, projectRoot?: string | null) => {
     setActiveCwd(cwd);
@@ -258,6 +336,10 @@ export function AppShell() {
     }
     // Leaving the draft for another project: an empty draft is meaningless.
     cleanupEmptyActiveDraft();
+    // A cross-project switch must not keep the outgoing draft key bound to the
+    // composer — it would silently write the new workspace's typing into the
+    // old project's draft (and drop that draft on send).
+    setActiveDraftId(null);
     // Close any session that belongs to a different project — it no longer
     // matches the selected project directory.
     setSelectedSession(null);
@@ -268,7 +350,10 @@ export function AppShell() {
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
     setActiveTopPanel(null);
-  }, [selectedSession, cleanupEmptyActiveDraft]);
+    // Restore the workspace we switched to: its last session or draft, or a
+    // fresh welcome draft so the composer matches the "+" flow.
+    restoreWorkspaceContext(cwd, newProject);
+  }, [selectedSession, cleanupEmptyActiveDraft, restoreWorkspaceContext]);
 
   // Update browser tab title when workspace changes
   useEffect(() => {
@@ -293,6 +378,9 @@ export function AppShell() {
     setActiveDraftId(null);
     setNewSessionCwd(null);
     setSelectedSession(session);
+    // Remember this session as the workspace's last open context so switching
+    // back to the workspace restores it.
+    setLastOpen(workspaceKeyOf(session), { kind: "session", id: session.id });
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
     setInitialSessionRestored(true);
@@ -310,7 +398,7 @@ export function AppShell() {
     }
   }, [router, isMobile, cleanupEmptyActiveDraft, selectedSession]);
 
-  const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
+  const handleNewSession = useCallback((_sessionId: string, cwd: string, projectRoot?: string | null) => {
     // An empty draft is meaningless: drop the current one (if it never got
     // content) before starting a new session.
     cleanupEmptyActiveDraft();
@@ -321,6 +409,7 @@ export function AppShell() {
     setActiveDraftId(draft.id);
     setSelectedSession(null);
     setNewSessionCwd(cwd);
+    setLastOpen(projectRoot ?? cwd, { kind: "draft", id: draft.id });
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
     setActiveTopPanel(null);
@@ -345,6 +434,10 @@ export function AppShell() {
         const full = d?.sessions.find((s) => s.id === sessionId);
         if (!full) return;
         setSelectedSession((prev) => (prev && prev.id === sessionId && !prev.projectRoot ? full : prev));
+        // The server-resolved projectRoot may differ from the transient key the
+        // memory was first written under — re-key it so worktree sessions are
+        // found when their workspace is reopened.
+        setLastOpen(workspaceKeyOf(full), { kind: "session", id: full.id });
       })
       .catch(() => {});
   }, []);
@@ -353,6 +446,7 @@ export function AppShell() {
   const handleSessionCreated = useCallback((session: SessionInfo) => {
     setNewSessionCwd(null);
     setSelectedSession(session);
+    setLastOpen(workspaceKeyOf(session), { kind: "session", id: session.id });
     setRefreshKey((k) => k + 1);
     // The draft has been promoted to a real session: drop the draft record.
     // The server already persisted the session file on the prompt command, so
@@ -376,20 +470,22 @@ export function AppShell() {
     setRefreshKey((k) => k + 1);
     setSessionKey((k) => k + 1);
     setNewSessionCwd(null);
+    const forkKey = selectedSession ? workspaceKeyOf(selectedSession) : null;
     setSelectedSession((prev) => ({
       ...(prev ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
       id: newSessionId,
     }));
+    if (forkKey) setLastOpen(forkKey, { kind: "session", id: newSessionId });
     hydrateSelectedSession(newSessionId);
     router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
-  }, [router, hydrateSelectedSession]);
+  }, [router, hydrateSelectedSession, selectedSession]);
 
   const handleInitialRestoreDone = useCallback(() => {
     setInitialSessionRestored(true);
   }, []);
 
   // Reopen a draft in the composer (from a sidebar click).
-  const handleSelectDraft = useCallback((draft: DraftSession) => {
+  const handleSelectDraft = useCallback((draft: DraftSession, projectRoot?: string | null) => {
     const wasActive = activeDraftIdRef.current === draft.id;
     // Clicking the already-open draft only refocuses it — never treat that as
     // "leaving" (an empty draft is dropped only when switching to another
@@ -401,6 +497,7 @@ export function AppShell() {
     setActiveDraftId(draft.id);
     setSelectedSession(null);
     setNewSessionCwd(draft.cwd);
+    setLastOpen(projectRoot ?? draft.cwd, { kind: "draft", id: draft.id });
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
     setActiveTopPanel(null);
@@ -429,16 +526,17 @@ export function AppShell() {
   const handleSessionDeleted = useCallback((sessionId: string) => {
     setRefreshKey((k) => k + 1);
     if (selectedSession?.id === sessionId) {
-      const cwd = selectedSession.cwd;
+      const session = selectedSession;
       setActiveDraftId(null);
       setSelectedSession(null);
-      setNewSessionCwd(cwd ?? null);
       setSessionKey((k) => k + 1);
       setSystemPrompt(null);
       setActiveTopPanel(null);
-      router.replace("/", { scroll: false });
+      // Back to a fresh composer backed by a draft row, consistent with the
+      // "+" flow, instead of a bare welcome page with no listed session.
+      openWelcomeDraft(session.cwd, workspaceKeyOf(session));
     }
-  }, [router, selectedSession]);
+  }, [selectedSession, openWelcomeDraft]);
 
   const handleOpenFile = useCallback((filePath: string, fileName: string, sourceOrOptions?: string | null | { initialDisplayMode?: "diff" }, options?: { initialDisplayMode?: "diff" }) => {
     const sourceSessionId = typeof sourceOrOptions === "string" || sourceOrOptions === null ? sourceOrOptions : undefined;
