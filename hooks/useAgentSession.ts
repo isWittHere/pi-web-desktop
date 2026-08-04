@@ -1668,7 +1668,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    // While the agent runs, a full-viewport spacer div sits below the message
+    // list to reserve room for streaming output. Scrolling to scrollHeight
+    // would land inside that empty spacer (the output ends up above the
+    // viewport); anchor at the end of the message list instead.
+    const spacerHeight = agentRunningRef.current ? container.clientHeight : 0;
+    container.scrollTo({
+      top: Math.max(0, container.scrollHeight - spacerHeight - container.clientHeight),
+      behavior,
+    });
   }, []);
 
   const scrollUserMsgToTop = useCallback(() => {
@@ -1713,6 +1723,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             setAgentRunning(true);
             setAgentPhase(agentState.state.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
             dispatch({ type: "start" });
+            // The initial mount scroll ran before the running state was known
+            // (no live tail / reserve spacer yet), so it targeted the file
+            // snapshot. Now that the agent is known to still be running,
+            // re-anchor the viewport so the continuing output is visible —
+            // otherwise it ends up just outside the viewport and no later
+            // streaming event moves it back.
+            window.requestAnimationFrame(() => scrollToBottom("instant"));
             void connectEvents(session.id);
             if (!agentState.state.isStreaming && agentState.state.isPromptRunning) {
               void waitForPromptSettlement(session.id);

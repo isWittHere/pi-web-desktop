@@ -188,10 +188,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     window.requestAnimationFrame(() => {
       const container = scrollContainerRef.current;
       if (!container) return;
-      container.scrollTop = container.scrollHeight;
+      // While running, a full-viewport reserve spacer sits below the message
+      // list. Scroll to the end of the messages (not the spacer) so the
+      // current output stays visible instead of landing above the viewport.
+      const spacerHeight = agentRunning ? container.clientHeight : 0;
+      container.scrollTo({
+        top: Math.max(0, container.scrollHeight - spacerHeight - container.clientHeight),
+        behavior: "auto",
+      });
       updateChatFades();
     });
-  }, [scrollContainerRef, updateChatFades]);
+  }, [scrollContainerRef, updateChatFades, agentRunning]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
