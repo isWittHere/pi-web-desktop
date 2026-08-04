@@ -322,9 +322,18 @@ const SKIP_COMMANDS = new Set([
   "pushd", "popd", "dirs",
 ]);
 
-/** Commands that wrap another command — skip them and their arguments/flags. */
+/**
+ * Commands that wrap another command — skip them (and their flags/values) to
+ * find the real work command.
+ */
 const WRAPPER_SKIP_COMMANDS = new Set([
-  "timeout",
+  "timeout", "sudo", "doas", "nohup", "nice", "env", "command", "exec",
+  "eval", "bash", "sh", "zsh", "ash", "dash", "fish", "ksh",
+]);
+
+/** Wrappers whose command string (`bash -c '...'`, `eval '...'`) is itself parsed. */
+const COMMAND_STRING_WRAPPERS = new Set([
+  "bash", "sh", "zsh", "ash", "dash", "fish", "ksh", "eval",
 ]);
 
 const LIST_COMMANDS = new Set(["ls", "dir", "ll", "la", "l", "tree", "eza", "exa"]);
@@ -339,11 +348,208 @@ function shellWords(command: string): string[] {
   return command.match(/"[^"]+"|'[^']+'|\S+/g)?.map((w) => w.replace(/^(["'])(.*)\1$/, "$2")) ?? [];
 }
 
+const EMPTY_FLAG_SET: ReadonlySet<string> = new Set();
+
+/**
+ * Options that consume the NEXT token as their value, per command family.
+ * Only genuinely value-taking flags belong here — boolean switches (`-r` for
+ * rm, `--verbose`, `-O` for curl…) must stay out or real targets get eaten.
+ */
+const VALUE_FLAGS_BY_COMMAND: Record<string, ReadonlySet<string>> = {
+  curl: new Set([
+    "-a", "-A", "-b", "-c", "-d", "-e", "-E", "-F", "-H", "-K", "-m", "-o",
+    "-r", "-T", "-u", "-x", "-X",
+    "--append", "--user-agent", "--cookie", "--cookie-jar", "--data",
+    "--data-ascii", "--data-binary", "--data-raw", "--data-urlencode",
+    "--form", "--form-string", "--header", "--config", "--max-time",
+    "--connect-timeout", "--output", "--range", "--upload-file", "--user",
+    "--proxy", "--request", "--retry", "--retry-delay", "--retry-connrefused",
+    "--retry-all-errors", "--url", "--write-out", "--referer", "--resolve",
+    "--interface", "--cert", "--key", "--cacert", "--capath", "--engine",
+    "--pass", "--cipher", "--host", "--local-port", "--max-filesize",
+    "--max-redirs", "--speed-limit", "--speed-time", "--proxy-user",
+    "--proxy-header", "--oauth2-bearer", "--netrc-file", "--tls-max",
+  ]),
+  wget: new Set([
+    "-O", "-o", "-P", "-T", "-w", "-Q", "-e", "-t",
+    "--output-document", "--output-file", "--directory-prefix", "--timeout",
+    "--connect-timeout", "--read-timeout", "--wait", "--quota", "--execute",
+    "--tries", "--header", "--user-agent", "--user", "--password", "--referer",
+    "--post-data", "--max-redirect", "--limit-rate", "--bind-address",
+    "--load-cookies", "--save-cookies", "--auth-no-challenge",
+  ]),
+  git: new Set([
+    "-b", "-C", "-L", "-G", "-S", "-m", "-n", "-o", "-u",
+    "--branch", "--message", "--output", "--set-upstream", "--author",
+    "--date", "--strategy", "--strategy-option", "--pathspec-from-file",
+    "--since", "--until", "--grep", "--format", "--pretty", "--max-count",
+    "--diff-filter", "--name-only", "--name-status",
+  ]),
+  npm: new Set([
+    "-w", "--workspace", "--registry", "--tag", "--prefix", "--cache",
+    "--userconfig", "--globalconfig", "--scope", "--install-strategy",
+  ]),
+  pnpm: new Set([
+    "-F", "-C", "--filter", "--registry", "--prefix", "--dir", "--workspace",
+    "--package-import-method", "--reporter",
+  ]),
+  yarn: new Set([
+    "--registry", "--cwd", "--cached", "--focus", "--node-options",
+    "--network-timeout", "--network-concurrency", "--install-mode",
+  ]),
+  pip: new Set([
+    "-r", "-c", "-e", "-t", "-i", "--requirement", "--constraint", "--editable",
+    "--target", "--index-url", "--extra-index-url", "--find-links",
+    "--trusted-host", "--proxy",
+  ]),
+  cargo: new Set([
+    "-p", "--package", "--target", "--manifest-path", "--features", "--bin",
+    "--example", "--jobs", "--message-format", "--profile",
+  ]),
+  docker: new Set([
+    "-c", "-e", "-f", "-p", "-u", "-v", "-w",
+    "--publish", "--volume", "--env", "--env-file", "--name", "--network",
+    "--cpus", "--memory", "--workdir", "--user", "--label", "--mount",
+    "--add-host", "--dns", "--platform", "--entrypoint", "--restart",
+    "--health-cmd", "--health-interval", "--log-driver", "--log-opt",
+    "--stop-timeout", "--shm-size", "--ip", "--ip6", "--link", "--tmpfs",
+    "--security-opt", "--device", "--runtime", "--file", "--config",
+    "--build-arg", "--target",
+  ]),
+  npx: new Set([
+    "-p", "-c", "-n", "--package", "--registry", "--call", "--node-arg", "--prefix",
+  ]),
+  python: new Set(["-c", "-W", "-X", "-I"]),
+  node: new Set([
+    "-e", "-r", "--eval", "--require", "--loader", "--experimental-loader",
+    "--max-old-space-size", "--env-file", "--watch-path", "--conditions",
+  ]),
+  java: new Set([
+    "-jar", "-cp", "-classpath", "-Xmx", "-Xms", "-Xss", "-agentlib",
+    "-javaagent", "-module-path", "--add-modules", "--module-path",
+  ]),
+  ssh: new Set([
+    "-b", "-c", "-D", "-E", "-F", "-i", "-J", "-l", "-L", "-m", "-o",
+    "-p", "-R", "-w",
+    "--port", "--identity-file", "--proxy-jump", "--config", "--log-file",
+  ]),
+  scp: new Set(["-P", "-i", "-o", "-l", "-F", "-c"]),
+  rsync: new Set([
+    "-b", "-e", "-f", "-T",
+    "--rsh", "--filter", "--exclude", "--include", "--backup-dir", "--log-file",
+    "--password-file", "--bwlimit", "--timeout", "--temp-dir", "--link-dest",
+    "--compare-dest", "--copy-dest", "--files-from", "--suffix",
+  ]),
+  find: new Set([
+    "-maxdepth", "-mindepth", "-name", "-iname", "-type", "-path", "-ipath",
+    "-size", "-mtime", "-mmin", "-atime", "-amin", "-ctime", "-cmin",
+    "-newer", "-anewer", "-cnewer", "-user", "-group", "-perm", "-regex",
+    "-iregex", "-printf", "-fprintf", "-fls", "-fprint", "-fprint0",
+  ]),
+  rg: new Set([
+    "-A", "-B", "-C", "-e", "-f", "-g", "-m", "-t",
+    "--regexp", "--file", "--glob", "--after-context", "--before-context",
+    "--context", "--max-count", "--type", "--type-add", "--sort", "--threads", "--pre",
+  ]),
+  grep: new Set([
+    "-A", "-B", "-C", "-e", "-f", "-m",
+    "--regexp", "--file", "--after-context", "--before-context", "--context",
+    "--max-count", "--include", "--exclude", "--include-dir", "--exclude-dir",
+    "--exclude-from",
+  ]),
+  tail: new Set(["-n", "-c", "-s", "--lines", "--bytes", "--sleep-interval"]),
+  head: new Set(["-n", "-c", "--lines", "--bytes"]),
+  sed: new Set(["-e", "-f", "-i"]),
+  jq: new Set(["-f", "--arg", "--argjson", "--slurpfile"]),
+  awk: new Set(["-F", "-v"]),
+  make: new Set([
+    "-C", "-f", "-I", "-j", "-l", "-o", "-W",
+    "--file", "--directory", "--jobs", "--include-dir", "--old-file",
+    "--what-if", "--load-average", "--eval",
+  ]),
+  go: new Set([
+    "-o", "-run", "-count", "-tags", "-gcflags", "-ldflags", "-mod", "-pkgdir",
+  ]),
+  timeout: new Set(["-s", "-k", "--signal", "--kill-after"]),
+  xargs: new Set(["-I", "-n", "-d", "-P", "-L"]),
+  apt: new Set(["-o", "-c", "-t", "--option", "--config-file", "--target-release"]),
+  apt_get: new Set(["-o", "-c", "-t", "--option", "--config-file", "--target-release"]),
+  sudo: new Set(["-u", "-g", "--user", "--group"]),
+  doas: new Set(["-u", "-C"]),
+  nice: new Set(["-n", "--adjustment"]),
+  env: new Set(["-u", "-C", "--unset", "--chdir"]),
+  deno: new Set([
+    "--config", "--import-map", "--lock", "--v8-flags", "-L", "--log-level",
+  ]),
+  bash: new Set(["-c", "--command"]),
+  sh: new Set(["-c", "--command"]),
+  zsh: new Set(["-c", "--command"]),
+  ash: new Set(["-c"]),
+  dash: new Set(["-c"]),
+  fish: new Set(["-c", "--command"]),
+  ksh: new Set(["-c"]),
+};
+
+/**
+ * Long options known to consume the next token as a value, applied to any
+ * command as a fallback when no per-command table entry exists.
+ */
+const GENERIC_VALUE_LONG_OPTIONS = new Set([
+  "--timeout", "--max-time", "--connect-timeout", "--read-timeout",
+  "--retry", "--retries", "--retry-delay", "--tries", "--wait",
+  "--output", "--output-file", "--output-document", "--directory",
+  "--directory-prefix", "--target", "--file", "--path", "--config",
+  "--input", "--header", "--user", "--password", "--token", "--key",
+  "--cert", "--url", "--name", "--tag", "--prefix", "--registry",
+  "--platform", "--arch", "--proxy", "--manifest-path", "--features",
+  "--bin", "--example", "--package", "--max-count", "--glob",
+  "--exclude", "--include", "--type", "--context", "--max-depth",
+  "--min-depth", "--branch", "--message", "--author", "--date",
+  "--grep", "--format", "--pretty", "--port", "--publish", "--volume",
+  "--env", "--env-file", "--network", "--cpus", "--memory", "--workdir",
+  "--label", "--mount", "--restart", "--requirement", "--index-url",
+  "--find-links", "--trusted-host", "--eval", "--module", "--command",
+  "--require", "--loader", "--signal", "--kill-after",
+  "--max-old-space-size", "--jobs", "--profile", "--limit-rate",
+  "--user-agent", "--referer", "--post-data", "--data", "--cookie",
+  "--cookie-jar", "--resolve", "--interface", "--range", "--strategy",
+  "--strategy-option", "--since", "--until", "--request", "--count",
+]);
+
+function isFlagWord(word: string): boolean {
+  return word.length > 1 && word.startsWith("-");
+}
+
+/**
+ * Whether a flag consumes the FOLLOWING token as its value.
+ *
+ * - `--opt=value` and attached short values (`-m60`, `-d@file`) are
+ *   self-contained and never consume the next token.
+ * - Short clusters (`-sLm`) take the value of their LAST option char (`-m`).
+ * - `--` (end of options) never consumes.
+ */
+function flagConsumesNextToken(flag: string, valueFlags: ReadonlySet<string>): boolean {
+  if (flag === "--" || flag.includes("=")) return false;
+  if (flag.startsWith("--")) {
+    return valueFlags.has(flag) || GENERIC_VALUE_LONG_OPTIONS.has(flag);
+  }
+  // Attached short value: -m60, -sLm60, -d@file — the value is inline.
+  if (/^-[a-zA-Z]+[^a-zA-Z-]/.test(flag)) return false;
+  if (valueFlags.has(flag)) return true;
+  // Short cluster: the last option char may take a separate value (-sLm → -m).
+  if (flag.length > 2 && /^-[a-zA-Z]+$/.test(flag)) {
+    return valueFlags.has(`-${flag.slice(-1)}`);
+  }
+  return false;
+}
+
 /**
  * Classify the first meaningful command in a shell command string.
- * Skips `cd`, `export`, `echo` etc. to find the real work command.
+ * Skips `cd`, `export`, `echo` etc. to find the real work command, and skips
+ * option VALUES (`--max-time 60`) so they are never mistaken for the target
+ * argument. `bash -c '…'` / `eval '…'` wrappers are unwrapped and re-parsed.
  */
-export function classifyShellCommand(raw: string): ShellCommandInfo {
+export function classifyShellCommand(raw: string, depth = 0): ShellCommandInfo {
   const segments = raw.split(/&&|\n|;(?!;)|(?<!\|)\|(?!\|)/);
   const firstWord = raw.split(/\s+/)[0]?.replace(/^[.\\/]+/, "") || "sh";
   const defaultResult: ShellCommandInfo = {
@@ -356,30 +562,59 @@ export function classifyShellCommand(raw: string): ShellCommandInfo {
     if (words.length === 0) continue;
 
     let i = 0;
-    while (
-      i < words.length &&
-      (SKIP_COMMANDS.has(words[i].toLowerCase()) || WRAPPER_SKIP_COMMANDS.has(words[i].toLowerCase()))
-    ) {
+    while (i < words.length) {
       const skipBin = words[i].toLowerCase();
-      i += 1;
-      if (i < words.length && ["cd", "chdir", "pushd"].includes(skipBin)) i += 1;
-      // timeout: skip --flags and the numeric duration argument to reach the real command
-      if (skipBin === "timeout") {
-        while (i < words.length && (words[i].startsWith("-") || /^\d/.test(words[i]))) {
-          i++;
-        }
+      if (SKIP_COMMANDS.has(skipBin)) {
+        i += 1;
+        if (["cd", "chdir", "pushd"].includes(skipBin) && i < words.length) i += 1;
+        continue;
       }
+      if (WRAPPER_SKIP_COMMANDS.has(skipBin)) {
+        const wrapperFlags = VALUE_FLAGS_BY_COMMAND[skipBin] ?? EMPTY_FLAG_SET;
+        let innerCommand: string | undefined;
+        i += 1;
+        while (i < words.length && isFlagWord(words[i])) {
+          const flag = words[i];
+          const consumesNext = flagConsumesNextToken(flag, wrapperFlags);
+          i += 1;
+          if (consumesNext && i < words.length) {
+            if (COMMAND_STRING_WRAPPERS.has(skipBin) && (flag === "-c" || flag === "--command")) {
+              innerCommand = words[i];
+            }
+            i += 1;
+          }
+        }
+        // `timeout [flags] DURATION CMD` — the duration is a positional argument.
+        if (skipBin === "timeout" && i < words.length && /^\d/.test(words[i])) i += 1;
+        // `eval 'command…'` — the next word is the command string.
+        if (skipBin === "eval" && i < words.length) innerCommand = words[i];
+        // `env FOO=bar cmd` — skip VAR=value assignments before the real command.
+        while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1;
+        if (innerCommand !== undefined && depth < 4) {
+          return classifyShellCommand(innerCommand, depth + 1);
+        }
+        continue;
+      }
+      break;
     }
 
     if (i >= words.length) continue;
 
     const binary = words[i].replace(/^[.\\/]+/, "").toLowerCase();
     const binaryBase = binary.split(/[/\\]/).pop() || binary;
+    const valueFlags = VALUE_FLAGS_BY_COMMAND[binaryBase] ?? EMPTY_FLAG_SET;
 
-    // Find first non-flag argument
+    // Find the first non-flag argument, skipping the VALUES of known
+    // value-taking options (e.g. `curl --max-time 60 URL` → the URL, not `60`).
     let argIndex = i + 1;
-    while (argIndex < words.length && words[argIndex].startsWith("-")) {
+    while (argIndex < words.length && isFlagWord(words[argIndex])) {
+      if (words[argIndex] === "--") {
+        argIndex += 1;
+        break;
+      }
+      const consumesNext = flagConsumesNextToken(words[argIndex], valueFlags);
       argIndex += 1;
+      if (consumesNext && argIndex < words.length) argIndex += 1;
     }
     const argument = argIndex < words.length ? words[argIndex] : undefined;
 
