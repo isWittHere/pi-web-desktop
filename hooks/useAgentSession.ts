@@ -468,6 +468,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } satisfies SessionStatsInfo;
   }, [messages, sessionStatsOverride, contextUsage, data?.filePath, session?.id, session?.name]);
 
+  // Apply a loaded session snapshot (messages, tree, leaf, metadata) to the
+  // hook state. Shared by the full load path and the cache fast path.
+  const applySessionData = useCallback((d: SessionData) => {
+    setData(d);
+    setActiveLeafId(d.leafId);
+    setMessages(d.context.messages);
+    setEntryIds(d.context.entryIds ?? []);
+    setCurrentModelOverride(null);
+    setError(null);
+    if (d.context.thinkingLevel && d.context.thinkingLevel !== "off") {
+      setThinkingLevel(d.context.thinkingLevel as ThinkingLevelOption);
+    }
+  }, [setData, setActiveLeafId, setMessages, setEntryIds, setCurrentModelOverride, setError, setThinkingLevel]);
+
   // Fetch the in-process agent state for a session (running flag + live
   // state). Shared by the full load path and the cache fast path.
   const loadAgentState = useCallback(async (sid: string) => {
@@ -517,16 +531,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           fresh = false;
         }
         if (fresh && sessionIdRef.current === sid) {
-          const d = cached.data;
-          setData(d);
-          setActiveLeafId(d.leafId);
-          setMessages(d.context.messages);
-          setEntryIds(d.context.entryIds ?? []);
-          setCurrentModelOverride(null);
-          setError(null);
-          if (d.context.thinkingLevel && d.context.thinkingLevel !== "off") {
-            setThinkingLevel(d.context.thinkingLevel as ThinkingLevelOption);
-          }
+          applySessionData(cached.data);
           messagesLoaded = true;
           if (showLoading) setLoading(false);
           if (!includeState) return null;
@@ -550,15 +555,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData;
       if (sessionIdRef.current !== sid) return null;
-      setData(d);
-      setActiveLeafId(d.leafId);
-      setMessages(d.context.messages);
-      setEntryIds(d.context.entryIds ?? []);
-      setCurrentModelOverride(null);
-      setError(null);
-      if (d.context.thinkingLevel && d.context.thinkingLevel !== "off") {
-        setThinkingLevel(d.context.thinkingLevel as ThinkingLevelOption);
-      }
+      applySessionData(d);
 
       messagesLoaded = true;
       // Cache the snapshot for fast reopen, anchored to the file mtime.
@@ -573,7 +570,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (showLoading && !messagesLoaded) setLoading(false);
     }
-  }, [loadAgentState]);
+  }, [loadAgentState, applySessionData]);
 
   const loadContext = useCallback(async (sid: string, leafId: string | null) => {
     try {
@@ -1884,10 +1881,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     // State
-    data, loading, error, activeLeafId, messages, entryIds, streamState,
-    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, newSessionModel, toolPreset, thinkingLevel,
-    retryInfo, contextUsage, systemPrompt, forkingEntryId,
-    isCompacting, compactError, compactResult, currentModel, displayModel, sessionStats,
+    loading, error, activeLeafId, messages, entryIds, streamState,
+    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, toolPreset, thinkingLevel,
+    retryInfo, contextUsage, forkingEntryId,
+    isCompacting, compactError, compactResult, displayModel, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
     notices: noticeState.visible, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection: isNew && newSessionModel === null,
@@ -1895,17 +1892,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     isNew,
     branchTree,
     // Refs
-    sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
-    lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
+    sessionIdRef, messagesEndRef, scrollContainerRef,
+    lastUserMsgRef,
     // Actions
     handleSend, executeBash, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
-    handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setActiveLeafId, setData, setMessages,
-    dispatch, setAgentRunning, setForkingEntryId,
+    handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
     handleLeafChange,
-    // Subscriptions
-    handleAgentEventRef,
   };
 }

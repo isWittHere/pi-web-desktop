@@ -17,7 +17,6 @@ export interface SessionCacheEntry<T = CacheShape> {
   data: T;
   /** File mtime (ISO string) captured when the snapshot was loaded. */
   infoModified: string;
-  cachedAt: number;
 }
 
 const MAX_ENTRIES = 8;
@@ -62,7 +61,7 @@ export function setCachedSession(sessionId: string, data: CacheShape, infoModifi
   if (!infoModified) return;
   const cache = getCacheMap();
   cache.delete(sessionId);
-  cache.set(sessionId, { data, infoModified, cachedAt: Date.now() });
+  cache.set(sessionId, { data, infoModified });
 
   let total = 0;
   for (const entry of cache.values()) total += estimateBytes(entry.data);
@@ -73,10 +72,6 @@ export function setCachedSession(sessionId: string, data: CacheShape, infoModifi
     if (oldest) total -= estimateBytes(oldest.data);
     cache.delete(oldestKey);
   }
-}
-
-export function clearCachedSession(sessionId: string): void {
-  getCacheMap().delete(sessionId);
 }
 
 export function clearSessionCache(): void {
