@@ -54,13 +54,13 @@ export function saveDraftSessions(drafts: DraftSession[]): void {
   }
 }
 
-export function createDraftSession(cwd: string, id?: string): DraftSession {
+export function createDraftSession(cwd: string): DraftSession {
   const now = new Date().toISOString();
   const generated = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   return {
-    id: id ?? generated,
+    id: generated,
     cwd,
     createdAt: now,
     modifiedAt: now,
@@ -73,10 +73,6 @@ export function removeDraftSession(drafts: DraftSession[], id: string): DraftSes
 
 export function renameDraftSession(drafts: DraftSession[], id: string, name: string): DraftSession[] {
   return drafts.map((d) => (d.id === id ? { ...d, name, modifiedAt: new Date().toISOString() } : d));
-}
-
-export function touchDraftSession(drafts: DraftSession[], id: string): DraftSession[] {
-  return drafts.map((d) => (d.id === id ? { ...d, modifiedAt: new Date().toISOString() } : d));
 }
 
 /** Convert a draft into the SessionInfo shape the sidebar renders as a row. */

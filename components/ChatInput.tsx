@@ -469,10 +469,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const attachedImagesRef = useRef(attachedImages);
   valueRef.current = value;
   attachedImagesRef.current = attachedImages;
-  // The draft key whose state has been restored into the editor. Drafts are
-  // only saved once restored, so the mount-time empty value cannot overwrite a
-  // persisted draft before it is loaded (effects in the same commit share the
-  // old value snapshot).
+  // The draft key whose state has been restored into the editor. The save
+  // effect only writes once this matches draftKey, so a mount-time save can
+  // never delete a persisted draft before the editor has been populated
+  // (lazy initializer on mount, restore effect on key change).
   const draftRestoredRef = useRef<string | null>(null);
   // The editor content the restore effect last loaded from the store. The save
   // effect skips when the editor still matches this snapshot — the store
@@ -654,13 +654,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     setDraft(draftKey, { value, images });
   }, [attachedImages, draftKey, value]);
 
-  // Restore the draft for the current key on mount and when the key changes,
-  // and persist the previous key's state when switching away. This runs AFTER
-  // the save effect so the first save is deferred until restoration marks the
-  // key as restored (draftRestoredRef).
+  // Runs AFTER the save effect so the first save is deferred until this marks
+  // the key as restored (draftRestoredRef). When the key changes, persist the
+  // outgoing key's editor state and load the new key's draft into the editor.
+  // On mount the lazy initializer already restored the draft, so only the
+  // refs and restored snapshot are (re)set — the save effect relies on the
+  // snapshot to skip writing back the unchanged content.
   useEffect(() => {
     const previousDraftKey = draftKeyRef.current;
-    if (previousDraftKey && previousDraftKey !== draftKey && draftRestoredRef.current === previousDraftKey) {
+    const keyChanged = previousDraftKey !== draftKey;
+    if (previousDraftKey && keyChanged && draftRestoredRef.current === previousDraftKey) {
       setDraft(previousDraftKey, {
         value: valueRef.current,
         images: attachedImagesRef.current.map(imageToDraftImage),
@@ -668,17 +671,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
 
     const draft = draftKey ? getDraft(draftKey) : null;
+    if (keyChanged) {
+      setValue(draft?.value ?? "");
+      setAtQuery(null);
+      setAttachedImages((prev) => {
+        prev.forEach(revokeImagePreview);
+        return draft?.images.map(draftImageToAttachedImage) ?? [];
+      });
+    }
     draftKeyRef.current = draftKey;
     draftRestoredRef.current = draftKey ?? null;
     restoredSnapshotRef.current = draft
       ? { value: draft.value, imageCount: draft.images.length }
       : { value: "", imageCount: 0 };
-    setValue(draft?.value ?? "");
-    setAtQuery(null);
-    setAttachedImages((prev) => {
-      prev.forEach(revokeImagePreview);
-      return draft?.images.map(draftImageToAttachedImage) ?? [];
-    });
   }, [draftKey]);
 
   useEffect(() => {
