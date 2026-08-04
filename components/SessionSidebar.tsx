@@ -12,6 +12,9 @@ import { QuickChangesPanel } from "./QuickChangesPanel";
 
 interface Props {
   selectedSessionId: string | null;
+  /** Active draft id — draft rows highlight against this (they have no server
+   *  session, so selectedSessionId alone never matches them). */
+  selectedDraftId?: string | null;
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
   onNewSession?: (sessionId: string, cwd: string) => void;
   /** Client-side unsent drafts rendered alongside real sessions. */
@@ -262,7 +265,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1489,6 +1492,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               key={node.session.id}
               node={node}
               selectedSessionId={selectedSessionId}
+              selectedDraftId={selectedDraftId}
               runningSessionIds={runningSessionIds}
               unreadSessionIds={unreadSessionIds}
               onSelectSession={handleSelectSessionFromList}
@@ -1624,6 +1628,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 function SessionTreeItem({
   node,
   selectedSessionId,
+  selectedDraftId,
   runningSessionIds,
   unreadSessionIds,
   onSelectSession,
@@ -1635,6 +1640,7 @@ function SessionTreeItem({
 }: {
   node: SessionTreeNode;
   selectedSessionId: string | null;
+  selectedDraftId?: string | null;
   runningSessionIds: Set<string>;
   unreadSessionIds: Set<string>;
   onSelectSession: (s: SessionRow) => void;
@@ -1646,6 +1652,9 @@ function SessionTreeItem({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
+
+  const isSelected = node.session.id === selectedSessionId
+    || (node.session.isDraft === true && node.session.id === selectedDraftId);
 
   return (
     <div>
@@ -1663,7 +1672,7 @@ function SessionTreeItem({
         )}
         <SessionItem
           session={node.session}
-          isSelected={node.session.id === selectedSessionId}
+          isSelected={isSelected}
           isRunning={runningSessionIds.has(node.session.id)}
           isUnread={unreadSessionIds.has(node.session.id)}
           onClick={() => onSelectSession(node.session)}
@@ -1684,6 +1693,7 @@ function SessionTreeItem({
               key={child.session.id}
               node={child}
               selectedSessionId={selectedSessionId}
+              selectedDraftId={selectedDraftId}
               runningSessionIds={runningSessionIds}
               unreadSessionIds={unreadSessionIds}
               onSelectSession={onSelectSession}

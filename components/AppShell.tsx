@@ -380,17 +380,12 @@ export function AppShell() {
   // Reopen a draft in the composer (from a sidebar click).
   const handleSelectDraft = useCallback((draft: DraftSession) => {
     const wasActive = activeDraftIdRef.current === draft.id;
-    // Leaving a draft for another session — drop it if it never got content.
-    cleanupEmptyActiveDraft();
-    if (wasActive && !getDraft(draft.id)) {
-      // The open draft was empty and got cleaned up — nothing to reopen.
-      setActiveDraftId(null);
-      setNewSessionCwd(null);
-      setSessionKey((k) => k + 1);
-      setSystemPrompt(null);
-      setActiveTopPanel(null);
-      router.replace("/", { scroll: false });
-      return;
+    // Clicking the already-open draft only refocuses it — never treat that as
+    // "leaving" (an empty draft is dropped only when switching to another
+    // session). When switching to a different draft, first drop the previous
+    // one if it never got any content.
+    if (!wasActive) {
+      cleanupEmptyActiveDraft();
     }
     setActiveDraftId(draft.id);
     setSelectedSession(null);
@@ -541,6 +536,7 @@ export function AppShell() {
     <>
       <SessionSidebar
         selectedSessionId={selectedSession?.id ?? null}
+        selectedDraftId={activeDraftId}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
         draftSessions={draftSessions}
