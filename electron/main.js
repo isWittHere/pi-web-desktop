@@ -273,6 +273,23 @@ ipcMain.handle("shell:open-theme-docs", () => {
   return shell.openExternal("https://pi.dev/docs/latest/themes");
 });
 
+// Reveal a file/folder in the system file explorer, selecting the item in its
+// parent folder. Unlike openPath() it returns void, so existence is pre-checked
+// here and the renderer gets a boolean it can trust. The path originates from
+// the renderer's file explorer, which is already backed by the server-side
+// allow-list; no new server API surface is introduced.
+ipcMain.handle("shell:show-item-in-folder", async (_event, fullPath) => {
+  if (typeof fullPath !== "string" || fullPath.length === 0) return false;
+  try {
+    if (!fs.existsSync(fullPath)) return false;
+    shell.showItemInFolder(fullPath);
+    return true;
+  } catch (error) {
+    console.error("[Electron] Failed to reveal item in folder:", error);
+    return false;
+  }
+});
+
 async function bootstrap() {
   try {
     await waitForServer(2000);

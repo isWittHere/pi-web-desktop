@@ -1,9 +1,12 @@
 "use client";
 
 import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useRef, useMemo } from "react";
-import { At, CaretRight, Check, DownloadSimple, Info, MinusCircle, Spinner, UploadSimple, Warning, X } from "@phosphor-icons/react";
+import { At, CaretRight, Check, Copy, DownloadSimple, FolderOpen, Info, LinkSimple, MinusCircle, Spinner, UploadSimple, Warning, X } from "@phosphor-icons/react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
+import { copyText } from "@/lib/clipboard";
+import { useI18n } from "@/hooks/useI18n";
+import { useContextMenu } from "./ContextMenu";
 import type { GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
 
 
@@ -236,6 +239,8 @@ function TreeNode({
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const { t } = useI18n();
+  const { openMenu } = useContextMenu();
 
   const loadChildren = useCallback(async (force = false) => {
     if (loaded && !force) return;
@@ -269,10 +274,39 @@ function TreeNode({
     }
   }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onToggleExpanded]);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const revealDisabled = typeof window === "undefined" || !window.piDesktop;
+    openMenu(e.clientX, e.clientY, [
+      {
+        label: t("desktop.revealInFolder"),
+        icon: <FolderOpen size={13} weight="regular" aria-hidden="true" />,
+        disabled: revealDisabled,
+        onSelect: () => { void window.piDesktop?.showItemInFolder(node.fullPath); },
+      },
+      { type: "separator" },
+      {
+        label: t("desktop.copyRelativePath"),
+        icon: <Copy size={13} weight="regular" aria-hidden="true" />,
+        feedbackLabel: t("desktop.copied"),
+        onSelect: () => copyText(getRelativeFilePath(node.fullPath, cwd)),
+      },
+      {
+        label: t("desktop.copyAbsolutePath"),
+        icon: <LinkSimple size={13} weight="regular" aria-hidden="true" />,
+        feedbackLabel: t("desktop.copied"),
+        onSelect: () => copyText(node.fullPath),
+      },
+    ]);
+  }, [cwd, node.fullPath, openMenu, t]);
+
+
   return (
     <div>
       <div
         onClick={handleClick}
+        onContextMenu={handleContextMenu}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{

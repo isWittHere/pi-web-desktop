@@ -22,4 +22,6 @@ contextBridge.exposeInMainWorld("piDesktop", {
   selectDirectory: () => ipcRenderer.invoke("dialog:select-directory"),
   openThemeFolder: () => ipcRenderer.invoke("shell:open-theme-folder"),
   openThemeDocs: () => ipcRenderer.invoke("shell:open-theme-docs"),
+  // Reveal a file/folder in the system file explorer (used by context menus).
+  showItemInFolder: (fullPath) => ipcRenderer.invoke("shell:show-item-in-folder", fullPath),
 });

@@ -20,5 +20,6 @@ interface Window {
     selectDirectory: () => Promise<string | null>;
     openThemeFolder: () => Promise<string>;
     openThemeDocs: () => Promise<void>;
+    showItemInFolder: (fullPath: string) => Promise<boolean>;
   };
 }
