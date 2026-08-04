@@ -190,7 +190,7 @@ export function DisplayConfig() {
                 style={textActionButtonStyle}
                 {...underlineOnHover}
               >
-                <Link size={12} weight="regular" aria-hidden="true" />
+                <ArrowSquareOut size={12} weight="regular" aria-hidden="true" />
                 {t("desktop.openThemeFolder")}
               </button>
               <button
@@ -199,7 +199,7 @@ export function DisplayConfig() {
                 style={textActionButtonStyle}
                 {...underlineOnHover}
               >
-                <ArrowSquareOut size={12} weight="regular" aria-hidden="true" />
+                <Link size={12} weight="regular" aria-hidden="true" />
                 {t("desktop.learnPiThemes")}
               </button>
             </>
