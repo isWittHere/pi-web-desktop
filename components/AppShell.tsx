@@ -277,6 +277,17 @@ export function AppShell() {
   }, [activeCwd]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+    // Re-clicking the already-open session must not remount the chat and
+    // re-run the full load/positioning cycle. Only skip when the effective
+    // cwd context already matches — otherwise the pending cwd move needs
+    // the full re-select flow.
+    if (!isRestore && selectedSession) {
+      const sameProject = (selectedSession.projectRoot ?? selectedSession.cwd) === (session.projectRoot ?? session.cwd);
+      if (selectedSession.id === session.id && sameProject) {
+        if (isMobile) setSidebarOpen(false);
+        return;
+      }
+    }
     // Leaving a draft for a real session — drop it if it never got content.
     cleanupEmptyActiveDraft();
     setActiveDraftId(null);
@@ -297,7 +308,7 @@ export function AppShell() {
     if (!isRestore) {
       router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
     }
-  }, [router, isMobile, cleanupEmptyActiveDraft]);
+  }, [router, isMobile, cleanupEmptyActiveDraft, selectedSession]);
 
   const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
     // An empty draft is meaningless: drop the current one (if it never got
