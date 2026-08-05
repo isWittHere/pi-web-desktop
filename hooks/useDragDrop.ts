@@ -2,30 +2,15 @@
 
 import { useState, useCallback, useRef } from "react";
 
-/** True when the payload contains at least one readable file (not only
- *  directories). Directory-only drags are ignored — dropping a folder has no
- *  well-defined "reference" meaning yet. */
-function hasDroppableFiles(items: DataTransferItemList | null): boolean {
-  if (!items) return false;
-  let hasFile = false;
-  let hasNonDirectory = false;
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (!item || item.kind !== "file") continue;
-    hasFile = true;
-    const entry = item.webkitGetAsEntry?.();
-    if (!entry || !entry.isDirectory) hasNonDirectory = true;
+/** Chromium hides dataTransfer.items during dragenter/dragover for
+ *  cross-process drags (OS file manager), so the only reliable hover-phase
+ *  signal is dataTransfer.types. Items are read at drop time instead. */
+function hasFilesInPayload(types: DataTransfer["types"]): boolean {
+  try {
+    return Array.from(types).includes("Files");
+  } catch {
+    return false;
   }
-  return hasFile && hasNonDirectory;
-}
-
-function containsImages(items: DataTransferItemList | null): boolean {
-  if (!items) return false;
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (item && item.kind === "file" && item.type.startsWith("image/")) return true;
-  }
-  return false;
 }
 
 /** Filters directory entries out of a drop payload (their File objects carry
@@ -41,21 +26,20 @@ function filePayloadWithoutDirectories(e: React.DragEvent): File[] {
 
 export function useDragDrop(onDrop: (files: File[]) => void) {
   const [isDragOver, setIsDragOver] = useState(false);
-  const [hasImages, setHasImages] = useState(false);
   const counterRef = useRef(0);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
-    if (!hasDroppableFiles(e.dataTransfer.items)) return;
+    if (!hasFilesInPayload(e.dataTransfer.types)) return;
     e.preventDefault();
     counterRef.current += 1;
-    setHasImages(containsImages(e.dataTransfer.items));
     setIsDragOver(true);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (!hasDroppableFiles(e.dataTransfer.items)) return;
+    if (!hasFilesInPayload(e.dataTransfer.types)) return;
+    // Without preventDefault the browser shows the drop-forbidden cursor and
+    // the drop event never fires.
     e.preventDefault();
-    setHasImages(containsImages(e.dataTransfer.items));
   }, []);
 
   const handleDragLeave = useCallback(() => {
@@ -74,5 +58,5 @@ export function useDragDrop(onDrop: (files: File[]) => void) {
     if (files.length) onDrop(files);
   }, [onDrop]);
 
-  return { isDragOver, hasImages, handleDragEnter, handleDragOver, handleDragLeave, handleDrop };
+  return { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop };
 }

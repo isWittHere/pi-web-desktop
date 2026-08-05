@@ -2190,7 +2190,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 setAttachMenuRect({ top: rect.top, left: rect.left, width: rect.width });
                 setAttachMenuOpen((v) => !v);
               }}
-              disabled={isStreaming}
               title={t("desktop.attachContext")}
               aria-label={t("desktop.attachContext")}
               aria-expanded={attachMenuOpen}
@@ -2200,12 +2199,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 background: attachMenuOpen ? "var(--bg-hover)" : "none", border: "none",
                 borderRadius: 6,
                 color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
-                cursor: isStreaming ? "not-allowed" : "pointer",
-                opacity: isStreaming ? 0.5 : 1,
+                cursor: "pointer",
                 transition: "background 0.12s, color 0.12s",
               }}
               onMouseEnter={(e) => {
-                if (isStreaming) return;
                 e.currentTarget.style.background = "var(--bg-hover)";
                 e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text)";
               }}
@@ -2217,14 +2214,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <PlusIcon size={14} />
             </button>
             {attachMenuOpen && attachMenuRect && (() => {
+              const vh = window.visualViewport?.height ?? window.innerHeight;
               const vw = window.innerWidth;
               const menuWidth = 200;
-              const menuHeight = 3 * 30 + 12;
-              const top = Math.max(8, attachMenuRect.top - menuHeight - 4);
-              const left = Math.min(attachMenuRect.left, vw - menuWidth - 8);
+              // Anchor like the other toolbar menus: bottom edge sits above
+              // the button's top edge, left-aligned to the button.
+              const l = Math.min(attachMenuRect.left, vw - menuWidth - 8);
+              const b = vh - attachMenuRect.top + 4;
               return (
                 <div ref={attachMenuRef} className="chat-input-menu-panel" style={{
-                  position: "fixed", top, left,
+                  position: "fixed", bottom: b, left: l,
                   zIndex: 2001, background: "var(--bg-panel)", border: "1px solid var(--border)",
                   borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                   overflow: "hidden", width: menuWidth,
@@ -2254,15 +2253,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     <button
                       type="button"
                       onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
+                      disabled={isStreaming}
+                      title={isStreaming ? t("desktop.imageAttachmentsCannotQueue") : undefined}
                       style={{
                         width: "100%", display: "flex", alignItems: "center", gap: 8,
                         padding: "4px 10px", borderRadius: 4,
                         background: "none", border: "none",
-                        color: "var(--text)", cursor: "pointer",
+                        color: isStreaming ? "var(--text-dim)" : "var(--text)",
+                        cursor: isStreaming ? "not-allowed" : "pointer",
                         fontSize: 12, textAlign: "left",
+                        opacity: isStreaming ? 0.6 : 1,
                         transition: "background 0.1s ease",
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseEnter={(e) => { if (!isStreaming) e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                     >
                       <ImageIcon size={14} weight="regular" aria-hidden="true" />
