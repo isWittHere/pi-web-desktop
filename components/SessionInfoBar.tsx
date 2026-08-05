@@ -116,6 +116,35 @@ export function SessionInfoBar({
   const hasSystemPrompt = systemPrompt !== null && systemPrompt !== "";
   const hasStats = sessionStats && t && (t.input > 0 || t.output > 0);
 
+  // Compact readout state: cost + context text + usage ring. Only shown once
+  // BOTH the cost and the context usage are known; while either is temporarily
+  // unknown (e.g. a fresh run that hasn't reported usage yet) we fall back to
+  // the full detailed chip form below so no information is lost.
+  const ctxKnown = !!contextUsage?.contextWindow && contextUsage.percent !== null;
+  const compactKnown = costStr !== null && ctxKnown;
+
+  // Usage donut — arc length = context usage %. Only rendered once percent is
+  // known, so it always receives a concrete value (no null dead-branch).
+  const usageRing = (pct: number) => (
+    <svg className="session-info-bar-donut" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.75" fill="none" stroke="var(--border)" strokeWidth="2.5" />
+      <circle
+        className="session-info-bar-donut-arc"
+        cx="8"
+        cy="8"
+        r="6.75"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        pathLength={100}
+        strokeDasharray={100}
+        strokeDashoffset={100 - Math.min(100, Math.max(0, pct))}
+        transform="rotate(-90 8 8)"
+      />
+    </svg>
+  );
+
   const hasBranching = hasSession && onBranchLeafChange && (() => {
     const tree = branchTree ?? [];
     function check(nodes: SessionTreeNode[]): boolean {
@@ -305,56 +334,46 @@ export function SessionInfoBar({
             aria-label={translate("desktop.sessionInfo")}
             aria-pressed={activePanel === "session"}
           >
-            {t && t.input > 0 && (
-              <span className="session-info-bar-token-chip">
-                <ArrowUp size={10} aria-hidden="true" />
-                {formatTokenCount(t.input)}
-              </span>
-            )}
-            {t && t.output > 0 && (
-              <span className="session-info-bar-token-chip">
-                <ArrowDown size={10} aria-hidden="true" />
-                {formatTokenCount(t.output)}
-              </span>
-            )}
-            {t && t.cacheRead > 0 && (
-              <span className="session-info-bar-token-chip">
-                <Database size={10} aria-hidden="true" />
-                {formatTokenCount(t.cacheRead)}
-              </span>
-            )}
-            {costStr && <span>{costStr}</span>}
-            {contextUsage?.contextWindow && contextUsage.percent !== null && (
-              <span className="session-info-bar-token-chip" style={{ color: ctxColor }}>
-                {/* Pure donut chart — arc length = context usage %. Details are in the tooltip & stats popover. */}
-                <svg
-                  className="session-info-bar-donut"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  aria-hidden="true"
-                >
-                  <circle cx="8" cy="8" r="6.75" fill="none" stroke="var(--border)" strokeWidth="2.5" />
-                  <circle
-                    className="session-info-bar-donut-arc"
-                    cx="8"
-                    cy="8"
-                    r="6.75"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    pathLength={100}
-                    strokeDasharray={100}
-                    strokeDashoffset={
-                      contextUsage.percent === null
-                        ? 0 // unknown usage → full ring
-                        : 100 - Math.min(100, Math.max(0, contextUsage.percent))
-                    }
-                    transform="rotate(-90 8 8)"
-                  />
-                </svg>
-              </span>
+            {compactKnown ? (
+              <>
+                <span>{costStr}</span>
+                {contextUsage && contextUsage.percent !== null && (
+                  <span className="session-info-bar-token-chip" style={{ color: ctxColor, marginLeft: 5 }}>
+                    {contextUsage.tokens !== null ? formatTokenCount(contextUsage.tokens) : "?"}
+                    /{formatTokenCount(contextUsage.contextWindow)}
+                    {usageRing(contextUsage.percent)}
+                  </span>
+                )}
+              </>
+            ) : (
+              // Either cost or context usage is still unknown — keep the full
+              // current form so no information is lost while values are pending.
+              <>
+                {t && t.input > 0 && (
+                  <span className="session-info-bar-token-chip">
+                    <ArrowUp size={10} aria-hidden="true" />
+                    {formatTokenCount(t.input)}
+                  </span>
+                )}
+                {t && t.output > 0 && (
+                  <span className="session-info-bar-token-chip">
+                    <ArrowDown size={10} aria-hidden="true" />
+                    {formatTokenCount(t.output)}
+                  </span>
+                )}
+                {t && t.cacheRead > 0 && (
+                  <span className="session-info-bar-token-chip">
+                    <Database size={10} aria-hidden="true" />
+                    {formatTokenCount(t.cacheRead)}
+                  </span>
+                )}
+                {costStr && <span>{costStr}</span>}
+                {contextUsage?.contextWindow && contextUsage.percent !== null && (
+                  <span className="session-info-bar-token-chip" style={{ color: ctxColor }}>
+                    {usageRing(contextUsage.percent)}
+                  </span>
+                )}
+              </>
             )}
           </button>
           {activePanel === "session" && sessionStats && (
