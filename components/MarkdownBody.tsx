@@ -165,9 +165,9 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>
       {streamingSplit ? (
-        parts.map((part) => (
+        parts.map((part, index) => (
           <MarkdownPart
-            key={part.id}
+            key={`${index}-${part.id}`}
             text={part.text}
             isStreaming={part.tail ? isStreaming : false}
             cwd={cwd}
