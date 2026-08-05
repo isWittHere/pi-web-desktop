@@ -328,6 +328,8 @@ type ModelsResponse = {
   thinkingLevels?: Record<string, string[]>;
   thinkingLevelMaps?: Record<string, Record<string, string | null>>;
   thinkingLevelPins?: Record<string, string>;
+  /** `provider:modelId` → whether the model accepts image input. */
+  imageInput?: Record<string, boolean>;
   modelScopeWarnings?: string[];
 };
 
@@ -355,6 +357,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [pendingBash, setPendingBash] = useState<{ command: string; excludeFromContext: boolean } | null>(null);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<ModelEntry[]>([]);
+  const [modelImageInput, setModelImageInput] = useState<Record<string, boolean>>({});
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [modelScopeWarnings, setModelScopeWarnings] = useState<string[]>([]);
@@ -1493,6 +1496,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const d = await res.json() as ModelsResponse;
     setModelNames(d.models);
+    setModelImageInput(d.imageInput ?? {});
     setModelThinkingLevels(d.thinkingLevels ?? {});
     setModelThinkingLevelMaps(d.thinkingLevelMaps ?? {});
     setModelScopeWarnings(d.modelScopeWarnings ?? []);
@@ -1882,7 +1886,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     loading, error, activeLeafId, messages, entryIds, streamState,
-    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,

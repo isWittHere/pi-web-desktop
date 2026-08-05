@@ -832,6 +832,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       </div>
     </div>
   );
+  const quickProjects = visibleProjects.filter((p) => isQuickWorkspace(p, homeDir));
+  const projectGroupHeader = (label: string) => (
+    <div style={{ padding: "5px 8px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
+  );
   const projectItem = (project: string) => {
     const isSelected = project === selectedProject;
     const isQuick = isQuickWorkspace(project, homeDir);
@@ -851,11 +855,17 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const projectList = (
     <div style={{ maxHeight: "min(32vh, 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
       {visibleProjects.length > 0 && (
-        <div style={{ padding: "5px 8px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
-          {t("desktop.recentProjects")}
-        </div>
+        <>
+          {projectGroupHeader(t("desktop.recentProjects"))}
+          {visibleProjects.map(projectItem)}
+        </>
       )}
-      {visibleProjects.map(projectItem)}
+      {quickProjects.length > 0 && (
+        <>
+          {projectGroupHeader(t("desktop.quickWorkspaces"))}
+          {quickProjects.map(projectItem)}
+        </>
+      )}
       {visibleProjects.length === 0 && <div style={{ padding: "8px", fontSize: 12, color: "var(--text-dim)" }}>{projectFilter.trim() ? t("desktop.noMatchingProjects") : t("desktop.noProjectsYet")}</div>}
     </div>
   );

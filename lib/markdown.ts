@@ -10,6 +10,8 @@ const markdownSanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     code: [["className", /^language-./, "math-inline", "math-display"]],
+    // Mention tokens injected by the mention remark plugin (lib/mention-tokens.ts).
+    span: [["className", /^mention-/], "data-mention-kind", "data-mention-value"],
   },
   strip: [...(defaultSchema.strip || []), "iframe", "object", "style", "form"],
 };

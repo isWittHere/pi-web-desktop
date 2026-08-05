@@ -2,7 +2,7 @@
 
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
-import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
+import ReactMarkdown, { type Components, type ExtraProps, type Options as ReactMarkdownOptions } from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
@@ -10,6 +10,7 @@ import { copyText } from "@/lib/clipboard";
 import { resolveLocalFileHref } from "@/lib/file-links";
 import { splitStableParts } from "@/lib/markdown-incremental";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { mentionRemarkPlugin, type MentionValidators } from "@/lib/mention-tokens";
 import { prismTheme } from "@/lib/prism-theme";
 
 
@@ -20,6 +21,12 @@ interface MarkdownBodyProps {
   isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
+  /**
+   * Highlight valid @file / /skill: mentions inside text (accent + dotted
+   * underline). Requires `mentionValidators` to resolve what is valid.
+   */
+  highlightMentions?: boolean;
+  mentionValidators?: MentionValidators;
 }
 
 interface MarkdownComponentsOptions {
@@ -125,11 +132,12 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
  * Stable chunks are marked non-streaming: their closed code blocks get Prism
  * highlighting immediately instead of waiting for the whole message to end.
  */
-const MarkdownPart = memo(function MarkdownPart({ text, isStreaming, cwd, onOpenFile }: {
+const MarkdownPart = memo(function MarkdownPart({ text, isStreaming, cwd, onOpenFile, remarkPlugins }: {
   text: string;
   isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
+  remarkPlugins?: ReactMarkdownOptions["remarkPlugins"];
 }) {
   const normalized = useMemo(() => normalizeDisplayMath(text), [text]);
   const components = useMemo(
@@ -138,7 +146,7 @@ const MarkdownPart = memo(function MarkdownPart({ text, isStreaming, cwd, onOpen
   );
   return (
     <ReactMarkdown
-      remarkPlugins={markdownRemarkPlugins}
+      remarkPlugins={remarkPlugins}
       rehypePlugins={markdownRehypePlugins}
       components={components}
     >
@@ -147,7 +155,7 @@ const MarkdownPart = memo(function MarkdownPart({ text, isStreaming, cwd, onOpen
   );
 });
 
-export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile }: MarkdownBodyProps) {
+export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, highlightMentions, mentionValidators }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   // Interning map: stable chunk text stays reference-stable so MarkdownPart
   // memo comparisons hit with === and skip the parse/render work entirely.
@@ -161,6 +169,14 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
     () => buildMarkdownComponents({ isStreaming, cwd, onOpenFile }),
     [isStreaming, cwd, onOpenFile],
   );
+  const mentionPlugins = useMemo(
+    () => (highlightMentions && mentionValidators ? [mentionRemarkPlugin(mentionValidators)] : []),
+    [highlightMentions, mentionValidators],
+  );
+  const remarkPlugins = useMemo(
+    () => [...(markdownRemarkPlugins ?? []), ...mentionPlugins],
+    [mentionPlugins],
+  );
 
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>
@@ -172,11 +188,12 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
             isStreaming={part.tail ? isStreaming : false}
             cwd={cwd}
             onOpenFile={onOpenFile}
+            remarkPlugins={remarkPlugins}
           />
         ))
       ) : (
         <ReactMarkdown
-          remarkPlugins={markdownRemarkPlugins}
+          remarkPlugins={remarkPlugins}
           rehypePlugins={markdownRehypePlugins}
           components={components}
         >

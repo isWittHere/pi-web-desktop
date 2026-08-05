@@ -6,6 +6,8 @@ export interface ModelsData {
   thinkingLevelMaps: Record<string, Record<string, string | null>>;
   /** `provider/modelId` → thinking level pinned by an enabledModels suffix. */
   thinkingLevelPins: Record<string, string>;
+  /** `provider/modelId` → whether the model accepts image input (Model.input). */
+  imageInput: Record<string, boolean>;
   /** Resolver diagnostics when an enabledModels pattern matched no model. */
   modelScopeWarnings?: string[];
 }

@@ -1,10 +1,14 @@
 "use client";
 
-import { memo, useState, useRef, useEffect, useMemo } from "react";
+import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { MarkdownBody } from "./MarkdownBody";
 import { copyText } from "@/lib/clipboard";
 
 import { isEmptyThinkingBlock } from "@/lib/message-display";
+import { parseSkillBlock } from "@/lib/skill-block";
+import { useFileIndex, useSkillInfo } from "@/hooks/useProjectContext";
+import type { MentionValidators } from "@/lib/mention-tokens";
 import { CompactionSummary } from "./CompactionSummary";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/ArrowBendDownRight";
@@ -33,6 +37,9 @@ import type {
 } from "@/lib/types";
 
 const MAX_THINKING_CACHE_ENTRIES = 100;
+// Keep in sync with .chat-user-skill-tip { max-width } in globals.css — used
+// to clamp the floating skill tooltip inside the window.
+const SKILL_TIP_MAX_WIDTH = 340;
 const thinkingContentCache = new Map<string, Promise<string>>();
 
 function loadThinkingContent(sessionId: string, entryId: string, blockIndex: number): Promise<string> {
@@ -162,6 +169,53 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
+  // The skill tooltip is portaled to document.body and positioned fixed, so
+  // no chat container (the bubble's overflow, or .chat-user-message's
+  // content-visibility containment) can clip it. Scrolling or resizing
+  // dismisses it — the standard tooltip interaction — so it can never get
+  // stuck at a stale position while the message it anchors scrolls away.
+  const [skillTip, setSkillTip] = useState<{ left: number; top: number } | null>(null);
+  const skillTokenRef = useRef<HTMLSpanElement | null>(null);
+  const skillTipHideTimerRef = useRef<number | null>(null);
+
+  const cancelSkillTipHide = useCallback(() => {
+    if (skillTipHideTimerRef.current !== null) {
+      window.clearTimeout(skillTipHideTimerRef.current);
+      skillTipHideTimerRef.current = null;
+    }
+  }, []);
+  const showSkillTip = useCallback(() => {
+    cancelSkillTipHide();
+    const token = skillTokenRef.current;
+    if (!token) return;
+    const rect = token.getBoundingClientRect();
+    // Viewport-fixed coordinates. Right-align to the token's right edge
+    // (tooltip grows leftward), clamped so it never leaves the window.
+    const left = Math.min(
+      Math.max(rect.right - SKILL_TIP_MAX_WIDTH, 8),
+      window.innerWidth - SKILL_TIP_MAX_WIDTH - 8,
+    );
+    setSkillTip({ left, top: rect.bottom + 8 });
+  }, [cancelSkillTipHide]);
+  const hideSkillTip = useCallback(() => {
+    if (skillTipHideTimerRef.current !== null) window.clearTimeout(skillTipHideTimerRef.current);
+    // Small grace so the mouse can travel from the token into the floating
+    // tooltip without it blinking away.
+    skillTipHideTimerRef.current = window.setTimeout(() => setSkillTip(null), 150);
+  }, []);
+  useEffect(() => {
+    if (skillTip === null) return;
+    // Dismiss on any scroll/resize: the anchored token moves under the
+    // mouse (or leaves the viewport), so a floating tooltip must not linger
+    // at a stale spot. Capture catches scrolling inside any container.
+    const dismiss = () => setSkillTip(null);
+    document.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      document.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+    };
+  }, [skillTip]);
 
   const content =
     typeof message.content === "string"
@@ -170,6 +224,27 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
           .filter((b): b is TextContent => b.type === "text")
           .map((b) => b.text)
           .join("\n");
+
+  // The SDK expands /skill:name into a <skill> block before storing the
+  // message; render that as a styled token instead of dumping the raw skill
+  // source into the bubble. Hovering the token reveals the skill's file path
+  // and description.
+  const skillBlock = content ? parseSkillBlock(content) : null;
+
+  // Validity lookups for @file mentions (project index) and /skill: tokens
+  // (loaded skills). null until data arrives — mentions stay plain then.
+  const fileIndex = useFileIndex(cwd);
+  const skillInfo = useSkillInfo(cwd);
+  const mentionValidators = useMemo<MentionValidators>(() => ({
+    fileExists: (path) => {
+      if (!fileIndex) return undefined;
+      const key = path.toLowerCase();
+      return fileIndex.paths.has(key) || fileIndex.dirs.has(key);
+    },
+    isSkill: (name) => (skillInfo ? skillInfo.has(name) : undefined),
+  }), [fileIndex, skillInfo]);
+  const markdownMentionProps = { cwd, onOpenFile, highlightMentions: true, mentionValidators } as const;
+  const skillMeta = skillBlock ? skillInfo?.get(skillBlock.name) : null;
 
   const imageBlocks: ImageContent[] =
     typeof message.content === "string"
@@ -220,10 +295,45 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               })}
             </div>
           )}
-          {content && <MarkdownBody className="markdown-user-message" cwd={cwd} onOpenFile={onOpenFile}>{content}</MarkdownBody>}
+          {content && (skillBlock ? (
+            <div className="chat-user-skill">
+              <span
+                ref={skillTokenRef}
+                className="mention-token mention-token-skill"
+                onMouseEnter={showSkillTip}
+                onMouseLeave={hideSkillTip}
+              >
+                /skill:{skillBlock.name}
+              </span>
+              {skillBlock.args && (
+                <MarkdownBody className="markdown-user-message" {...markdownMentionProps}>{skillBlock.args}</MarkdownBody>
+              )}
+            </div>
+          ) : (
+            <MarkdownBody className="markdown-user-message" {...markdownMentionProps}>{content}</MarkdownBody>
+          ))}
         </div>
 
       </div>
+
+      {/* Floating skill tooltip — portaled to body + fixed, so no chat
+          container (bubble overflow / content-visibility containment) can
+          clip it. Dismissed on scroll/resize. */}
+      {skillTip !== null && (skillMeta || skillBlock?.location) && createPortal(
+        <div
+          className="chat-user-skill-tip"
+          role="tooltip"
+          style={{ left: skillTip.left, top: skillTip.top }}
+          onMouseEnter={cancelSkillTipHide}
+          onMouseLeave={hideSkillTip}
+        >
+          {skillMeta && skillMeta.description && (
+            <span className="chat-user-skill-tip-desc">{skillMeta.description}</span>
+          )}
+          <span className="chat-user-skill-tip-path">{skillMeta?.filePath ?? skillBlock?.location}</span>
+        </div>,
+        document.body,
+      )}
 
       {/* Bottom row: action buttons + timestamp */}
       {(time || canFork || canNavigate || true) && (

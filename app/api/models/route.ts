@@ -23,6 +23,7 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   const nameMap = new Map<string, string>();
   const thinkingLevels: Record<string, string[]> = {};
   const thinkingLevelMaps: Record<string, Record<string, string | null>> = {};
+  const imageInput: Record<string, boolean> = {};
 
   const agentDir = getAgentDir();
   // Model enumeration imports project extensions to discover their providers.
@@ -49,6 +50,7 @@ async function loadModels(cwd: string): Promise<ModelsData> {
     nameMap.set(key, model.name);
     thinkingLevels[key] = getSupportedThinkingLevels(model);
     if (model.thinkingLevelMap) thinkingLevelMaps[key] = model.thinkingLevelMap;
+    imageInput[key] = model.input.includes("image");
   }
 
   const defaultProvider = settings.getDefaultProvider();
@@ -68,6 +70,7 @@ async function loadModels(cwd: string): Promise<ModelsData> {
     thinkingLevels,
     thinkingLevelMaps,
     thinkingLevelPins: scope.thinkingLevelPins,
+    imageInput,
     ...(scope.warnings.length > 0 ? { modelScopeWarnings: scope.warnings } : {}),
   };
 }
@@ -79,6 +82,7 @@ const EMPTY_MODELS: ModelsData = {
   thinkingLevels: {},
   thinkingLevelMaps: {},
   thinkingLevelPins: {},
+  imageInput: {},
 };
 
 export async function GET(req: Request) {

@@ -145,7 +145,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
 
   const {
     loading, error, messages, entryIds, streamState,
-    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -433,6 +433,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
       isAutoModelSelection={isAutoModelSelection}
       modelNames={modelNames}
       modelList={modelList}
+      imageInputByModel={modelImageInput}
       modelScopeWarnings={modelScopeWarnings}
       onModelChange={handleModelChange}
       compactResult={compactResult}

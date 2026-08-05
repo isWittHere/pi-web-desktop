@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
+import React, { useMemo, useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
@@ -9,6 +9,8 @@ import {
   type AtQueryMatch, type FileIndexEntry,
 } from "@/lib/file-fuzzy";
 import { toCwdRelativeMentions } from "@/lib/file-mentions";
+import { tokenizeMentions } from "@/lib/mention-tokens";
+import { useFileIndex, useSkillNames } from "@/hooks/useProjectContext";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -68,6 +70,8 @@ interface Props {
   isAutoModelSelection?: boolean;
   modelNames?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string }[];
+  /** `provider:modelId` → whether the model accepts image input. */
+  imageInputByModel?: Record<string, boolean>;
   modelScopeWarnings?: string[];
   onModelChange?: (provider: string, modelId: string) => void;
   compactResult?: CompactResultInfo | null;
@@ -310,7 +314,7 @@ function NextTurnBanner() {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, isCompacting, onAbortCompaction, stepLabel, model, isAutoModelSelection, modelNames, modelList, modelScopeWarnings, onModelChange,
+  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, isCompacting, onAbortCompaction, stepLabel, model, isAutoModelSelection, modelNames, modelList, imageInputByModel, modelScopeWarnings, onModelChange,
   compactResult, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
@@ -469,12 +473,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [fileIndex, setFileIndex] = useState<{ cwd: string; entries: FileIndexEntry[]; truncated: boolean } | null>(null);
   const [fileIndexLoading, setFileIndexLoading] = useState(false);
   const [atServerResult, setAtServerResult] = useState<{ cwd: string; query: string; matches: FileIndexEntry[] } | null>(null);
+  // Shared project-index / skill-name caches for mention highlighting (the
+  // autocomplete menu keeps its own index state above — untouched).
+  const fileIndexSnapshot = useFileIndex(cwd);
+  const skillNames = useSkillNames(cwd);
   // Whether the composer textarea currently holds focus. Drives the
   // conditional visibility of the floating maximize/restore button above the
   // input box — it only appears while the user is typing-focused.
   const [inputFocused, setInputFocused] = useState(false);
+  // True while an IME composition is in progress. The textarea text is
+  // transparent so the highlight layer behind it shows through; some IMEs
+  // paint the composing string in the element's text color, so fall back to
+  // solid text while composing and let the highlight layer reappear after.
+  const [compositionActive, setCompositionActive] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const highlightLayerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const modelDropdownPanelRef = useRef<HTMLDivElement>(null);
   const modelSearchRef = useRef<HTMLInputElement>(null);
@@ -501,6 +515,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const attachedImagesRef = useRef(attachedImages);
   valueRef.current = value;
   attachedImagesRef.current = attachedImages;
+
+  // Highlight layer segments: valid @file mentions and /skill: commands get
+  // accent + dotted underline styling in the backdrop behind the textarea.
+  // The token under the @ autocomplete caret stays plain while being edited.
+  const highlightSegments = useMemo(() => {
+    const index = fileIndexSnapshot;
+    const skills = skillNames;
+    return tokenizeMentions(value, {
+      fileExists: (path) => {
+        if (!index) return undefined;
+        const key = path.toLowerCase();
+        return index.paths.has(key) || index.dirs.has(key);
+      },
+      isSkill: (name) => (skills ? skills.has(name) : undefined),
+    }, atQuery?.start ?? null);
+  }, [value, fileIndexSnapshot, skillNames, atQuery]);
   // The draft key whose state has been restored into the editor. The save
   // effect only writes once this matches draftKey, so a mount-time save can
   // never delete a persisted draft before the editor has been populated
@@ -851,6 +881,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   useEffect(() => {
     applyAutoHeight();
   }, [applyAutoHeight, value]);
+
+  // Mirror the textarea's internal scroll onto the highlight layer (auto
+  // height cap / manual resize both make the textarea scroll). Runs after
+  // every render so height changes settle before the offset is recomputed.
+  const syncHighlightScroll = useCallback(() => {
+    const ta = textareaRef.current;
+    const layer = highlightLayerRef.current;
+    if (!ta || !layer) return;
+    const offset = ta.scrollTop > 0 ? -ta.scrollTop : 0;
+    layer.style.transform = offset ? `translateY(${offset}px)` : "";
+  }, []);
+  useEffect(() => {
+    syncHighlightScroll();
+  });
 
   // Switching between auto and fixed manual height: fixed mode lets flex
   // stretch fill the shell (clear any stale inline height), auto mode
@@ -1392,6 +1436,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? (modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)?.name ?? model.modelId)
     : null;
   const currentName = displayModelName;
+
+  // Image input is only available for models whose registry entry declares
+  // `input` to include "image". Unknown models (not in the visible scope, or
+  // before the models response arrives) default to supported so the attach
+  // button is never blocked on missing data — only on a known lack of support.
+  const modelSupportsImages = model
+    ? (imageInputByModel?.[`${model.provider}:${model.modelId}`] ?? true)
+    : true;
+  const activeModelName = model
+    ? (modelList?.find((m) => m.provider === model.provider && m.id === model.modelId)?.name
+      ?? modelNames?.[`${model.provider}:${model.modelId}`]
+      ?? model.modelId)
+    : "";
 
   const compactSavedTokens = compactResult
     ? Math.max(0, compactResult.tokensBefore - compactResult.estimatedTokensAfter)
@@ -2103,6 +2160,24 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
           </div>
           <div className="chat-input-editor-row" style={{ borderColor: bashMode ? "var(--tool-bg)" : undefined }}>
+          {/* Highlight layer: same text, same metrics, positioned exactly over
+              the textarea content box (editor row padding is 6px 12px). The
+              textarea's own text is transparent so these tokens show through,
+              with valid @file / /skill: mentions tinted accent + dotted. */}
+          <div className="chat-input-highlight-viewport" aria-hidden="true">
+            <div
+              ref={highlightLayerRef}
+              className="chat-input-highlight"
+            >
+              {highlightSegments.map((segment, i) =>
+                segment.type === "text" || !segment.token.valid ? (
+                  segment.text
+                ) : (
+                  <span key={i} className={`mention-token mention-token-${segment.token.kind}`}>{segment.text}</span>
+                )
+              )}
+            </div>
+          </div>
           <textarea
             ref={textareaRef}
             value={value}
@@ -2115,12 +2190,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               const el = e.currentTarget;
               updateAtQuery(el.value, el.selectionStart);
             }}
+            onScroll={syncHighlightScroll}
             onKeyDown={handleKeyDown}
             onCompositionStart={() => {
               isComposingRef.current = true;
+              setCompositionActive(true);
             }}
             onCompositionEnd={(e) => {
               isComposingRef.current = false;
+              setCompositionActive(false);
               lastCompositionEndAtRef.current = Date.now();
               const el = e.currentTarget;
               updateAtQuery(el.value, el.selectionStart);
@@ -2143,11 +2221,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               border: "none",
               outline: "none",
               resize: "none",
-              color: "var(--text)",
+              // Transparent so the highlight layer beneath shows through;
+              // the caret and IME composition text stay visible. Solid text
+              // while composing (some IMEs paint in the element's color).
+              color: compositionActive ? "var(--text)" : "transparent",
+              caretColor: "var(--text)",
+              // Positioned so it paints above the absolutely-positioned
+              // highlight layer (both are positioned; DOM order wins).
+              position: "relative",
               minHeight: manualMode ? 0 : 24,
               maxHeight: manualMode ? "none" : AUTO_MAX_HEIGHT,
               padding: 0,
-              overflow: "auto",
+              overflow: "hidden auto",
             }}
           />
 
@@ -2239,19 +2324,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     <button
                       type="button"
                       onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
-                      disabled={isStreaming}
-                      title={isStreaming ? t("desktop.imageAttachmentsCannotQueue") : undefined}
+                      disabled={isStreaming || !modelSupportsImages}
+                      title={!modelSupportsImages
+                        ? t("desktop.attachImageModelUnsupported", { model: activeModelName })
+                        : isStreaming ? t("desktop.imageAttachmentsCannotQueue") : undefined}
                       style={{
                         width: "100%", display: "flex", alignItems: "center", gap: 8,
                         padding: "4px 10px", borderRadius: 4,
                         background: "none", border: "none",
-                        color: isStreaming ? "var(--text-dim)" : "var(--text)",
-                        cursor: isStreaming ? "not-allowed" : "pointer",
+                        color: isStreaming || !modelSupportsImages ? "var(--text-dim)" : "var(--text)",
+                        cursor: isStreaming || !modelSupportsImages ? "not-allowed" : "pointer",
                         fontSize: 12, textAlign: "left",
-                        opacity: isStreaming ? 0.6 : 1,
+                        opacity: isStreaming || !modelSupportsImages ? 0.6 : 1,
                         transition: "background 0.1s ease",
                       }}
-                      onMouseEnter={(e) => { if (!isStreaming) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseEnter={(e) => { if (!isStreaming && modelSupportsImages) e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                     >
                       <ImageIcon size={14} weight="regular" aria-hidden="true" />
