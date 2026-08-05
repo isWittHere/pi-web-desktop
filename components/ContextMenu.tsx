@@ -230,7 +230,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             <div
               key={`sep-${index}`}
               role="separator"
-              style={{ height: 1, margin: "4px 6px", background: "var(--border)" }}
+              style={{ height: 1, margin: "4px 0", background: "var(--border)" }}
             />
           );
         }
