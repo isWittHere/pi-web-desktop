@@ -2119,13 +2119,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     const b = vh - thinkingDropdownRect.top + 4;
                     const maxH = Math.min(360, Math.max(120, Math.min(thinkingDropdownRect.top - 8, vh * 0.6)));
                     return (
-                  <div style={{
+                  <div className="chat-input-menu-panel" style={{
                     position: "fixed", bottom: b, left: l,
                     zIndex: 2001, background: "var(--bg-panel)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                     overflow: "hidden", minWidth: 200, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
                   }}>
                     {isStreaming && <NextTurnBanner />}
+                    <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
                     {THINKING_LEVELS.filter((lvl) => {
                       if (!availableThinkingLevels) return true;
                       if (lvl === "auto") return true;
@@ -2141,13 +2142,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           onClick={() => { setThinkingDropdownOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "6px 12px",
+                            width: "100%", padding: "4px 10px",
+                            borderRadius: 4,
                             background: isActive ? "var(--bg-selected)" : "none",
                             border: "none",
                             color: isActive ? "var(--accent)" : "var(--text)",
                             cursor: "pointer", fontSize: 12, textAlign: "left",
                             fontFamily: "var(--font-mono)",
                             whiteSpace: "nowrap",
+                            transition: "background 0.1s ease",
                           }}
                           onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                           onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
@@ -2161,6 +2164,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </button>
                       );
                     })}
+                    </div>
                   </div>
                     );
                   })()}
@@ -2293,13 +2297,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     const b = vh - toolDropdownRect.top + 6;
                     const maxH = Math.min(320, Math.max(100, Math.min(toolDropdownRect.top - 8, vh * 0.5)));
                     return (
-                  <div style={{
+                  <div className="chat-input-menu-panel" style={{
                     position: "fixed", bottom: b, right: r,
                     zIndex: 2001, background: "var(--bg-panel)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                     overflow: "hidden", minWidth: 120, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
                   }}>
                     {isStreaming && <NextTurnBanner />}
+                    <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = (toolPreset ?? "default") === preset;
@@ -2310,13 +2315,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "6px 12px",
+                            width: "100%", padding: "4px 10px",
+                            borderRadius: 4,
                             background: isActive ? "var(--bg-selected)" : "none",
                             border: "none",
                             color: isActive ? "var(--accent)" : "var(--text)",
                             cursor: "pointer", fontSize: 12, textAlign: "left",
                             fontFamily: "var(--font-mono)",
                             whiteSpace: "nowrap",
+                            transition: "background 0.1s ease",
                           }}
                           onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                           onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
@@ -2327,6 +2334,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </button>
                       );
                     })}
+                    </div>
                   </div>
                     );
                   })()}
@@ -2389,7 +2397,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     // viewport so long model names never push the panel off-screen.
                     // On desktop, clamp left so the panel stays within the viewport.
                     const panelMinWidth = modelDropdownRect.width;
-                    const panelMaxWidth = Math.min(360, viewportWidth - 16);
+                    const panelMaxWidth = Math.min(400, viewportWidth - 16);
                     const panelPos: React.CSSProperties = isMobile
                       ? { left: 8, right: 8, maxWidth: "calc(100vw - 16px)" }
                       : {
@@ -2427,7 +2435,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     const hasAnyResults = hasFavs || filteredGroups.length > 0;
 
                     return (
-                      <div ref={modelDropdownPanelRef} className="chat-input-model-dropdown" style={{
+                      <div ref={modelDropdownPanelRef} className="chat-input-model-dropdown chat-input-menu-panel" style={{
                       position: "fixed",
                       bottom,
                       ...panelPos,
@@ -2483,7 +2491,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
                       {/* Favorites group — at top, always expanded */}
                       {hasFavs && (
-                        <div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                           <div style={{
                             padding: "6px 12px 4px",
                             fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
@@ -2498,20 +2506,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                               <div
                                 key={`fav-${opt.provider}:${opt.modelId}`}
                                 className="model-row"
-                                style={{ display: "flex", alignItems: "center", width: "100%" }}
+                                style={{ display: "flex", alignItems: "center", margin: "0 4px" }}
                               >
                                 <button
                                   onClick={() => { setModelDropdownOpen(false); if (!isActive || isAutoModelSelection) onModelChange(opt.provider, opt.modelId); }}
                                   style={{
                                     display: "flex", alignItems: "center", gap: 8,
                                     flex: 1, minWidth: 0,
-                                    padding: "6px 12px",
+                                    padding: "4px 8px",
+                                    borderRadius: 4,
                                     background: isActive ? "var(--bg-selected)" : "none",
                                     border: "none",
                                     color: isActive ? "var(--accent)" : "var(--text)",
                                     cursor: "pointer", fontSize: 12, textAlign: "left",
                                     fontFamily: "var(--font-mono)",
                                     whiteSpace: "nowrap", overflow: "hidden",
+                                    transition: "background 0.1s ease",
                                   }}
                                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
@@ -2551,8 +2561,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           ? <CaretRightIcon size={10} color="var(--text-dim)" />
                           : <CaretDownIcon size={10} color="var(--text-dim)" />;
                         return (
-                        <div key={group.provider}>
+                        <div key={group.provider} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                           <button
+                            className="chat-input-menu-group-header"
                             onClick={() => toggleProviderExpand(group.provider)}
                             style={{
                               display: "flex", alignItems: "center", gap: 4,
@@ -2576,20 +2587,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                               <div
                                 key={`${opt.provider}:${opt.modelId}`}
                                 className="model-row"
-                                style={{ display: "flex", alignItems: "center", width: "100%" }}
+                                style={{ display: "flex", alignItems: "center", margin: "0 4px" }}
                               >
                                 <button
                                   onClick={() => { setModelDropdownOpen(false); if (!isActive || isAutoModelSelection) onModelChange(opt.provider, opt.modelId); }}
                                   style={{
                                     display: "flex", alignItems: "center", gap: 8,
                                     flex: 1, minWidth: 0,
-                                    padding: "6px 12px",
+                                    padding: "4px 8px",
+                                    borderRadius: 4,
                                     background: isActive ? "var(--bg-selected)" : "none",
                                     border: "none",
                                     color: isActive ? "var(--accent)" : "var(--text)",
                                     cursor: "pointer", fontSize: 12, textAlign: "left",
                                     fontFamily: "var(--font-mono)",
                                     whiteSpace: "nowrap", overflow: "hidden",
+                                    transition: "background 0.1s ease",
                                   }}
                                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}

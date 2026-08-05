@@ -545,8 +545,13 @@ pre, code {
   border-radius: 4px !important;
   font-size: inherit !important;
 }
-/* Reset border-radius on model dropdown panel buttons */
-.chat-input-model-dropdown button {
+/* Dropdown panels inside the toolbar: menu options share the toolbar
+   button radius. */
+.chat-input-menu-panel button {
+  border-radius: 4px !important;
+}
+/* Group header rows in the model picker stay square */
+.chat-input-menu-panel .chat-input-menu-group-header {
   border-radius: 0 !important;
 }
 .chat-input-toolbar-actions {
