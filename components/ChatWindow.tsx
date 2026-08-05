@@ -16,6 +16,7 @@ import { useDragDrop } from "@/hooks/useDragDrop";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ImagesIcon } from "@phosphor-icons/react/Images";
+import { FilesIcon } from "@phosphor-icons/react/Files";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import {
   captureScrollDistance,
@@ -336,10 +337,13 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
 
   const onDrop = useCallback((files: File[]) => {
     if (agentRunning) return;
-    chatInputRef?.current?.addImages(files);
+    const images = files.filter((file) => file.type.startsWith("image/"));
+    const others = files.filter((file) => !file.type.startsWith("image/"));
+    if (images.length) chatInputRef?.current?.addImages(images);
+    if (others.length) chatInputRef?.current?.addFileMentions(others);
   }, [agentRunning, chatInputRef]);
 
-  const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
+  const { isDragOver, hasImages, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
 
   const visibleMessages = messages.filter((m) => m.role === "user" || m.role === "assistant");
   const inputHistory = useMemo(() => {
@@ -487,8 +491,14 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
           style={{ background: "color-mix(in srgb, var(--accent) 8%, transparent)" }}
         >
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-            <ImagesIcon size={56} weight="regular" color="var(--accent)" aria-hidden="true" />
-            <span style={{ fontSize: 13, color: "var(--accent)" }}>{t("desktop.dropImagesToAttach")}</span>
+            {hasImages ? (
+              <ImagesIcon size={56} weight="regular" color="var(--accent)" aria-hidden="true" />
+            ) : (
+              <FilesIcon size={56} weight="regular" color="var(--accent)" aria-hidden="true" />
+            )}
+            <span style={{ fontSize: 13, color: "var(--accent)" }}>
+              {t(hasImages ? "desktop.dropImagesToAttach" : "desktop.dropFilesToReference")}
+            </span>
           </div>
         </div>
       )}

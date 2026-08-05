@@ -5,9 +5,11 @@ import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, Slas
 import type { SkillsResponse } from "@/lib/api-types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
 import {
-  buildEntriesFromFiles, buildAtInsertText, extractAtQuery, filterFileEntries,
+  buildEntriesFromFiles, buildAtInsertText, buildFileAtMentionsText, extractAtQuery, filterFileEntries,
   type AtQueryMatch, type FileIndexEntry,
 } from "@/lib/file-fuzzy";
+import { toCwdRelativeMentions } from "@/lib/file-mentions";
+import { encodeFilePathForApi } from "@/lib/file-paths";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableHeight } from "@/hooks/useResizableHeight";
@@ -92,6 +94,7 @@ export interface ChatInputHandle {
   insertIfEmpty: (text: string) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
+  addFileMentions: (files: File[]) => void;
 }
 
 const TOOL_PRESETS = ["off", "default", "full"] as const;
@@ -580,6 +583,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     addImages(files: File[]) {
       processImageFiles(files);
     },
+    addFileMentions(files: File[]) {
+      processFileMentions(files);
+    },
   }));
 
   const processImageFiles = useCallback(async (files: File[]) => {
@@ -604,6 +610,88 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     );
     setAttachedImages((prev) => [...prev, ...newImages]);
   }, [isStreaming]);
+
+  /** Append `@relative/path ` mention tokens for dropped files. Cursor lands
+   *  at the end of the input so the user can keep typing right away. */
+  const insertFileMentionsAtEnd = useCallback((mentions: string[]) => {
+    const text = buildFileAtMentionsText(mentions);
+    if (!text) return;
+    const ta = textareaRef.current;
+    if (!ta) {
+      setValue((v) => (v ? `${v} ${text}` : text));
+      return;
+    }
+    const before = ta.value;
+    const sep = before.length > 0 && !before.endsWith(" ") ? " " : "";
+    const newVal = before + sep + text;
+    setValue(newVal);
+    setAtQuery(null);
+    requestAnimationFrame(() => {
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(newVal.length, newVal.length);
+      applyAutoHeight();
+    });
+  }, [applyAutoHeight]);
+
+  /** Upload dropped files into the session cwd (plain-browser fallback and
+   *  the "copy outside files into the project" path). Returns the uploaded
+   *  file names, which are cwd-relative mention paths by construction. */
+  const uploadFilesToCwd = useCallback(async (files: File[], targetCwd: string): Promise<string[]> => {
+    const formData = new FormData();
+    for (const f of files) formData.append("files", f);
+    const response = await fetch(
+      `/api/files/${encodeFilePathForApi(targetCwd)}?type=upload&conflict=error`,
+      { method: "POST", body: formData },
+    );
+    const data = await response.json().catch(() => null) as
+      | { uploaded?: string[]; errors?: Array<{ name: string; error: string }> }
+      | null;
+    if (!response.ok || !data) {
+      throw new Error(data?.errors?.[0]?.error ?? `Upload failed (HTTP ${response.status})`);
+    }
+    if (data.errors && data.errors.length > 0) {
+      throw new Error(data.errors.map((e) => `${e.name}: ${e.error}`).join("; "));
+    }
+    return data.uploaded ?? [];
+  }, []);
+
+  /** Turn dropped non-image files into @ mentions. Desktop resolves each
+   *  File's absolute path via the Electron bridge and references in-project
+   *  files in place (zero-copy); anything outside cwd is offered a copy into
+   *  the project. Plain browsers have no path API, so files are uploaded into
+   *  cwd first and then referenced by their uploaded name. */
+  const processFileMentions = useCallback(async (files: File[]) => {
+    if (isStreaming || !cwd) return;
+    const getPathForFile = window.piDesktop?.getPathForFile;
+    if (getPathForFile) {
+      const absPaths = files.map((f) => getPathForFile(f)).filter((p): p is string => Boolean(p));
+      if (!absPaths.length) return;
+      const { mentions, rejected } = toCwdRelativeMentions(absPaths, cwd);
+      if (mentions.length) insertFileMentionsAtEnd(mentions);
+      if (!rejected.length) return;
+      const outsideName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+      const copyOutside = window.confirm(
+        rejected.length === 1
+          ? t("desktop.dropOutsideProjectConfirm", { name: outsideName(rejected[0]) })
+          : t("desktop.dropOutsideProjectConfirmMany", { count: rejected.length }),
+      );
+      if (!copyOutside) return;
+      try {
+        const uploaded = await uploadFilesToCwd(files, cwd);
+        if (uploaded.length) insertFileMentionsAtEnd(uploaded);
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+    try {
+      const uploaded = await uploadFilesToCwd(files, cwd);
+      if (uploaded.length) insertFileMentionsAtEnd(uploaded);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error));
+    }
+  }, [cwd, isStreaming, insertFileMentionsAtEnd, uploadFilesToCwd, t]);
 
   const toggleFavorite = useCallback((provider: string, modelId: string) => {
     setFavorites((prev) => {

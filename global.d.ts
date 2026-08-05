@@ -21,5 +21,6 @@ interface Window {
     openThemeFolder: () => Promise<string>;
     openThemeDocs: () => Promise<void>;
     showItemInFolder: (fullPath: string) => Promise<boolean>;
+    getPathForFile: (file: File) => string;
   };
 }
