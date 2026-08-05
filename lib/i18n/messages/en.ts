@@ -150,6 +150,7 @@ export const enLocale = {
     "desktop.injectMessageNow": "Interrupt the current run and inject this message now",
     "desktop.queueMessageAfterFinish": "Queue this message after the agent finishes",
     "desktop.attachImage": "Attach image",
+    "desktop.dropImagesToAttach": "Drop images to attach",
     "desktop.disableCompletionSound": "Disable completion sound",
     "desktop.enableCompletionSound": "Enable completion sound",
     "desktop.soundLabelOn": "Sound: On",

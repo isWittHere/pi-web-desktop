@@ -150,6 +150,7 @@ export const zhCNLocale = {
     "desktop.injectMessageNow": "中断当前运行并立即注入此消息",
     "desktop.queueMessageAfterFinish": "在 Agent 完成后将此消息加入队列",
     "desktop.attachImage": "添加图片",
+    "desktop.dropImagesToAttach": "拖入图片以附加",
     "desktop.disableCompletionSound": "关闭完成提示音",
     "desktop.enableCompletionSound": "开启完成提示音",
     "desktop.soundLabelOn": "提示音：开启",
