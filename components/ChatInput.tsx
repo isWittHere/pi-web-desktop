@@ -89,6 +89,8 @@ interface Props {
   draftKey?: string;
   /** Session working directory — enables the @ file autocomplete menu */
   cwd?: string | null;
+  /** Messages scroll container — the popup menus cap their height at its top edge */
+  messagesScrollRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export interface ChatInputHandle {
@@ -318,6 +320,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onPromptWithStreamingBehavior,
   draftKey,
   cwd,
+  messagesScrollRef,
 }: Props, ref) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
@@ -444,6 +447,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const bashExcluded = bashMode && trimmedValue.startsWith("!!");
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  // Hover feedback only — never moves the keyboard selection.
+  const [slashHoverIndex, setSlashHoverIndex] = useState<number | null>(null);
   const [skillDormancy, setSkillDormancy] = useState<Record<string, boolean>>({});
   const [inputShortcut, setInputShortcut] = useState<"enter" | "ctrl-enter">(() => {
     try {
@@ -453,8 +458,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [atQuery, setAtQuery] = useState<AtQueryMatch | null>(null);
   const [atMenuOpen, setAtMenuOpen] = useState(false);
   const [atActiveIndex, setAtActiveIndex] = useState(0);
+  const [atHoverIndex, setAtHoverIndex] = useState<number | null>(null);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   const [historyActiveIndex, setHistoryActiveIndex] = useState(0);
+  const [historyHoverIndex, setHistoryHoverIndex] = useState<number | null>(null);
+  // Measured space above the input area; caps the popup menus so they never
+  // extend past the window's top edge. null until first measured.
+  const [popupMaxHeight, setPopupMaxHeight] = useState<number | null>(null);
+  const inputAreaRef = useRef<HTMLDivElement>(null);
   const [fileIndex, setFileIndex] = useState<{ cwd: string; entries: FileIndexEntry[]; truncated: boolean } | null>(null);
   const [fileIndexLoading, setFileIndexLoading] = useState(false);
   const [atServerResult, setAtServerResult] = useState<{ cwd: string; query: string; matches: FileIndexEntry[] } | null>(null);
@@ -476,6 +487,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const lastCompositionEndAtRef = useRef(0);
   const slashCommandsRequestedRef = useRef(false);
   const slashItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  // Scroll suppression: when the active index is clamped because the match
+  // list shrank, do not scroll the list (it would jump mid-typing).
+  const atSuppressScrollRef = useRef(false);
+  const slashSuppressScrollRef = useRef(false);
+  const historySuppressScrollRef = useRef(false);
   const atItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const historyItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const fileIndexMetaRef = useRef<{ cwd: string; fetchedAt: number } | null>(null);
@@ -932,12 +948,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     return () => { cancelled = true; };
   }, [cwd, slashMenuOpen]);
 
-  const slashCommandCountLabel = `${filteredSlashCommands.length} ${t(
-    slashQuery
-      ? (filteredSlashCommands.length === 1 ? "desktop.match" : "desktop.matches")
-      : (filteredSlashCommands.length === 1 ? "desktop.command" : "desktop.commands")
-  )}`;
   const hasInputText = Boolean(value.trim());
+  // Popup height caps: once the space above the input is measured, it wins
+  // over the static viewport-relative caps.
+  const atMenuHeightCap = popupMaxHeight === null ? "min(30vh, 240px)" : Math.min(240, popupMaxHeight);
+  const slashMenuHeightCap = popupMaxHeight === null ? "min(38vh, 300px)" : Math.min(300, popupMaxHeight);
   const canQueueStreamingMessage = hasInputText && attachedImages.length === 0;
 
   // ── @ file autocomplete ──────────────────────────────────────────────────
@@ -1000,6 +1015,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
     setAtMenuOpen(true);
     setAtActiveIndex(0);
+    setAtHoverIndex(null);
   }, [atTokenKey]);
 
   // Fetch the file index when the menu opens. The server caches per cwd for
@@ -1063,6 +1079,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   useEffect(() => {
     if (atActiveIndex >= atMatches.length) {
+      atSuppressScrollRef.current = true;
       setAtActiveIndex(Math.max(0, atMatches.length - 1));
     }
   }, [atMatches.length, atActiveIndex]);
@@ -1073,6 +1090,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   useEffect(() => {
     if (!atMenuOpen) return;
+    if (atSuppressScrollRef.current) {
+      atSuppressScrollRef.current = false;
+      return;
+    }
     atItemRefs.current[atActiveIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [atActiveIndex, atMenuOpen]);
 
@@ -1123,49 +1144,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     clearInput();
   }, [value, attachedImages, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock]);
 
-  const getNextSlashIndex = useCallback((direction: "up" | "down" | "left" | "right") => {
-    const lastIndex = filteredSlashCommands.length - 1;
-    if (lastIndex < 0) return 0;
-
-    if (direction === "left") return Math.max(0, slashActiveIndex - 1);
-    if (direction === "right") return Math.min(lastIndex, slashActiveIndex + 1);
-
-    const currentNode = slashItemRefs.current[slashActiveIndex];
-    if (!currentNode) {
-      return direction === "down"
-        ? Math.min(lastIndex, slashActiveIndex + 1)
-        : Math.max(0, slashActiveIndex - 1);
-    }
-
-    const currentRect = currentNode.getBoundingClientRect();
-    const currentX = currentRect.left + currentRect.width / 2;
-    const currentY = currentRect.top + currentRect.height / 2;
-    let bestIndex = -1;
-    let bestScore = Number.POSITIVE_INFINITY;
-
-    for (let index = 0; index <= lastIndex; index += 1) {
-      if (index === slashActiveIndex) continue;
-      const node = slashItemRefs.current[index];
-      if (!node) continue;
-      const rect = node.getBoundingClientRect();
-      const candidateY = rect.top + rect.height / 2;
-      const verticalDelta = candidateY - currentY;
-      if (direction === "down" ? verticalDelta <= 4 : verticalDelta >= -4) continue;
-
-      const candidateX = rect.left + rect.width / 2;
-      const score = Math.abs(verticalDelta) * 1000 + Math.abs(candidateX - currentX);
-      if (score < bestScore) {
-        bestIndex = index;
-        bestScore = score;
-      }
-    }
-
-    if (bestIndex >= 0) return bestIndex;
-    return direction === "down"
-      ? Math.min(lastIndex, slashActiveIndex + 1)
-      : Math.max(0, slashActiveIndex - 1);
-  }, [filteredSlashCommands.length, slashActiveIndex]);
-
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       const nativeEvent = e.nativeEvent;
@@ -1210,24 +1188,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       }
 
       if (slashMenuOpen && slashQuery !== null) {
-        if (e.key === "ArrowDown") {
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") {
           e.preventDefault();
-          setSlashActiveIndex(getNextSlashIndex("down"));
+          setSlashActiveIndex((i) => Math.min(Math.max(0, filteredSlashCommands.length - 1), i + 1));
           return;
         }
-        if (e.key === "ArrowUp") {
+        if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
           e.preventDefault();
-          setSlashActiveIndex(getNextSlashIndex("up"));
-          return;
-        }
-        if (e.key === "ArrowRight") {
-          e.preventDefault();
-          setSlashActiveIndex(getNextSlashIndex("right"));
-          return;
-        }
-        if (e.key === "ArrowLeft") {
-          e.preventDefault();
-          setSlashActiveIndex(getNextSlashIndex("left"));
+          setSlashActiveIndex((i) => Math.max(0, i - 1));
           return;
         }
         if (e.key === "Escape") {
@@ -1272,6 +1240,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         setSlashMenuOpen(false);
         setAtMenuOpen(false);
         setHistoryActiveIndex(0);
+        setHistoryHoverIndex(null);
         setHistoryMenuOpen(true);
         return;
       }
@@ -1298,7 +1267,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
     },
-    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, inputShortcut, cwd, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, openAtCompletion]
+    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, inputShortcut, cwd, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, openAtCompletion]
   );
 
   const handleInput = useCallback(() => {
@@ -1316,6 +1285,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   useEffect(() => {
     if (historyActiveIndex >= (inputHistory?.length ?? 0)) {
+      historySuppressScrollRef.current = true;
       setHistoryActiveIndex(Math.max(0, (inputHistory?.length ?? 0) - 1));
     }
   }, [historyActiveIndex, inputHistory]);
@@ -1326,8 +1296,39 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   useEffect(() => {
     if (!historyMenuOpen) return;
+    if (historySuppressScrollRef.current) {
+      historySuppressScrollRef.current = false;
+      return;
+    }
     historyItemRefs.current[historyActiveIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [historyActiveIndex, historyMenuOpen]);
+
+  // Cap the popup menus to the space above the input so they never poke past
+  // the window's top edge. Re-measures while any menu is open: on window
+  // resize, page scroll, and input-area size changes (auto-growing textarea).
+  useEffect(() => {
+    if (!atMenuOpen && !slashMenuOpen && !historyMenuOpen) return;
+    const measure = () => {
+      const el = inputAreaRef.current;
+      if (!el) return;
+      // Menus anchor 8px above the input area; keep a 4px breathing margin.
+      // The cap's reference is the top edge of the messages area, so the
+      // menus never cover the message list's header rows — not the window.
+      const inputTop = el.getBoundingClientRect().top;
+      const areaTop = messagesScrollRef?.current?.getBoundingClientRect().top ?? 0;
+      setPopupMaxHeight(Math.max(48, Math.round(inputTop - 12 - areaTop)));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    const observer = new ResizeObserver(measure);
+    if (inputAreaRef.current) observer.observe(inputAreaRef.current);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+      observer.disconnect();
+    };
+  }, [atMenuOpen, slashMenuOpen, historyMenuOpen, messagesScrollRef]);
 
   useEffect(() => {
     if (slashQuery === null) {
@@ -1338,6 +1339,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
     setSlashMenuOpen(true);
     setSlashActiveIndex(0);
+    setSlashHoverIndex(null);
     if (!slashCommandsRequestedRef.current && onLoadSlashCommands) {
       slashCommandsRequestedRef.current = true;
       Promise.resolve(onLoadSlashCommands()).catch(() => {
@@ -1348,6 +1350,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   useEffect(() => {
     if (slashActiveIndex >= filteredSlashCommands.length) {
+      slashSuppressScrollRef.current = true;
       setSlashActiveIndex(Math.max(0, filteredSlashCommands.length - 1));
     }
   }, [filteredSlashCommands.length, slashActiveIndex]);
@@ -1358,6 +1361,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   useEffect(() => {
     if (!slashMenuOpen) return;
+    if (slashSuppressScrollRef.current) {
+      slashSuppressScrollRef.current = false;
+      return;
+    }
     slashItemRefs.current[slashActiveIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [slashActiveIndex, slashMenuOpen]);
 
@@ -1608,7 +1615,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         )}
 
         {/* Main input */}
-        <div style={{ position: "relative" }}>
+        <div ref={inputAreaRef} style={{ position: "relative" }}>
           {historyMenuOpen && inputHistory.length > 0 && (
             <div
               style={{
@@ -1622,22 +1629,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 borderRadius: 8,
                 boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
                 overflow: "hidden",
-                maxHeight: "min(38vh, 300px)",
+                maxHeight: slashMenuHeightCap,
               }}
             >
-              <div style={{ padding: "4px 8px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", color: "var(--text-dim)", fontSize: 11 }}>
-                <span>{t("desktop.inputHistory")}</span>
-                <span style={{ fontFamily: "var(--font-mono)" }}>{t("desktop.tabOrEnter")}</span>
-              </div>
-              <div style={{ maxHeight: "calc(min(38vh, 300px) - 24px)", overflowY: "auto", padding: 4 }}>
+              <div style={{ maxHeight: slashMenuHeightCap, overflowY: "auto", padding: 4 }}>
                 {inputHistory.map((item, index) => (
                   <button
                     key={`${index}:${item}`}
                     ref={(node) => { historyItemRefs.current[index] = node; }}
                     type="button"
                     onMouseDown={(event) => { event.preventDefault(); applyHistoryInput(item); }}
-                    onMouseEnter={() => setHistoryActiveIndex(index)}
-                    style={{ width: "100%", display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 6px", border: "none", borderRadius: 5, background: index === historyActiveIndex ? "var(--bg-selected)" : "transparent", color: "var(--text)", cursor: "pointer", textAlign: "left" }}
+                    onMouseEnter={() => setHistoryHoverIndex(index)}
+                    onMouseLeave={() => setHistoryHoverIndex(null)}
+                    style={{ width: "100%", display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 6px", border: "none", borderRadius: 5, background: index === historyActiveIndex ? "var(--bg-selected)" : historyHoverIndex === index ? "var(--bg-hover)" : "transparent", color: "var(--text)", cursor: "pointer", textAlign: "left" }}
                   >
                     <span style={{ flexShrink: 0, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11 }}>{index + 1}</span>
                     <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{item}</span>
@@ -1659,42 +1663,31 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 borderRadius: 8,
                 boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
                 overflow: "hidden",
-                maxHeight: "min(38vh, 300px)",
+                maxHeight: slashMenuHeightCap,
               }}
             >
-              <div
-                style={{
-                  padding: "4px 8px",
-                  borderBottom: "1px solid var(--border)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  fontSize: 11,
-                  color: "var(--text-dim)",
-                }}
-              >
-                <span>{slashCommandsLoading ? t("desktop.loadingCommands") : `${t("desktop.slashCommands")} · ${slashCommandCountLabel}`}</span>
-                <span style={{ fontFamily: "var(--font-mono)" }}>{t("desktop.tabOrEnter")}</span>
-              </div>
-              <div style={{ maxHeight: "calc(min(38vh, 300px) - 24px)", overflowY: "auto", padding: 4 }}>
-                {!slashCommandsLoading && filteredSlashCommands.length === 0 ? (
+              <div style={{ maxHeight: slashMenuHeightCap, overflowY: "auto", padding: "6px 6px 8px" }}>
+                {slashCommandsLoading ? (
+                  <div style={{ padding: "2px 2px 2px", fontSize: 12, color: "var(--text-dim)" }}>
+                    {t("desktop.loadingCommands")}
+                  </div>
+                ) : filteredSlashCommands.length === 0 ? (
                   <div style={{ padding: "2px 2px 2px", fontSize: 12, color: "var(--text-dim)" }}>
                     {t("desktop.noSlashCommands")}
                   </div>
                 ) : (
-                  groupedSlashCommands.map((group) => (
-                    <section key={group.source} style={{ marginBottom: 6 }}>
+                  groupedSlashCommands.map((group, groupIndex) => (
+                    <section key={group.source} style={{ marginBottom: groupIndex === groupedSlashCommands.length - 1 ? 0 : 6 }}>
                       <div
                         style={{
                           position: "sticky",
-                          top: -4,
+                          top: -6,
                           zIndex: 1,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
                           gap: 8,
-                          padding: "2px 0 4px",
+                          padding: "2px 6px 4px",
                           background: "var(--bg)",
                           color: "var(--text-dim)",
                           fontSize: 10,
@@ -1725,7 +1718,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                 e.preventDefault();
                                 applySlashCommand(command);
                               }}
-                              onMouseEnter={() => setSlashActiveIndex(index)}
+                              onMouseEnter={() => setSlashHoverIndex(index)}
+                              onMouseLeave={() => setSlashHoverIndex(null)}
                               style={{
                                 width: "100%",
                                 display: "flex",
@@ -1734,7 +1728,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                 padding: "3px 6px",
                                 border: "none",
                                 borderRadius: 5,
-                                background: active ? "var(--bg-selected)" : "none",
+                                background: active ? "var(--bg-selected)" : slashHoverIndex === index ? "var(--bg-hover)" : "none",
                                 color: "var(--text)",
                                 cursor: "pointer",
                                 textAlign: "left",
@@ -1785,12 +1779,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           )}
           {atMenuOpen && atQuery !== null && (() => {
             const indexLoading = fileIndexLoading && (!fileIndex || fileIndex.cwd !== cwd);
-            const matchCountLabel = `${atMatches.length} ${t(atMatches.length === 1 ? "desktop.match" : "desktop.matches")}`;
             // With a truncated index, local results are provisional — the
             // debounced server search over the full listing replaces them.
             const truncatedHint = fileIndex?.truncated && !serverResultInUse
-              ? (atQuery.query ? ` · ${t("desktop.searchingAllFiles")}` : ` · ${t("desktop.indexTruncated")}`)
-              : "";
+              ? (atQuery.query ? t("desktop.searchingAllFiles") : t("desktop.indexTruncated"))
+              : null;
             return (
               <div
                 style={{
@@ -1804,30 +1797,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   borderRadius: 8,
                   boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
                   overflow: "hidden",
-                  maxHeight: "min(30vh, 240px)",
+                  maxHeight: atMenuHeightCap,
                 }}
               >
-                <div
-                  style={{
-                    padding: "4px 8px",
-                    borderBottom: "1px solid var(--border)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
-                    fontSize: 11,
-                    color: "var(--text-dim)",
-                  }}
-                >
-                  <span>
-                    {indexLoading
-                      ? t("desktop.loadingFiles")
-                      : `${t("desktop.files")} · ${matchCountLabel}${truncatedHint}`}
-                  </span>
-                  <span style={{ fontFamily: "var(--font-mono)" }}>{t("desktop.tabOrEnter")}</span>
-                </div>
-                <div style={{ maxHeight: "calc(min(30vh, 240px) - 24px)", overflowY: "auto", padding: 2 }}>
-                  {!indexLoading && atMatches.length === 0 ? (
+                <div style={{ maxHeight: atMenuHeightCap, overflowY: "auto", padding: "6px 6px 8px" }}>
+                  {indexLoading ? (
+                    <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>
+                      {t("desktop.loadingFiles")}
+                    </div>
+                  ) : atMatches.length === 0 ? (
                     <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>
                       {needsServerSearch && !serverResultInUse ? t("desktop.searching") : t("desktop.noMatchingFiles")}
                     </div>
@@ -1847,7 +1825,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             e.preventDefault();
                             applyAtCompletion(entry);
                           }}
-                          onMouseEnter={() => setAtActiveIndex(index)}
+                          onMouseEnter={() => setAtHoverIndex(index)}
+                          onMouseLeave={() => setAtHoverIndex(null)}
                           style={{
                             width: "100%",
                             display: "flex",
@@ -1856,7 +1835,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             padding: "3px 6px",
                             border: "none",
                             borderRadius: 5,
-                            background: active ? "var(--bg-selected)" : "none",
+                            background: active ? "var(--bg-selected)" : atHoverIndex === index ? "var(--bg-hover)" : "none",
                             color: "var(--text)",
                             cursor: "pointer",
                             textAlign: "left",
@@ -1875,6 +1854,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </button>
                       );
                     })
+                  )}
+                  {truncatedHint && (
+                    <div style={{ padding: "4px 6px 0", fontSize: 10, color: "var(--text-dim)" }}>
+                      {truncatedHint}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1911,7 +1895,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div
             style={{
               position: "absolute",
-              zIndex: 4, // above the resize handle (z-index 3)
+              // Above the @/slash/history popups (z-index 120) and the resize
+              // handle (3), below the fixed toolbar dropdowns (2000+).
+              zIndex: 130,
               top: -22,
               right: isMobile ? 12 : 20,
               display: "flex",

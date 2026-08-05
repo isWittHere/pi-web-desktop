@@ -453,6 +453,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
       onAudioUnlock={unlockAudio}
       draftKey={session?.id ?? newSessionDraftId ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined)}
       cwd={session?.cwd ?? newSessionCwd}
+      messagesScrollRef={scrollContainerRef}
     />
   );
 
