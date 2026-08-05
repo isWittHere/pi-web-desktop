@@ -64,8 +64,9 @@ export function useContextMenu(): ContextMenuApi {
  * the provider can open it via `useContextMenu().openMenu(x, y, entries)`.
  *
  * Behavior: follows the pointer, flips at viewport edges, closes on outside
- * click / Escape / scroll / window blur / resize, and supports basic keyboard
- * navigation (↑/↓, Enter, Space).
+ * click / Escape / user scroll (wheel/touch) / window blur / resize, and
+ * supports basic keyboard navigation (↑/↓, Enter, Space). Programmatic
+ * auto-scroll (e.g. streaming chat) does not dismiss it.
  */
 export function ContextMenuProvider({ children }: { children: ReactNode }) {
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -134,23 +135,38 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     setPos({ x, y });
   }, [menu]);
 
-  // Close on outside mousedown / scroll / blur / resize while open.
+  // Close on user-initiated gestures while open: outside mousedown (also
+  // covers scrollbar drags), wheel/touch scroll, window blur and resize.
+  // Deliberately NOT on generic `scroll` events — programmatic auto-scroll
+  // (e.g. the chat list following streaming output) would otherwise dismiss
+  // the menu on every streamed token.
   useEffect(() => {
     if (!menu) return;
+    const isInsideMenu = (target: EventTarget | null) =>
+      menuRef.current?.contains(target as Node) ?? false;
     const onPointerDown = (e: MouseEvent) => {
-      if (menuRef.current?.contains(e.target as Node)) return;
+      if (isInsideMenu(e.target)) return;
       closeMenu();
     };
-    const onScroll = () => closeMenu();
+    const onWheel = (e: WheelEvent) => {
+      if (isInsideMenu(e.target)) return;
+      closeMenu();
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (isInsideMenu(e.target)) return;
+      closeMenu();
+    };
     const onBlur = () => closeMenu();
     const onResize = () => closeMenu();
     document.addEventListener("mousedown", onPointerDown, true);
-    document.addEventListener("scroll", onScroll, true);
+    document.addEventListener("wheel", onWheel, true);
+    document.addEventListener("touchmove", onTouchMove, true);
     window.addEventListener("blur", onBlur);
     window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onPointerDown, true);
-      document.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("wheel", onWheel, true);
+      document.removeEventListener("touchmove", onTouchMove, true);
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("resize", onResize);
     };
