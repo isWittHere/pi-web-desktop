@@ -19,6 +19,8 @@ import { ArrowClockwiseIcon } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowElbowUpLeftIcon } from "@phosphor-icons/react/ArrowElbowUpLeft";
 import { ArrowsInIcon } from "@phosphor-icons/react/ArrowsIn";
 import { ArrowsOutIcon } from "@phosphor-icons/react/ArrowsOut";
+import { AtIcon } from "@phosphor-icons/react/At";
+import { ImageIcon } from "@phosphor-icons/react/Image";
 import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
 
 import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
@@ -431,6 +433,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [thinkingDropdownRect, setThinkingDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [attachMenuRect, setAttachMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => {
     if (typeof window === "undefined") return [];
     return draftKey ? getDraft(draftKey)?.images.map(draftImageToAttachedImage) ?? [] : [];
@@ -466,6 +470,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const toolDropdownRef = useRef<HTMLDivElement>(null);
   const thinkingDropdownRef = useRef<HTMLDivElement>(null);
   const controlsMenuRef = useRef<HTMLDivElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
   const lastCompositionEndAtRef = useRef(0);
@@ -692,6 +697,51 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       window.alert(error instanceof Error ? error.message : String(error));
     }
   }, [cwd, isStreaming, insertFileMentionsAtEnd, uploadFilesToCwd, t]);
+
+  /** Insert "@" at the caret and open the @ file menu (shared by the Ctrl+I
+   *  shortcut and the + toolbar menu's file entry). */
+  const openAtCompletion = useCallback(() => {
+    if (!cwd) return;
+    const ta = textareaRef.current;
+    const start = ta?.selectionStart ?? value.length;
+    const end = ta?.selectionEnd ?? start;
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const separator = before && !/[\s@]$/.test(before) ? " " : "";
+    const nextValue = `${before}${separator}@${after}`;
+    const cursor = before.length + separator.length + 1;
+    setValue(nextValue);
+    setAtQuery(extractAtQuery(nextValue.slice(0, cursor)));
+    setAtMenuOpen(true);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(cursor, cursor);
+    });
+  }, [cwd, value]);
+
+  /** Prefix the input with "/" so the existing slash-command menu opens
+   *  (its trigger is derived from the value). Already-in-slash inputs are
+   *  left alone. */
+  const openSlashTrigger = useCallback(() => {
+    const ta = textareaRef.current;
+    const current = ta?.value ?? value;
+    if (current.startsWith("/")) {
+      requestAnimationFrame(() => { ta?.focus(); });
+      return;
+    }
+    const newVal = `/${current}`;
+    setValue(newVal);
+    setAtQuery(null);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(1, 1);
+      applyAutoHeight();
+    });
+  }, [value, applyAutoHeight]);
 
   const toggleFavorite = useCallback((provider: string, modelId: string) => {
     setFavorites((prev) => {
@@ -1132,21 +1182,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "i" && !isComposing && cwd) {
         e.preventDefault();
-        const ta = e.currentTarget;
-        const start = ta.selectionStart ?? ta.value.length;
-        const end = ta.selectionEnd ?? start;
-        const before = ta.value.slice(0, start);
-        const after = ta.value.slice(end);
-        const separator = before && !/[\s@]$/.test(before) ? " " : "";
-        const nextValue = `${before}${separator}@${after}`;
-        const cursor = before.length + separator.length + 1;
-        setValue(nextValue);
-        setAtQuery(extractAtQuery(nextValue.slice(0, cursor)));
-        setAtMenuOpen(true);
-        requestAnimationFrame(() => {
-          ta.focus();
-          ta.setSelectionRange(cursor, cursor);
-        });
+        openAtCompletion();
         return;
       }
 
@@ -1262,7 +1298,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
     },
-    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, inputShortcut, cwd, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value]
+    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, inputShortcut, cwd, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, openAtCompletion]
   );
 
   const handleInput = useCallback(() => {
@@ -1382,9 +1418,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (controlsMenuRef.current && !controlsMenuRef.current.contains(e.target as Node)) {
         setControlsMenuOpen(false);
       }
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setAttachMenuOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // The + attach menu opens from the toolbar button (not the textarea), so
+  // Escape while it is open never reaches the textarea key handler.
+  useEffect(() => {
+    const escHandler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") setAttachMenuOpen(false);
+    };
+    document.addEventListener("keydown", escHandler);
+    return () => document.removeEventListener("keydown", escHandler);
   }, []);
 
   useEffect(() => {
@@ -2136,14 +2185,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div className="chat-input-toolbar-left" style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
             <button
               className="chat-input-toolbar-attach"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={(e) => {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                setAttachMenuRect({ top: rect.top, left: rect.left, width: rect.width });
+                setAttachMenuOpen((v) => !v);
+              }}
               disabled={isStreaming}
-              title={t("desktop.attachImage")}
-              aria-label={t("desktop.attachImage")}
+              title={t("desktop.attachContext")}
+              aria-label={t("desktop.attachContext")}
+              aria-expanded={attachMenuOpen}
               style={{
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                 width: 24, height: 24, padding: 0,
-                background: "none", border: "none",
+                background: attachMenuOpen ? "var(--bg-hover)" : "none", border: "none",
                 borderRadius: 6,
                 color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
                 cursor: isStreaming ? "not-allowed" : "pointer",
@@ -2156,12 +2210,85 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "none";
+                e.currentTarget.style.background = attachMenuOpen ? "var(--bg-hover)" : "none";
                 e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text-muted)";
               }}
             >
               <PlusIcon size={14} />
             </button>
+            {attachMenuOpen && attachMenuRect && (() => {
+              const vw = window.innerWidth;
+              const menuWidth = 200;
+              const menuHeight = 3 * 30 + 12;
+              const top = Math.max(8, attachMenuRect.top - menuHeight - 4);
+              const left = Math.min(attachMenuRect.left, vw - menuWidth - 8);
+              return (
+                <div ref={attachMenuRef} className="chat-input-menu-panel" style={{
+                  position: "fixed", top, left,
+                  zIndex: 2001, background: "var(--bg-panel)", border: "1px solid var(--border)",
+                  borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
+                  overflow: "hidden", width: menuWidth,
+                }}>
+                  <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <button
+                      type="button"
+                      onClick={() => { setAttachMenuOpen(false); openAtCompletion(); }}
+                      disabled={!cwd}
+                      title={cwd ? t("desktop.attachFileReference") : undefined}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: 8,
+                        padding: "4px 10px", borderRadius: 4,
+                        background: "none", border: "none",
+                        color: cwd ? "var(--text)" : "var(--text-dim)",
+                        cursor: cwd ? "pointer" : "not-allowed",
+                        fontSize: 12, textAlign: "left",
+                        opacity: cwd ? 1 : 0.6,
+                        transition: "background 0.1s ease",
+                      }}
+                      onMouseEnter={(e) => { if (cwd) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                    >
+                      <AtIcon size={14} weight="regular" aria-hidden="true" />
+                      <span style={{ flex: 1 }}>{t("desktop.attachFileReference")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: 8,
+                        padding: "4px 10px", borderRadius: 4,
+                        background: "none", border: "none",
+                        color: "var(--text)", cursor: "pointer",
+                        fontSize: 12, textAlign: "left",
+                        transition: "background 0.1s ease",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                    >
+                      <ImageIcon size={14} weight="regular" aria-hidden="true" />
+                      <span style={{ flex: 1 }}>{t("desktop.attachImage")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAttachMenuOpen(false); openSlashTrigger(); }}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: 8,
+                        padding: "4px 10px", borderRadius: 4,
+                        background: "none", border: "none",
+                        color: "var(--text)", cursor: "pointer",
+                        fontSize: 12, textAlign: "left",
+                        transition: "background 0.1s ease",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                    >
+                      <StarFourIcon size={14} weight="regular" aria-hidden="true" />
+                      <span style={{ flex: 1 }}>{t("desktop.attachSkillCommand")}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
             {onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} className="chat-input-toolbar-thinking" style={{ position: "relative" }}>
                 <button
