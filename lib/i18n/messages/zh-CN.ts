@@ -165,7 +165,7 @@ export const zhCNLocale = {
     "desktop.more": "更多",
     "desktop.stopCompaction": "停止压缩",
     "desktop.compactContext": "压缩上下文",
-    "desktop.compacting": "正在压缩...",
+    "desktop.compacting": "正在压缩上下文...",
     "desktop.compact": "压缩",
     "desktop.changeToolPreset": "更改工具预设：{preset}",
     "desktop.toolPreset": "更改工具预设",

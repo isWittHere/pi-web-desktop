@@ -422,6 +422,8 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
       onFollowUp={agentRunning ? handleFollowUp : undefined}
       onPromptWithStreamingBehavior={agentRunning ? handlePromptWithStreamingBehavior : undefined}
       isStreaming={agentRunning}
+      isCompacting={isCompacting}
+      onAbortCompaction={handleAbortCompaction}
       stepLabel={currentStepLabel}
       model={displayModelValue}
       isAutoModelSelection={isAutoModelSelection}
@@ -624,7 +626,6 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
                 soundEnabled={soundEnabled}
                 onSoundToggle={onSoundToggle}
                 onCompact={session ? handleCompact : undefined}
-                onAbortCompaction={handleAbortCompaction}
                 isCompacting={isCompacting}
                 compactError={compactError}
                 branchTree={branchTree}
@@ -653,7 +654,10 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
           </div>
         </div>
         <div className="relative flex-1 min-h-0 min-w-0">
-          <div ref={scrollContainerRef} className={`chat-scroll-container h-full min-w-0 overflow-x-hidden overflow-y-auto pt-4${openPositioning ? " invisible" : ""}`} style={{ scrollbarWidth: "none" }}>
+          {/* NB: keep a space before `${` — Tailwind's scanner silently drops
+              any utility class glued to it (e.g. `pt-4${…}` emits no CSS rule,
+              leaving the first message flush against the top). */}
+          <div ref={scrollContainerRef} className={`chat-scroll-container h-full min-w-0 overflow-x-hidden overflow-y-auto pt-4 ${openPositioning ? " invisible" : ""}`} style={{ scrollbarWidth: "none" }}>
             <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
             <div style={{ width: "100%", minWidth: 0, maxWidth: 820, margin: "0 auto" }}>
               <ExtensionStatusBar statuses={extensionStatuses} />
@@ -987,7 +991,6 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
               soundEnabled={soundEnabled}
               onSoundToggle={onSoundToggle}
               onCompact={session ? handleCompact : undefined}
-              onAbortCompaction={handleAbortCompaction}
               isCompacting={isCompacting}
               compactError={compactError}
               branchTree={branchTree}

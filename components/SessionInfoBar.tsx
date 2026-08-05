@@ -3,7 +3,7 @@
 import {
   ArrowDown,
   ArrowUp,
-  ArrowsIn,
+  ArrowsInLineVertical,
   BellRinging,
   BellSlash,
   Check,
@@ -12,7 +12,6 @@ import {
   Database,
   FileText,
   GitBranch,
-  Square,
 } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -33,7 +32,6 @@ export interface SessionInfoBarProps {
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
   onCompact?: () => void;
-  onAbortCompaction?: () => void;
   isCompacting?: boolean;
   compactError?: string | null;
   branchTree?: SessionTreeNode[];
@@ -61,7 +59,6 @@ export function SessionInfoBar({
   soundEnabled,
   onSoundToggle,
   onCompact,
-  onAbortCompaction,
   isCompacting,
   compactError,
   branchTree,
@@ -287,11 +284,12 @@ export function SessionInfoBar({
           <button
             type="button"
             className={`session-info-bar-button${isCompacting ? " is-compacting" : ""}`}
-            onClick={isCompacting ? onAbortCompaction : onCompact}
-            title={isCompacting ? translate("desktop.stopCompaction") : translate("desktop.compactContext")}
-            aria-label={isCompacting ? translate("desktop.stopCompaction") : translate("desktop.compactContext")}
+            onClick={onCompact}
+            disabled={isCompacting}
+            title={isCompacting ? translate("desktop.compacting") : translate("desktop.compactContext")}
+            aria-label={isCompacting ? translate("desktop.compacting") : translate("desktop.compactContext")}
           >
-            {isCompacting ? <Square size={13} /> : <ArrowsIn size={13} />}
+            <ArrowsInLineVertical size={13} />
           </button>
         </div>
       )}

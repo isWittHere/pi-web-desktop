@@ -570,9 +570,10 @@ pre, code {
 .chat-input-send:not(:disabled) {
   color: var(--accent-blue) !important;
   cursor: pointer !important;
+  background: color-mix(in srgb, var(--accent-blue) 12%, var(--bg-panel)) !important;
 }
 .chat-input-send:not(:disabled):hover {
-  background: var(--bg-card) !important;
+  background: color-mix(in srgb, var(--accent-blue) 22%, var(--bg-panel)) !important;
   color: var(--accent-blue) !important;
   transform: none;
 }
@@ -1217,18 +1218,29 @@ span.linenumber {
   background: var(--bg-selected);
   color: var(--text);
 }
+/* Compact button while compacting is inert — suppress the hover highlight. */
+.session-info-bar-button:disabled,
+.session-info-bar-button:disabled:hover {
+  background: none;
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+/* Compact button while compacting — the icon breathes (opacity pulse). */
+.session-info-bar-button.is-compacting svg {
+  animation: session-info-bar-compact-breathe 1.6s ease-in-out infinite;
+}
+@keyframes session-info-bar-compact-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
 /* Token stats button uses a slightly wider internal gap than the icon buttons. */
 .session-info-bar-button.is-stats {
   gap: 5px;
-}
-
-/* Compact button — pulsing red while compacting. */
-.session-info-bar-button.is-compacting {
-  color: #ef4444;
-}
-.session-info-bar-button.is-compacting:hover {
-  background: rgba(239, 68, 68, 0.16);
-  color: #ef4444;
 }
 
 .session-info-bar-compact-wrap {

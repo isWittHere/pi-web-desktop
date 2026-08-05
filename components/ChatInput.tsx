@@ -26,7 +26,7 @@ import { CheckIcon } from "@phosphor-icons/react/Check";
 import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
 import { LightningIcon } from "@phosphor-icons/react/Lightning";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/MagnifyingGlass";
-import { PaperPlaneTiltIcon } from "@phosphor-icons/react/PaperPlaneTilt";
+import { PaperPlaneRightIcon } from "@phosphor-icons/react/PaperPlaneRight";
 import { PlusIcon } from "@phosphor-icons/react/Plus";
 import { SquareIcon } from "@phosphor-icons/react/Square";
 import { StarIcon } from "@phosphor-icons/react/Star";
@@ -54,6 +54,10 @@ interface Props {
   onFollowUp?: (message: string, images?: AttachedImage[]) => void;
   onPromptWithStreamingBehavior?: (message: string, behavior: "steer" | "followUp", images?: AttachedImage[]) => void;
   isStreaming: boolean;
+  /** Compaction is running outside a prompt — the send slot becomes a Stop button */
+  isCompacting?: boolean;
+  /** Abort an in-progress compaction (used by the Stop button while compacting) */
+  onAbortCompaction?: () => void;
   /** Current agent step name (thinking / editing / reading / executing…) shown in the streaming-actions row */
   stepLabel?: string | null;
   model?: { provider: string; modelId: string } | null;
@@ -299,7 +303,7 @@ function NextTurnBanner() {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, stepLabel, model, isAutoModelSelection, modelNames, modelList, modelScopeWarnings, onModelChange,
+  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, isCompacting, onAbortCompaction, stepLabel, model, isAutoModelSelection, modelNames, modelList, modelScopeWarnings, onModelChange,
   compactResult, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
@@ -2631,7 +2635,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </div>
             )}
 
-            {!isStreaming && (
+            {!isStreaming && !isCompacting && (
               <button
                 type="button"
                 onClick={handleSend}
@@ -2640,33 +2644,39 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 title={t("desktop.sendMessage")}
                 aria-label={t("desktop.sendMessage")}
               >
-                <PaperPlaneTiltIcon size={14} />
+                <PaperPlaneRightIcon size={14} />
               </button>
             )}
 
-            {isStreaming && (
+            {(isStreaming || isCompacting) && (
               <button
-                onClick={onAbort}
-                title={t("desktop.stopAgent")}
-                aria-label={t("desktop.stopAgent")}
+                onClick={isCompacting ? onAbortCompaction : onAbort}
+                title={isCompacting ? t("desktop.stopCompaction") : t("desktop.stopAgent")}
+                aria-label={isCompacting ? t("desktop.stopCompaction") : t("desktop.stopAgent")}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "3px 7px",
                   height: 24,
-                  background: "rgba(239,68,68,0.12)",
+                  background: isCompacting
+                    ? "color-mix(in srgb, var(--accent-orange) 14%, var(--bg-panel))"
+                    : "color-mix(in srgb, var(--accent-red) 12%, var(--bg-panel))",
                   border: "none",
                   borderRadius: 6,
-                  color: "#ef4444",
+                  color: isCompacting ? "var(--accent-orange)" : "var(--accent-red)",
                   cursor: "pointer",
                   fontSize: 12, fontWeight: 600,
                   whiteSpace: "nowrap", letterSpacing: "-0.01em",
                   transition: "background 0.12s",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.20)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = isCompacting
+                  ? "color-mix(in srgb, var(--accent-orange) 24%, var(--bg-panel))"
+                  : "color-mix(in srgb, var(--accent-red) 20%, var(--bg-panel))"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = isCompacting
+                  ? "color-mix(in srgb, var(--accent-orange) 14%, var(--bg-panel))"
+                  : "color-mix(in srgb, var(--accent-red) 12%, var(--bg-panel))"; }}
               >
                 <SquareIcon size={14} />
-                {t("desktop.stop")}
+                {isCompacting ? t("desktop.stopCompaction") : t("desktop.stop")}
               </button>
             )}
 
