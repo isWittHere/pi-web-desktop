@@ -11,7 +11,6 @@ import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { SessionInfoBar } from "./SessionInfoBar";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
-import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
@@ -46,6 +45,14 @@ interface Props {
   onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
   onViewFullHistory?: () => void;
   systemPrompt: string | null;
+  /** Completion-sound state — owned by AppShell so background completions in
+   *  other workspaces can share the same audio instance (and its gesture
+   *  unlock). When omitted the sound toggle defaults to on and callbacks are
+   *  no-ops, so the component still works standalone. */
+  soundEnabled?: boolean;
+  onSoundToggle?: () => void;
+  playDoneSound?: () => void;
+  unlockAudio?: (force?: boolean) => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -117,8 +124,7 @@ function withAssistantBlocks(
 
 
 
-export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt }: Props) {
-  const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
+export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio }: Props) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
 
@@ -126,8 +132,8 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
   // wrapping handleAgentEventRef because useAgentSession overwrites that ref
   // on every render (it syncs the latest callback), which would blow away an
   // externally-installed wrapper after the first re-render.
-  const playDoneSoundRef = useRef(playDoneSound);
-  playDoneSoundRef.current = playDoneSound;
+  const playDoneSoundRef = useRef<() => void>(playDoneSound ?? (() => {}));
+  playDoneSoundRef.current = playDoneSound ?? (() => {});
   const soundEnabledRef = useRef(soundEnabled);
   soundEnabledRef.current = soundEnabled;
   const soundedExtensionDialogIdRef = useRef<string | null>(null);

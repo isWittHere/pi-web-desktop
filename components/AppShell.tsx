@@ -12,6 +12,7 @@ import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { useTheme } from "@/hooks/useTheme";
+import { useAudio } from "@/hooks/useAudio";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
@@ -49,6 +50,12 @@ export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isDark, toggleTheme } = useTheme();
+  // Single shared audio instance: the completion sound is also played for
+  // sessions that finish in the background (other workspaces, or a session
+  // that is not the one open in the chat area). Sharing the instance means
+  // the AudioContext unlocked by a ChatInput gesture is the same one the
+  // sidebar plays through.
+  const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio, soundEnabledRef } = useAudio();
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
@@ -471,6 +478,13 @@ export function AppShell() {
     setExplorerRefreshKey((k) => k + 1);
   }, []);
 
+  // A session that finished while not open in the chat area (other workspace,
+  // or a second session of the current workspace) — play the completion sound
+  // when enabled, like the open session's own end tone.
+  const handleBackgroundTaskDone = useCallback(() => {
+    if (soundEnabledRef.current) playDoneSound();
+  }, [playDoneSound, soundEnabledRef]);
+
   const handleSessionForked = useCallback((newSessionId: string) => {
     setRefreshKey((k) => k + 1);
     setSessionKey((k) => k + 1);
@@ -675,6 +689,7 @@ export function AppShell() {
         // a project is actually active. This also covers the initial welcome
         // screen before sessions finish loading.
         showWorkspaceControls={Boolean(activeCwd ?? selectedSession?.cwd ?? newSessionCwd)}
+        onBackgroundTaskDone={handleBackgroundTaskDone}
       />
 
     </>
@@ -819,6 +834,10 @@ export function AppShell() {
               onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
               onViewFullHistory={handleViewFullHistory}
               systemPrompt={systemPrompt}
+              soundEnabled={soundEnabled}
+              onSoundToggle={onSoundToggle}
+              playDoneSound={playDoneSound}
+              unlockAudio={unlockAudio}
             />
           ) : showPlaceholder ? (
             activeCwd ? (

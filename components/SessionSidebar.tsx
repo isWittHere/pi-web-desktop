@@ -39,6 +39,9 @@ interface Props {
   };
   /** Hide both workspace controls on the empty welcome page. */
   showWorkspaceControls?: boolean;
+  /** Fired when a session that is not open in the chat area finishes running
+   *  (other workspace, or a second session of the current workspace). */
+  onBackgroundTaskDone?: () => void;
 }
 
 interface WorktreeEntry {
@@ -266,7 +269,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -422,8 +425,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       });
     }
 
+    // A background completion should also ring — the open session's own end
+    // tone is handled by ChatWindow, so anything else that finished counts.
+    if (completedInBackground.length > 0) onBackgroundTaskDone?.();
+
     previousRunningSessionIdsRef.current = runningSessionIds;
-  }, [runningSessionIds, selectedSessionId]);
+  }, [runningSessionIds, selectedSessionId, onBackgroundTaskDone]);
 
   useEffect(() => {
     if (!selectedSessionId) return;
@@ -752,6 +759,18 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   }, [selectedCwd, onNewSession, projectRootFor]);
 
   const recentProjects = getRecentProjects(allRows);
+  // Per-project running/unread counts for the workspace selector list items
+  // and the collapsed-caret dot (activity in other workspaces). Iterated per
+  // render — the session list is small, so no memo is needed.
+  const projectActivity = new Map<string, { running: number; unread: number }>();
+  for (const s of allRows) {
+    const key = s.projectRoot ?? s.cwd;
+    if (!key) continue;
+    let entry = projectActivity.get(key);
+    if (!entry) { entry = { running: 0, unread: 0 }; projectActivity.set(key, entry); }
+    if (runningSessionIds.has(s.id)) entry.running++;
+    if (unreadSessionIds.has(s.id)) entry.unread++;
+  }
   const visibleProjects = projectFilter.trim()
     ? recentProjects.filter((p) => p.toLowerCase().includes(projectFilter.trim().toLowerCase()))
     : recentProjects;
@@ -839,6 +858,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const projectItem = (project: string) => {
     const isSelected = project === selectedProject;
     const isQuick = isQuickWorkspace(project, homeDir);
+    const activity = projectActivity.get(project);
+    const runningCount = activity?.running ?? 0;
+    const unreadCount = activity?.unread ?? 0;
     return (
       <button key={project} onClick={() => selectProject(project)} title={project} style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "3px 8px", background: isSelected ? "var(--bg-selected)" : "transparent", border: "none", borderRadius: 5, color: isSelected ? "var(--accent)" : "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "var(--font-mono)", minWidth: 0 }} onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }} onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}>
         {isQuick ? (
@@ -849,6 +871,22 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           <span style={{ width: 12, flexShrink: 0 }} />
         )}
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pathBaseName(project)}</span>
+        {(runningCount > 0 || unreadCount > 0) && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+            {runningCount > 0 && (
+              <span title={t("desktop.agentRunning")} style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--accent)", fontSize: 10, lineHeight: 1 }}>
+                <RunningSessionIndicator />
+                {runningCount > 1 && <span>{runningCount}</span>}
+              </span>
+            )}
+            {unreadCount > 0 && (
+              <span title={t("desktop.newActivity")} style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--accent)", fontSize: 10, lineHeight: 1 }}>
+                <UnreadSessionIndicator />
+                {unreadCount > 1 && <span>{unreadCount}</span>}
+              </span>
+            )}
+          </span>
+        )}
       </button>
     );
   };
@@ -900,6 +938,13 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     const isLargeWorkspaceControl = location === "welcome";
     const isProjectDropdownOpen = workspaceProjectDropdownOpen === location;
     const isWorktreeDropdownOpen = workspaceWorktreeDropdownOpen === location;
+    // Activity in any *other* workspace (running or unread) lights a dot on
+    // the collapsed caret so it is visible without opening the list.
+    const hasOtherWorkspaceActivity = recentProjects.some((p) => {
+      if (p === selectedProject) return false;
+      const a = projectActivity.get(p);
+      return (a?.running ?? 0) > 0 || (a?.unread ?? 0) > 0;
+    });
     return showWorkspaceControls ? (
       <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: isLargeWorkspaceControl ? 6 : 2, height: isLargeWorkspaceControl ? "auto" : "100%", minWidth: 0, width: isLargeWorkspaceControl ? "100%" : undefined }}>
         <div style={{ position: "relative", minWidth: 0, width: isLargeWorkspaceControl ? "fit-content" : undefined, maxWidth: isLargeWorkspaceControl ? "min(100%, 560px)" : undefined }}>
@@ -941,7 +986,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             }}
           >
             <PathLabel text={compactProjectLabel} style={{ flex: 1, minWidth: 0, color: "inherit", direction: "ltr", fontFamily: "inherit" }} />
-            <CaretDown size={12} weight="regular" style={{ flexShrink: 0, transition: "transform 0.12s", transform: isProjectDropdownOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />
+            <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+              <CaretDown size={12} weight="regular" style={{ transition: "transform 0.12s", transform: isProjectDropdownOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />
+              {hasOtherWorkspaceActivity && (
+                <span style={{ position: "absolute", right: -4, bottom: -4, width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", pointerEvents: "none" }} aria-hidden="true" />
+              )}
+            </span>
           </button>
           <AnimatedDropdown open={isProjectDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(38vh, 300px)" }}>
             {projectSearch}
