@@ -310,6 +310,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
+  // Holds the latest onBackgroundTaskDone so the effect below can keep its
+  // deps array identical to the pre-feature version — a changing callback
+  // reference must not resize/reshuffle the deps (React errors on that).
+  const onBackgroundTaskDoneRef = useRef(onBackgroundTaskDone);
+  useEffect(() => { onBackgroundTaskDoneRef.current = onBackgroundTaskDone; });
   // Once a lightweight running snapshot arrives it owns the dynamic state;
   // late /api/sessions responses cannot revive an older embedded snapshot.
   const runningSnapshotAuthoritativeRef = useRef(false);
@@ -427,10 +432,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
     // A background completion should also ring — the open session's own end
     // tone is handled by ChatWindow, so anything else that finished counts.
-    if (completedInBackground.length > 0) onBackgroundTaskDone?.();
+    if (completedInBackground.length > 0) onBackgroundTaskDoneRef.current?.();
 
     previousRunningSessionIdsRef.current = runningSessionIds;
-  }, [runningSessionIds, selectedSessionId, onBackgroundTaskDone]);
+  }, [runningSessionIds, selectedSessionId]);
 
   useEffect(() => {
     if (!selectedSessionId) return;
