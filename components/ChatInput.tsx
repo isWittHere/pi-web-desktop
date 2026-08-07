@@ -4,6 +4,8 @@ import React, { useMemo, useRef, useState, useCallback, useEffect, useImperative
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
+import { isBase64ImageWithinLimits } from "@/lib/image-attachments";
+import type { TextContent, UserMessage } from "@/lib/types";
 import {
   buildEntriesFromFiles, buildAtInsertText, buildFileAtMentionsText, extractAtQuery, filterFileEntries,
   type AtQueryMatch, type FileIndexEntry,
@@ -100,6 +102,8 @@ interface Props {
 export interface ChatInputHandle {
   insertText: (text: string) => void;
   insertIfEmpty: (text: string) => void;
+  /** Restore a historical user message (text + images) into the composer. */
+  replaceMessage: (message: UserMessage) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
   addFileMentions: (files: File[]) => void;
@@ -266,6 +270,49 @@ function revokeImagePreview(image: AttachedImage): void {
   if (image.previewUrl.startsWith("blob:")) {
     URL.revokeObjectURL(image.previewUrl);
   }
+}
+
+function draftImagesToAttachedImages(images: ChatDraftImage[] | undefined): AttachedImage[] {
+  return (images ?? []).map(draftImageToAttachedImage);
+}
+
+/**
+ * True when the composer is empty enough to restore a historical message:
+ * no draft text, no attached images, and no image reads still in flight.
+ * The pending-image guard prevents clobbering an image the user just dropped
+ * while its FileReader is still running.
+ */
+export function canRestoreUserMessage(
+  value: string,
+  attachedImageCount: number,
+  pendingImageCount: number,
+): boolean {
+  return !value.trim() && attachedImageCount === 0 && pendingImageCount === 0;
+}
+
+export function getUserMessageText(message: UserMessage): string {
+  if (typeof message.content === "string") return message.content;
+  return message.content
+    .filter((block): block is TextContent => block.type === "text")
+    .map((block) => block.text)
+    .join("\n");
+}
+
+export function getUserMessageDraftImages(message: UserMessage): ChatDraftImage[] {
+  if (typeof message.content === "string") return [];
+  return message.content.flatMap((block) => {
+    if (block.type !== "image") return [];
+
+    // Support both the current nested image format and older flat pi-ai entries.
+    const flat = block as unknown as { data?: unknown; mimeType?: unknown };
+    const data = block.source?.type === "base64" ? block.source.data : flat.data;
+    const mimeType = block.source?.type === "base64" ? block.source.media_type : flat.mimeType;
+    if (typeof data !== "string" || typeof mimeType !== "string") return [];
+
+    // Size/type guard expects the flat image shape (type + data + mimeType).
+    const image = { type: "image" as const, data, mimeType };
+    return isBase64ImageWithinLimits(image) ? [{ data, mimeType }] : [];
+  });
 }
 
 function QueuedMessageRow({ kind, text, label }: { kind: "steer" | "follow-up"; text: string; label: string }) {
@@ -515,6 +562,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const attachedImagesRef = useRef(attachedImages);
   valueRef.current = value;
   attachedImagesRef.current = attachedImages;
+  // Image FileReader reads still in flight — replaceMessage must not clobber
+  // an image the user just dropped before its read finished.
+  const pendingImageCountRef = useRef(0);
 
   // Highlight layer segments: valid @file mentions and /skill: commands get
   // accent + dotted underline styling in the backdrop behind the textarea.
@@ -593,6 +643,24 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         applyAutoHeight();
       });
     },
+    replaceMessage(message: UserMessage) {
+      const ta = textareaRef.current;
+      const current = ta ? ta.value : value;
+      if (!canRestoreUserMessage(current, attachedImagesRef.current.length, pendingImageCountRef.current)) return;
+
+      setValue(getUserMessageText(message));
+      setAtQuery(null);
+      setHistoryMenuOpen(false);
+      setAttachedImages((prev) => {
+        prev.forEach(revokeImagePreview);
+        return draftImagesToAttachedImages(getUserMessageDraftImages(message));
+      });
+      requestAnimationFrame(() => {
+        if (!ta) return;
+        ta.focus();
+        applyAutoHeight();
+      });
+    },
     prependText(text: string) {
       if (!text.trim()) return;
       const ta = textareaRef.current;
@@ -643,23 +711,28 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (isStreaming) return;
     const imageFiles = files.filter((f) => f.type.startsWith("image/"));
     if (!imageFiles.length) return;
-    const newImages = await Promise.all(
-      imageFiles.map(
-        (file) =>
-          new Promise<AttachedImage>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result as string;
-              // result is "data:<mime>;base64,<data>"
-              const base64 = result.split(",")[1];
-              resolve({ data: base64, mimeType: file.type, previewUrl: URL.createObjectURL(file) });
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          })
-      )
-    );
-    setAttachedImages((prev) => [...prev, ...newImages]);
+    pendingImageCountRef.current += imageFiles.length;
+    try {
+      const newImages = await Promise.all(
+        imageFiles.map(
+          (file) =>
+            new Promise<AttachedImage>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const result = reader.result as string;
+                // result is "data:<mime>;base64,<data>"
+                const base64 = result.split(",")[1];
+                resolve({ data: base64, mimeType: file.type, previewUrl: URL.createObjectURL(file) });
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            })
+        )
+      );
+      setAttachedImages((prev) => [...prev, ...newImages]);
+    } finally {
+      pendingImageCountRef.current = Math.max(0, pendingImageCountRef.current - imageFiles.length);
+    }
   }, [isStreaming]);
 
   /** Append `@relative/path ` mention tokens for dropped files. Cursor lands

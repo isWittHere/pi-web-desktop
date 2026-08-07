@@ -42,6 +42,30 @@ const MAX_THINKING_CACHE_ENTRIES = 100;
 const SKILL_TIP_MAX_WIDTH = 340;
 const thinkingContentCache = new Map<string, Promise<string>>();
 
+/**
+ * Replace the first text block of a user message (preserving image blocks).
+ * Used when re-editing a historical message as its compact command form, so
+ * the composer receives `/skill:name args` instead of the raw skill envelope.
+ */
+export function replaceUserMessageText(message: UserMessage, text: string): UserMessage {
+  if (typeof message.content === "string") return { ...message, content: text };
+
+  const content: Array<TextContent | ImageContent> = [];
+  let replaced = false;
+  for (const block of message.content) {
+    if (block.type !== "text") {
+      content.push(block);
+      continue;
+    }
+    if (!replaced) {
+      content.push({ ...block, text });
+      replaced = true;
+    }
+  }
+  if (!replaced) content.unshift({ type: "text", text });
+  return { ...message, content };
+}
+
 function loadThinkingContent(sessionId: string, entryId: string, blockIndex: number): Promise<string> {
   const key = `${sessionId}:${entryId}:${blockIndex}`;
   const cached = thinkingContentCache.get(key);
@@ -83,7 +107,7 @@ interface Props {
   forking?: boolean;
   onNavigate?: (entryId: string) => void;
   prevAssistantEntryId?: string;
-  onEditContent?: (content: string) => void;
+  onEditContent?: (message: UserMessage) => void;
   showTimestamp?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
@@ -164,7 +188,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   forking?: boolean;
   onNavigate?: (entryId: string) => void;
   prevAssistantEntryId?: string;
-  onEditContent?: (content: string) => void;
+  onEditContent?: (message: UserMessage) => void;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
@@ -245,6 +269,12 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   }), [fileIndex, skillInfo]);
   const markdownMentionProps = { cwd, onOpenFile, highlightMentions: true, mentionValidators } as const;
   const skillMeta = skillBlock ? skillInfo?.get(skillBlock.name) : null;
+
+  // Editing a skill-expanded message restores the compact `/skill:name args`
+  // command rather than the raw `<skill>` envelope stored by the SDK.
+  const editTarget = skillBlock
+    ? replaceUserMessageText(message, `/skill:${skillBlock.name}${skillBlock.args ? ` ${skillBlock.args}` : ""}`)
+    : message;
 
   const imageBlocks: ImageContent[] =
     typeof message.content === "string"
@@ -378,7 +408,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             }}>
               {canNavigate && (
                 <button
-                  onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(content); }}
+                  onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(editTarget); }}
                   title={t("desktop.editFromHere")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
