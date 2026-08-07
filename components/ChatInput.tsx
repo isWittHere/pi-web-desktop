@@ -528,11 +528,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // conditional visibility of the floating maximize/restore button above the
   // input box — it only appears while the user is typing-focused.
   const [inputFocused, setInputFocused] = useState(false);
-  // True while an IME composition is in progress. The textarea text is
-  // transparent so the highlight layer behind it shows through; some IMEs
-  // paint the composing string in the element's text color, so fall back to
-  // solid text while composing and let the highlight layer reappear after.
-  const [compositionActive, setCompositionActive] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightLayerRef = useRef<HTMLDivElement>(null);
@@ -2267,11 +2262,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onKeyDown={handleKeyDown}
             onCompositionStart={() => {
               isComposingRef.current = true;
-              setCompositionActive(true);
             }}
             onCompositionEnd={(e) => {
               isComposingRef.current = false;
-              setCompositionActive(false);
               lastCompositionEndAtRef.current = Date.now();
               const el = e.currentTarget;
               updateAtQuery(el.value, el.selectionStart);
@@ -2294,10 +2287,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               border: "none",
               outline: "none",
               resize: "none",
-              // Transparent so the highlight layer beneath shows through;
-              // the caret and IME composition text stay visible. Solid text
-              // while composing (some IMEs paint in the element's color).
-              color: compositionActive ? "var(--text)" : "transparent",
+              // Transparent so the highlight layer beneath shows through. The
+              // caret (caretColor) and the composing text stay visible: the
+              // highlight layer renders the same `value` (React controlled
+              // onChange fires during IME composition), so the composing pinyin
+              // shows through in `var(--text)` while @file / /skill mention
+              // highlights keep their accent tint. Painting the textarea text
+              // solid here would cast an opaque layer over the highlight row —
+              // hiding the mention highlights and double-drawing the glyphs
+              // (a bolder, blurrier look) while composing.
+              color: "transparent",
               caretColor: "var(--text)",
               // Positioned so it paints above the absolutely-positioned
               // highlight layer (both are positioned; DOM order wins).
