@@ -2118,6 +2118,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <button
                     type="button"
                     onClick={() => sendQueued("steer")}
+                    // onMouseDown preventDefault keeps focus in the textarea so
+                    // the maximize group (which is focus-gated) does not unmount
+                    // and shift the floating actions row under the cursor.
+                    onMouseDown={(e) => e.preventDefault()}
                     disabled={!canQueueStreamingMessage}
                     title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.injectMessageNow")}
                     aria-label={t("desktop.steer")}
@@ -2148,6 +2152,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <button
                     type="button"
                     onClick={() => sendQueued("followup")}
+                    // Same focus-preservation guard as the steer button above.
+                    onMouseDown={(e) => e.preventDefault()}
                     disabled={!canQueueStreamingMessage}
                     title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.queueMessageAfterFinish")}
                     aria-label={t("desktop.followUp")}
