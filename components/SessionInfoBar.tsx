@@ -116,13 +116,6 @@ export function SessionInfoBar({
   const hasSystemPrompt = systemPrompt !== null && systemPrompt !== "";
   const hasStats = sessionStats && t && (t.input > 0 || t.output > 0);
 
-  // Compact readout state: cost + context text + usage ring. Only shown once
-  // BOTH the cost and the context usage are known; while either is temporarily
-  // unknown (e.g. a fresh run that hasn't reported usage yet) we fall back to
-  // the full detailed chip form below so no information is lost.
-  const ctxKnown = !!contextUsage?.contextWindow && contextUsage.percent !== null;
-  const compactKnown = costStr !== null && ctxKnown;
-
   // Usage donut — arc length = context usage %. Only rendered once percent is
   // known, so it always receives a concrete value (no null dead-branch).
   const usageRing = (pct: number) => (
@@ -334,20 +327,18 @@ export function SessionInfoBar({
             aria-label={translate("desktop.sessionInfo")}
             aria-pressed={activePanel === "session"}
           >
-            {compactKnown ? (
+            {contextUsage && contextUsage.contextWindow && contextUsage.percent !== null ? (
+              // Context usage known → context text + ring, plus cost if reported.
               <>
-                <span>{costStr}</span>
-                {contextUsage && contextUsage.percent !== null && (
-                  <span className="session-info-bar-token-chip" style={{ color: ctxColor, marginLeft: 5 }}>
-                    {contextUsage.tokens !== null ? formatTokenCount(contextUsage.tokens) : "?"}
-                    /{formatTokenCount(contextUsage.contextWindow)}
-                    {usageRing(contextUsage.percent)}
-                  </span>
-                )}
+                {costStr && <span>{costStr}</span>}
+                <span className="session-info-bar-token-chip" style={{ color: ctxColor, marginLeft: costStr ? 5 : 0 }}>
+                  {contextUsage.tokens !== null ? formatTokenCount(contextUsage.tokens) : "?"}
+                  /{formatTokenCount(contextUsage.contextWindow)}
+                  {usageRing(contextUsage.percent)}
+                </span>
               </>
             ) : (
-              // Either cost or context usage is still unknown — keep the full
-              // current form so no information is lost while values are pending.
+              // Context usage unknown → keep the other (full) info, incl. cost.
               <>
                 {t && t.input > 0 && (
                   <span className="session-info-bar-token-chip">
@@ -368,11 +359,6 @@ export function SessionInfoBar({
                   </span>
                 )}
                 {costStr && <span>{costStr}</span>}
-                {contextUsage?.contextWindow && contextUsage.percent !== null && (
-                  <span className="session-info-bar-token-chip" style={{ color: ctxColor }}>
-                    {usageRing(contextUsage.percent)}
-                  </span>
-                )}
               </>
             )}
           </button>

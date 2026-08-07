@@ -122,6 +122,30 @@ if (DO_CLEAN && existsSync(RELDIR)) {
 }
 mkdirSync(RELDIR, { recursive: true });
 
+// Snapshot the pristine lockfile before any npm tree-mutation step. npm
+// dedupe / prune / `npm install electron` / restore all re-resolve caret
+// ranges and rewrite package-lock.json, silently drifting the committed
+// dependency graph (and polluting git history). We restore this copy at the
+// end so the working-tree lockfile is byte-identical to when the build began.
+const LOCKFILE = join(ROOT, "package-lock.json");
+const LOCK_BAK = join(RELDIR, ".package-lock.json.bak");
+if (existsSync(LOCKFILE)) {
+  cpSync(LOCKFILE, LOCK_BAK);
+  log("  snapshot package-lock.json for restore");
+}
+
+// Guarantee the lockfile is restored even if the build fails partway through
+// the npm mutation steps (dedupe / prune / electron install). The normal
+// restore happens in Step 3c; this only fires on early exit while the backup
+// still exists.
+process.on("exit", (code) => {
+  if (code !== 0 && existsSync(LOCK_BAK)) {
+    try { cpSync(LOCK_BAK, LOCKFILE); } catch {}
+    try { rmSync(LOCK_BAK, { force: true }); } catch {}
+    log("  restored pristine package-lock.json (on failure)");
+  }
+});
+
 // Flatten nested node_modules to reduce duplication in the final package.
 // Safe to run even if the tree is already optimal — it only moves packages.
 log("  npm dedupe …");
@@ -171,7 +195,11 @@ log("Step 2c: npm prune --production");
 run("npm", ["prune", "--production"]);
 
 log("  reinstalling electron for builder");
-run("npm", ["install", "--no-save", "electron"]);
+// --package-lock=false: electron is a devDependency needed only so
+// electron-builder can resolve its version/platform binaries, and it is
+// excluded from the package anyway. Installing it must NOT rewrite
+// package-lock.json (which would drift the committed electron pin).
+run("npm", ["install", "--no-save", "--package-lock=false", "electron"]);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 3. electron-builder
@@ -197,6 +225,15 @@ if (existsSync(UNPKDIR) && existsSync(NEXT_NM)) {
 //     tree is usable for development after the build finishes.
 // ══════════════════════════════════════════════════════════════════════════════
 log("Step 3c: npm install (restore devDependencies)");
+// Restore the pristine lockfile captured at build start. The npm lifecycle
+// steps above re-resolve caret ranges and would otherwise leave a rewritten
+// package-lock.json behind. `npm install` below then rebuilds node_modules
+// from this exact lockfile, so the working tree matches the committed deps.
+if (existsSync(LOCK_BAK)) {
+  cpSync(LOCK_BAK, LOCKFILE);
+  rmSync(LOCK_BAK, { force: true });
+  log("  restored pristine package-lock.json");
+}
 run("npm", ["install"]);
 
 // ══════════════════════════════════════════════════════════════════════════════
