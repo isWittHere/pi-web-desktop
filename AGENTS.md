@@ -490,10 +490,11 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 ### Theme System (`lib/theme.ts` + `hooks/useTheme.ts` + `app/api/themes/`)
 - **Theme sets**: Themes are organized as paired dark+light variants under a base name (e.g. "gruvbox" → `gruvbox-dark.json` + `gruvbox-light.json`). Single-file themes are also supported.
 - **File lookup** (global → project): `~/.pi/agent/themes/` then `<cwd>/.pi/themes/`. Also accepts direct file paths.
+- **Built-in themes** (`lib/themes/`): Five bundled pi CLI theme sets (gruvbox, miku-aqua, orbital-rose, scarlet-tether, solarized), each with dark+light variants, imported at build time (`resolveJsonModule`) as a static registry (`BUILTIN_THEMES`). User themes in the scanned dirs take precedence over a built-in with the same base name; built-ins are the final fallback in `resolveTheme` and are listed with `builtin: true` when no user theme collides.
 - **Resolution**: `lib/theme.ts` parses pi CLI theme JSON, resolves `vars` references, converts 256-color indices to hex via xterm palette, and maps 51 pi CLI tokens to ~23 pi-web CSS custom properties.
 - **API**: `GET /api/themes` lists available theme sets; `GET /api/themes/{name}?mode=dark|light` resolves a specific variant and returns the CSS variable map.
 - **Cache**: `useTheme` caches resolved themes by `name::mode` in a module-level Map.
-- **Border depth slider**: User-adjustable 0-100 range blends `--border`/`--border-hover` from invisible (matches bg) → theme default → max contrast (matches text). Uses `color-mix()`.
+- **Border depth slider**: User-adjustable 0-100 range blends `--border`/`--border-hover` from invisible (matches bg) → theme default → max contrast (matches text). Uses `color-mix()`. Default depth is 25 (a subtle border) for new users; the Default theme's border palette is tuned so its depth-25 contrast matches the built-in themes.
 - **View transitions**: `toggleTheme()` uses the View Transition API with a circular clip-path animation triggered from the click origin.
 - **System color scheme**: `useTheme` subscribes to `(prefers-color-scheme: dark)` media query for "system" mode.
 - **Layout inline script**: `app/layout.tsx` reads `pi-theme-mode`, `pi-theme`, runs migration from old per-mode keys (`pi-theme-dark`/`pi-theme-light`), and sets `data-theme-mode`/`data-theme-resolved-mode`/`dark` class before React hydration. The per-mode-key migration is self-cleaning and idempotent; it may be dropped once no supported release writes the old keys.

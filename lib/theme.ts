@@ -22,6 +22,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "fs";
 import { join, basename, extname } from "path";
 import { homedir } from "os";
+import { BUILTIN_THEMES, findBuiltinTheme } from "./themes";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -492,6 +493,20 @@ export function listThemeSets(projectCwd?: string): ThemeSetInfo[] {
     });
   }
 
+  // Built-in themes — only when no user theme shares the same base name.
+  // User themes in ~/.pi/agent/themes or <cwd>/.pi/themes take precedence.
+  for (const builtin of BUILTIN_THEMES) {
+    if (seen.has(builtin.name)) continue;
+    seen.add(builtin.name);
+    result.push({
+      name: builtin.name,
+      displayName: themeNameToDisplay(builtin.name),
+      hasDark: !!builtin.dark,
+      hasLight: !!builtin.light,
+      builtin: true,
+    });
+  }
+
   return result;
 }
 
@@ -566,6 +581,24 @@ export function resolveTheme(
       const bg0 = vars.bg0 || "#1a1a1a";
       return {
         name: basename(name, extname(name)),
+        isDark: relativeLuminance(bg0) < 0.5,
+        cssVars,
+      };
+    }
+  }
+
+  // Built-in theme fallback. User themes (and direct paths) above take
+  // precedence; a built-in is only used when nothing else resolved.
+  const builtin = findBuiltinTheme(name);
+  if (builtin) {
+    const theme = variant === "light" ? builtin.light || builtin.dark : builtin.dark || builtin.light;
+    if (theme) {
+      const vars = resolveVars(theme.vars);
+      const colors = resolveColors(theme.colors, vars);
+      const cssVars = mapToCssVars(colors, vars);
+      const bg0 = vars.bg0 || "#1a1a1a";
+      return {
+        name,
         isDark: relativeLuminance(bg0) < 0.5,
         cssVars,
       };

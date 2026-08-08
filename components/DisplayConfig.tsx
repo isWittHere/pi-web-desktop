@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link } from "@phosphor-icons/react";
+import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link, Check } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import type { ThemeSetInfo } from "@/lib/theme";
@@ -111,21 +111,6 @@ function BorderIcon({ depth }: { depth: number }) {
   );
 }
 
-// ── Variant availability dots ───────────────────────────────────────────────
-
-function VariantDots({ hasDark, hasLight, t }: { hasDark: boolean; hasLight: boolean; t: (key: string) => string }) {
-  return (
-    <span style={{ display: "inline-flex", gap: 3, alignItems: "center", flexShrink: 0 }}>
-      {hasDark && (
-        <span title={t("desktop.darkVariant")} style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#7c6f64" }} />
-      )}
-      {hasLight && (
-        <span title={t("desktop.lightVariant")} style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#d5c4a1", border: "1px solid rgba(0,0,0,0.1)" }} />
-      )}
-    </span>
-  );
-}
-
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export function DisplayConfig() {
@@ -227,34 +212,17 @@ export function DisplayConfig() {
                 onMouseLeave={() => setHoveredTag(null)}
               >
                 {ts.displayName}
-                <VariantDots hasDark={ts.hasDark} hasLight={ts.hasLight} t={t} />
               </button>
             ))}
           </div>
         )}
 
-        {/* Border depth */}
+        {/* Border depth — preset swatches only, the range slider is hidden */}
         <div style={{ marginTop: 20 }}>
           <SectionLabel
             icon={<BorderIcon depth={borderDepth} />}
             label={`${t("desktop.borderVisibility")} (${borderDepth})`}
           />
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{t("desktop.borderSubtle")}</span>
-            <input
-              type="range"
-              min={0} max={100} step={1}
-              value={borderDepth}
-              onChange={(e) => setBorderDepth(Number(e.target.value))}
-              style={{
-                flex: 1,
-                accentColor: "var(--accent)",
-                height: 6,
-                cursor: "pointer",
-              }}
-            />
-            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{t("desktop.borderBold")}</span>
-          </div>
           <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
             {[0, 25, 50, 75, 100].map((d) => {
               const active = borderDepth === d;
@@ -267,13 +235,16 @@ export function DisplayConfig() {
                   onClick={() => setBorderDepth(d)}
                   style={{
                     width: 28, height: 20,
-                    border: `2px solid ${active ? "var(--accent)" : previewBorder}`,
+                    border: `2px solid ${previewBorder}`,
                     borderRadius: 5,
                     background: "var(--bg-card)",
                     cursor: "pointer",
                     transition: "border-color 0.1s",
+                    display: "flex", alignItems: "center", justifyContent: "center",
                   }}
-                />
+                >
+                  {active && <Check size={13} weight="bold" color="var(--accent)" aria-hidden="true" />}
+                </div>
               );
             })}
           </div>

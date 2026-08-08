@@ -77,7 +77,7 @@ function readBorderDepth(): number {
       if (!isNaN(n) && n >= 0 && n <= 100) return n;
     }
   } catch {}
-  return 50;
+  return 25;
 }
 
 // ─── System preference ──────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ export function useTheme() {
     return resolveEffectiveMode(getModeSnapshot());
   });
 
-  // Border depth slider (0-100, default 50 = theme unchanged)
+  // Border depth slider (0-100, default 25 = a subtle border) 
   const [borderDepth, setBorderDepthState] = useState<number>(() => readBorderDepth());
 
   const setBorderDepth = useCallback((depth: number) => {
@@ -435,7 +435,7 @@ export function useTheme() {
     setTheme,
     toggleTheme,
     isDark,
-    /** Border visibility depth (0 = invisible, 50 = theme default, 100 = max contrast). */
+    /** Border visibility depth (0 = invisible, 25 = default subtle border, 50 = theme default, 100 = max contrast). */
     borderDepth,
     /** Set border depth (0-100). */
     setBorderDepth,
