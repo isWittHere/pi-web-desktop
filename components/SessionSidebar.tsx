@@ -1049,25 +1049,27 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               <PathLabel text={compactWorktreeLabel ?? ""} style={{ flex: 1, minWidth: 0, color: "inherit", direction: "ltr", fontFamily: "inherit" }} />
               {showWorktreeSwitcher && <CaretDown size={12} weight="regular" style={{ flexShrink: 0, transition: "transform 0.12s", transform: isWorktreeDropdownOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />}
             </button>
-            <AnimatedDropdown open={showWorktreeSwitcher && isWorktreeDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden" }}>
-              <div style={{ maxHeight: "min(40vh, 300px)", overflowY: "auto" }}>
+            <AnimatedDropdown open={showWorktreeSwitcher && isWorktreeDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(38vh, 300px)" }}>
+              <div style={{ maxHeight: "min(32vh, 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
                 {worktreeState?.worktrees.map((wt) => {
                   const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
                   return (
-                    <button key={wt.path} onClick={() => { setSelectedCwd(wt.path); setWtDropdownOpen(false); setWorkspaceWorktreeDropdownOpen(null); setWtError(null); }} title={wt.path} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "var(--bg)", border: "none", borderBottom: "1px solid var(--border)", color: isCurrent ? "var(--text)" : "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11, fontFamily: "var(--font-mono)" }}>
-                      {isCurrent ? <Check size={10} color="var(--accent)" weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" /> : <span style={{ width: 10, flexShrink: 0 }} />}
+                    <button key={wt.path} onClick={() => { setSelectedCwd(wt.path); setWtDropdownOpen(false); setWorkspaceWorktreeDropdownOpen(null); setWtError(null); }} title={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "3px 8px", background: isCurrent ? "var(--bg-selected)" : "transparent", border: "none", borderRadius: 5, color: isCurrent ? "var(--accent)" : "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "var(--font-mono)", minWidth: 0 }} onMouseEnter={(e) => { if (!isCurrent) e.currentTarget.style.background = "var(--bg-hover)"; }} onMouseLeave={(e) => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}>
+                      {isCurrent ? <Check size={12} color="var(--accent)" weight="bold" style={{ flexShrink: 0 }} aria-hidden="true" /> : <span style={{ width: 12, flexShrink: 0 }} />}
                       <PathLabel text={wt.branch ?? displayCwd(wt.path, homeDir)} style={{ flex: 1 }} />
                       {wt.isMain && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("desktop.main")}</span>}
                     </button>
                   );
                 })}
               </div>
+              <div style={{ borderTop: "1px solid var(--border)", padding: "4px", flexShrink: 0 }}>
               {!wtNewOpen ? (
-                <button onClick={(e) => { e.stopPropagation(); setWtNewOpen(true); setWtError(null); setTimeout(() => wtNewInputRef.current?.focus(), 0); }} title={t("desktop.createWorktree")} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "8px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11 }}>
+                <button onClick={(e) => { e.stopPropagation(); setWtNewOpen(true); setWtError(null); setTimeout(() => wtNewInputRef.current?.focus(), 0); }} title={t("desktop.createWorktree")} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 8px", background: "transparent", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 12 }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}>
+                  <Plus size={14} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
                   <span>{t("desktop.newWorktree")}</span>
                 </button>
               ) : (
-                <div style={{ padding: "6px 8px" }}>
+                <div style={{ padding: "6px 4px 4px" }}>
                   <input
                     ref={wtNewInputRef}
                     value={wtNewBranch}
@@ -1086,6 +1088,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                   {wtError && <div style={{ marginTop: 5, color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>{wtError}</div>}
                 </div>
               )}
+              </div>
             </AnimatedDropdown>
           </div>
         )}
@@ -1265,26 +1268,23 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 title={currentWt ? t("desktop.switchWorktreeWithPath", { path: currentWt.path }) : t("desktop.switchWorktree")}
                 style={{
                   width: "100%",
-                  height: 29,
-                  boxSizing: "border-box",
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
-                  padding: "0 10px",
-                  background: "var(--bg-hover)",
-                  border: "1px solid var(--border)",
+                  padding: "6px 10px",
+                  background: currentWt ? "var(--bg-hover)" : "rgba(37,99,235,0.06)",
+                  border: currentWt ? "1px solid var(--border)" : "1px solid rgba(37,99,235,0.4)",
                   borderRadius: 7,
                   cursor: "pointer",
-                  fontSize: 11,
-                  lineHeight: 1.35,
-                  color: "var(--text-muted)",
+                  fontSize: 12,
+                  color: "var(--text)",
                   textAlign: "left",
+                  transition: "border-color 0.15s, background 0.15s",
                 }}
               >
                 <GitBranch size={11} weight="regular" style={{ flexShrink: 0, color: currentWt && !currentWt.isMain ? "var(--accent)" : "var(--text-dim)" }} aria-hidden="true" />
                 <PathLabel
                   text={currentWt ? (currentWt.branch ?? displayCwd(currentWt.path, homeDir)) : "…"}
-                  style={{ flex: 1, fontFamily: "var(--font-mono)", color: "var(--text)" }}
+                  style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text)" }}
                 />
                 {currentWt?.isMain && (
                   <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("desktop.main")}</span>
@@ -1310,14 +1310,17 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                   borderRadius: 8,
                   boxShadow: "0 6px 20px rgba(0,0,0,0.10)",
                   overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  maxHeight: "min(38vh, 300px)",
                 }}
               >
-                  <div style={{ maxHeight: "min(40vh, 300px)", overflowY: "auto" }}>
+                  <div style={{ maxHeight: "min(32vh, 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
                     {worktreeState.worktrees.map((wt) => {
                       const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
                       if (wtConfirmRemove === wt.path) {
                         return (
-                          <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "rgba(239,68,68,0.06)" }}>
+                          <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "rgba(239,68,68,0.06)" }}>
                             <span style={{ flex: 1, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {t("desktop.uncommittedChanges")}
                             </span>
@@ -1341,7 +1344,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                         <div
                           key={wt.path}
                           className="wt-row"
-                          style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
+                          style={{ display: "flex", alignItems: "center" }}
                         >
                           <button
                             onClick={() => {
@@ -1355,21 +1358,24 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                               minWidth: 0,
                               display: "flex",
                               alignItems: "center",
-                              gap: 7,
-                              padding: "8px 10px",
-                              background: "var(--bg)",
+                              gap: 6,
+                              padding: "3px 8px",
+                              background: isCurrent ? "var(--bg-selected)" : "transparent",
                               border: "none",
-                              color: isCurrent ? "var(--text)" : "var(--text-muted)",
+                              borderRadius: 5,
+                              color: isCurrent ? "var(--accent)" : "var(--text)",
                               cursor: "pointer",
                               textAlign: "left",
-                              fontSize: 11,
+                              fontSize: 12,
                               fontFamily: "var(--font-mono)",
                             }}
+                            onMouseEnter={(e) => { if (!isCurrent) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                            onMouseLeave={(e) => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}
                           >
                             {isCurrent ? (
-                              <Check size={10} color="var(--accent)" weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
+                              <Check size={12} color="var(--accent)" weight="bold" style={{ flexShrink: 0 }} aria-hidden="true" />
                             ) : (
-                              <span style={{ width: 10, flexShrink: 0 }} />
+                              <span style={{ width: 12, flexShrink: 0 }} />
                             )}
                             <PathLabel text={wt.branch ?? displayCwd(wt.path, homeDir)} style={{ flex: 1 }} />
                             {wt.isMain && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("desktop.main")}</span>}
@@ -1381,7 +1387,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                               title={t("desktop.removeWorktree", { path: wt.path })}
                               style={{
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                width: 34, height: 28, padding: 0, marginRight: 4,
+                                width: 24, height: 20, padding: 0, marginRight: 4,
                                 background: "none", border: "none",
                                 color: "var(--text-dim)", cursor: "pointer",
                                 borderRadius: 5, flexShrink: 0,
@@ -1398,6 +1404,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                     })}
                   </div>
 
+                  <div style={{ borderTop: "1px solid var(--border)", padding: "4px", flexShrink: 0 }}>
                   {!wtNewOpen ? (
                     <button
                       onClick={(e) => {
@@ -1410,22 +1417,25 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 7,
+                        gap: 8,
                         width: "100%",
-                        padding: "8px 10px",
-                        background: "none",
+                        padding: "7px 8px",
+                        background: "transparent",
                         border: "none",
+                        borderRadius: 5,
                         color: "var(--text-muted)",
                         cursor: "pointer",
                         textAlign: "left",
-                        fontSize: 11,
+                        fontSize: 12,
                       }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
                     >
-                      <Plus size={10} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
+                      <Plus size={14} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
                       <span>{t("desktop.newWorktree")}</span>
                     </button>
                   ) : (
-                    <div style={{ padding: "6px 8px" }}>
+                    <div style={{ padding: "6px 4px 4px" }}>
                       <input
                         ref={wtNewInputRef}
                         value={wtNewBranch}
@@ -1497,7 +1507,8 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                   )}
                   {wtError && (
                     <div style={{
-                      padding: "5px 10px 8px",
+                      marginTop: 5,
+                      padding: "0 4px 2px",
                       color: "#dc2626",
                       fontSize: 11,
                       lineHeight: 1.35,
@@ -1506,6 +1517,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                       {wtError}
                     </div>
                   )}
+                  </div>
               </AnimatedDropdown>
             </div>
           );
