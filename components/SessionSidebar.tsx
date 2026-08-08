@@ -1343,7 +1343,6 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                       return (
                         <div
                           key={wt.path}
-                          className="wt-row"
                           style={{ display: "flex", alignItems: "center" }}
                         >
                           <button
