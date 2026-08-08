@@ -42,6 +42,15 @@ const markdownSanitizeSchema = {
     // Mention tokens injected by the mention remark plugin (lib/mention-tokens.ts).
     span: [["className", /^mention-/], "data-mention-kind", "data-mention-value"],
   },
+  protocols: {
+    ...defaultSchema.protocols,
+    // Let `img src` through untouched so local filesystem paths (relative,
+    // absolute, file:) reach the render component for rewriting to /api/files.
+    // The img component (lib/markdown-images.ts) is the security gate now: it
+    // only emits http(s), data:image, same-origin /api|/_next URLs, or local
+    // paths it rewrote itself, and drops everything else (javascript:, …).
+    src: [],
+  },
   strip: [...(defaultSchema.strip || []), "iframe", "object", "style", "form"],
 };
 

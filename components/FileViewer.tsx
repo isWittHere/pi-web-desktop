@@ -14,6 +14,7 @@ import {
 } from "@/lib/file-types";
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { resolveLocalFileHref } from "@/lib/file-links";
+import { resolveMarkdownImageSrc } from "@/lib/markdown-images";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { prismTheme } from "@/lib/prism-theme";
 import { CodeBlock, MarkdownCodeContext, MermaidBlock } from "@/components/MarkdownBody";
@@ -1108,6 +1109,29 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
                     <a href={href} {...props} className={linkClass} onClick={handleClick}>
                       {children}
                     </a>
+                  );
+                },
+                img({ src, alt, ...props }) {
+                  // `node` is react-markdown metadata, never a DOM attribute.
+                  delete props.node;
+                  // Local paths (relative to the markdown file, absolute, or
+                  // file:) are rewritten to /api/files; unsafe URL shapes return
+                  // null and the image is dropped entirely.
+                  const resolved = resolveMarkdownImageSrc(
+                    src,
+                    markdownDirectory,
+                    cwd ?? markdownDirectory,
+                    sourceSessionId,
+                  );
+                  if (!resolved) return null;
+                  return (
+                    // eslint-disable-next-line @next/next/no-img-element -- dynamic file/remote src, cannot use next/image
+                    <img
+                      src={resolved}
+                      alt={alt}
+                      {...props}
+                      className="max-w-full h-auto"
+                    />
                   );
                 },
                 table({ children }) {

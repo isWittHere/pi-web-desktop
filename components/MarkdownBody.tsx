@@ -8,6 +8,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { copyText } from "@/lib/clipboard";
 import { resolveLocalFileHref } from "@/lib/file-links";
+import { resolveMarkdownImageSrc } from "@/lib/markdown-images";
 import { splitStableParts } from "@/lib/markdown-incremental";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { mentionRemarkPlugin, type MentionValidators } from "@/lib/mention-tokens";
@@ -109,6 +110,23 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
         <a href={href} {...props} className={linkClass} onClick={handleClick}>
           {children}
         </a>
+      );
+    },
+    img({ src, alt, ...props }: React.ComponentProps<'img'> & ExtraProps) {
+      // `node` is react-markdown metadata, not a DOM attribute.
+      delete props.node;
+      const resolved = resolveMarkdownImageSrc(src, cwd);
+      // Local paths are rewritten to /api/files; unsafe URL shapes return null
+      // and the image is dropped entirely.
+      if (!resolved) return null;
+      return (
+        // eslint-disable-next-line @next/next/no-img-element -- dynamic file/remote src, cannot use next/image
+        <img
+          src={resolved}
+          alt={alt}
+          {...props}
+          className="max-w-full h-auto"
+        />
       );
     },
     table({ children }: React.ComponentProps<'table'> & ExtraProps) {
