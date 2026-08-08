@@ -60,15 +60,12 @@ export const markdownRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [
   remarkFrontmatter,
   remarkFrontmatterToCode,
 ];
-export const markdownPreviewRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = markdownRemarkPlugins;
 
 export const markdownRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
   rehypeRaw,
   [rehypeSanitize, markdownSanitizeSchema],
   [rehypeKatex, { throwOnError: false, strict: false }],
 ];
-
-export const markdownPreviewRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = markdownRehypePlugins;
 
 /**
  * Transforms inline $$...$$ display math on a single line into block $$ math

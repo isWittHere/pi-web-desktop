@@ -821,19 +821,6 @@ pre, code {
   text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .markdown-body a:hover { text-decoration-color: var(--accent); }
-.markdown-body .markdown-inline-code {
-  display: inline;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  padding: 1px 5px;
-  color: var(--accent-blue);
-  font-family: var(--font-mono);
-  font-size: 0.88em;
-  line-height: inherit;
-}
 .markdown-body .contains-task-list {
   padding-left: 0;
   list-style: none;
@@ -879,15 +866,6 @@ pre, code {
   border-left: 2px solid var(--text-muted);
   color: var(--text-muted);
   font-style: italic;
-}
-.markdown-table-wrap {
-  width: 100%;
-  margin: 12px 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-card);
 }
 .markdown-body table {
   border-collapse: separate;
@@ -959,7 +937,6 @@ pre, code {
   margin: 3px 0;
   padding: 4px 8px;
 }
-.markdown-custom-message .markdown-table-wrap,
 .markdown-custom-message .markdown-code-block {
   margin: 4px 0;
 }
@@ -982,7 +959,6 @@ pre, code {
   margin: 4px 0 8px;
 }
 .markdown-compaction-message li { margin: 2px 0; }
-.markdown-compaction-message .markdown-table-wrap,
 .markdown-compaction-message .markdown-code-block {
   margin: 6px 0;
 }
@@ -1051,30 +1027,6 @@ pre, code {
 }
 .markdown-code-streaming code {
   font-family: inherit;
-}
-.markdown-code-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 36px;
-  padding: 4px 10px 4px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-dim);
-  font-size: 11px;
-}
-.markdown-code-lang {
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.markdown-code-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 .markdown-code-action {
   display: inline-flex;
