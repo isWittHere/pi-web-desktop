@@ -1,9 +1,38 @@
 import type { Options as ReactMarkdownOptions } from "react-markdown";
+import type { Root, RootContent } from "mdast";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { visit } from "unist-util-visit";
+
+/**
+ * Renders YAML frontmatter (parsed by remark-frontmatter into a `yaml` node)
+ * as a visible YAML code block. Without this, mdast-util-to-hast has no
+ * handler for `yaml` nodes and silently drops the metadata. Converting to a
+ * standard `code` node reuses the existing CodeBlock/Prism rendering path, so
+ * the metadata is visible in both the conversation and the file previewer
+ * without touching the sanitize schema. `remark-frontmatter` only treats a
+ * leading `---` block as frontmatter, so thematic breaks later in the document
+ * are unaffected.
+ */
+export function remarkFrontmatterToCode() {
+  return (tree: Root) => {
+    visit(tree, (node, index, parent) => {
+      if (node.type !== "yaml" || index === undefined || !parent) return;
+      const value = (node as { value?: unknown }).value;
+      const replacement: RootContent = {
+        type: "code",
+        lang: "yaml",
+        value: typeof value === "string" ? value : "",
+        position: node.position,
+      } as RootContent;
+      parent.children[index] = replacement;
+    });
+  };
+}
 
 const markdownSanitizeSchema = {
   ...defaultSchema,
@@ -16,7 +45,12 @@ const markdownSanitizeSchema = {
   strip: [...(defaultSchema.strip || []), "iframe", "object", "style", "form"],
 };
 
-export const markdownRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [remarkGfm, remarkMath];
+export const markdownRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [
+  remarkGfm,
+  remarkMath,
+  remarkFrontmatter,
+  remarkFrontmatterToCode,
+];
 export const markdownPreviewRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = markdownRemarkPlugins;
 
 export const markdownRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
