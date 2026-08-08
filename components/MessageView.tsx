@@ -4,6 +4,8 @@ import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { MarkdownBody } from "./MarkdownBody";
 import { copyText } from "@/lib/clipboard";
+import { encodeFilePathForApi } from "@/lib/file-paths";
+import { isImagePath } from "@/lib/file-types";
 
 import { isEmptyThinkingBlock } from "@/lib/message-display";
 import { parseSkillBlock } from "@/lib/skill-block";
@@ -712,7 +714,7 @@ function AssistantMessageView({
 
 function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
   if (block.type === "text") {
-    return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} />;
+    return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
   }
   if (block.type === "thinking") {
     return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} sessionId={sessionId} entryId={entryId} blockIndex={blockIndex} />;
@@ -721,13 +723,13 @@ function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCal
     const tc = block as ToolCallContent;
     const result = toolResults?.get(tc.toolCallId);
     const duration = toolCallDurations?.get(tc.toolCallId);
-    return <ToolCallBlock block={tc} result={result} duration={duration} />;
+    return <ToolCallBlock block={tc} result={result} duration={duration} sessionId={sessionId} />;
   }
   return null;
 }
 
-function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent; isStreaming?: boolean; cwd?: string; onOpenFile?: (filePath: string) => void }) {
-  return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</MarkdownBody>;
+function TextBlock({ block, isStreaming, cwd, onOpenFile, sessionId }: { block: TextContent; isStreaming?: boolean; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string }) {
+  return <MarkdownBody isStreaming={isStreaming} cwd={cwd} sourceSessionId={sessionId} onOpenFile={onOpenFile}>{block.text}</MarkdownBody>;
 }
 
 export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, contentOnly = false, isStreaming, cwd, onOpenFile, className }: {
@@ -845,7 +847,7 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, isStreamin
   if (error) return <div className="text-xs text-red-400">{error}</div>;
 
   return (
-    <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} className={className}>
+    <MarkdownBody isStreaming={isStreaming} cwd={cwd} sourceSessionId={sessionId} onOpenFile={onOpenFile} className={className}>
       {block.deferred ? (content ?? "") : block.thinking}
     </MarkdownBody>
   );
@@ -855,7 +857,7 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, isStreamin
 // let the user opt into the full payload so expanding a 45K result stays snappy.
 const RESULT_PREVIEW_CHARS = 8000;
 
-export const ToolCallBlock = memo(function ToolCallBlock({ block, result, duration, processStyle = false }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; processStyle?: boolean }) {
+export const ToolCallBlock = memo(function ToolCallBlock({ block, result, duration, processStyle = false, sessionId }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; processStyle?: boolean; sessionId?: string }) {
   const [expanded, setExpanded] = useState(false);
   const inputStr = useMemo(() => JSON.stringify(block.input, null, 2), [block.input]);
   const isEditTool = isEditToolName(block.toolName);
@@ -870,6 +872,10 @@ export const ToolCallBlock = memo(function ToolCallBlock({ block, result, durati
   );
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
+  const imageSources = useMemo(
+    () => getToolResultImageSources(block.input, result, sessionId),
+    [block.input, result, sessionId],
+  );
 
   return (
     <div
@@ -918,9 +924,42 @@ export const ToolCallBlock = memo(function ToolCallBlock({ block, result, durati
           />
         )
       )}
+      <ToolResultImages sources={imageSources} />
     </div>
   );
 });
+
+export function getToolResultImageSources(
+  input: Record<string, unknown>,
+  result?: ToolResultMessage,
+  sessionId?: string,
+): string[] {
+  const sources = result?.content
+    .filter((item): item is ImageContent => item.type === "image")
+    .map(imageSource)
+    .filter(Boolean) ?? [];
+  if (sources.length > 0) return sources;
+
+  if (!result || result.isError || typeof input.path !== "string" || !isImagePath(input.path)) return [];
+  return [`/api/files/${encodeFilePathForApi(input.path)}?type=read${sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : ""}`];
+}
+
+export function ToolResultImages({ sources }: { sources: string[] }) {
+  if (sources.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8, padding: 8, borderTop: "1px solid var(--border)", background: "var(--bg)" }}>
+      {sources.map((src, index) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={`${src.slice(0, 80)}:${index}`}
+          src={src}
+          alt=""
+          style={{ display: "block", maxWidth: "100%", maxHeight: 420, objectFit: "contain", borderRadius: 6 }}
+        />
+      ))}
+    </div>
+  );
+}
 
 interface ResultDiff {
   text: string;
@@ -1473,9 +1512,10 @@ function getMessageImages(content: CustomMessage["content"] | UserMessage["conte
 function imageSource(img: ImageContent): string {
   const flat = img as unknown as { data?: string; mimeType?: string };
   if (img.source) {
-    return img.source.type === "base64"
-      ? `data:${img.source.media_type};base64,${img.source.data}`
-      : img.source.url ?? "";
+    if (img.source.type === "base64") {
+      return img.source.data ? `data:${img.source.media_type ?? "image/png"};base64,${img.source.data}` : "";
+    }
+    return img.source.url ?? "";
   }
   return flat.data ? `data:${flat.mimeType};base64,${flat.data}` : "";
 }
@@ -1515,5 +1555,3 @@ function getToolPreview(block: ToolCallContent): string {
   const first = input[keys[0]];
   return String(first).slice(0, 120);
 }
-
-

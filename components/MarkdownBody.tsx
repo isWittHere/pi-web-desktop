@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
 import ReactMarkdown, { type Components, type ExtraProps, type Options as ReactMarkdownOptions } from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -8,10 +8,12 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { copyText } from "@/lib/clipboard";
 import { resolveLocalFileHref } from "@/lib/file-links";
+import { encodeFilePathForApi } from "@/lib/file-paths";
 import { splitStableParts } from "@/lib/markdown-incremental";
 import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { mentionRemarkPlugin, type MentionValidators } from "@/lib/mention-tokens";
 import { prismTheme } from "@/lib/prism-theme";
+import { LocalFileActions } from "./LocalFileActions";
 
 
 
@@ -20,6 +22,7 @@ interface MarkdownBodyProps {
   className?: string;
   isStreaming?: boolean;
   cwd?: string;
+  sourceSessionId?: string;
   onOpenFile?: (filePath: string) => void;
   /**
    * Highlight valid @file / /skill: mentions inside text (accent + dotted
@@ -32,6 +35,7 @@ interface MarkdownBodyProps {
 interface MarkdownComponentsOptions {
   isStreaming?: boolean;
   cwd?: string;
+  sourceSessionId?: string;
   onOpenFile?: (filePath: string) => void;
 }
 
@@ -44,7 +48,7 @@ interface MarkdownComponentsOptions {
  */
 export const MarkdownCodeContext = createContext(false);
 
-function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownComponentsOptions): Components {
+function buildMarkdownComponents({ isStreaming, cwd, sourceSessionId, onOpenFile }: MarkdownComponentsOptions): Components {
   return {
     h1({ children }: React.ComponentProps<'h1'>) {
       return <h1 id={headingId(children)} className="scroll-mt-24 text-xl font-semibold mt-4 mb-2 text-(--text)">{children}</h1>
@@ -67,7 +71,7 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
         }
         return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} isStreaming={isStreaming} />;
       }
-      return (
+      const inlineCode = (
         <code
           className="inline max-w-full whitespace-normal break-words [overflow-wrap:anywhere] align-baseline bg-(--bg-secondary) border border-(--border) px-1.5 py-0.5 text-xs font-mono text-(--accent-blue)"
           {...props}
@@ -75,6 +79,12 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
           {children}
         </code>
       );
+      const filePath = resolveLocalFileHref(raw.trim(), cwd);
+      return filePath ? (
+        <LocalFileActions filePath={filePath} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile}>
+          {inlineCode}
+        </LocalFileActions>
+      ) : inlineCode;
     },
     pre: function PreElement({ children }: React.ComponentProps<'pre'> & ExtraProps) {
       // react-markdown wraps every fenced/indented code block in <pre>; inline
@@ -86,9 +96,8 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
       // `node` is react-markdown metadata, not a DOM attribute.
       delete props.node;
       const linkClass = "text-(--accent-blue) underline underline-offset-2 hover:text-(--accent-blue)/80";
-      const filePath = onOpenFile ? resolveLocalFileHref(href, cwd) : null;
-      const openFile = onOpenFile;
-      if (!filePath || !openFile) {
+      const filePath = resolveLocalFileHref(href, cwd);
+      if (!filePath) {
         return (
           <a href={href} {...props} className={linkClass} target="_blank" rel="noopener noreferrer">
             {children}
@@ -96,20 +105,20 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
         );
       }
 
-      const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-        if (event.defaultPrevented || event.button !== 0) return;
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        const target = event.currentTarget.getAttribute("target");
-        if (target && target !== "_self") return;
-        event.preventDefault();
-        openFile(filePath);
-      };
-
       return (
-        <a href={href} {...props} className={linkClass} onClick={handleClick}>
-          {children}
-        </a>
+        <LocalFileActions filePath={filePath} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} className={linkClass}>
+          <span {...props}>{children}</span>
+        </LocalFileActions>
       );
+    },
+    img({ src, alt, ...props }: React.ComponentProps<'img'> & ExtraProps) {
+      delete props.node;
+      const filePath = typeof src === "string" ? resolveLocalFileHref(src, cwd) : null;
+      const resolvedSrc = filePath
+        ? `/api/files/${encodeFilePathForApi(filePath)}?type=read${sourceSessionId ? `&sessionId=${encodeURIComponent(sourceSessionId)}` : ""}`
+        : src;
+      // eslint-disable-next-line @next/next/no-img-element
+      return <img src={resolvedSrc} alt={alt ?? ""} {...props} className="max-w-full rounded-lg" />;
     },
     table({ children }: React.ComponentProps<'table'> & ExtraProps) {
       return (
@@ -132,17 +141,18 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
  * Stable chunks are marked non-streaming: their closed code blocks get Prism
  * highlighting immediately instead of waiting for the whole message to end.
  */
-const MarkdownPart = memo(function MarkdownPart({ text, isStreaming, cwd, onOpenFile, remarkPlugins }: {
+const MarkdownPart = memo(function MarkdownPart({ text, isStreaming, cwd, sourceSessionId, onOpenFile, remarkPlugins }: {
   text: string;
   isStreaming?: boolean;
   cwd?: string;
+  sourceSessionId?: string;
   onOpenFile?: (filePath: string) => void;
   remarkPlugins?: ReactMarkdownOptions["remarkPlugins"];
 }) {
   const normalized = useMemo(() => normalizeDisplayMath(text), [text]);
   const components = useMemo(
-    () => buildMarkdownComponents({ isStreaming, cwd, onOpenFile }),
-    [isStreaming, cwd, onOpenFile],
+    () => buildMarkdownComponents({ isStreaming, cwd, sourceSessionId, onOpenFile }),
+    [isStreaming, cwd, sourceSessionId, onOpenFile],
   );
   return (
     <ReactMarkdown
@@ -155,7 +165,7 @@ const MarkdownPart = memo(function MarkdownPart({ text, isStreaming, cwd, onOpen
   );
 });
 
-export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, highlightMentions, mentionValidators }: MarkdownBodyProps) {
+export function MarkdownBody({ children, className, isStreaming, cwd, sourceSessionId, onOpenFile, highlightMentions, mentionValidators }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   // Interning map: stable chunk text stays reference-stable so MarkdownPart
   // memo comparisons hit with === and skip the parse/render work entirely.
@@ -166,8 +176,8 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
   );
   const streamingSplit = isStreaming && parts.length > 1;
   const components = useMemo(
-    () => buildMarkdownComponents({ isStreaming, cwd, onOpenFile }),
-    [isStreaming, cwd, onOpenFile],
+    () => buildMarkdownComponents({ isStreaming, cwd, sourceSessionId, onOpenFile }),
+    [isStreaming, cwd, sourceSessionId, onOpenFile],
   );
   const mentionPlugins = useMemo(
     () => (highlightMentions && mentionValidators ? [mentionRemarkPlugin(mentionValidators)] : []),
@@ -187,6 +197,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
             text={part.text}
             isStreaming={part.tail ? isStreaming : false}
             cwd={cwd}
+            sourceSessionId={sourceSessionId}
             onOpenFile={onOpenFile}
             remarkPlugins={remarkPlugins}
           />

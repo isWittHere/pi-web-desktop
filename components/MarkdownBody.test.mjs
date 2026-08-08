@@ -50,8 +50,22 @@ test("opens non-file markdown links in a safe new tab", () => {
 test("keeps local file markdown links in the app", () => {
   const html = renderMarkdown("[file](components/MarkdownBody.tsx)");
 
-  assert.match(html, /<a (?=[^>]*href="components\/MarkdownBody\.tsx")[^>]*>file<\/a>/);
+  assert.match(html, /title="\/home\/me\/project\/components\/MarkdownBody\.tsx"/);
+  assert.match(html, /role="button"/);
   assert.doesNotMatch(html, /target=|rel=|\snode=/);
+});
+
+test("turns inline-code local paths into file action triggers", () => {
+  const html = renderMarkdown("`output/demo.mp4`");
+
+  assert.match(html, /title="\/home\/me\/project\/output\/demo\.mp4"/);
+  assert.match(html, /role="button"/);
+});
+
+test("renders local markdown images through the file preview API", () => {
+  const html = renderMarkdown("![preview](images/demo.png)");
+
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/images\/demo\.png\?type=read"/);
 });
 
 test("defers Prism highlighting while a code block is streaming", async () => {

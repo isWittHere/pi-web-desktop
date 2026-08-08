@@ -112,7 +112,7 @@ export function AppTitleBar({
   sessionTitle,
   onWorkspaceControlsHostChange,
 }: AppTitleBarProps) {
-  const { isElectron, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
+  const { isElectron, isMac, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
   const { t: translate } = useI18n();
 
   return (
@@ -139,6 +139,8 @@ export function AppTitleBar({
           toggleMaximize();
         }}
       >
+        {isMac && <div aria-hidden="true" style={{ width: 72, flexShrink: 0 }} />}
+
         {/* Sidebar toggle */}
         <button
           className="app-no-drag"
@@ -251,7 +253,7 @@ export function AppTitleBar({
         </button>
 
         {/* Window controls (Electron only) */}
-        {isElectron && (
+        {isElectron && !isMac && (
           <div style={{ display: "flex", alignItems: "stretch", height: "100%", flexShrink: 0 }}>
             <button
               className="app-no-drag"

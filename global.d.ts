@@ -13,6 +13,7 @@ interface ElectronWindowControls {
 interface Window {
   electron?: {
     isElectron: true;
+    platform: NodeJS.Platform;
     windowControls: ElectronWindowControls;
   };
   // Existing bridge from SessionSidebar (declared there too — merged here centrally)
@@ -21,6 +22,8 @@ interface Window {
     openThemeFolder: () => Promise<string>;
     openThemeDocs: () => Promise<void>;
     showItemInFolder: (fullPath: string) => Promise<boolean>;
+    openExternal: (url: string) => Promise<boolean>;
+    writeClipboardText: (text: string) => Promise<boolean>;
     getPathForFile: (file: File) => string;
   };
 }

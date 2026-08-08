@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, Tray, nativeImage, shell } = require("electron");
 const { fork } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -91,7 +91,6 @@ function getIconPath() {
 }
 
 function createTray() {
-  // Use nativeImage.createFromPath for reliable tray icon rendering on Windows
   const iconPath = path.join(__dirname, "tray-icon.png");
   const sourceIcon = nativeImage.createFromPath(iconPath);
   const trayIcon = process.platform === "darwin"
@@ -140,7 +139,9 @@ function createWindow() {
     minHeight: 400,
     title: "Pi Agent Web",
     icon: iconPath,
-    frame: false,
+    frame: process.platform === "darwin",
+    titleBarStyle: process.platform === "darwin" ? "hidden" : undefined,
+    trafficLightPosition: process.platform === "darwin" ? { x: 12, y: 11 } : undefined,
     backgroundColor: "#1a1a1a",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -217,6 +218,25 @@ function createWindow() {
     }
   });
 
+  mainWindow.webContents.on("context-menu", (_event, params) => {
+    const template = params.isEditable
+      ? [
+          { role: "undo", enabled: params.editFlags.canUndo },
+          { role: "redo", enabled: params.editFlags.canRedo },
+          { type: "separator" },
+          { role: "cut", enabled: params.editFlags.canCut },
+          { role: "copy", enabled: params.editFlags.canCopy },
+          { role: "paste", enabled: params.editFlags.canPaste },
+          { role: "selectAll", enabled: params.editFlags.canSelectAll },
+        ]
+      : params.selectionText
+        ? [{ role: "copy", enabled: params.editFlags.canCopy }]
+        : [];
+    if (template.length > 0) {
+      Menu.buildFromTemplate(template).popup({ window: mainWindow, frame: params.frame });
+    }
+  });
+
   mainWindow.loadURL(URL);
 
   mainWindow.on("close", (event) => {
@@ -248,6 +268,12 @@ ipcMain.on("window:close", (event) => {
 
 ipcMain.handle("window:is-maximized", (event) => {
   return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false;
+});
+
+ipcMain.handle("clipboard:write-text", (event, text) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || typeof text !== "string") return false;
+  clipboard.writeText(text);
+  return true;
 });
 
 // Open the native OS folder-picker dialog. Used by the workspace selector's
@@ -294,6 +320,18 @@ ipcMain.handle("shell:show-item-in-folder", async (_event, fullPath) => {
   }
 });
 
+ipcMain.handle("shell:open-external", async (event, rawUrl) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || typeof rawUrl !== "string") return false;
+  try {
+    const target = new globalThis.URL(rawUrl);
+    if (target.origin !== URL || !target.pathname.startsWith("/api/files/")) return false;
+    await shell.openExternal(target.toString());
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 async function bootstrap() {
   try {
     await waitForServer(2000);
@@ -328,9 +366,10 @@ if (!gotTheLock) {
     }
   });
 
-  // Remove the native menu bar for a clean frameless look.
-  // DevTools can still be toggled via Ctrl+Shift+I / F12.
-  Menu.setApplicationMenu(null);
+  const applicationMenu = process.platform === "darwin"
+    ? Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }])
+    : null;
+  Menu.setApplicationMenu(applicationMenu);
 
   app.whenReady().then(bootstrap);
 }

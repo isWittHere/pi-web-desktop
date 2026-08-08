@@ -44,3 +44,11 @@ test("large results render a preview and opt into the full payload", () => {
   // Reuses the existing i18n key instead of adding a new one.
   assert.match(source, /t\("desktop\.loadFullOutput"\)/);
 });
+
+test("tool result images render directly, including deferred read images", () => {
+  assert.match(source, /export function getToolResultImageSources/);
+  assert.match(source, /\.filter\(\(item\): item is ImageContent => item\.type === "image"\)/);
+  assert.match(source, /!result \|\| result\.isError/);
+  assert.match(source, /isImagePath\(input\.path\)/);
+  assert.match(source, /export function ToolResultImages/);
+});

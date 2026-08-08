@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("electron", {
   isElectron: true,
+  platform: process.platform,
   windowControls: {
     minimize: () => ipcRenderer.send("window:minimize"),
     toggleMaximize: () => ipcRenderer.send("window:toggle-maximize"),
@@ -24,6 +25,8 @@ contextBridge.exposeInMainWorld("piDesktop", {
   openThemeDocs: () => ipcRenderer.invoke("shell:open-theme-docs"),
   // Reveal a file/folder in the system file explorer (used by context menus).
   showItemInFolder: (fullPath) => ipcRenderer.invoke("shell:show-item-in-folder", fullPath),
+  openExternal: (url) => ipcRenderer.invoke("shell:open-external", url),
+  writeClipboardText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   // Absolute path of a dragged-in File (webUtils is the only sanctioned way
   // to recover paths from drop payloads since File.path was removed).
   getPathForFile: (file) => webUtils.getPathForFile(file),
