@@ -39,6 +39,7 @@ import {
   type DraftSession,
 } from "@/lib/draft-sessions";
 import { clearLastOpen, getLastOpen, setLastOpen, setLastWorkspace, workspaceKeyOf } from "@/lib/workspace-memory";
+import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -596,7 +597,7 @@ export function AppShell() {
   }, [fileTabs]);
 
   const sessionTitle = selectedSession
-    ? selectedSession.name || selectedSession.firstMessage.slice(0, 50) || selectedSession.id.slice(0, 12)
+    ? selectedSession.name || getSessionDisplayFirstMessage(selectedSession.firstMessage).slice(0, 50) || selectedSession.id.slice(0, 12)
     : null;
 
   const handleViewFullHistory = useCallback(() => {

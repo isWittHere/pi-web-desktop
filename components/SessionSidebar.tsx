@@ -8,6 +8,7 @@ import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { getDraft } from "@/lib/draft-store";
 import { getLastWorkspace } from "@/lib/workspace-memory";
+import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { QuickChangesPanel } from "./QuickChangesPanel";
@@ -1913,8 +1914,8 @@ function SessionItem({
 
   const title = session.name
     || (session.isDraft
-        ? (session.firstMessage.slice(0, 50) || t("desktop.newSessionDraft"))
-        : session.firstMessage.slice(0, 50))
+        ? (getSessionDisplayFirstMessage(session.firstMessage).slice(0, 50) || t("desktop.newSessionDraft"))
+        : getSessionDisplayFirstMessage(session.firstMessage).slice(0, 50))
     || session.id.slice(0, 12);
 
   // A two-pixel overlay gives the otherwise native one-pixel input caret a

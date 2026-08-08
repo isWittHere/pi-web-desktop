@@ -39,3 +39,17 @@ export function parseSkillBlock(text: string): SkillBlock | null {
     args: (match[4] ?? "").trim(),
   };
 }
+
+/**
+ * Derive a concise display form of a stored first user message for session
+ * auto-naming. When the message is an SDK-expanded skill block, collapse it to
+ * the compact `/skill:name args` command the user actually typed (mirroring
+ * MessageView's edit reconstruction) instead of leaking the raw `<skill>` XML
+ * into the session title. Plain messages pass through untouched.
+ */
+export function getSessionDisplayFirstMessage(text: string): string {
+  const block = parseSkillBlock(text);
+  return block
+    ? `/skill:${block.name}${block.args ? ` ${block.args}` : ""}`
+    : text;
+}
