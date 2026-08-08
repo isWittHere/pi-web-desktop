@@ -93,7 +93,11 @@ function getIconPath() {
 function createTray() {
   // Use nativeImage.createFromPath for reliable tray icon rendering on Windows
   const iconPath = path.join(__dirname, "tray-icon.png");
-  const trayIcon = nativeImage.createFromPath(iconPath);
+  const sourceIcon = nativeImage.createFromPath(iconPath);
+  const trayIcon = process.platform === "darwin"
+    ? sourceIcon.resize({ width: 16, height: 16, quality: "best" })
+    : sourceIcon;
+  if (process.platform === "darwin") trayIcon.setTemplateImage(true);
   tray = new Tray(trayIcon);
   tray.setToolTip("Pi Agent Web");
 
