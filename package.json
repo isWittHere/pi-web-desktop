@@ -36,10 +36,11 @@
     "start": "next start -H 127.0.0.1 -p 30141",
     "start:lan": "next start -H 0.0.0.0 -p 30141",
     "lint": "eslint .",
+    "icons": "node scripts/generate-icons.mjs",
     "electron:dev": "electron .",
-    "electron:build": "npm run build && electron-builder",
-    "electron:dir": "npm run build && electron-builder --win dir",
-    "electron:portable": "npm run build && electron-builder --win portable",
+    "electron:build": "npm run icons && npm run build && electron-builder",
+    "electron:dir": "npm run icons && npm run build && electron-builder --win dir",
+    "electron:portable": "npm run icons && npm run build && electron-builder --win portable",
     "release:green": "node scripts/build-release.mjs",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
   },
@@ -123,7 +124,7 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "public/icon.icns"
+      "icon": "public/icon-mac.png"
     },
     "linux": {
       "target": "AppImage",

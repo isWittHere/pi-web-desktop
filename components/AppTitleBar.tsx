@@ -112,7 +112,7 @@ export function AppTitleBar({
   sessionTitle,
   onWorkspaceControlsHostChange,
 }: AppTitleBarProps) {
-  const { isElectron, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
+  const { isElectron, isMac, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
   const { t: translate } = useI18n();
 
   return (
@@ -139,6 +139,10 @@ export function AppTitleBar({
           toggleMaximize();
         }}
       >
+        {/* macOS traffic-light buttons live in the native title bar area; reserve
+            space on the left so they don't overlap the sidebar toggle. */}
+        {isMac && <div aria-hidden="true" style={{ width: 72, flexShrink: 0 }} />}
+
         {/* Sidebar toggle */}
         <button
           className="app-no-drag"
@@ -250,8 +254,8 @@ export function AppTitleBar({
           <Gear size={16} aria-hidden="true" />
         </button>
 
-        {/* Window controls (Electron only) */}
-        {isElectron && (
+        {/* Window controls (Electron only; macOS uses native traffic lights) */}
+        {isElectron && !isMac && (
           <div style={{ display: "flex", alignItems: "stretch", height: "100%", flexShrink: 0 }}>
             <button
               className="app-no-drag"

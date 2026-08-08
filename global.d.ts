@@ -13,6 +13,7 @@ interface ElectronWindowControls {
 interface Window {
   electron?: {
     isElectron: true;
+    platform: NodeJS.Platform;
     windowControls: ElectronWindowControls;
   };
   // Existing bridge from SessionSidebar (declared there too — merged here centrally)

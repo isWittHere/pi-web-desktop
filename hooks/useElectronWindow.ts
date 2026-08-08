@@ -36,6 +36,7 @@ export function useElectronWindow() {
 
   return {
     isElectron,
+    isMac: isElectron && window.electron?.platform === "darwin",
     isMaximized,
     minimize: () => window.electron?.windowControls.minimize(),
     toggleMaximize: () => window.electron?.windowControls.toggleMaximize(),

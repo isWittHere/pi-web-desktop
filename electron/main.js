@@ -87,12 +87,18 @@ function startServer() {
 }
 
 function getIconPath() {
-  return path.join(__dirname, "..", "public", "icon.ico");
+  // Windows keeps the .ico; macOS uses the rasterized Pi app icon. nativeImage
+  // cannot load SVG, so icon-mac.png is rendered from public/icon.svg by
+  // scripts/generate-icons.mjs (run automatically by electron:build).
+  return path.join(__dirname, "..", "public", process.platform === "win32" ? "icon.ico" : "icon-mac.png");
 }
 
 function createTray() {
-  // Use nativeImage.createFromPath for reliable tray icon rendering on Windows
-  const iconPath = path.join(__dirname, "tray-icon.png");
+  // Windows keeps the existing tray icon; macOS uses the Pi template icon
+  // (black + alpha) so the system adapts it to light/dark menu bars.
+  const iconPath = process.platform === "darwin"
+    ? path.join(__dirname, "tray-icon-mac.png")
+    : path.join(__dirname, "tray-icon.png");
   const sourceIcon = nativeImage.createFromPath(iconPath);
   const trayIcon = process.platform === "darwin"
     ? sourceIcon.resize({ width: 16, height: 16, quality: "best" })
@@ -140,7 +146,12 @@ function createWindow() {
     minHeight: 400,
     title: "Pi Agent Web",
     icon: iconPath,
-    frame: false,
+    // macOS: keep the native frame so the traffic-light buttons render, but
+    // hide the title bar text (the renderer draws its own title bar).
+    // Windows/Linux: unchanged frameless window with custom controls.
+    frame: process.platform === "darwin",
+    titleBarStyle: process.platform === "darwin" ? "hidden" : undefined,
+    trafficLightPosition: process.platform === "darwin" ? { x: 12, y: 11 } : undefined,
     backgroundColor: "#1a1a1a",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -295,6 +306,9 @@ ipcMain.handle("shell:show-item-in-folder", async (_event, fullPath) => {
 });
 
 async function bootstrap() {
+  if (process.platform === "darwin") {
+    app.dock.setIcon(getIconPath());
+  }
   try {
     await waitForServer(2000);
   } catch {
@@ -328,9 +342,13 @@ if (!gotTheLock) {
     }
   });
 
-  // Remove the native menu bar for a clean frameless look.
-  // DevTools can still be toggled via Ctrl+Shift+I / F12.
-  Menu.setApplicationMenu(null);
+  // macOS keeps a minimal native menu (appMenu + editMenu) so system
+  // shortcuts like Cmd+C/V and Cmd+Q keep working with the hidden title bar.
+  // Windows/Linux: no menu bar, matching the existing frameless look.
+  const applicationMenu = process.platform === "darwin"
+    ? Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }])
+    : null;
+  Menu.setApplicationMenu(applicationMenu);
 
   app.whenReady().then(bootstrap);
 }
