@@ -11,6 +11,7 @@ import {
   isAudioPath,
   isDocumentPreviewPath,
   isImagePath,
+  isVideoPath,
 } from "@/lib/file-types";
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { resolveLocalFileHref } from "@/lib/file-links";
@@ -550,8 +551,9 @@ function formatDuration(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
+function MediaViewer({ filePath, cwd, sourceSessionId, kind }: Props & { kind: "audio" | "video" }) {
   const { t } = useI18n();
+  const isVideo = kind === "video";
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
@@ -610,7 +612,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
         <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span style={{ marginLeft: "auto" }}>{ext || t("desktop.audio")}</span>
+        <span style={{ marginLeft: "auto" }}>{ext || (isVideo ? t("desktop.video") : t("desktop.audio"))}</span>
         {duration != null && <span>{formatDuration(duration)}</span>}
         {size != null && <span>{formatSize(size)}</span>}
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
@@ -625,13 +627,22 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
           background: "var(--bg-panel)",
         }}
       >
-        <div style={{ width: "min(680px, 100%)" }}>
+        <div style={{ width: isVideo ? "min(960px, 100%)" : "min(680px, 100%)", maxHeight: "100%" }}>
           {error && (
             <div style={{ color: "#f87171", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
               {error}
             </div>
           )}
-          <audio
+          {isVideo ? <video
+            key={src}
+            controls
+            playsInline
+            preload="metadata"
+            src={src}
+            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+            onError={() => setError(t("desktop.failedToLoadVideo"))}
+            style={{ width: "100%", maxHeight: "calc(100vh - 110px)", objectFit: "contain", background: "#000", borderRadius: 6 }}
+          /> : <audio
             key={src}
             controls
             preload="metadata"
@@ -639,7 +650,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
             onError={() => setError(t("desktop.failedToLoadAudio"))}
             style={{ width: "100%" }}
-          />
+          />}
         </div>
       </div>
     </div>
@@ -752,7 +763,10 @@ export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initial
     return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
   if (isAudioPath(filePath)) {
-    return <AudioViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
+    return <MediaViewer kind="audio" filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
+  }
+  if (isVideoPath(filePath)) {
+    return <MediaViewer kind="video" filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
   if (isDocumentPreviewPath(filePath)) {
     return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;

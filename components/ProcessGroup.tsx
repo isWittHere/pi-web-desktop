@@ -34,6 +34,7 @@ import { ToolboxIcon } from "@phosphor-icons/react/Toolbox";
 import { TrashIcon } from "@phosphor-icons/react/Trash";
 import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
 import { getFileIcon } from "./FileIcons";
+import { LocalFileActions } from "./LocalFileActions";
 
 interface ProcessGroupProps {
   blocks: ProcessContentBlock[];
@@ -494,11 +495,13 @@ function StepIcon({ step, ts }: { step: Step; ts: BuildLabelFn }) {
 }
 
 /** Render file-type icons and label for merged steps with file targets. */
-function MergedFileTargets({ targets, typeLabel, count, label }: {
+function MergedFileTargets({ targets, typeLabel, count, label, onOpenFile, sessionId }: {
   targets: string[];
   typeLabel: string;
   count: number;
   label: string;
+  onOpenFile?: (filePath: string) => void;
+  sessionId?: string;
 }) {
   if (targets.length === 0) {
     return <span className="max-w-52 truncate" title={label}>{label}</span>;
@@ -509,8 +512,8 @@ function MergedFileTargets({ targets, typeLabel, count, label }: {
     return (
       <>
         <span className="shrink-0">{typeLabel}</span>
-        <ProcessFileTag filePath={targets[0]} />
-        <ProcessFileTag filePath={targets[1]} />
+        <ProcessFileTag filePath={targets[0]} onOpenFile={onOpenFile} sessionId={sessionId} />
+        <ProcessFileTag filePath={targets[1]} onOpenFile={onOpenFile} sessionId={sessionId} />
       </>
     );
   }
@@ -539,19 +542,21 @@ function MergedFileTargets({ targets, typeLabel, count, label }: {
           ))}
         </span>
       )}
-      <ProcessFileTag filePath={targets[0]} />
+      <ProcessFileTag filePath={targets[0]} onOpenFile={onOpenFile} sessionId={sessionId} />
       <span className="shrink-0 text-[10px] tabular-nums text-text-dim">+{count - 1}</span>
     </>
   );
 }
 
-function ProcessFileTag({ filePath }: { filePath: string }) {
+function ProcessFileTag({ filePath, onOpenFile, sessionId }: { filePath: string; onOpenFile?: (filePath: string) => void; sessionId?: string }) {
   const basename = filePath.split(/[\\/]/).filter(Boolean).pop() || filePath;
   return (
-    <span className="process-file-tag" title={filePath}>
-      {getFileIcon(filePath, 12)}
-      <span>{basename}</span>
-    </span>
+    <LocalFileActions filePath={filePath} sourceSessionId={sessionId} onOpenFile={onOpenFile}>
+      <span className="process-file-tag" title={filePath}>
+        {getFileIcon(filePath, 12)}
+        <span>{basename}</span>
+      </span>
+    </LocalFileActions>
   );
 }
 
@@ -597,6 +602,7 @@ function StepContent({ step, cwd, onOpenFile, sessionId, ts, isStreaming }: {
           result={step.block.result}
           duration={step.block.duration}
           processStyle
+          sessionId={sessionId}
         />
       </div>
     );
@@ -621,6 +627,7 @@ function StepContent({ step, cwd, onOpenFile, sessionId, ts, isStreaming }: {
               result={block.result}
               duration={block.duration}
               processStyle
+              sessionId={sessionId}
             />
           </div>
         ))}
@@ -649,7 +656,7 @@ function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId, isStreaming }: {
     <div className="space-y-2 pr-2">
       {blocks.map((block) =>
         block.type === "text" ? (
-          <MarkdownBody key={block.id} cwd={cwd} onOpenFile={onOpenFile} className="!text-text-dim" isStreaming={isStreaming}>
+          <MarkdownBody key={block.id} cwd={cwd} sourceSessionId={sessionId} onOpenFile={onOpenFile} className="!text-text-dim" isStreaming={isStreaming}>
             {block.text}
           </MarkdownBody>
         ) : (
@@ -933,11 +940,13 @@ export function ProcessGroup({
                               typeLabel={step.typeLabel}
                               count={step.blocks.length}
                               label={step.label}
+                              onOpenFile={onOpenFile}
+                              sessionId={sessionId}
                             />
                           ) : hasFileTag ? (
                             <>
                               <span className="shrink-0">{toolInfo!.typeLabel}</span>
-                              <ProcessFileTag filePath={toolInfo!.target!} />
+                              <ProcessFileTag filePath={toolInfo!.target!} onOpenFile={onOpenFile} sessionId={sessionId} />
                             </>
                           ) : (
                             <span
@@ -1011,11 +1020,13 @@ export function ProcessGroup({
                           typeLabel={step.typeLabel}
                           count={step.blocks.length}
                           label={step.label}
+                          onOpenFile={onOpenFile}
+                          sessionId={sessionId}
                         />
                       ) : hasFileTag ? (
                         <>
                           <span className="shrink-0">{toolInfo!.typeLabel}</span>
-                          <ProcessFileTag filePath={toolInfo!.target!} />
+                          <ProcessFileTag filePath={toolInfo!.target!} onOpenFile={onOpenFile} sessionId={sessionId} />
                         </>
                       ) : (
                         <span
