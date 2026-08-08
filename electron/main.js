@@ -87,7 +87,7 @@ function startServer() {
 }
 
 function getIconPath() {
-  return path.join(__dirname, "..", "public", "icon.ico");
+  return path.join(__dirname, "..", "public", process.platform === "win32" ? "icon.ico" : "icon.png");
 }
 
 function createTray() {
@@ -333,6 +333,7 @@ ipcMain.handle("shell:open-external", async (event, rawUrl) => {
 });
 
 async function bootstrap() {
+  if (process.platform === "darwin") app.dock.setIcon(getIconPath());
   try {
     await waitForServer(2000);
   } catch {

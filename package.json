@@ -114,6 +114,12 @@
       "!node_modules/@earendil-works/pi-coding-agent/examples/**",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": ".next/node_modules",
+        "to": "app/.next/node_modules"
+      }
+    ],
     "win": {
       "target": "nsis",
       "icon": "public/icon.ico"

@@ -16,4 +16,10 @@ test("macOS uses native left-side traffic lights instead of custom right-side co
 
 test("macOS packaging uses the Pi app icon instead of Electron's default", () => {
   assert.match(packageJson, /"icon": "public\/icon\.png"/);
+  assert.match(main, /app\.dock\.setIcon\(getIconPath\(\)\)/);
+});
+
+test("desktop packaging keeps Next.js external package aliases", () => {
+  assert.match(packageJson, /"from": "\.next\/node_modules"/);
+  assert.match(packageJson, /"to": "app\/\.next\/node_modules"/);
 });
