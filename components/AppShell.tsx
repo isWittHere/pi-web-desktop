@@ -38,7 +38,7 @@ import {
   saveDraftSessions,
   type DraftSession,
 } from "@/lib/draft-sessions";
-import { clearLastOpen, getLastOpen, setLastOpen, workspaceKeyOf } from "@/lib/workspace-memory";
+import { clearLastOpen, getLastOpen, setLastOpen, setLastWorkspace, workspaceKeyOf } from "@/lib/workspace-memory";
 import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -343,6 +343,11 @@ export function AppShell() {
     // within the same project (e.g. switching worktree, or clicking a session
     // that lives in another worktree) must not close the open session.
     const newProject = projectRoot ?? cwd;
+    // Record this as the last-active workspace so a restart returns here
+    // (getRecentProjects only tracks the most recently *modified* session, not
+    // the workspace the user actually left open). Idempotent for same-project
+    // moves, so it is safe to write on every effective cwd change.
+    setLastWorkspace(newProject);
     if (selectedSession && (selectedSession.projectRoot ?? selectedSession.cwd) === newProject) {
       return;
     }

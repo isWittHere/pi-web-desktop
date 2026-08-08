@@ -7,6 +7,7 @@ import type { SessionInfo } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { getDraft } from "@/lib/draft-store";
+import { getLastWorkspace } from "@/lib/workspace-memory";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { QuickChangesPanel } from "./QuickChangesPanel";
@@ -570,7 +571,16 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       }
       // Include drafts so a project that only has drafts is still selected.
       const projects = getRecentProjects(rows);
-      if (projects.length > 0) setSelectedCwd(projects[0]);
+      // Prefer the workspace that was active when the app last closed over the
+      // most-recently-*modified*-session ordering (which drifts when a session
+      // elsewhere was merely touched or ran in the background). Fall back to
+      // the recency ordering when the remembered workspace is gone or no
+      // longer has any sessions/drafts.
+      const lastWorkspace = getLastWorkspace();
+      const initialTarget = lastWorkspace && projects.includes(lastWorkspace)
+        ? lastWorkspace
+        : (projects[0] ?? null);
+      if (initialTarget) setSelectedCwd(initialTarget);
     }
   }, [draftSessions, allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
 

@@ -18,6 +18,38 @@ export type LastOpenEntry = { kind: "session" | "draft"; id: string };
 
 const STORAGE_KEY = "pi-web:last-open-by-workspace";
 
+/**
+ * "Last active workspace" memory.
+ *
+ * getRecentProjects() only knows which workspace has the most recently
+ * *modified* session — that is not the workspace the user last worked in
+ * (merely opening a session, or a newer background run elsewhere, drifts the
+ * ordering). The app therefore persisted nothing about which workspace was
+ * active at close, so every restart landed on the newest-session project
+ * instead of the one actually left open. This separate key records the active
+ * workspace on every switch so startup can return to it.
+ */
+const LAST_WORKSPACE_KEY = "pi-web:last-workspace";
+
+/** The workspace that was active when the app last closed, or null. */
+export function getLastWorkspace(): string | null {
+  try {
+    const key = window.localStorage.getItem(LAST_WORKSPACE_KEY);
+    return key && key.length > 0 ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the currently active workspace (project root when known, else cwd). */
+export function setLastWorkspace(workspaceKey: string): void {
+  try {
+    window.localStorage.setItem(LAST_WORKSPACE_KEY, workspaceKey);
+  } catch {
+    // storage unavailable — memory is best-effort
+  }
+}
+
 function readMap(): Record<string, LastOpenEntry | undefined> {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) return {};
