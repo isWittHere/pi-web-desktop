@@ -15,6 +15,7 @@ test("desktop clipboard keeps native edit actions and a main-process fallback", 
 });
 
 test("macOS tray icon uses the native menu-bar size and template rendering", () => {
+  assert.match(main, /"public", "pi-original\.png"/);
   assert.match(main, /resize\(\{ width: 16, height: 16, quality: "best" \}\)/);
   assert.match(main, /setTemplateImage\(true\)/);
 });

@@ -91,7 +91,7 @@ function getIconPath() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, "tray-icon.png");
+  const iconPath = path.join(__dirname, "..", "public", "pi-original.png");
   const sourceIcon = nativeImage.createFromPath(iconPath);
   const trayIcon = process.platform === "darwin"
     ? sourceIcon.resize({ width: 16, height: 16, quality: "best" })
