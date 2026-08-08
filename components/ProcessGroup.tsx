@@ -457,8 +457,8 @@ function formatCustomLabel(customType: string): string {
 // Icons
 // ---------------------------------------------------------------------------
 
-function Caret({ expanded }: { expanded: boolean }) {
-  return <CaretRightIcon size={12} className={`shrink-0 transition-all duration-150 ${expanded ? "rotate-90" : ""}`} />;
+function Caret() {
+  return <CaretRightIcon size={12} className="shrink-0" />;
 }
 
 function stepIconElement(iconName: StepIconName, size: number = 14) {
@@ -903,7 +903,7 @@ export function ProcessGroup({
         >
           <span className="truncate">{summary}</span>
           <span className={`opacity-40 transition-opacity group-hover/summary:opacity-80 ${areaExpanded ? "rotate-90" : ""}`}>
-            <Caret expanded={false} />
+            <Caret />
           </span>
         </button>
         {!singleThinking && (
@@ -984,7 +984,7 @@ export function ProcessGroup({
                           )}
                           {hasContent && (
                             <span className={`ml-0.5 shrink-0 transition-opacity ${open ? "opacity-70 rotate-90" : "opacity-0 group-hover/step:opacity-70"}`}>
-                              <Caret expanded={false} />
+                              <Caret />
                             </span>
                           )}
                         </button>
