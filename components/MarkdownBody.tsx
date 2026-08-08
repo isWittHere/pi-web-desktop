@@ -368,6 +368,14 @@ export function CodeBlock({ code, lang, headerAction, isStreaming }: { code: str
             borderRadius: 0,
             border: "none",
             background: "var(--bg-secondary)",
+            // Long lines must scroll horizontally inside the block (the
+            // `.markdown-code-block` wrapper clips with `overflow: hidden` for
+            // the rounded corners, so the `<pre>` itself has to be the scroll
+            // container — same design as the streaming pre below). Without
+            // this, wide code is silently cut off with no scrollbar, in both
+            // the conversation and the file previewer (which reuses this
+            // component).
+            overflowX: "auto",
           }}
           codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
         >
