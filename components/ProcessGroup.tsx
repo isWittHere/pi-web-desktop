@@ -28,7 +28,7 @@ import { ImageIcon } from "@phosphor-icons/react/Image";
 import { ListBulletsIcon } from "@phosphor-icons/react/ListBullets";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/MagnifyingGlass";
 import { PencilSimpleLineIcon } from "@phosphor-icons/react/PencilSimpleLine";
-import { RowsIcon } from "@phosphor-icons/react/Rows";
+import { ListDashesIcon } from "@phosphor-icons/react/ListDashes";
 import { TerminalIcon } from "@phosphor-icons/react/Terminal";
 import { ToolboxIcon } from "@phosphor-icons/react/Toolbox";
 import { TrashIcon } from "@phosphor-icons/react/Trash";
@@ -556,7 +556,7 @@ function ProcessFileTag({ filePath }: { filePath: string }) {
 }
 
 function DisplayModeIcon({ mode }: { mode: "timeline" | "tabs" }) {
-  return mode === "timeline" ? <RowsIcon size={14} /> : <ColumnsIcon size={14} />;
+  return mode === "timeline" ? <ColumnsIcon size={14} /> : <ListDashesIcon size={14} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -863,7 +863,7 @@ export function ProcessGroup({
 
   return (
     <div className="group/process relative mb-3 min-w-0">
-      <div className="group/summary-row flex items-center justify-between">
+      <div className="group/summary-row flex items-center">
         <button
           type="button"
           onClick={() => setAreaExpanded((v) => !v)}
@@ -871,7 +871,7 @@ export function ProcessGroup({
           aria-expanded={areaExpanded}
         >
           <span className="truncate">{summary}</span>
-          <span className={`opacity-0 transition-opacity group-hover/summary:opacity-60 ${areaExpanded ? "rotate-90" : ""}`}>
+          <span className={`opacity-40 transition-opacity group-hover/summary:opacity-80 ${areaExpanded ? "rotate-90" : ""}`}>
             <Caret expanded={false} />
           </span>
         </button>
@@ -883,7 +883,7 @@ export function ProcessGroup({
               setDisplayMode(nextMode);
               setAreaExpanded(true);
             }}
-            className="shrink-0 p-1 text-text-dim opacity-0 transition-colors hover:text-text group-hover/summary-row:opacity-100"
+            className="shrink-0 p-1 text-text-dim opacity-0 transition-opacity hover:text-text group-hover/summary-row:opacity-100"
             title={displayMode === "timeline" ? t("desktop.processTabMode") : t("desktop.processTimelineMode")}
           >
             <DisplayModeIcon mode={displayMode} />
@@ -954,7 +954,7 @@ export function ProcessGroup({
                             <span className="shrink-0 text-[11px] font-medium text-red-400">{t("desktop.processFailedStep")}</span>
                           )}
                           {hasContent && (
-                            <span className={`ml-0.5 shrink-0 opacity-0 transition-opacity group-hover/step:opacity-50 ${open ? "rotate-90" : ""}`}>
+                            <span className={`ml-0.5 shrink-0 opacity-35 transition-opacity group-hover/step:opacity-70 ${open ? "rotate-90" : ""}`}>
                               <Caret expanded={false} />
                             </span>
                           )}
