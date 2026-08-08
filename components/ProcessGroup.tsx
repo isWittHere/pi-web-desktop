@@ -983,7 +983,7 @@ export function ProcessGroup({
                             <span className="shrink-0 text-[11px] font-medium text-red-400">{t("desktop.processFailedStep")}</span>
                           )}
                           {hasContent && (
-                            <span className={`ml-0.5 shrink-0 opacity-35 transition-opacity group-hover/step:opacity-70 ${open ? "rotate-90" : ""}`}>
+                            <span className={`ml-0.5 shrink-0 transition-opacity ${open ? "opacity-70 rotate-90" : "opacity-0 group-hover/step:opacity-70"}`}>
                               <Caret expanded={false} />
                             </span>
                           )}
