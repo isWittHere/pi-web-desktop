@@ -1,8 +1,9 @@
 import { execFile } from "child_process";
 import { existsSync, mkdirSync, realpathSync } from "fs";
-import { basename, dirname, join, resolve } from "path";
+import { basename, dirname, join, normalize, resolve } from "path";
 import { promisify } from "util";
 import { allowFileRoot } from "./allowed-roots";
+import { sameResolvedPath } from "./path-compare";
 
 const execFileAsync = promisify(execFile);
 
@@ -99,10 +100,13 @@ export async function resolveProject(cwd: string): Promise<ProjectInfo> {
     // cwd is a subdirectory of a repo keeps its own project identity —
     // grouping subdirs under the repo root would change where new sessions
     // are created for existing users.
-    const isTopLevel = toplevel === realCwd;
+    const isTopLevel = sameResolvedPath(toplevel, realCwd);
     const isWorktreeTopLevel = gitDir !== commonDir && isTopLevel;
     info = {
-      projectRoot: isWorktreeTopLevel ? dirname(commonDir) : cwd,
+      // normalize() keeps the project root in native form so worktree
+      // sessions group with main-checkout sessions on Windows (git prints
+      // forward slashes while session cwds are stored with backslashes).
+      projectRoot: isWorktreeTopLevel ? normalize(dirname(commonDir)) : cwd,
       branch: ref && ref !== "HEAD" ? ref : null,
       isWorktree: isWorktreeTopLevel,
       isTopLevel,
