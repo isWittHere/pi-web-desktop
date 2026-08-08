@@ -706,6 +706,9 @@ export function ProcessGroup({
   const hasUserSelectedTabRef = useRef(false);
   const userScrolledUpRef = useRef(false);
   const ignoreProgrammaticScrollUntilRef = useRef(0);
+  const latestStepScrollRef = useRef<HTMLDivElement | null>(null);
+  const latestStepUserScrolledUpRef = useRef(false);
+  const latestStepId = steps.length > 0 ? steps[steps.length - 1].id : null;
 
   useEffect(() => {
     if (isStreaming) {
@@ -715,6 +718,7 @@ export function ProcessGroup({
     }
     if (!wasStreamingRef.current) return;
     userScrolledUpRef.current = false;
+    latestStepUserScrolledUpRef.current = false;
     setStepStates({});
     const timer = window.setTimeout(() => setAreaExpanded(false), 300);
     wasStreamingRef.current = false;
@@ -793,6 +797,33 @@ export function ProcessGroup({
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     updateShadows();
   }, [blocks, isStreaming, updateShadows]);
+
+  // Timeline mode: detect manual scrolling inside the latest step's own scroll
+  // window so the autoscroll below pauses while the user reads older content.
+  // Re-attach only when the latest step changes (its container is replaced).
+  useEffect(() => {
+    if (!isStreaming || displayMode !== "timeline") return;
+    const el = latestStepScrollRef.current;
+    if (!el) return;
+    latestStepUserScrolledUpRef.current = false;
+    const onScroll = () => {
+      if (Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
+      latestStepUserScrolledUpRef.current =
+        el.scrollHeight - el.scrollTop - el.clientHeight > 4;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [isStreaming, displayMode, latestStepId]);
+
+  // Timeline mode: keep the latest step's own scroll window pinned to the
+  // bottom while its content streams in.
+  useEffect(() => {
+    if (!isStreaming || displayMode !== "timeline") return;
+    const el = latestStepScrollRef.current;
+    if (!el || latestStepUserScrolledUpRef.current) return;
+    ignoreProgrammaticScrollUntilRef.current = Date.now() + 100;
+    el.scrollTop = el.scrollHeight;
+  }, [blocks, isStreaming, displayMode, latestStepId]);
 
   if (steps.length === 0) return null;
 
@@ -902,22 +933,20 @@ export function ProcessGroup({
               {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
             </div>
           ) : displayMode === "timeline" ? (
-            <div className="relative mt-2">
-              {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
-              {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
-              <div ref={scrollRef} className={isStreaming ? "max-h-[320px] overflow-y-auto" : ""}>
-                <div className="relative ml-5 space-y-2">
-                  <div className="absolute -left-3 -top-1.5 h-4 w-2 rounded-bl border-b border-l border-border" />
-                  {steps.map((step, index) => {
-                    const open = stepStates[step.id] ?? false;
-                    const hasContent = stepHasContent(step);
-                    const isError =
-                      (step.kind === "tool" && step.block.status === "error") ||
-                      (step.kind === "toolGroup" && step.blocks.some(b => b.status === "error"));
-                    const toolInfo = step.kind === "tool" ? enrichedToolLabel(step.block, ts) : null;
-                    const hasFileTag = step.kind !== "toolGroup" && toolInfo?.target !== undefined && toolInfo?.typeLabel !== undefined;
-                    return (
-                      <div key={step.id} className="group/step relative min-w-0">
+            <div className="mt-2">
+              <div className="relative ml-5 space-y-2">
+                <div className="absolute -left-3 -top-1.5 h-4 w-2 rounded-bl border-b border-l border-border" />
+                {steps.map((step, index) => {
+                  const open = stepStates[step.id] ?? false;
+                  const isLatest = index === steps.length - 1;
+                  const hasContent = stepHasContent(step);
+                  const isError =
+                    (step.kind === "tool" && step.block.status === "error") ||
+                    (step.kind === "toolGroup" && step.blocks.some(b => b.status === "error"));
+                  const toolInfo = step.kind === "tool" ? enrichedToolLabel(step.block, ts) : null;
+                  const hasFileTag = step.kind !== "toolGroup" && toolInfo?.target !== undefined && toolInfo?.typeLabel !== undefined;
+                  return (
+                    <div key={step.id} className="group/step relative min-w-0">
                         {index < steps.length - 1 && <span className="absolute bottom-[-9px] left-[7px] top-[22px] border-l border-border" />}
                         <button
                           type="button"
@@ -960,14 +989,16 @@ export function ProcessGroup({
                           )}
                         </button>
                         {open && hasContent && (
-                          <div className="ml-5 mt-1.5 overflow-hidden">
+                          <div
+                            ref={isLatest ? latestStepScrollRef : undefined}
+                            className="ml-5 mt-1.5 max-h-[320px] overflow-y-auto overflow-x-hidden"
+                          >
                             <StepContent step={step} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} ts={ts} isStreaming={isStreaming} />
                           </div>
                         )}
                       </div>
                     );
                   })}
-                </div>
               </div>
             </div>
           ) : (
