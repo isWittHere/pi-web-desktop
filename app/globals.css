@@ -1698,3 +1698,9 @@ span.linenumber {
     display: none !important;
   }
 }
+
+/* Startup splash (static HTML, removed by AppShell after first paint) */
+@keyframes pi-splash-breathe {
+  0%, 100% { opacity: 0.95; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.96); }
+}

@@ -8,6 +8,7 @@ import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { getDraft } from "@/lib/draft-store";
 import { getLastWorkspace } from "@/lib/workspace-memory";
+import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
@@ -331,12 +332,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
 
-  const loadSessions = useCallback(async (showLoading = false) => {
+  const loadSessions = useCallback(async (showLoading = false, force = false) => {
     try {
       if (showLoading) setLoading(true);
-      const res = await fetch("/api/sessions");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { sessions: SessionInfo[]; runningSessionIds?: string[] };
+      // Shared cache: startup also fetches the list from the workspace-restore
+      // path, so dedupe onto one request (force refreshes on explicit reload).
+      const data = await getSessionList(force);
       setAllSessions(data.sessions);
       // This is only an initial fallback. The dedicated snapshot route owns
       // running state once it has responded, so a slow list reload stays stale.
@@ -367,7 +368,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   useEffect(() => {
     const isFirst = !initialLoadDone.current;
     initialLoadDone.current = true;
-    loadSessions(isFirst);
+    // Refresh forces the shared cache on explicit reloads (refreshKey bumps);
+    // the first load may reuse a list already fetched by the restore path.
+    loadSessions(isFirst, !isFirst);
   }, [loadSessions, refreshKey]);
 
   // Persist unread markers so they survive a browser refresh before the user

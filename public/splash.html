@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+<title>Pi Agent Web</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1a1a1a;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .splash { display: flex; flex-direction: column; align-items: center; gap: 26px; }
+  .logo {
+    width: 88px; height: 88px; color: #ffffff;
+    animation: breathe 1.7s ease-in-out infinite;
+  }
+  .logo svg { width: 100%; height: 100%; display: block; }
+  .dots { display: flex; gap: 9px; }
+  .dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.95; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.96); }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+  <div class="splash">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" xmlns="http://www.w3.org/2000/svg">
+        <path clip-rule="evenodd" d="M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5z"></path>
+        <path d="M17.5 12H23v11h-5.5V12z"></path>
+      </svg>
+    </div>
+    <div class="dots"><span></span><span></span><span></span></div>
+  </div>
+</body>
+</html>

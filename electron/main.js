@@ -18,6 +18,7 @@ const HOSTNAME = "127.0.0.1";
 const URL = `http://${HOSTNAME}:${PORT}`;
 
 let mainWindow = null;
+let splashWindow = null;
 let serverProcess = null;
 let tray = null;
 
@@ -93,6 +94,31 @@ function getIconPath() {
   return path.join(__dirname, "..", "public", process.platform === "win32" ? "icon.ico" : "icon-mac.png");
 }
 
+/**
+ * Full-screen splash with the Pi logo, shown while the server (and later the
+ * main window) is starting up. It is a pure local static page, so it appears
+ * instantly and gives the user feedback instead of a black/empty window.
+ */
+function createSplashWindow() {
+  splashWindow = new BrowserWindow({
+    width: 380,
+    height: 380,
+    frame: false,
+    resizable: false,
+    movable: true,
+    center: true,
+    skipTaskbar: true,
+    backgroundColor: "#1a1a1a",
+    webPreferences: {
+      sandbox: true,
+    },
+  });
+  splashWindow.loadFile(path.join(__dirname, "..", "public", "splash.html"));
+  splashWindow.on("closed", () => {
+    splashWindow = null;
+  });
+}
+
 function createTray() {
   // Windows keeps the existing tray icon; macOS uses the Pi template icon
   // (black + alpha) so the system adapts it to light/dark menu bars.
@@ -110,12 +136,7 @@ function createTray() {
   const contextMenu = Menu.buildFromTemplate([
     {
       label: "Show",
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
-      },
+      click: showMainWindow,
     },
     { type: "separator" },
     {
@@ -130,11 +151,22 @@ function createTray() {
   tray.setContextMenu(contextMenu);
 
   tray.on("double-click", () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    showMainWindow();
   });
+}
+
+/**
+ * Show the main window, creating it again when the user previously closed it.
+ * Closing the window destroys the renderer (releasing its memory) while the
+ * server keeps running in the background, so recreating here is fast.
+ */
+function showMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    createWindow();
+  }
 }
 
 function createWindow() {
@@ -230,11 +262,11 @@ function createWindow() {
 
   mainWindow.loadURL(URL);
 
-  mainWindow.on("close", (event) => {
-    if (!app.isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
-    }
+  mainWindow.on("close", () => {
+    // Closing the window destroys the UI renderer (releasing its memory). The
+    // server and tray stay alive in the background so the next Show recreates
+    // the window fast. Full shutdown only happens via tray Quit (before-quit
+    // kills the server).
   });
 
   mainWindow.on("closed", () => {
@@ -309,6 +341,10 @@ async function bootstrap() {
   if (process.platform === "darwin") {
     app.dock.setIcon(getIconPath());
   }
+  // Show the Pi logo immediately. The server may still be cold-starting (or
+  // not running at all) — the splash replaces the black/empty wait with a
+  // branded page, and also blocks any interaction until the UI is ready.
+  createSplashWindow();
   try {
     await waitForServer(2000);
   } catch {
@@ -317,11 +353,14 @@ async function bootstrap() {
       await waitForServer(60000);
     } catch (err) {
       dialog.showErrorBox("Startup Error", `Failed to start Pi Web: ${err.message}`);
+      if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
       app.quit();
       return;
     }
   }
 
+  // Server is ready — dismiss the splash and open the real window.
+  if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
   createTray();
   createWindow();
 }
@@ -334,12 +373,9 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    // Someone tried to launch a second instance → restore the existing window.
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      if (!mainWindow.isVisible()) mainWindow.show();
-      mainWindow.focus();
-    }
+    // Someone tried to launch a second instance → restore the existing window,
+    // or recreate it if the user had closed it (server kept running).
+    showMainWindow();
   });
 
   // macOS keeps a minimal native menu (appMenu + editMenu) so system
@@ -354,13 +390,9 @@ if (!gotTheLock) {
 }
 
 app.on("window-all-closed", () => {
-  if (serverProcess) {
-    serverProcess.kill();
-    serverProcess = null;
-  }
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  // The user closed the window — destroy the renderer but keep the server and
+  // tray running in the background. A subsequent Show recreates the window
+  // quickly (server is still up), and tray Quit is the only full exit.
 });
 
 app.on("activate", () => {

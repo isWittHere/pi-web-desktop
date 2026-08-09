@@ -39,6 +39,7 @@ import {
   type DraftSession,
 } from "@/lib/draft-sessions";
 import { clearLastOpen, getLastOpen, setLastOpen, setLastWorkspace, workspaceKeyOf } from "@/lib/workspace-memory";
+import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
@@ -79,6 +80,16 @@ export function AppShell() {
       const meaningful = prev.filter((d) => getDraft(d.id) !== null);
       return meaningful.length === prev.length ? prev : meaningful;
     });
+  }, []);
+
+  // Remove the static startup splash (layout.tsx) once the first frame has
+  // been painted, so there is no flash of empty UI between the splash and the
+  // first real render. The splash also blocked interaction meanwhile.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      document.getElementById("pi-splash")?.remove();
+    });
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   // Drop the currently open draft when it never got any content (typed text
@@ -291,16 +302,17 @@ export function AppShell() {
       return;
     }
     if (lastOpen?.kind === "session") {
-      void fetch("/api/sessions")
-        .then((r) => (r.ok ? (r.json() as Promise<{ sessions: SessionInfo[] }>) : null))
+      // Shared cache: SessionSidebar already fetches the same list at startup,
+      // so this does not add a second /api/sessions round-trip.
+      getSessionList()
         .then((d) => {
           if (token !== workspaceRestoreTokenRef.current) return; // stale switch
-          const s = d?.sessions.find((x) => x.id === lastOpen.id);
+          const s = d.sessions.find((x) => x.id === lastOpen.id);
           if (!s) {
             // The list loaded but the remembered session is gone — forget it.
-            // When the list itself failed (d === null) keep the memory so a
-            // later switch retries the restore.
-            if (d) clearLastOpen(projectKey);
+            // When the list itself failed keep the memory so a later switch
+            // retries the restore.
+            clearLastOpen(projectKey);
             openWelcomeDraft(cwd, projectKey);
             return;
           }
@@ -447,10 +459,10 @@ export function AppShell() {
   // handleCwdChange relies on. Hydrate it from the session list so switching
   // worktrees right after creating a session doesn't close the chat.
   const hydrateSelectedSession = useCallback((sessionId: string) => {
-    void fetch("/api/sessions")
-      .then((r) => (r.ok ? (r.json() as Promise<{ sessions: SessionInfo[] }>) : null))
+    // Shared cache (see restoreWorkspaceContext) — no second /api/sessions trip.
+    getSessionList()
       .then((d) => {
-        const full = d?.sessions.find((s) => s.id === sessionId);
+        const full = d.sessions.find((s) => s.id === sessionId);
         if (!full) return;
         setSelectedSession((prev) => (prev && prev.id === sessionId && !prev.projectRoot ? full : prev));
         // The server-resolved projectRoot may differ from the transient key the
