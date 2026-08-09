@@ -1632,7 +1632,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               unreadSessionIds={unreadSessionIds}
               onSelectSession={handleSelectSessionFromList}
               onRenamed={(id, name) => {
-                loadSessions();
+                // Force a refresh: the shared session-list cache would otherwise
+                // serve the stale pre-rename list and the sidebar row would
+                // keep showing the old name.
+                loadSessions(false, true);
                 onSessionRenamed?.(id, name);
               }}
               onSessionDeleted={(id) => {
