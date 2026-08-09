@@ -130,9 +130,10 @@ function createTray() {
 }
 
 /**
- * Show the main window, creating it again when the user previously closed it.
- * Closing the window destroys the renderer (releasing its memory) while the
- * server keeps running in the background, so recreating here is fast.
+ * Show the main window. With the temporary hide-on-close behavior the window
+ * is never destroyed on close, so this is normally just show+focus. The
+ * createWindow() fallback covers the rare case the window was actually
+ * destroyed (e.g. full quit path).
  */
 function showMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -159,11 +160,24 @@ function createWindow() {
     titleBarStyle: process.platform === "darwin" ? "hidden" : undefined,
     trafficLightPosition: process.platform === "darwin" ? { x: 12, y: 11 } : undefined,
     backgroundColor: "#1a1a1a",
+    // Start hidden: show() only fires after the splash has actually rendered
+    // (ready-to-show below), so the user never sees an empty first frame or a
+    // flash between window creation and the splash paint.
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Only reveal the window once the in-window splash has painted. This kills
+  // the startup flash: without it the window appears empty (backgroundColor)
+  // for a few frames while loadFile(splash.html) is still in flight.
+  mainWindow.once("ready-to-show", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+    }
   });
 
   // Sync the renderer's document.title to the native window title,
@@ -236,16 +250,20 @@ function createWindow() {
 
   // Load the in-window splash first (same window as the app): its script
   // polls the server and navigates this window to the web UI once it is up.
-  // The UI's own StartupSplash is SSR'd into the app HTML, so the Pi logo
-  // stays on screen seamlessly across the whole startup (server cold start + UI
-  // hydration) without a separate splash window.
+  // The app's HTML carries a CSS-only body::before Pi logo that covers the
+  // JS-load + hydration gap; AppShell fades it out (html.pi-booted) once the
+  // workspace + session content are ready — all in one window, no flash.
   mainWindow.loadFile(path.join(__dirname, "..", "public", "splash.html"));
 
-  mainWindow.on("close", () => {
-    // Closing the window destroys the UI renderer (releasing its memory). The
-    // server and tray stay alive in the background so the next Show recreates
-    // the window fast. Full shutdown only happens via tray Quit (before-quit
-    // kills the server).
+  mainWindow.on("close", (event) => {
+    // TEMPORARY: hide the window to the tray instead of destroying the UI.
+    // The "destroy UI on close to free memory" optimization is disabled until
+    // the startup/splash work is finalized for release. This restores the
+    // pre-optimization behavior: close → hide; tray Show / double-click → show.
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
   });
 
   mainWindow.on("closed", () => {
@@ -364,9 +382,10 @@ if (!gotTheLock) {
 }
 
 app.on("window-all-closed", () => {
-  // The user closed the window — destroy the renderer but keep the server and
-  // tray running in the background. A subsequent Show recreates the window
-  // quickly (server is still up), and tray Quit is the only full exit.
+  // TEMPORARY: with hide-on-close the window is never actually closed, so this
+  // path is not exercised. Once the "destroy UI on close to free memory"
+  // optimization ships, this is where the renderer is torn down while the
+  // server + tray keep running, and a subsequent Show recreates the window.
 });
 
 app.on("activate", () => {
