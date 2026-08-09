@@ -39,7 +39,7 @@ export default function RootLayout({
           not-yet-ready UI.
         */}
         <div id="pi-splash" style={{ position: "fixed", inset: 0, zIndex: 2147483647, background: "#1a1a1a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 26 }}>
-          <svg viewBox="0 0 24 24" fill="#ffffff" fill-rule="evenodd" width={88} height={88} xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style={{ animation: "pi-splash-breathe 1.7s ease-in-out infinite" }}>
+          <svg viewBox="0 0 24 24" fill="#ffffff" fillRule="evenodd" width={88} height={88} xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style={{ animation: "pi-splash-breathe 1.7s ease-in-out infinite" }}>
             <path clipRule="evenodd" d="M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5z" />
             <path d="M17.5 12H23v11h-5.5V12z" />
           </svg>
