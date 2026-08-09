@@ -267,6 +267,16 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
       <Field label={t("desktop.modelsApi")}>
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
       </Field>
+
+      <Field label={t("desktop.modelsHeaders")}>
+        <HeaderListEditor
+          headers={provider.headers}
+          onChange={(headers) => set("headers", headers)}
+        />
+        <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
+          {t("desktop.modelsHeadersHelp")}
+        </span>
+      </Field>
     </div>
   );
 }
@@ -435,6 +445,78 @@ function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
   return { ...model, compat: Object.keys(rest).length ? rest : undefined };
 }
 
+// Generic helper for boolean and string compat flags. An empty compat map is
+// collapsed to `undefined` so the saved models.json stays free of `{}` noise.
+function getCompatBool(model: ModelEntry, key: string): boolean {
+  return model.compat?.[key] === true;
+}
+
+function setCompatBool(model: ModelEntry, key: string, value: boolean): ModelEntry {
+  const next = { ...(model.compat ?? {}) };
+  if (value) next[key] = true;
+  else delete next[key];
+  return { ...model, compat: Object.keys(next).length ? next : undefined };
+}
+
+function getCompatStr(model: ModelEntry, key: string): string | undefined {
+  const v = model.compat?.[key];
+  return typeof v === "string" ? v : undefined;
+}
+
+function setCompatStr(model: ModelEntry, key: string, value: string | undefined): ModelEntry {
+  const next = { ...(model.compat ?? {}) };
+  if (value) next[key] = value;
+  else delete next[key];
+  return { ...model, compat: Object.keys(next).length ? next : undefined };
+}
+
+// Editable key/value header list for a provider. Rebuilds a fresh object on
+// each edit so empty keys/values are dropped instead of persisted as noise.
+function HeaderListEditor({ headers, onChange }: {
+  headers: Record<string, string> | undefined;
+  onChange: (h: Record<string, string> | undefined) => void;
+}) {
+  const t = useModelTranslation();
+  const entries = Object.entries(headers ?? {});
+  const setEntry = (row: number, k: string, v: string): void => {
+    const next: Record<string, string> = {};
+    entries.forEach(([ok, ov], j) => { if (j !== row) next[ok] = ov; });
+    if (k.trim()) next[k.trim()] = v;
+    onChange(Object.keys(next).length ? next : undefined);
+  };
+  const removeEntry = (row: number): void => {
+    const next = entries.filter((_, j) => j !== row);
+    onChange(Object.keys(next).length ? Object.fromEntries(next) : undefined);
+  };
+  const rowBtnStyle = {
+    padding: "6px 9px",
+    background: "none",
+    border: "1px solid rgba(239,68,68,0.3)",
+    borderRadius: 4,
+    color: "#ef4444",
+    cursor: "pointer",
+    fontSize: 11,
+    lineHeight: 1,
+  } satisfies React.CSSProperties;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {entries.map(([k, v], i) => (
+        <div key={i} style={{ display: "flex", gap: 6 }}>
+          <input value={k} onChange={(e) => setEntry(i, e.target.value, v)}
+            placeholder="Header-Name" style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
+          <input value={v} onChange={(e) => setEntry(i, k, e.target.value)}
+            placeholder="value" style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
+          <button onClick={() => removeEntry(i)} style={rowBtnStyle}>✕</button>
+        </div>
+      ))}
+      <button onClick={() => onChange({ ...(headers ?? {}), "": "" })}
+        style={{ padding: "5px 9px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, alignSelf: "flex-start" }}>
+        <PlusIcon size={11} /> {t("desktop.modelsAddHeader")}
+      </button>
+    </div>
+  );
+}
+
 function ModelDetail({
   providerName,
   provider,
@@ -589,6 +671,11 @@ function ModelDetail({
             checked={hasDeepseekCompat(model)}
             onChange={(v) => onChange(setDeepseekCompat(model, v))}
           />
+          <Check
+            label={t("desktop.modelsSupportsDeveloperRole")}
+            checked={getCompatBool(model, "supportsDeveloperRole")}
+            onChange={(v) => onChange(setCompatBool(model, "supportsDeveloperRole", v))}
+          />
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <SectionTitle>{t("desktop.modelsThinkingLevelMap")}</SectionTitle>
@@ -607,6 +694,22 @@ function ModelDetail({
             />
           </div>
         </>
+      )}
+
+      <Check
+        label={t("desktop.modelsSendSessionAffinity")}
+        checked={getCompatBool(model, "sendSessionAffinityHeaders")}
+        onChange={(v) => onChange(setCompatBool(model, "sendSessionAffinityHeaders", v))}
+      />
+      {getCompatBool(model, "sendSessionAffinityHeaders") && (
+        <Field label={t("desktop.modelsSessionAffinityFormat")}>
+          <Select
+            value={getCompatStr(model, "sessionAffinityFormat") ?? "openai-nosession"}
+            onChange={(v) => onChange(setCompatStr(model, "sessionAffinityFormat", v || undefined))}
+            options={["openai", "openai-nosession", "openrouter"] as const}
+            required
+          />
+        </Field>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
