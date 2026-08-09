@@ -3,6 +3,7 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage, shell } = require("electron");
 const { fork } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const http = require("http");
 
@@ -20,6 +21,17 @@ const URL = `http://${HOSTNAME}:${PORT}`;
 let mainWindow = null;
 let serverProcess = null;
 let tray = null;
+
+// Diagnostic log for external-link handling. Also written to a file so the
+// behavior can be verified without watching the terminal (the window's close
+// button only hides to tray, so a stale main process can otherwise mask
+// whether the new code is actually running).
+const LOG_FILE = path.join(os.tmpdir(), "pi-web-electron.log");
+function logToFile(...args) {
+  try {
+    fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${args.join(" ")}\n`);
+  } catch { /* best effort */ }
+}
 
 function waitForServer(timeoutMs = 30000) {
   const start = Date.now();
@@ -184,6 +196,75 @@ function createWindow() {
   // so the workspace name (set by AppShell) appears in the title bar.
   mainWindow.webContents.on("page-title-updated", (_event, title) => {
     mainWindow.setTitle(title);
+  });
+
+  // ── External links ────────────────────────────────────────────────
+  // Route external links (target="_blank" / window.open) to the system
+  // browser via shell.openExternal instead of spawning an in-app
+  // BrowserWindow. Same-origin URLs (e.g. the in-app session export
+  // preview) are allowed to open in-app as before.
+  //
+  // IMPORTANT: only window.open / target="_blank" requests reach this
+  // handler. The splash → app bootstrap (window.location.replace) goes
+  // through will-navigate, which is intentionally NOT intercepted here:
+  // guarding it with an incomplete same-origin check is what previously
+  // left the window stuck on the splash screen.
+  const isAppUrl = (rawUrl) => {
+    const url = String(rawUrl || "");
+    // Relative URLs always resolve against the app origin → in-app.
+    if (url.startsWith("/")) return true;
+    let parsed = null;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return false;
+    }
+    const localHost =
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "::1";
+    const samePort = parsed.port === "" || parsed.port === String(PORT);
+    return localHost && samePort;
+  };
+
+  // Strip junk Chromium may have glued onto the URL (trailing markdown
+  // punctuation such as `)/`, whitespace) until it parses, so
+  // shell.openExternal receives a clean address. Falls back to the trimmed
+  // original if nothing parses.
+  const cleanExternalUrl = (rawUrl) => {
+    let url = String(rawUrl || "").trim();
+    try {
+      new URL(url);
+      return url;
+    } catch { /* fall through */ }
+    url = url.replace(/[\s\r\n]+$/g, "").replace(/[)\]}>.,;:!?"']+$/g, "");
+    try {
+      new URL(url);
+      return url;
+    } catch { /* fall through */ }
+    return url;
+  };
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    logToFile("[window-open] received:", JSON.stringify(url));
+    if (isAppUrl(url)) {
+      logToFile("[window-open] allow same-origin:", JSON.stringify(url));
+      return { action: "allow" };
+    }
+    const cleaned = cleanExternalUrl(url);
+    if (/^https?:\/\//i.test(cleaned)) {
+      logToFile("[window-open] opening external:", JSON.stringify(url), "->", cleaned);
+      shell.openExternal(cleaned).then(
+        () => logToFile("[window-open] openExternal ok:", cleaned),
+        (err) => {
+          console.error("[Electron] openExternal failed:", cleaned, err);
+          logToFile("[window-open] openExternal FAILED:", cleaned, String(err));
+        }
+      );
+    } else {
+      logToFile("[window-open] denied non-web:", JSON.stringify(url));
+    }
+    return { action: "deny" };
   });
 
   // Enable DevTools toggle with Ctrl+Shift+I / F12
