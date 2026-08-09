@@ -31,6 +31,8 @@ interface Props {
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
   onCwdChange?: (cwd: string | null, projectRoot?: string | null) => void;
+  /** Fired when a session is renamed, so the top bar title can update. */
+  onSessionRenamed?: (id: string, name: string) => void;
   onOpenFile?: (filePath: string, fileName: string, options?: { initialDisplayMode?: "diff" }) => void;
   explorerRefreshKey?: number;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
@@ -271,7 +273,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1593,7 +1595,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               runningSessionIds={runningSessionIds}
               unreadSessionIds={unreadSessionIds}
               onSelectSession={handleSelectSessionFromList}
-              onRenamed={loadSessions}
+              onRenamed={(id, name) => {
+                loadSessions();
+                onSessionRenamed?.(id, name);
+              }}
               onSessionDeleted={(id) => {
                 onSessionDeleted?.(id);
                 loadSessions();
@@ -1741,7 +1746,7 @@ function SessionTreeItem({
   runningSessionIds: Set<string>;
   unreadSessionIds: Set<string>;
   onSelectSession: (s: SessionRow) => void;
-  onRenamed?: () => void;
+  onRenamed?: (id: string, name: string) => void;
   onSessionDeleted?: (id: string) => void;
   onDeleteDraft?: (id: string) => void;
   onRenameDraft?: (id: string, name: string) => void;
@@ -1892,7 +1897,7 @@ function SessionItem({
   isRunning?: boolean;
   isUnread?: boolean;
   onClick: () => void;
-  onRenamed?: () => void;
+  onRenamed?: (id: string, name: string) => void;
   onDeleted?: (id: string) => void;
   onDeleteDraft?: (id: string) => void;
   onRenameDraft?: (id: string, name: string) => void;
@@ -1946,7 +1951,7 @@ function SessionItem({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
-      onRenamed?.();
+      onRenamed?.(session.id, name);
     } catch {
       // ignore
     }

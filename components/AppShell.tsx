@@ -548,6 +548,10 @@ export function AppShell() {
     setDraftSessions((prev) => renameDraftSession(prev, draftId, name));
   }, []);
 
+  const handleSessionRenamed = useCallback((id: string, name: string) => {
+    setSelectedSession((prev) => (prev && prev.id === id ? { ...prev, name } : prev));
+  }, []);
+
   const handleSessionDeleted = useCallback((sessionId: string) => {
     setRefreshKey((k) => k + 1);
     if (selectedSession?.id === sessionId) {
@@ -681,6 +685,7 @@ export function AppShell() {
         onInitialRestoreDone={handleInitialRestoreDone}
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}
+        onSessionRenamed={handleSessionRenamed}
         selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
