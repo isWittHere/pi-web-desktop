@@ -30,7 +30,12 @@ interface Props {
   refreshKey?: number;
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
-  onCwdChange?: (cwd: string | null, projectRoot?: string | null) => void;
+  /**
+   * Fired when the effective cwd changes. isAutoSelect is true when the
+   * change comes from the startup auto-select/URL restore (not a user click),
+   * so the parent can avoid recording it as the "last active workspace".
+   */
+  onCwdChange?: (cwd: string | null, projectRoot?: string | null, isAutoSelect?: boolean) => void;
   /** Fired when a session is renamed, so the top bar title can update. */
   onSessionRenamed?: (id: string, name: string) => void;
   onOpenFile?: (filePath: string, fileName: string, options?: { initialDisplayMode?: "diff" }) => void;
@@ -493,12 +498,17 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const allRows: SessionRow[] = [...draftRows, ...allSessions];
 
   // Notify parent only when the effective cwd actually changes (not when
-  // projectRootFor identity changes due to session/worktree refreshes).
+  // projectRootFor identity changes due to session/worktree refreshes). The
+  // isAutoSelect flag is consumed here so startup auto-selection (restore of
+  // the remembered workspace) is not mistaken for user activity.
   const lastNotifiedCwdRef = useRef<string | null>(null);
+  const autoSelectRef = useRef(false);
   useEffect(() => {
     if (lastNotifiedCwdRef.current === selectedCwd) return;
     lastNotifiedCwdRef.current = selectedCwd;
-    onCwdChange?.(selectedCwd, projectRootFor(selectedCwd));
+    const isAutoSelect = autoSelectRef.current;
+    autoSelectRef.current = false;
+    onCwdChange?.(selectedCwd, projectRootFor(selectedCwd), isAutoSelect);
   }, [selectedCwd, onCwdChange, projectRootFor]);
 
   // Sync the worktree switcher to the selected session's cwd. Sessions of all
@@ -557,6 +567,13 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       ...(draftSessions ?? []).map((d) => ({ ...draftToSessionInfo(d), isDraft: true as const })),
       ...allSessions,
     ];
+    // Wait for the real session list. Drafts alone must not drive the initial
+    // workspace choice: a stale draft in a quick workspace (pi-cwd-*) ranks
+    // that workspace first (getRecentProjects sorts by modifiedAt) and, when
+    // the remembered last workspace is not among the draft-only projects, the
+    // fallback below would lock the app onto that workspace before the real
+    // sessions have even loaded.
+    if (allSessions.length === 0) return;
     if (rows.length === 0) return;
 
     if (selectedCwd === null) {
@@ -565,6 +582,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         restoredRef.current = true;
         const target = allSessions.find((s) => s.id === initialSessionId);
         if (target) {
+          autoSelectRef.current = true;
           setSelectedCwd(target.cwd);
           onSelectSession(target, true);
           return;
@@ -574,6 +592,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       }
       // Include drafts so a project that only has drafts is still selected.
       const projects = getRecentProjects(rows);
+      // Real sessions alone decide the fallback ordering: a pure-draft project
+      // (e.g. a stale quick-workspace draft) must not outrank every real
+      // session's workspace just because its draft was touched recently.
+      const sessionProjects = getRecentProjects(allSessions);
       // Prefer the workspace that was active when the app last closed over the
       // most-recently-*modified*-session ordering (which drifts when a session
       // elsewhere was merely touched or ran in the background). Fall back to
@@ -582,8 +604,14 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       const lastWorkspace = getLastWorkspace();
       const initialTarget = lastWorkspace && projects.includes(lastWorkspace)
         ? lastWorkspace
-        : (projects[0] ?? null);
-      if (initialTarget) setSelectedCwd(initialTarget);
+        : (sessionProjects[0] ?? projects[0] ?? null);
+      if (initialTarget) {
+        // Startup auto-selection must not be recorded as the user's last
+        // active workspace — otherwise a stale/incorrect pick reinforces
+        // itself across restarts (the pi-cwd-* quick-workspace loop).
+        autoSelectRef.current = true;
+        setSelectedCwd(initialTarget);
+      }
     }
   }, [draftSessions, allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
 
