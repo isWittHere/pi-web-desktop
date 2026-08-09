@@ -31,6 +31,11 @@ interface Props {
   onInitialRestoreDone?: () => void;
   /** Fired once the session list has loaded (startup readiness signal). */
   onSessionsLoaded?: () => void;
+  /** Fired when the session list has loaded and contains no real sessions
+   *  (brand-new user, or draft-only rows): there is no workspace to
+   *  auto-select and no session content for the startup splash to wait for,
+   *  so the parent can fade it to the first-run welcome screen. */
+  onNoContentToWaitFor?: () => void;
   refreshKey?: number;
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
@@ -296,7 +301,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onSessionsLoaded }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onSessionsLoaded, onNoContentToWaitFor }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -356,6 +361,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       // path, so dedupe onto one request (force refreshes on explicit reload).
       const data = await getSessionList(force);
       setAllSessions(data.sessions);
+      // The real list has now been scanned (mount's initial empty array does
+      // not count) — the auto-select effect may make first-screen decisions.
+      sessionsLoadedRef.current = true;
       // This is only an initial fallback. The dedicated snapshot route owns
       // running state once it has responded, so a slow list reload stays stale.
       if (!runningSnapshotAuthoritativeRef.current) {
@@ -490,6 +498,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   }, []);
 
   const restoredRef = useRef(false);
+  // True once loadSessions() has actually returned a list (vs. the mount-time
+  // initial empty array). Gates the empty-list branch of the auto-select
+  // effect so a brand-new user is only detected after the scan really ran.
+  const sessionsLoadedRef = useRef(false);
 
   /** Resolve the project root for a cwd from the freshest data available */
   const projectRootFor = useCallback((cwd: string | null): string | null => {
@@ -675,7 +687,22 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     // the remembered last workspace is not among the draft-only projects, the
     // fallback below would lock the app onto that workspace before the real
     // sessions have even loaded.
-    if (allSessions.length === 0) return;
+    // Only decide once loadSessions() has returned: the mount-time empty
+    // array is not "no sessions", it is "not loaded yet".
+    if (!sessionsLoadedRef.current) return;
+    if (allSessions.length === 0) {
+      // Brand-new user (or draft-only rows): no real session exists, so there
+      // is no workspace to auto-select and nothing to restore. A ?session=
+      // URL param is necessarily invalid here — end the restore flow so the
+      // parent can show the first-run welcome placeholder. The splash also
+      // has no session content to wait for: tell the parent to mark readiness.
+      if (initialSessionId && !restoredRef.current) {
+        restoredRef.current = true;
+        onInitialRestoreDone?.();
+      }
+      onNoContentToWaitFor?.();
+      return;
+    }
     if (rows.length === 0) return;
 
     if (selectedCwd === null) {
@@ -715,7 +742,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         setSelectedCwd(initialTarget);
       }
     }
-  }, [draftSessions, allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
+  }, [draftSessions, allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone, onNoContentToWaitFor]);
 
   const commitCustomPath = useCallback(async (candidate?: string) => {
     const path = (candidate ?? customPathValue).trim();

@@ -722,6 +722,10 @@ export function AppShell() {
         initialSessionId={initialSessionId}
         onInitialRestoreDone={handleInitialRestoreDone}
         onSessionsLoaded={handleSessionsLoaded}
+        // A brand-new user has no sessions to restore and no workspace to
+        // auto-select — the splash has nothing to wait for, so the sidebar
+        // signals readiness directly and the first-run welcome screen shows.
+        onNoContentToWaitFor={contentDone}
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}
         onSessionRenamed={handleSessionRenamed}
