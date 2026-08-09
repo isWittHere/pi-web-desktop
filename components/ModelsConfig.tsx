@@ -446,8 +446,8 @@ function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
   return { ...model, compat: Object.keys(rest).length ? rest : undefined };
 }
 
-// Generic helper for boolean and string compat flags. An empty compat map is
-// collapsed to `undefined` so the saved models.json stays free of `{}` noise.
+// Generic helper for boolean compat flags. An empty compat map is collapsed to
+// `undefined` so the saved models.json stays free of `{}` noise.
 function setCompatBool(model: ModelEntry, key: string, value: boolean): ModelEntry {
   const next = { ...(model.compat ?? {}) };
   if (value) next[key] = true;
@@ -463,8 +463,9 @@ function effectiveCompat(provider: ProviderEntry, model: ModelEntry): Record<str
   return { ...(provider.compat ?? {}), ...(model.compat ?? {}) };
 }
 
-// Editable key/value header list for a provider. Rebuilds a fresh object on
-// each edit so empty keys/values are dropped instead of persisted as noise.
+// Editable key/value header list for a provider or model entry. Rebuilds a
+// fresh object on each edit so empty keys/values are dropped instead of being
+// persisted as noise.
 function HeaderListEditor({ headers, onChange }: {
   headers: Record<string, string> | undefined;
   onChange: (h: Record<string, string> | undefined) => void;
