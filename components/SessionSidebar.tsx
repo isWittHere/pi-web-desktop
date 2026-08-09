@@ -74,6 +74,20 @@ interface WorktreeState {
   worktrees: WorktreeEntry[];
 }
 
+/** How often the worktree list is re-polled while the current workspace is a
+ *  git top-level, so branch switches made outside this app (via the agent or
+ *  another terminal) are reflected in the switcher label without a manual
+ *  refresh. Generous interval keeps git invocations cheap. */
+const WORKTREE_POLL_MS = 5000;
+
+function sameWorktrees(a: WorktreeEntry[], b: WorktreeEntry[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].path !== b[i].path || a[i].branch !== b[i].branch || a[i].isMain !== b[i].isMain) return false;
+  }
+  return true;
+}
+
 const UNREAD_SESSIONS_STORAGE_KEY = "pi-web:unread-session-ids";
 
 function loadUnreadSessionIds(): Set<string> {
@@ -567,6 +581,85 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       });
     return () => { cancelled = true; };
   }, [selectedCwd, wtRefreshKey, refreshKey]);
+
+  // Poll the worktree list so branch switches made outside this app (the agent
+  // running `git checkout`, or another terminal) are reflected in the switcher
+  // label without a manual refresh. Mirrors the running-sessions poll: pauses
+  // while the tab is hidden, dedupes in-flight requests, and only writes state
+  // when the data actually changed so the whole sidebar does not re-render on
+  // every tick. Depends on worktreeState so a data change re-arms promptly.
+  useEffect(() => {
+    let active = true;
+    let controller: AbortController | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async () => {
+      if (!active || document.visibilityState !== "visible") return;
+      // Only poll while the current workspace is a loaded git top-level;
+      // otherwise there is no worktree list to refresh.
+      const st = worktreeState;
+      if (!selectedCwd || !st || st.forCwd !== selectedCwd || !st.isGit || !st.isTopLevel) return;
+      controller?.abort();
+      const currentController = new AbortController();
+      controller = currentController;
+      try {
+        const response = await fetch(`/api/worktrees?cwd=${encodeURIComponent(selectedCwd)}`, {
+          cache: "no-store",
+          signal: currentController.signal,
+        });
+        if (!response.ok || !active || controller !== currentController) return;
+        const data = await response.json() as {
+          projectRoot?: string; isGit?: boolean; isTopLevel?: boolean;
+          worktrees?: WorktreeEntry[]; error?: string;
+        };
+        if (!active || controller !== currentController) return;
+        // Ignore responses that no longer belong to the same project.
+        if (data.error || !data.projectRoot || data.projectRoot !== st.projectRoot) return;
+        const next: WorktreeState = {
+          forCwd: selectedCwd,
+          projectRoot: data.projectRoot,
+          isGit: data.isGit ?? false,
+          isTopLevel: data.isTopLevel ?? false,
+          worktrees: data.worktrees ?? [],
+        };
+        setWorktreeState((prev) =>
+          prev && prev.forCwd === next.forCwd
+            && prev.projectRoot === next.projectRoot
+            && prev.isGit === next.isGit
+            && prev.isTopLevel === next.isTopLevel
+            && sameWorktrees(prev.worktrees, next.worktrees)
+            ? prev
+            : next
+        );
+      } catch (error) {
+        if ((error as DOMException).name !== "AbortError") console.warn("Failed to poll worktrees", error);
+      } finally {
+        if (active && controller === currentController && document.visibilityState === "visible") {
+          timer = setTimeout(poll, WORKTREE_POLL_MS);
+        }
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void poll();
+      } else {
+        controller?.abort();
+        if (timer) clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    void poll();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      active = false;
+      controller?.abort();
+      if (timer) clearTimeout(timer);
+      timer = null;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [selectedCwd, worktreeState]);
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
@@ -1204,7 +1297,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             <Plus size={13} weight="regular" aria-hidden="true" />
           </button>
           <button
-            onClick={() => loadSessions(false)}
+            onClick={() => loadSessions(false, true)}
             title={t("desktop.refresh")}
             aria-label={t("desktop.refresh")}
             style={{
