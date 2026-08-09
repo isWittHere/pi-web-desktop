@@ -28,6 +28,8 @@ interface Props {
   onRenameDraft?: (draftId: string, name: string) => void;
   initialSessionId?: string | null;
   onInitialRestoreDone?: () => void;
+  /** Fired once the session list has loaded (startup readiness signal). */
+  onSessionsLoaded?: () => void;
   refreshKey?: number;
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
@@ -279,7 +281,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onSessionsLoaded }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -357,12 +359,15 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
         sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
       }
+      // Startup readiness: the list is usable now (auto-select runs right
+      // after setAllSessions on the next render).
+      onSessionsLoaded?.();
     } catch (e) {
       setError(String(e));
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [onSessionsLoaded]);
 
   const initialLoadDone = useRef(false);
   useEffect(() => {

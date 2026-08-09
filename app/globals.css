@@ -1699,8 +1699,20 @@ span.linenumber {
   }
 }
 
-/* Startup splash (static HTML, removed by AppShell after first paint) */
-@keyframes pi-splash-breathe {
-  0%, 100% { opacity: 0.95; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(0.96); }
+/* Startup splash: a CSS-only full-screen Pi logo (no JS needed) so the app
+   shows the logo from its very first paint — while the JS bundle loads and
+   before React hydrates — covering the initial-load gap. It is faded out by
+   AppShell (html.pi-booted) once the workspace + session content are ready.
+   pointer-events: none keeps the title bar draggable and never blocks input. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: #1a1a1a url("data:image/svg+xml,%3Csvg viewBox%3D%220 0 24 24%22 fill%3D%22%23ffffff%22 fill-rule%3D%22evenodd%22 xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath clip-rule%3D%22evenodd%22 d%3D%22M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5z%22/%3E%3Cpath d%3D%22M17.5 12H23v11h-5.5V12z%22/%3E%3C/svg%3E") center / 88px no-repeat;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+html.pi-booted body::before {
+  opacity: 0;
 }

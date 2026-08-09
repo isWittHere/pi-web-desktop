@@ -6,7 +6,6 @@ import "@fontsource/ia-writer-quattro/400-italic.css";
 import "@fontsource/ia-writer-quattro/700.css";
 import "@fontsource/ia-writer-quattro/700-italic.css";
 import "@fontsource/lilex";
-import { StartupSplash } from "@/components/StartupSplash";
 
 export const metadata: Metadata = {
   title: "Pi Agent Web",
@@ -32,13 +31,6 @@ export default function RootLayout({
         />
       </head>
       <body translate="no" className="notranslate" style={{ height: "100dvh", display: "flex", flexDirection: "column" }}>
-        {/*
-          Startup splash in the same window as the app: SSR'd into the initial
-          HTML so the Pi logo is visible from first paint until React has
-          hydrated and painted the real UI (then StartupSplash unmounts
-          itself). While visible it also blocks interaction.
-        */}
-        <StartupSplash />
         {children}
       </body>
     </html>

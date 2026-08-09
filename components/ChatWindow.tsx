@@ -40,6 +40,8 @@ interface Props {
   onSystemPromptChange?: (prompt: string | null) => void;
   onSessionStatsChange?: (stats: SessionStatsInfo | null) => void;
   onSessionStatsPanelOpen?: () => void;
+  /** Fired once the session content finished its initial load (startup readiness). */
+  onContentReady?: () => void;
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
   onOpenFile?: (filePath: string) => void;
   onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
@@ -124,7 +126,7 @@ function withAssistantBlocks(
 
 
 
-export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio }: Props) {
+export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, onContentReady }: Props) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
 
@@ -178,6 +180,16 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     if (soundEnabledRef.current) playDoneSoundRef.current();
   }, [extensionDialog]);
 
+  // Report when the session content finishes its initial load. This is a
+  // startup-readiness signal: the splash stays visible until the restored
+  // session's content is rendered, so the user never sees a half-loaded page.
+  const prevContentLoadingRef = useRef(loading);
+  useEffect(() => {
+    if (prevContentLoadingRef.current === true && loading === false) {
+      onContentReady?.();
+    }
+    prevContentLoadingRef.current = loading;
+  }, [loading, onContentReady]);
   // Register the abort handler for the global Esc shortcut
   useEffect(() => {
     registerAbortHandler(agentRunning || bashRunning ? handleAbort : null);

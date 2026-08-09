@@ -93,6 +93,28 @@ export function AppShell() {
   }, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
+  // ── Startup splash (readiness signal) ──────────────────────────────────
+  // The CSS-only body::before Pi logo stays visible until the whole startup
+  // chain is ready: session list loaded + workspace auto-selected, and the
+  // restored session's content rendered (or no session content to wait for).
+  // Only then do we add html.pi-booted to fade it out, so the user sees a
+  // fully prepared page. (The ready state lives here; the visual layer is
+  // pure CSS in globals.css — there is no React overlay to unmount.)
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  const [contentReady, setContentReady] = useState<boolean | null>(null);
+  const handleSessionsLoaded = useCallback(() => setSessionsLoaded(true), []);
+  const waitForContent = useCallback(() => setContentReady(false), []);
+  const contentDone = useCallback(() => setContentReady(true), []);
+  const handleContentReady = useCallback(() => setContentReady(true), []);
+  useEffect(() => {
+    if (sessionsLoaded && contentReady === true) {
+      // Keep the CSS splash visible for at least ~800ms total even when the
+      // startup chain resolves quickly, so the user actually perceives the
+      // logo, then fade it out via html.pi-booted.
+      const t = setTimeout(() => document.documentElement.classList.add("pi-booted"), 800);
+      return () => clearTimeout(t);
+    }
+  }, [sessionsLoaded, contentReady]);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("models");
@@ -262,12 +284,14 @@ export function AppShell() {
     setActiveDraftId(draft.id);
     setNewSessionCwd(cwd);
     setLastOpen(projectKey, { kind: "draft", id: draft.id });
+    // A welcome draft has no session content to wait for — mark readiness.
+    contentDone();
     // A draft is not URL-representable — drop a stale ?session= so a refresh
     // does not yank back to the previous workspace's session.
     if (new URLSearchParams(window.location.search).has("session")) {
       router.replace("/", { scroll: false });
     }
-  }, [router]);
+  }, [router, contentDone]);
 
   // Restore the workspace's last open context after switching to it. Called
   // from handleCwdChange once the outgoing context has been reset. A draft
@@ -282,6 +306,8 @@ export function AppShell() {
         setActiveDraftId(draft.id);
         setNewSessionCwd(draft.cwd);
         setLastOpen(projectKey, { kind: "draft", id: draft.id });
+        // A draft reopens with an empty composer — no session content to wait for.
+        contentDone();
         if (new URLSearchParams(window.location.search).has("session")) {
           router.replace("/", { scroll: false });
         }
@@ -316,6 +342,7 @@ export function AppShell() {
           // present: useAgentSession loads content in a mount-only effect, so
           // the null-session welcome mount from the switch would never load
           // the restored session's messages.
+          waitForContent();
           setSelectedSession(s);
           setSessionKey((k) => k + 1);
           if (new URLSearchParams(window.location.search).get("session") !== s.id) {
@@ -332,7 +359,7 @@ export function AppShell() {
       return;
     }
     openWelcomeDraft(cwd, projectKey);
-  }, [draftSessions, router, openWelcomeDraft]);
+  }, [draftSessions, router, openWelcomeDraft, waitForContent, contentDone]);
 
   const handleCwdChange = useCallback((cwd: string | null, projectRoot?: string | null, isAutoSelect = false) => {
     setActiveCwd(cwd);
@@ -398,6 +425,9 @@ export function AppShell() {
     cleanupEmptyActiveDraft();
     setActiveDraftId(null);
     setNewSessionCwd(null);
+    // Wait for the session content before hiding the startup splash (only
+    // matters while the splash is still up; afterwards it is a no-op).
+    waitForContent();
     setSelectedSession(session);
     // Remember this session as the workspace's last open context so switching
     // back to the workspace restores it.
@@ -417,7 +447,7 @@ export function AppShell() {
     if (!isRestore) {
       router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
     }
-  }, [router, isMobile, cleanupEmptyActiveDraft, selectedSession]);
+  }, [router, isMobile, cleanupEmptyActiveDraft, selectedSession, waitForContent]);
 
   const handleNewSession = useCallback((_sessionId: string, cwd: string, projectRoot?: string | null) => {
     // An empty draft is meaningless: drop the current one (if it never got
@@ -466,6 +496,9 @@ export function AppShell() {
   // Called by ChatWindow when a new session gets its real id from pi
   const handleSessionCreated = useCallback((session: SessionInfo) => {
     setNewSessionCwd(null);
+    // The new session now has real content (the first prompt already went out)
+    // — mark readiness in case the splash is still up.
+    contentDone();
     setSelectedSession(session);
     setLastOpen(workspaceKeyOf(session), { kind: "session", id: session.id });
     setRefreshKey((k) => k + 1);
@@ -480,7 +513,7 @@ export function AppShell() {
     setActiveDraftId(null);
     hydrateSelectedSession(session.id);
     router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
-  }, [router, hydrateSelectedSession]);
+  }, [router, hydrateSelectedSession, contentDone]);
 
   const handleAgentEnd = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -498,6 +531,8 @@ export function AppShell() {
     setRefreshKey((k) => k + 1);
     setSessionKey((k) => k + 1);
     setNewSessionCwd(null);
+    // A fork already carries the parent's content — mark readiness.
+    contentDone();
     const forkKey = selectedSession ? workspaceKeyOf(selectedSession) : null;
     setSelectedSession((prev) => ({
       ...(prev ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
@@ -506,7 +541,7 @@ export function AppShell() {
     if (forkKey) setLastOpen(forkKey, { kind: "session", id: newSessionId });
     hydrateSelectedSession(newSessionId);
     router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
-  }, [router, hydrateSelectedSession, selectedSession]);
+  }, [router, hydrateSelectedSession, selectedSession, contentDone]);
 
   const handleInitialRestoreDone = useCallback(() => {
     setInitialSessionRestored(true);
@@ -686,6 +721,7 @@ export function AppShell() {
         onRenameDraft={handleRenameDraft}
         initialSessionId={initialSessionId}
         onInitialRestoreDone={handleInitialRestoreDone}
+        onSessionsLoaded={handleSessionsLoaded}
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}
         onSessionRenamed={handleSessionRenamed}
@@ -844,6 +880,7 @@ export function AppShell() {
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
+              onContentReady={handleContentReady}
               onOpenFile={handleOpenLinkedFile}
               onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
               onViewFullHistory={handleViewFullHistory}
