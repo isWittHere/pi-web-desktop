@@ -599,12 +599,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       // Prefer the workspace that was active when the app last closed over the
       // most-recently-*modified*-session ordering (which drifts when a session
       // elsewhere was merely touched or ran in the background). Fall back to
-      // the recency ordering when the remembered workspace is gone or no
-      // longer has any sessions/drafts.
+      // the recency ordering among real sessions only — never to a pure-draft
+      // project (allSessions is guaranteed non-empty above).
       const lastWorkspace = getLastWorkspace();
       const initialTarget = lastWorkspace && projects.includes(lastWorkspace)
         ? lastWorkspace
-        : (sessionProjects[0] ?? projects[0] ?? null);
+        : (sessionProjects[0] ?? null);
       if (initialTarget) {
         // Startup auto-selection must not be recorded as the user's last
         // active workspace — otherwise a stale/incorrect pick reinforces
