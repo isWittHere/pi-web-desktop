@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowClockwise, CaretDown, CaretRight, Check, CircleDashed, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
+import { ArrowClockwise, CaretDown, CaretRight, Check, CircleDashed, ClockCounterClockwise, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
 import type { SessionInfo } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
@@ -11,6 +11,7 @@ import { getLastWorkspace } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { useI18n } from "@/hooks/useI18n";
+import { useContextMenu } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { QuickChangesPanel } from "./QuickChangesPanel";
 
@@ -1968,8 +1969,8 @@ function SessionItem({
     if (renaming) setRenameCaretLeft(renameMeasureRef.current?.getBoundingClientRect().width ?? 0);
   }, [renaming, renameValue, renameCaretIndex]);
 
-  const startRename = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const startRename = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setRenameValue(title);
     setRenameCaretIndex(title.length);
     setRenaming(true);
@@ -1996,8 +1997,8 @@ function SessionItem({
     }
   }, [renameValue, session.id, session.name, session.isDraft, onRenamed, onRenameDraft]);
 
-  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteClick = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setConfirmDelete(true);
   }, []);
 
@@ -2022,12 +2023,50 @@ function SessionItem({
     setConfirmDelete(false);
   }, []);
 
+  const { openMenu } = useContextMenu();
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Inline rename / delete-confirm / delete-in-flight take over the row:
+    // don't let a stray right-click open a menu on top of them.
+    if (confirmDelete || renaming || deleting) return;
+    openMenu(e.clientX, e.clientY, [
+      {
+        label: t("desktop.rename"),
+        icon: <PencilSimple size={13} weight="regular" aria-hidden="true" />,
+        onSelect: () => startRename(),
+      },
+      {
+        label: t("desktop.viewFullHistory"),
+        icon: <ClockCounterClockwise size={13} weight="regular" aria-hidden="true" />,
+        // Drafts have no saved .jsonl yet, so the HTML export has nothing to read.
+        disabled: session.isDraft === true,
+        onSelect: () => {
+          window.open(
+            `/api/sessions/${encodeURIComponent(session.id)}/export?inline=1`,
+            "_blank",
+            "noopener,noreferrer",
+          );
+        },
+      },
+      { type: "separator" },
+      {
+        label: t("desktop.delete"),
+        icon: <Trash size={13} weight="regular" aria-hidden="true" />,
+        danger: true,
+        onSelect: () => handleDeleteClick(),
+      },
+    ]);
+  }, [confirmDelete, renaming, deleting, openMenu, session.id, session.isDraft, startRename, handleDeleteClick, t]);
+
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
   const ITEM_HEIGHT = 50;
 
   return (
     <div
       onClick={confirmDelete || renaming ? undefined : onClick}
+      onContextMenu={handleContextMenu}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); }}
       style={{
