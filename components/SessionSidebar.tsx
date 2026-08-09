@@ -1297,7 +1297,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             <Plus size={13} weight="regular" aria-hidden="true" />
           </button>
           <button
-            onClick={() => loadSessions(false)}
+            onClick={() => loadSessions(false, true)}
             title={t("desktop.refresh")}
             aria-label={t("desktop.refresh")}
             style={{
