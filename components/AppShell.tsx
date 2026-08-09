@@ -82,22 +82,6 @@ export function AppShell() {
     });
   }, []);
 
-  // Startup splash overlay: rendered by React (SSR + hydration) so there is
-  // no DOM-manipulation conflict. It covers the whole viewport with the Pi
-  // logo until the first frame is painted, then React unmounts it. While
-  // visible it also blocks interaction with the not-yet-ready UI.
-  const [showStartupSplash, setShowStartupSplash] = useState(true);
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      setShowStartupSplash(false);
-      // In Electron the main window is created hidden and shown only once the
-      // UI has painted, so the splash stays on screen until now (no white
-      // flash while the bundle loads). Browsers ignore this.
-      window.electron?.appReady?.();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
   // Drop the currently open draft when it never got any content (typed text
   // or attached images). Used when leaving a draft for another session.
   const cleanupEmptyActiveDraft = useCallback(() => {
@@ -727,27 +711,6 @@ export function AppShell() {
 
   return (
     <>
-    {showStartupSplash && (
-      <div
-        aria-hidden="true"
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 2147483647,
-          background: "#1a1a1a",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 26,
-        }}
-      >
-        <svg viewBox="0 0 24 24" fill="#ffffff" fillRule="evenodd" width={88} height={88} xmlns="http://www.w3.org/2000/svg" style={{ animation: "pi-splash-breathe 1.7s ease-in-out infinite" }}>
-          <path clipRule="evenodd" d="M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5z" />
-          <path d="M17.5 12H23v11h-5.5V12z" />
-        </svg>
-      </div>
-    )}
     <style>{`
       @media (max-width: 640px) {
         .sidebar-overlay-backdrop.sidebar-mobile-pending {

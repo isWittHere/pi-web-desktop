@@ -14,8 +14,6 @@ interface Window {
   electron?: {
     isElectron: true;
     platform: NodeJS.Platform;
-    /** Signal that the renderer painted its first frame (swap splash → window). */
-    appReady: () => void;
     windowControls: ElectronWindowControls;
   };
   // Existing bridge from SessionSidebar (declared there too — merged here centrally)

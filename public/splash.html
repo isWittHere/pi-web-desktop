@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src http://127.0.0.1:30141" />
 <title>Pi Agent Web</title>
 <style>
   html, body {
@@ -47,5 +47,18 @@
     </div>
     <div class="dots"><span></span><span></span><span></span></div>
   </div>
+  <script>
+    // This page is loaded inside the app's main window (same window). Once the
+    // pi server is reachable we navigate this same window to the web UI; the
+    // UI's own StartupSplash (SSR'd into its HTML) continues seamlessly from
+    // here, so the Pi logo covers the whole startup.
+    (function poll() {
+      // no-cors: we only need to know the server answers; opaque responses are
+      // fine. If nothing listens, fetch rejects and we retry.
+      fetch("http://127.0.0.1:30141/api/home", { mode: "no-cors", cache: "no-store" })
+        .then(function () { window.location.href = "http://127.0.0.1:30141"; })
+        .catch(function () { setTimeout(poll, 300); });
+    })();
+  </script>
 </body>
 </html>

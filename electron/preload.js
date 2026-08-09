@@ -5,10 +5,6 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 contextBridge.exposeInMainWorld("electron", {
   isElectron: true,
   platform: process.platform,
-  // Called once the renderer has painted its first frame — the main process
-  // swaps the splash window for the real window at this point (no white flash
-  // while the JS bundle loads and React hydrates).
-  appReady: () => ipcRenderer.send("app:ready"),
   windowControls: {
     minimize: () => ipcRenderer.send("window:minimize"),
     toggleMaximize: () => ipcRenderer.send("window:toggle-maximize"),
