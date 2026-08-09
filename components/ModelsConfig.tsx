@@ -53,6 +53,7 @@ interface ModelEntry {
   contextWindow?: number;
   maxTokens?: number;
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+  headers?: Record<string, string>;
   compat?: Record<string, unknown>;
 }
 
@@ -447,10 +448,6 @@ function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
 
 // Generic helper for boolean and string compat flags. An empty compat map is
 // collapsed to `undefined` so the saved models.json stays free of `{}` noise.
-function getCompatBool(model: ModelEntry, key: string): boolean {
-  return model.compat?.[key] === true;
-}
-
 function setCompatBool(model: ModelEntry, key: string, value: boolean): ModelEntry {
   const next = { ...(model.compat ?? {}) };
   if (value) next[key] = true;
@@ -458,16 +455,24 @@ function setCompatBool(model: ModelEntry, key: string, value: boolean): ModelEnt
   return { ...model, compat: Object.keys(next).length ? next : undefined };
 }
 
-function getCompatStr(model: ModelEntry, key: string): string | undefined {
-  const v = model.compat?.[key];
-  return typeof v === "string" ? v : undefined;
-}
-
 function setCompatStr(model: ModelEntry, key: string, value: string | undefined): ModelEntry {
   const next = { ...(model.compat ?? {}) };
   if (value) next[key] = value;
   else delete next[key];
   return { ...model, compat: Object.keys(next).length ? next : undefined };
+}
+
+// Compat can be configured at the provider or model level; provider-composer
+// merges them (model wins) at runtime. The UI reads the effective value so
+// hand-edited models.json settings are reflected correctly, while toggles
+// write to the model entry so a per-model override is explicit.
+function effectiveCompat(provider: ProviderEntry, model: ModelEntry): Record<string, unknown> {
+  return { ...(provider.compat ?? {}), ...(model.compat ?? {}) };
+}
+
+function effectiveCompatStr(provider: ProviderEntry, model: ModelEntry, key: string): string | undefined {
+  const v = effectiveCompat(provider, model)[key];
+  return typeof v === "string" ? v : undefined;
 }
 
 // Editable key/value header list for a provider. Rebuilds a fresh object on
@@ -658,6 +663,16 @@ function ModelDetail({
         <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
       </Field>
 
+      <Field label={t("desktop.modelsHeaders")}>
+        <HeaderListEditor
+          headers={model.headers}
+          onChange={(headers) => set("headers", headers)}
+        />
+        <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
+          {t("desktop.modelsHeadersModelHelp")}
+        </span>
+      </Field>
+
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         <Check label={t("desktop.modelsReasoningThinking")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
         <Check label={t("desktop.modelsImageInput")} checked={model.input?.includes("image") ?? false}
@@ -673,7 +688,7 @@ function ModelDetail({
           />
           <Check
             label={t("desktop.modelsSupportsDeveloperRole")}
-            checked={getCompatBool(model, "supportsDeveloperRole")}
+            checked={effectiveCompat(provider, model)["supportsDeveloperRole"] !== false}
             onChange={(v) => onChange(setCompatBool(model, "supportsDeveloperRole", v))}
           />
           <div>
@@ -698,13 +713,13 @@ function ModelDetail({
 
       <Check
         label={t("desktop.modelsSendSessionAffinity")}
-        checked={getCompatBool(model, "sendSessionAffinityHeaders")}
+        checked={effectiveCompat(provider, model)["sendSessionAffinityHeaders"] === true}
         onChange={(v) => onChange(setCompatBool(model, "sendSessionAffinityHeaders", v))}
       />
-      {getCompatBool(model, "sendSessionAffinityHeaders") && (
+      {effectiveCompat(provider, model)["sendSessionAffinityHeaders"] === true && (
         <Field label={t("desktop.modelsSessionAffinityFormat")}>
           <Select
-            value={getCompatStr(model, "sessionAffinityFormat") ?? "openai-nosession"}
+            value={effectiveCompatStr(provider, model, "sessionAffinityFormat") ?? "openai"}
             onChange={(v) => onChange(setCompatStr(model, "sessionAffinityFormat", v || undefined))}
             options={["openai", "openai-nosession", "openrouter"] as const}
             required
