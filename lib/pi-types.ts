@@ -120,7 +120,10 @@ export interface AgentSessionLike {
   readonly isStreaming: boolean;
   readonly isCompacting: boolean;
   readonly model: ModelLike | undefined;
-  readonly modelRuntime: { getModel: (provider: string, modelId: string) => ModelLike | undefined };
+  readonly modelRuntime: {
+    getModel: (provider: string, modelId: string) => ModelLike | undefined;
+    refresh: (options?: { allowNetwork?: boolean }) => Promise<unknown>;
+  };
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
   readonly agent: { state?: { systemPrompt?: string; thinkingLevel?: string } };
