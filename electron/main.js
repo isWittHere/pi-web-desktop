@@ -178,6 +178,10 @@ function createWindow() {
     minHeight: 400,
     title: "Pi Agent Web",
     icon: iconPath,
+    // Created hidden: the splash window stays visible until the renderer
+    // signals its first painted frame (app:ready), avoiding a white flash
+    // while the JS bundle loads and React hydrates.
+    show: false,
     // macOS: keep the native frame so the traffic-light buttons render, but
     // hide the title bar text (the renderer draws its own title bar).
     // Windows/Linux: unchanged frameless window with custom controls.
@@ -274,6 +278,30 @@ function createWindow() {
   });
 }
 
+// The renderer signals its first painted frame — dismiss the splash and show
+// the (hidden) main window. This is the seam where the branded splash gives
+// way to the real UI with no white flash and nothing interactive exposed
+// before it is ready.
+ipcMain.on("app:ready", () => {
+  if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
+// Safety net: if the renderer never signals readiness (preload failure,
+// renderer crash, ...), never leave the user staring at a splash — force the
+// main window open after a timeout.
+function showMainWindowAfterTimeout() {
+  setTimeout(() => {
+    if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  }, 15000);
+}
+
 ipcMain.on("window:minimize", (event) => {
   BrowserWindow.fromWebContents(event.sender)?.minimize();
 });
@@ -359,10 +387,12 @@ async function bootstrap() {
     }
   }
 
-  // Server is ready — dismiss the splash and open the real window.
-  if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
+  // Server is ready — open the real window in the background. The splash
+  // stays on screen until the renderer reports its first painted frame
+  // (app:ready), then it is swapped for the main window.
   createTray();
   createWindow();
+  showMainWindowAfterTimeout();
 }
 
 // ── Single-instance lock ──────────────────────────────────────
