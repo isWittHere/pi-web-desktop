@@ -1094,7 +1094,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       return (a?.running ?? 0) > 0 || (a?.unread ?? 0) > 0;
     });
     return showWorkspaceControls ? (
-      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: isLargeWorkspaceControl ? 6 : 2, height: isLargeWorkspaceControl ? "auto" : "100%", minWidth: 0, width: isLargeWorkspaceControl ? "100%" : undefined }}>
+      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: isLargeWorkspaceControl ? 6 : 0, height: isLargeWorkspaceControl ? "auto" : "100%", minWidth: 0, width: isLargeWorkspaceControl ? "100%" : undefined }}>
         <div style={{ position: "relative", minWidth: 0, width: isLargeWorkspaceControl ? "fit-content" : undefined, maxWidth: isLargeWorkspaceControl ? "min(100%, 560px)" : undefined }}>
           <button
             className="app-no-drag app-titlebar-context-control"
@@ -1168,6 +1168,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 padding: "0 8px",
                 background: isWorktreeDropdownOpen ? "var(--bg-selected)" : "none",
                 border: "none",
+                borderRadius: isLargeWorkspaceControl ? 8 : 0,
                 color: isWorktreeDropdownOpen ? "var(--text)" : showWorktreeSwitcher ? "var(--text-muted)" : "var(--text-dim)",
                 cursor: showWorktreeSwitcher ? "pointer" : "default",
                 fontSize: 12,

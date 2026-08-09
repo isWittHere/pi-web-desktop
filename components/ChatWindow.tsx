@@ -572,8 +572,10 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
             {/* Header: workspace picker + version info */}
             <div
               style={{
-                padding: "0 34px 6px 7px",
+                paddingTop: 0,
                 paddingRight: isMobile ? 16 : 34,
+                paddingBottom: 6,
+                paddingLeft: 6,
               }}
             >
               <div
