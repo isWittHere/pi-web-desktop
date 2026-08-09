@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { memo, useState, useRef, useEffect, useMemo, useCallback, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { MarkdownBody } from "./MarkdownBody";
 import { copyText } from "@/lib/clipboard";
@@ -195,12 +195,17 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   const [copied, setCopied] = useState(false);
   // The skill tooltip is portaled to document.body and positioned fixed, so
   // no chat container (the bubble's overflow, or .chat-user-message's
-  // content-visibility containment) can clip it. Scrolling or resizing
-  // dismisses it — the standard tooltip interaction — so it can never get
-  // stuck at a stale position while the message it anchors scrolls away.
+  // content-visibility containment) can clip it. Scrolling re-anchors it to
+  // the token's current position instead of dismissing it — streaming grows
+  // the message list and the container scrolls at turn boundaries — and only
+  // a token that scrolls out of the viewport closes the tooltip.
   const [skillTip, setSkillTip] = useState<{ left: number; top: number } | null>(null);
   const skillTokenRef = useRef<HTMLSpanElement | null>(null);
   const skillTipHideTimerRef = useRef<number | null>(null);
+  // Mirror of the tooltip visibility so the one-time scroll/resize listeners
+  // can check it without re-registering on every position update.
+  const skillTipOpenRef = useRef(false);
+  skillTipOpenRef.current = skillTip !== null;
 
   const cancelSkillTipHide = useCallback(() => {
     if (skillTipHideTimerRef.current !== null) {
@@ -208,38 +213,92 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
       skillTipHideTimerRef.current = null;
     }
   }, []);
-  const showSkillTip = useCallback(() => {
-    cancelSkillTipHide();
-    const token = skillTokenRef.current;
-    if (!token) return;
-    const rect = token.getBoundingClientRect();
-    // Viewport-fixed coordinates. Right-align to the token's right edge
-    // (tooltip grows leftward), clamped so it never leaves the window.
-    const left = Math.min(
-      Math.max(rect.right - SKILL_TIP_MAX_WIDTH, 8),
-      window.innerWidth - SKILL_TIP_MAX_WIDTH - 8,
-    );
-    setSkillTip({ left, top: rect.bottom + 8 });
-  }, [cancelSkillTipHide]);
   const hideSkillTip = useCallback(() => {
     if (skillTipHideTimerRef.current !== null) window.clearTimeout(skillTipHideTimerRef.current);
     // Small grace so the mouse can travel from the token into the floating
     // tooltip without it blinking away.
     skillTipHideTimerRef.current = window.setTimeout(() => setSkillTip(null), 150);
   }, []);
+
+  /** Text box of the token. The .chat-user-skill column stretches the span
+   *  to the full block width, so the element rect would be the whole row
+   *  while the visible text sits at its left. Measure the text node contents
+   *  instead so the tooltip anchors to what the user actually sees. */
+  const measureSkillTokenRect = useCallback((token: HTMLSpanElement): DOMRect => {
+    const range = document.createRange();
+    range.selectNodeContents(token);
+    const rect = range.getBoundingClientRect();
+    range.detach();
+    return rect;
+  }, []);
+
+  /** Viewport-fixed anchor for the tooltip. Returns null when the token
+   *  scrolled out of the viewport — a floating tooltip has nothing to anchor
+   *  to then. Left-aligned to the token's left edge (tooltip grows
+   *  rightward), clamped so it never leaves the window. */
+  const computeSkillTipPosition = useCallback((token: HTMLSpanElement): { left: number; top: number } | null => {
+    const rect = measureSkillTokenRect(token);
+    if (rect.bottom < 0 || rect.top > window.innerHeight) return null;
+    const left = Math.min(
+      Math.max(rect.left, 8),
+      window.innerWidth - SKILL_TIP_MAX_WIDTH - 8,
+    );
+    return { left, top: rect.bottom + 8 };
+  }, [measureSkillTokenRect]);
+
+  /** Re-anchor the tooltip after the list scrolled or the window resized.
+   *  Keeps the tooltip alive while the anchored token stays in view — only a
+   *  token that scrolled out of the viewport closes it. Functional update
+   *  with a sub-pixel threshold avoids re-render churn on every scroll tick. */
+  const repositionSkillTip = useCallback(() => {
+    const token = skillTokenRef.current;
+    if (!token) return;
+    const position = computeSkillTipPosition(token);
+    setSkillTip((prev) => {
+      if (!position) return null;
+      if (prev && Math.abs(prev.left - position.left) < 1 && Math.abs(prev.top - position.top) < 1) return prev;
+      return position;
+    });
+  }, [computeSkillTipPosition]);
+
+  const showSkillTip = useCallback(() => {
+    cancelSkillTipHide();
+    repositionSkillTip();
+  }, [cancelSkillTipHide, repositionSkillTip]);
+
+  // The leave may be caused by the layout shifting under a stationary cursor
+  // (streaming content pushing the token) rather than the mouse moving away.
+  // If the pointer is still inside the token's (possibly shifted) box, keep
+  // the tooltip and re-anchor it instead of hiding.
+  const handleSkillTokenMouseLeave = useCallback((event: MouseEvent<HTMLSpanElement>) => {
+    const token = skillTokenRef.current;
+    if (!token) return;
+    const rect = measureSkillTokenRect(token);
+    if (
+      event.clientX >= rect.left && event.clientX <= rect.right &&
+      event.clientY >= rect.top && event.clientY <= rect.bottom
+    ) {
+      repositionSkillTip();
+      return;
+    }
+    hideSkillTip();
+  }, [hideSkillTip, measureSkillTokenRect, repositionSkillTip]);
+
+  // One-time scroll/resize listeners (the open-ref guard keeps them cheap
+  // while closed). Capture catches scrolling inside any container, e.g. the
+  // chat list or the composer.
   useEffect(() => {
-    if (skillTip === null) return;
-    // Dismiss on any scroll/resize: the anchored token moves under the
-    // mouse (or leaves the viewport), so a floating tooltip must not linger
-    // at a stale spot. Capture catches scrolling inside any container.
-    const dismiss = () => setSkillTip(null);
-    document.addEventListener("scroll", dismiss, true);
-    window.addEventListener("resize", dismiss);
-    return () => {
-      document.removeEventListener("scroll", dismiss, true);
-      window.removeEventListener("resize", dismiss);
+    const onScrollOrResize = () => {
+      if (!skillTipOpenRef.current) return;
+      repositionSkillTip();
     };
-  }, [skillTip]);
+    document.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      document.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [repositionSkillTip]);
 
   const content =
     typeof message.content === "string"
@@ -331,7 +390,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 ref={skillTokenRef}
                 className="mention-token mention-token-skill"
                 onMouseEnter={showSkillTip}
-                onMouseLeave={hideSkillTip}
+                onMouseLeave={handleSkillTokenMouseLeave}
               >
                 /skill:{skillBlock.name}
               </span>

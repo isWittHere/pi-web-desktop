@@ -1,6 +1,6 @@
 "use client";
 
-// Shared, cached access to the project file index and loaded skill names,
+// Shared, cached access to the project file index and loaded skill metadata,
 // used to decide whether @file / /skill: mentions are valid enough to
 // highlight. Module-level cache + external store so every user message in a
 // session shares one fetch instead of firing one request per bubble.
@@ -18,7 +18,7 @@ export interface FileIndexSnapshot {
   truncated: boolean;
 }
 
-export interface SkillNamesSnapshot {
+export interface SkillInfoSnapshot {
   cwd: string;
   /** skill name → metadata (description, filePath, baseDir) */
   skills: Map<string, SkillInfo>;
@@ -72,11 +72,11 @@ async function fetchFileIndex(cwd: string): Promise<FileIndexSnapshot | null> {
   return request;
 }
 
-const skillSnapshots = new Map<string, SkillNamesSnapshot>();
+const skillSnapshots = new Map<string, SkillInfoSnapshot>();
 const skillsFetchedAt = new Map<string, number>();
-const skillsInflight = new Map<string, Promise<SkillNamesSnapshot | null>>();
+const skillsInflight = new Map<string, Promise<SkillInfoSnapshot | null>>();
 
-async function fetchSkillNames(cwd: string): Promise<SkillNamesSnapshot | null> {
+async function fetchSkillInfo(cwd: string): Promise<SkillInfoSnapshot | null> {
   const existing = skillsInflight.get(cwd);
   if (existing) return existing;
   const request = (async () => {
@@ -84,7 +84,7 @@ async function fetchSkillNames(cwd: string): Promise<SkillNamesSnapshot | null> 
       const response = await fetch(`/api/skills?cwd=${encodeURIComponent(cwd)}`);
       if (!response.ok) return null;
       const data = (await response.json()) as SkillsResponse;
-      const snapshot: SkillNamesSnapshot = {
+      const snapshot: SkillInfoSnapshot = {
         cwd,
         skills: new Map(data.skills.map((skill) => [skill.name, skill])),
       };
@@ -134,7 +134,7 @@ export function useSkillInfo(cwd?: string | null): Map<string, SkillInfo> | null
     if (!cwd) return;
     const fetchedAt = skillsFetchedAt.get(cwd);
     if (fetchedAt !== undefined && Date.now() - fetchedAt < SKILLS_TTL_MS) return;
-    void fetchSkillNames(cwd);
+    void fetchSkillInfo(cwd);
   }, [cwd]);
   return snapshot ? snapshot.skills : null;
 }

@@ -276,6 +276,12 @@ pre, code {
   gap: 6px;
   min-width: 0;
 }
+/* The token must size to its visible text: the skill block column would
+   otherwise stretch it to the full width (flex default), making both the
+   hover target and the tooltip anchor wider than the text the user sees. */
+.chat-user-skill > .mention-token-skill {
+  align-self: flex-start;
+}
 .chat-user-skill-tip {
   position: fixed;
   z-index: 1000;
