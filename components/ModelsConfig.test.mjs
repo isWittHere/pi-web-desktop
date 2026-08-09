@@ -33,13 +33,9 @@ test("custom model config exposes headers and compat compatibility flags", async
   assert.match(source, /headers=\{model\.headers\}/);
   assert.match(source, /set\("headers", headers\)/);
 
-  // Model-level compat toggles read the effective (provider+model) value so
+  // Model-level compat toggle reads the effective (provider+model) value so
   // hand-edited models.json settings are reflected, while writes stay on the
   // model entry as an explicit per-model override.
   assert.match(source, /effectiveCompat\(provider, model\)\["supportsDeveloperRole"\] !== false/);
   assert.match(source, /setCompatBool\(model, "supportsDeveloperRole", v\)/);
-  assert.match(source, /effectiveCompat\(provider, model\)\["sendSessionAffinityHeaders"\] === true/);
-  assert.match(source, /setCompatBool\(model, "sendSessionAffinityHeaders", v\)/);
-  assert.match(source, /effectiveCompatStr\(provider, model, "sessionAffinityFormat"\)/);
-  assert.match(source, /options=\{\["openai", "openai-nosession", "openrouter"\]/);
 });

@@ -455,24 +455,12 @@ function setCompatBool(model: ModelEntry, key: string, value: boolean): ModelEnt
   return { ...model, compat: Object.keys(next).length ? next : undefined };
 }
 
-function setCompatStr(model: ModelEntry, key: string, value: string | undefined): ModelEntry {
-  const next = { ...(model.compat ?? {}) };
-  if (value) next[key] = value;
-  else delete next[key];
-  return { ...model, compat: Object.keys(next).length ? next : undefined };
-}
-
 // Compat can be configured at the provider or model level; provider-composer
 // merges them (model wins) at runtime. The UI reads the effective value so
 // hand-edited models.json settings are reflected correctly, while toggles
 // write to the model entry so a per-model override is explicit.
 function effectiveCompat(provider: ProviderEntry, model: ModelEntry): Record<string, unknown> {
   return { ...(provider.compat ?? {}), ...(model.compat ?? {}) };
-}
-
-function effectiveCompatStr(provider: ProviderEntry, model: ModelEntry, key: string): string | undefined {
-  const v = effectiveCompat(provider, model)[key];
-  return typeof v === "string" ? v : undefined;
 }
 
 // Editable key/value header list for a provider. Rebuilds a fresh object on
@@ -709,22 +697,6 @@ function ModelDetail({
             />
           </div>
         </>
-      )}
-
-      <Check
-        label={t("desktop.modelsSendSessionAffinity")}
-        checked={effectiveCompat(provider, model)["sendSessionAffinityHeaders"] === true}
-        onChange={(v) => onChange(setCompatBool(model, "sendSessionAffinityHeaders", v))}
-      />
-      {effectiveCompat(provider, model)["sendSessionAffinityHeaders"] === true && (
-        <Field label={t("desktop.modelsSessionAffinityFormat")}>
-          <Select
-            value={effectiveCompatStr(provider, model, "sessionAffinityFormat") ?? "openai"}
-            onChange={(v) => onChange(setCompatStr(model, "sessionAffinityFormat", v || undefined))}
-            options={["openai", "openai-nosession", "openrouter"] as const}
-            required
-          />
-        </Field>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
