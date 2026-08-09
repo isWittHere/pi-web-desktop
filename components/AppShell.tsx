@@ -735,10 +735,12 @@ export function AppShell() {
           title: titleWorkspaceControlsHost,
           welcome: welcomeWorkspaceControlsHost,
         }}
-        // Both workspace controls (title bar + welcome page) stay hidden until
-        // a project is actually active. This also covers the initial welcome
-        // screen before sessions finish loading.
-        showWorkspaceControls={Boolean(activeCwd ?? selectedSession?.cwd ?? newSessionCwd)}
+        // The title-bar workspace selector must be reachable on the first-run
+        // welcome screen too (a brand-new user has no sessions/cwd yet), so it
+        // is shown whenever a project is active OR the welcome placeholder is
+        // on screen. The welcome-page variant still only renders once a chat
+        // session mounts (which requires a cwd).
+        showWorkspaceControls={Boolean(activeCwd ?? selectedSession?.cwd ?? newSessionCwd) || showPlaceholder}
         onBackgroundTaskDone={handleBackgroundTaskDone}
       />
 
