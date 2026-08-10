@@ -1063,8 +1063,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const hasInputText = Boolean(value.trim());
   // Popup height caps: once the space above the input is measured, it wins
   // over the static viewport-relative caps.
-  const atMenuHeightCap = popupMaxHeight === null ? "min(30vh, 240px)" : Math.min(240, popupMaxHeight);
-  const slashMenuHeightCap = popupMaxHeight === null ? "min(38vh, 300px)" : Math.min(300, popupMaxHeight);
+  const atMenuHeightCap = popupMaxHeight === null ? "min(calc(30vh / var(--app-ui-scale, 1)), 240px)" : Math.min(240, popupMaxHeight);
+  const slashMenuHeightCap = popupMaxHeight === null ? "min(calc(38vh / var(--app-ui-scale, 1)), 300px)" : Math.min(300, popupMaxHeight);
   const canQueueStreamingMessage = hasInputText && attachedImages.length === 0;
 
   // ── @ file autocomplete ──────────────────────────────────────────────────
@@ -2608,7 +2608,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 zIndex: 60,
                 padding: 1,
                 width: "max-content",
-                maxWidth: "calc(100vw - 32px)",
+                maxWidth: "calc(100vw / var(--app-ui-scale, 1) - 32px)",
                 flexWrap: "nowrap",
                 justifyContent: "flex-end",
                 border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
@@ -2768,7 +2768,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     const panelMinWidth = modelDropdownRect.width;
                     const panelMaxWidth = Math.min(400, viewportWidth - 16);
                     const panelPos: React.CSSProperties = isMobile
-                      ? { left: 8, right: 8, maxWidth: "calc(100vw - 16px)" }
+                      ? { left: 8, right: 8, maxWidth: "calc(100vw / var(--app-ui-scale, 1) - 16px)" }
                       : {
                           // Anchor the content-sized panel to the selector's
                           // right edge, while preserving an 8px viewport inset.

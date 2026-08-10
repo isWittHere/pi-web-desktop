@@ -943,7 +943,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
             )}
 
             {agentRunning && (
-              <div style={{ height: scrollContainerRef.current ? scrollContainerRef.current.clientHeight : "80vh" }} />
+              <div style={{ height: scrollContainerRef.current ? scrollContainerRef.current.clientHeight : "calc(80vh / var(--app-ui-scale, 1))" }} />
             )}
 
               <div ref={messagesEndRef} />
@@ -1399,7 +1399,7 @@ function ExtensionCustomPanel({
         }}
         style={{
           width: "min(920px, 100%)",
-          maxHeight: "min(760px, calc(100vh - 40px))",
+          maxHeight: "min(760px, calc(100vh / var(--app-ui-scale, 1) - 40px))",
           border: "1px solid var(--border)",
           borderRadius: 8,
           background: "var(--bg)",
@@ -1429,7 +1429,7 @@ function ExtensionCustomPanel({
           style={{
             margin: 0,
             padding: 14,
-            maxHeight: "calc(min(760px, 100vh - 40px) - 48px)",
+            maxHeight: "calc(min(760px, calc(100vh / var(--app-ui-scale, 1) - 40px)) - 48px)",
             overflow: "auto",
             background: "var(--bg-panel)",
             color: "var(--text)",

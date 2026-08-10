@@ -1186,7 +1186,7 @@ function AddProviderPicker({
       style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+      <div style={{ width: 820, maxWidth: "calc(100vw / var(--app-ui-scale, 1) - 32px)", maxHeight: "min(calc(72vh / var(--app-ui-scale, 1)), calc(100vh / var(--app-ui-scale, 1) - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
         {/* Search */}
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <MagnifyingGlassIcon size={13} style={{ color: "var(--text-dim)", flexShrink: 0 }} />
@@ -1477,7 +1477,7 @@ export function ModelsConfig({
     >
       <div style={embedded
         ? { flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }
-        : { width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "78vh", maxHeight: "calc(100dvh - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+        : { width: isMobile ? "calc(100vw / var(--app-ui-scale, 1) - 16px)" : 860, maxWidth: "calc(100vw / var(--app-ui-scale, 1) - 16px)", height: isMobile ? "calc(100dvh / var(--app-ui-scale, 1) - 16px)" : "calc(78vh / var(--app-ui-scale, 1))", maxHeight: "calc(100dvh / var(--app-ui-scale, 1) - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
 
         {!embedded && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
@@ -1495,7 +1495,7 @@ export function ModelsConfig({
           {/* Left: tree */}
           <div style={{
             width: isMobile ? "100%" : 210,
-            maxHeight: isMobile ? "40vh" : undefined,
+            maxHeight: isMobile ? "calc(40vh / var(--app-ui-scale, 1))" : undefined,
             borderRight: isMobile ? "none" : "1px solid var(--border)",
             borderBottom: isMobile ? "1px solid var(--border)" : "none",
             display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)",

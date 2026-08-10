@@ -167,7 +167,7 @@ export function AppTitleBar({
           style={{
             flex: "0 1 auto",
             minWidth: 0,
-            maxWidth: "min(52vw, 560px)",
+            maxWidth: "min(calc(52vw / var(--app-ui-scale, 1)), 560px)",
             height: "100%",
             display: "flex",
             alignItems: "center",
@@ -319,7 +319,7 @@ export function AppTitleBar({
           top: topPanelPos.top,
           left: topPanelPos.left,
           width: topPanelPos.width,
-          maxHeight: `calc(100dvh - ${topPanelPos.top}px)`,
+          maxHeight: `calc(100dvh / var(--app-ui-scale, 1) - ${topPanelPos.top}px)`,
           overflowY: "auto",
           zIndex: 500,
         }}>
@@ -330,7 +330,7 @@ export function AppTitleBar({
             }}>
               {systemPrompt ? (
                 <div style={{
-                  maxHeight: "min(600px, 75vh)",
+                  maxHeight: "min(600px, calc(75vh / var(--app-ui-scale, 1)))",
                   overflowY: "auto",
                   padding: "12px 16px",
                   color: "var(--text-muted)",

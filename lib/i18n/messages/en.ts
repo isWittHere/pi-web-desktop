@@ -34,6 +34,8 @@ export const enLocale = {
     "desktop.learnPiThemes": "Learn about Pi themes",
     "desktop.defaultTheme": "Default",
     "desktop.appearanceMode": "Appearance Mode",
+    "desktop.textSize": "Text Size",
+    "desktop.textSizeDescription": "Adjust the size of text and interface elements.",
     "desktop.loadingThemes": "Loading themes…",
     "desktop.borderVisibility": "Border Visibility",
     "desktop.borderSubtle": "Subtle",

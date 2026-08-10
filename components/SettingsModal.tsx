@@ -63,10 +63,10 @@ export function SettingsModal({
         aria-modal="true"
         aria-label={t("desktop.settings")}
         style={{
-          width: isMobile ? "calc(100vw - 16px)" : 1000,
-          maxWidth: "calc(100vw - 16px)",
-          height: isMobile ? "calc(100dvh - 16px)" : "80vh",
-          maxHeight: "calc(100dvh - 16px)",
+          width: isMobile ? "calc(100vw / var(--app-ui-scale, 1) - 16px)" : 1000,
+          maxWidth: "calc(100vw / var(--app-ui-scale, 1) - 16px)",
+          height: isMobile ? "calc(100dvh / var(--app-ui-scale, 1) - 16px)" : "calc(80vh / var(--app-ui-scale, 1))",
+          maxHeight: "calc(100dvh / var(--app-ui-scale, 1) - 16px)",
           background: "var(--bg)",
           border: "1px solid var(--border)",
           borderRadius: 10,

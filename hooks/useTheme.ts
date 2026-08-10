@@ -21,6 +21,7 @@ function notify() { listeners.forEach((cb) => cb()); }
 const KEY_MODE = "pi-theme-mode";
 const KEY_THEME = "pi-theme";
 const KEY_BORDER_DEPTH = "pi-border-depth";
+const KEY_FONT_SCALE = "pi-font-scale";
 
 /** Migration: extract base name from old per-mode keys (e.g. "gruvbox-dark" → "gruvbox"). */
 function migrateOldTheme(): string | null {
@@ -78,6 +79,27 @@ function readBorderDepth(): number {
     }
   } catch {}
   return 25;
+}
+
+// ─── UI/text scale (Text Size setting) ───────────────────────────────────
+
+/** Multiplier range for the root zoom applied via `--app-ui-scale`. */
+const FONT_SCALE_MIN = 0.8;
+const FONT_SCALE_MAX = 1.5;
+
+function readFontScale(): number {
+  try {
+    const v = localStorage.getItem(KEY_FONT_SCALE);
+    if (v !== null) {
+      const n = parseFloat(v);
+      if (!isNaN(n) && n >= FONT_SCALE_MIN && n <= FONT_SCALE_MAX) return n;
+    }
+  } catch {}
+  return 1;
+}
+
+function applyFontScale(scale: number) {
+  document.documentElement.style.setProperty("--app-ui-scale", String(scale));
 }
 
 // ─── System preference ──────────────────────────────────────────────────────
@@ -299,6 +321,16 @@ export function useTheme() {
     applyBorderDepth(clamped);
   }, []);
 
+  // UI/text scale (Text Size setting, default 1 = 100%)
+  const [fontScale, setFontScaleState] = useState<number>(() => readFontScale());
+
+  const setFontScale = useCallback((scale: number) => {
+    const clamped = Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, Math.round(scale * 100) / 100));
+    setFontScaleState(clamped);
+    try { localStorage.setItem(KEY_FONT_SCALE, String(clamped)); } catch {}
+    applyFontScale(clamped);
+  }, []);
+
   const isDark = resolvedMode === "dark";
 
   const applyingRef = useRef(false);
@@ -334,6 +366,7 @@ export function useTheme() {
       try { localStorage.setItem(KEY_MODE, m); } catch {}
       try { localStorage.setItem(KEY_THEME, t); } catch {}
       applyBorderDepth(readBorderDepth());
+      applyFontScale(readFontScale());
       notify();
     });
     // The inline bootstrap state must be reconciled once before subscriptions update.
@@ -405,11 +438,22 @@ export function useTheme() {
 
     if (!supportsVT || reduceMotion) { apply(); return; }
 
-    const x = origin?.x ?? window.innerWidth / 2;
-    const y = origin?.y ?? window.innerHeight / 2;
+    // getBoundingClientRect() / innerWidth report physical pixels, but the
+    // clip-path wipe lives in the zoomed pseudo-element's local (CSS) space:
+    // CSS `zoom` scales every CSS length by the zoom factor when painting, so
+    // feeding a physical origin would put the wipe center 25% off at Text
+    // Size 125%. Convert the physical origin into CSS space first; zoom then
+    // scales it back to the exact button position.
+    const uiScale = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    const x = (origin?.x ?? window.innerWidth / 2) / uiScale;
+    const y = (origin?.y ?? window.innerHeight / 2) / uiScale;
+    // CSS-space viewport equivalents, so endRadius covers the whole window
+    // regardless of scale.
+    const cssViewportW = window.innerWidth / uiScale;
+    const cssViewportH = window.innerHeight / uiScale;
     const endRadius = Math.hypot(
-      Math.max(x, window.innerWidth - x),
-      Math.max(y, window.innerHeight - y),
+      Math.max(x, cssViewportW - x),
+      Math.max(y, cssViewportH - y),
     );
 
     const transition = document.startViewTransition(() => { apply(); });
@@ -439,5 +483,9 @@ export function useTheme() {
     borderDepth,
     /** Set border depth (0-100). */
     setBorderDepth,
+    /** UI/text scale multiplier (0.8–1.5, 1 = 100%). */
+    fontScale,
+    /** Set the UI/text scale (Text Size setting). */
+    setFontScale,
   };
 }

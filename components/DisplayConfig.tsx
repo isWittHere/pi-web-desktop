@@ -114,7 +114,7 @@ function BorderIcon({ depth }: { depth: number }) {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export function DisplayConfig() {
-  const { mode, resolvedMode, themeName, setMode, setTheme, borderDepth, setBorderDepth } = useTheme();
+  const { mode, resolvedMode, themeName, setMode, setTheme, borderDepth, setBorderDepth, fontScale, setFontScale } = useTheme();
   const { locale: language, setLocale: setLanguage, t } = useI18n();
   const [themeSets, setThemeSets] = useState<ThemeSetInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -287,6 +287,27 @@ export function DisplayConfig() {
             {t("desktop.noCustomThemesHint2")}
           </p>
         )}
+      </ConfigSection>
+
+      {/* ── Text Size ── */}
+      <ConfigSection title={t("desktop.textSize")} description={t("desktop.textSizeDescription")}>
+        <div style={tagGroupStyle}>
+          {[0.9, 1, 1.1, 1.2, 1.25, 1.3, 1.35].map((s) => {
+            const active = fontScale === s;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setFontScale(s)}
+                style={tagStyle(active, hoveredTag === `scale:${s}`)}
+                onMouseEnter={() => setHoveredTag(`scale:${s}`)}
+                onMouseLeave={() => setHoveredTag(null)}
+              >
+                {Math.round(s * 100)}%
+              </button>
+            );
+          })}
+        </div>
       </ConfigSection>
 
       {/* ── Language ── */}

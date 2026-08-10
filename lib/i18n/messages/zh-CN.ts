@@ -34,6 +34,8 @@ export const zhCNLocale = {
     "desktop.learnPiThemes": "了解 Pi theme",
     "desktop.defaultTheme": "默认",
     "desktop.appearanceMode": "外观模式",
+    "desktop.textSize": "字体大小",
+    "desktop.textSizeDescription": "调整界面文字与元素的显示大小。",
     "desktop.loadingThemes": "加载主题中…",
     "desktop.borderVisibility": "边框可见度",
     "desktop.borderSubtle": "浅淡",

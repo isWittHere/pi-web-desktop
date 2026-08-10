@@ -182,10 +182,14 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: geometricPrecision;
+  /* User-adjustable UI/text scale (Text Size setting): zoom scales fonts,
+     icons, spacing and panel widths proportionally. Set pre-hydration by
+     app/layout.tsx and by hooks/useTheme.ts; defaults to 1 (100%). */
+  zoom: var(--app-ui-scale, 1);
 }
 
 html, body {
-  height: 100%;
+  height: calc(100dvh / var(--app-ui-scale, 1));
   margin: 0;
   padding: 0;
   background: var(--bg);
@@ -195,8 +199,14 @@ html, body {
   overscroll-behavior: none;
 }
 
-body {
-  height: 100dvh;
+/* Safety net for the Text Size zoom (var --app-ui-scale, see hooks/useTheme.ts):
+   CSS zoom on <html> shrinks the layout viewport's width but not its height,
+   and vh/vw/dvh units never shrink, so every viewport-unit sizing in the app
+   divides by var(--app-ui-scale) (see AppShell, layout.tsx, modals). This
+   overflow: clip guarantees a missed compensation degrades to edge clipping
+   instead of an outer scrollbar at scale > 1. */
+html {
+  overflow: clip;
 }
 
 /* Frameless app title bar (Electron) — empty space is a drag handle,
@@ -1590,8 +1600,8 @@ span.linenumber {
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
-    width: var(--right-panel-width, clamp(360px, 42vw, 640px));
-    min-width: var(--right-panel-width, clamp(360px, 42vw, 640px));
+    width: var(--right-panel-width, clamp(360px, calc(42vw / var(--app-ui-scale, 1)), 640px));
+    min-width: var(--right-panel-width, clamp(360px, calc(42vw / var(--app-ui-scale, 1)), 640px));
   }
   .right-panel-container.right-panel-closed {
     width: 0;
@@ -1599,8 +1609,8 @@ span.linenumber {
     border-left: none !important;
   }
   .right-panel-container > * {
-    width: var(--right-panel-width, clamp(360px, 42vw, 640px));
-    min-width: var(--right-panel-width, clamp(360px, 42vw, 640px));
+    width: var(--right-panel-width, clamp(360px, calc(42vw / var(--app-ui-scale, 1)), 640px));
+    min-width: var(--right-panel-width, clamp(360px, calc(42vw / var(--app-ui-scale, 1)), 640px));
   }
 
   .workspace-panel-splitter {
@@ -1642,7 +1652,7 @@ span.linenumber {
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(var(--right-panel-width, clamp(360px, 42vw, 640px)), calc(100% - 48px));
+    width: min(var(--right-panel-width, clamp(360px, calc(42vw / var(--app-ui-scale, 1)), 640px)), calc(100% - 48px));
     min-width: 0;
     box-shadow: -8px 0 20px color-mix(in srgb, var(--text) 12%, transparent);
   }
@@ -1654,7 +1664,7 @@ span.linenumber {
     position: absolute;
     z-index: 203;
     top: 0;
-    right: min(var(--right-panel-width, clamp(360px, 42vw, 640px)), calc(100% - 48px));
+    right: min(var(--right-panel-width, clamp(360px, calc(42vw / var(--app-ui-scale, 1)), 640px)), calc(100% - 48px));
     bottom: 0;
   }
 }
@@ -1676,7 +1686,7 @@ span.linenumber {
     left: 0;
     bottom: 0;
     width: 280px;
-    max-width: 85vw;
+    max-width: calc(85vw / var(--app-ui-scale, 1));
     transition: transform 0.25s ease, box-shadow 0.25s ease;
   }
   .sidebar-container.sidebar-open {

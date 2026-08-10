@@ -131,7 +131,7 @@ export function QuickChangesPanel({ cwd, refreshKey, onOpenFile }: Props) {
         </button>
       </div>
       {open && (
-        <div style={{ minHeight: 0, maxHeight: "min(35vh, 280px)", overflowY: "auto", overflowX: "hidden", padding: "2px 4px 4px" }}>
+        <div style={{ minHeight: 0, maxHeight: "min(calc(35vh / var(--app-ui-scale, 1)), 280px)", overflowY: "auto", overflowX: "hidden", padding: "2px 4px 4px" }}>
           {gitStatus.files.map((status) => (
             <ChangeRow key={status.filePath} status={status} cwd={cwd} onOpenFile={onOpenFile} />
           ))}

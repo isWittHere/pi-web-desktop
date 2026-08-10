@@ -1066,7 +1066,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     );
   };
   const projectList = (
-    <div style={{ maxHeight: "min(32vh, 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
+    <div style={{ maxHeight: "min(calc(32vh / var(--app-ui-scale, 1)), 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
       {visibleProjects.length > 0 && (
         <>
           {projectGroupHeader(t("desktop.recentProjects"))}
@@ -1168,7 +1168,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               )}
             </span>
           </button>
-          <AnimatedDropdown open={isProjectDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(38vh, 300px)" }}>
+          <AnimatedDropdown open={isProjectDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)" }}>
             {projectSearch}
             {projectList}
             {projectActions}
@@ -1220,8 +1220,8 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               <PathLabel text={compactWorktreeLabel ?? ""} style={{ flex: 1, minWidth: 0, color: "inherit", direction: "ltr", fontFamily: "inherit" }} />
               {showWorktreeSwitcher && <CaretDown size={12} weight="regular" style={{ flexShrink: 0, transition: "transform 0.12s", transform: isWorktreeDropdownOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />}
             </button>
-            <AnimatedDropdown open={showWorktreeSwitcher && isWorktreeDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(38vh, 300px)" }}>
-              <div style={{ maxHeight: "min(32vh, 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
+            <AnimatedDropdown open={showWorktreeSwitcher && isWorktreeDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)" }}>
+              <div style={{ maxHeight: "min(calc(32vh / var(--app-ui-scale, 1)), 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
                 {worktreeState?.worktrees.map((wt) => {
                   const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
                   return (
@@ -1412,7 +1412,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              maxHeight: "min(38vh, 300px)",
+              maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)",
             }}
           >
             {projectSearch}
@@ -1483,10 +1483,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                   overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
-                  maxHeight: "min(38vh, 300px)",
+                  maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)",
                 }}
               >
-                  <div style={{ maxHeight: "min(32vh, 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
+                  <div style={{ maxHeight: "min(calc(32vh / var(--app-ui-scale, 1)), 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
                     {worktreeState.worktrees.map((wt) => {
                       const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
                       if (wtConfirmRemove === wt.path) {
