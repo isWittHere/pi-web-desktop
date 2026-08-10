@@ -30,6 +30,7 @@ import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
 import { clearDraft, getDraft } from "@/lib/draft-store";
+import { cssPx } from "@/lib/ui-scale";
 import {
   createDraftSession,
   loadDraftSessions,
@@ -190,7 +191,9 @@ export function AppShell() {
     if (!activeTopPanel || !topBarRef.current) return;
     const update = () => {
       const rect = topBarRef.current!.getBoundingClientRect();
-      setTopPanelPos({ top: rect.bottom, left: rect.left, width: rect.width });
+      // rect is physical; the fixed dropdown below positions in CSS pixels
+      // that zoom paints at scale, so convert once here.
+      setTopPanelPos({ top: cssPx(rect.bottom), left: cssPx(rect.left), width: cssPx(rect.width) });
     };
     update();
     const ro = new ResizeObserver(update);

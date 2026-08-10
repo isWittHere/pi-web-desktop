@@ -4,6 +4,7 @@ import { memo, useState, useRef, useEffect, useMemo, useCallback, type MouseEven
 import { createPortal } from "react-dom";
 import { MarkdownBody } from "./MarkdownBody";
 import { copyText } from "@/lib/clipboard";
+import { cssPx, cssViewportSize } from "@/lib/ui-scale";
 
 import { isEmptyThinkingBlock } from "@/lib/message-display";
 import { parseSkillBlock } from "@/lib/skill-block";
@@ -253,13 +254,19 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
    *  to then. Left-aligned to the token's left edge (tooltip grows
    *  rightward), clamped so it never leaves the window. */
   const computeSkillTipPosition = useCallback((token: HTMLSpanElement): { left: number; top: number } | null => {
+    // Range rects and innerWidth/innerHeight are physical under CSS zoom;
+    // the fixed tooltip positions in CSS pixels that zoom paints at scale.
     const rect = measureSkillTokenRect(token);
-    if (rect.bottom < 0 || rect.top > window.innerHeight) return null;
+    const rectTop = cssPx(rect.top);
+    const rectBottom = cssPx(rect.bottom);
+    const rectLeft = cssPx(rect.left);
+    const { width: vw, height: vh } = cssViewportSize();
+    if (rectBottom < 0 || rectTop > vh) return null;
     const left = Math.min(
-      Math.max(rect.left, 8),
-      window.innerWidth - SKILL_TIP_MAX_WIDTH - 8,
+      Math.max(rectLeft, 8),
+      vw - SKILL_TIP_MAX_WIDTH - 8,
     );
-    return { left, top: rect.bottom + 8 };
+    return { left, top: rectBottom + 8 };
   }, [measureSkillTokenRect]);
 
   /** Re-anchor the tooltip after the list scrolled or the window resized.

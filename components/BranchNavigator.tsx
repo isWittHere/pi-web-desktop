@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { CaretDown, GitBranch } from "@phosphor-icons/react";
 import type { SessionEntry, SessionTreeNode } from "@/lib/types";
+import { cssPx } from "@/lib/ui-scale";
 import { useI18n } from "@/hooks/useI18n";
 
 interface Props {
@@ -233,7 +234,9 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
     if (!anchor) return;
     const update = () => {
       const rect = anchor.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom, left: rect.left, width: rect.width });
+      // rect is physical; the fixed dropdown positions in CSS pixels that
+      // zoom paints at scale, so convert once here.
+      setDropdownPos({ top: cssPx(rect.bottom), left: cssPx(rect.left), width: cssPx(rect.width) });
     };
     update();
     const ro = new ResizeObserver(update);

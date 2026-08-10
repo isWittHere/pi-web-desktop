@@ -13,6 +13,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Check } from "@phosphor-icons/react";
+import { cssPx, cssViewportSize } from "@/lib/ui-scale";
 
 export interface ContextMenuItem {
   /** Discriminant for the menu-entry union; callers never need to set it. */
@@ -92,7 +93,9 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     feedbackTimerRef.current = null;
     setFeedbackIndex(-1);
     setActiveIndex(-1);
-    setMenu({ x, y, entries });
+    // Callers pass physical mouse coords (clientX/clientY); the fixed overlay
+    // positions in CSS pixels that zoom paints at scale, so convert once here.
+    setMenu({ x: cssPx(x), y: cssPx(y), entries });
     setVisible(false);
     // Double rAF: mount first, then animate the fade/scale in.
     requestAnimationFrame(() => {
@@ -126,11 +129,12 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     const height = el.offsetHeight;
     let x = menu.x;
     let y = menu.y;
-    if (x + width > window.innerWidth - MENU_MARGIN) {
-      x = Math.max(MENU_MARGIN, window.innerWidth - width - MENU_MARGIN);
+    const { width: vw, height: vh } = cssViewportSize();
+    if (x + width > vw - MENU_MARGIN) {
+      x = Math.max(MENU_MARGIN, vw - width - MENU_MARGIN);
     }
-    if (y + height > window.innerHeight - MENU_MARGIN) {
-      y = Math.max(MENU_MARGIN, window.innerHeight - height - MENU_MARGIN);
+    if (y + height > vh - MENU_MARGIN) {
+      y = Math.max(MENU_MARGIN, vh - height - MENU_MARGIN);
     }
     setPos({ x, y });
   }, [menu]);

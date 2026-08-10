@@ -14,6 +14,7 @@ import { toCwdRelativeMentions } from "@/lib/file-mentions";
 import { tokenizeMentions } from "@/lib/mention-tokens";
 import { useFileIndex, useSkillNames } from "@/hooks/useProjectContext";
 import { encodeFilePathForApi } from "@/lib/file-paths";
+import { cssPx } from "@/lib/ui-scale";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableHeight } from "@/hooks/useResizableHeight";
@@ -2354,7 +2355,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               className="chat-input-toolbar-attach"
               onClick={(e) => {
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                setAttachMenuRect({ top: rect.top, left: rect.left, width: rect.width });
+                setAttachMenuRect({ top: cssPx(rect.top), left: cssPx(rect.left), width: cssPx(rect.width) });
                 setAttachMenuOpen((v) => !v);
               }}
               title={t("desktop.attachContext")}
@@ -2381,8 +2382,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <PlusIcon size={14} />
             </button>
             {attachMenuOpen && attachMenuRect && (() => {
-              const vh = window.visualViewport?.height ?? window.innerHeight;
-              const vw = window.innerWidth;
+              const vh = cssPx(window.visualViewport?.height ?? window.innerHeight);
+              const vw = cssPx(window.innerWidth);
               const menuWidth = 200;
               // Anchor like the other toolbar menus: bottom edge sits above
               // the button's top edge, left-aligned to the button.
@@ -2464,7 +2465,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} className="chat-input-toolbar-thinking" style={{ position: "relative" }}>
                 <button
-                  onClick={(e) => { const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setThinkingDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setThinkingDropdownOpen((v) => !v); }}
+                  onClick={(e) => { const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setThinkingDropdownRect({ top: cssPx(rect.top), left: cssPx(rect.left), width: cssPx(rect.width) }); setThinkingDropdownOpen((v) => !v); }}
                   title={isStreaming ? t("desktop.changeReasoningLevelWhileRunning", { level: thinkingDisplayLabel }) : t("desktop.changeReasoningLevel", { level: thinkingDisplayLabel })}
                   aria-label={t("desktop.reasoningLevel")}
                   style={{
@@ -2498,8 +2499,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   />
                 </button>
                 {thinkingDropdownOpen && thinkingDropdownRect && (() => {
-                    const vh = window.visualViewport?.height ?? window.innerHeight;
-                    const vw = window.innerWidth;
+                    const vh = cssPx(window.visualViewport?.height ?? window.innerHeight);
+                    const vw = cssPx(window.innerWidth);
                     const panelMaxW = Math.min(240, vw - 16);
                     // Anchor the menu's bottom-right to the selector's top-right.
                     const l = Math.min(thinkingDropdownRect.left, vw - panelMaxW - 8);
@@ -2639,7 +2640,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {onToolPresetChange && (
               <div ref={toolDropdownRef} className="chat-input-toolbar-tools" style={{ position: "relative" }}>
                 <button
-                  onClick={(e) => { const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolDropdownRect({ top: rect.top, left: rect.left, width: rect.width }); setToolDropdownOpen((v) => !v); }}
+                  onClick={(e) => { const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolDropdownRect({ top: cssPx(rect.top), left: cssPx(rect.left), width: cssPx(rect.width) }); setToolDropdownOpen((v) => !v); }}
                   title={isStreaming ? t("desktop.changeToolPresetWhileRunning", { preset: toolPresetLabel }) : t("desktop.changeToolPreset", { preset: toolPresetLabel })}
                   aria-label={t("desktop.toolPreset")}
                   style={{
@@ -2674,8 +2675,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   />
                 </button>
                 {toolDropdownOpen && toolDropdownRect && (() => {
-                    const vh = window.visualViewport?.height ?? window.innerHeight;
-                    const vw = window.innerWidth;
+                    const vh = cssPx(window.visualViewport?.height ?? window.innerHeight);
+                    const vw = cssPx(window.innerWidth);
                     const panelMaxW = Math.min(200, vw - 16);
                     // Anchor the menu's bottom-right corner to the selector's
                     // top-right corner. `right` preserves the alignment even
@@ -2734,7 +2735,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <button
                     onClick={(e) => {
                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                      setModelDropdownRect({ top: rect.top, left: rect.left, width: rect.width });
+                      setModelDropdownRect({ top: cssPx(rect.top), left: cssPx(rect.left), width: cssPx(rect.width) });
                       if (!modelDropdownOpen) setModelSearch("");
                       setModelDropdownOpen((v) => !v);
                     }}
@@ -2776,8 +2777,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     />
                   </button>
                   {modelDropdownOpen && modelDropdownRect && (() => {
-                    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-                    const viewportWidth = window.innerWidth;
+                    const viewportHeight = cssPx(window.visualViewport?.height ?? window.innerHeight);
+                    const viewportWidth = cssPx(window.innerWidth);
                     const bottom = viewportHeight - modelDropdownRect.top + 6;
                     const maxH = Math.min(400, Math.max(120, Math.min(modelDropdownRect.top - 8, viewportHeight * 0.6)));
                     // On mobile, pin to a small left margin and cap width to the
