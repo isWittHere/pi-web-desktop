@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowClockwise, CaretDown, CaretRight, Check, CircleDashed, ClockCounterClockwise, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
+import { ArrowClockwise, CaretDown, CaretRight, Check, CircleDashed, ClockCounterClockwise, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple, X } from "@phosphor-icons/react";
 import type { SessionInfo } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
@@ -334,6 +334,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sessionsOpen, setSessionsOpen] = useState(true);
+  // Session-list quick-search: searchOpen swaps the header for a filter box,
+  // and sessionSearch drives live filtering of the visible session rows.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [sessionSearch, setSessionSearch] = useState("");
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
@@ -984,8 +988,24 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         }
       : null);
 
+  // Live quick-search: filters against the exact title shown in the list
+  // (a user-set name, else the first-message preview, else a short id).
+  // Applied after the project scope so search only ever narrows the currently
+  // visible project's sessions, never crosses into other workspaces.
+  const searchQuery = sessionSearch.trim().toLowerCase();
+  const searchScopedSessions = searchQuery
+    ? filteredSessions.filter((s) => {
+        const title = s.name
+          || (s.isDraft
+              ? (getSessionDisplayFirstMessage(s.firstMessage).slice(0, 50) || t("desktop.newSessionDraft"))
+              : getSessionDisplayFirstMessage(s.firstMessage).slice(0, 50))
+          || s.id.slice(0, 12);
+        return title.toLowerCase().includes(searchQuery);
+      })
+    : filteredSessions;
+
   // Build parent-child tree within the filtered set
-  const sessionTree = buildSessionTree(filteredSessions);
+  const sessionTree = buildSessionTree(searchScopedSessions);
 
   const currentWt = worktreeState?.worktrees.find((w) => w.path === selectedCwd)
     ?? worktreeState?.worktrees.find((w) => w.isMain)
@@ -1279,6 +1299,53 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
       <div style={{ flexShrink: 0 }}>
+        {searchOpen ? (
+          /* ── Search mode: the header becomes a quick-filter box ── */
+          /* height matches the natural section-header row (11px text at the
+             inherited line-height 1.5 + 6px padding) so toggling does not jump. */
+          <div style={{ display: "flex", alignItems: "center", gap: 4, height: 28.5, boxSizing: "border-box", padding: "0 8px" }}>
+            <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+              <MagnifyingGlass size={13} color="var(--text-dim)" style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} aria-hidden="true" />
+              <input
+                value={sessionSearch}
+                onChange={(e) => setSessionSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    if (sessionSearch) setSessionSearch("");
+                    else setSearchOpen(false);
+                  }
+                }}
+                placeholder={t("desktop.searchSessionsPlaceholder")}
+                aria-label={t("desktop.searchSessions")}
+                autoFocus
+                style={{
+                  width: "100%", height: 24, boxSizing: "border-box",
+                  padding: "0 8px 0 27px", background: "var(--bg-hover)",
+                  border: "1px solid var(--accent)", borderRadius: 6,
+                  outline: "none", color: "var(--text)", fontSize: 12,
+                  fontFamily: "var(--font-mono)",
+                }}
+              />
+            </div>
+            <button
+              onClick={() => { setSearchOpen(false); setSessionSearch(""); }}
+              title={t("desktop.exitSearch")}
+              aria-label={t("desktop.exitSearch")}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 24, height: 24, padding: 0,
+                background: "none", border: "none",
+                color: "var(--text-dim)", cursor: "pointer",
+                borderRadius: 5, flexShrink: 0,
+                transition: "color 0.12s, background 0.12s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+            >
+              <X size={13} weight="regular" aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
         <div style={{ display: "flex", alignItems: "center" }}>
           <button
             onClick={() => setSessionsOpen((v) => !v)}
@@ -1301,6 +1368,29 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           >
             <CaretRight size={9} weight="regular" style={{ transform: sessionsOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
             {t("desktop.sessions")}
+          </button>
+          <button
+            onClick={() => {
+              setSessionsOpen(true);
+              setSearchOpen(true);
+            }}
+            title={t("desktop.searchSessions")}
+            aria-label={t("desktop.searchSessions")}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 26, height: 26, padding: 0,
+              background: "none",
+              border: "none",
+              color: "var(--text-dim)",
+              cursor: "pointer",
+              borderRadius: 5,
+              flexShrink: 0,
+              transition: "color 0.3s, background 0.3s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+          >
+            <MagnifyingGlass size={13} weight="regular" aria-hidden="true" />
           </button>
           <button
             onClick={handleNewSession}
@@ -1349,6 +1439,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             )}
           </button>
         </div>
+        )}
 
         {/* CWD picker */}
         {!hasWorkspaceControlsHosts && <div ref={dropdownRef} style={{ position: "relative" }}>
@@ -1739,9 +1830,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               {error}
             </div>
           )}
-          {!loading && !error && filteredSessions.length === 0 && (
+          {!loading && !error && searchScopedSessions.length === 0 && (
             <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-              {t("desktop.noSessionsFound")}
+              {searchQuery ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
             </div>
           )}
           {sessionTree.map((node) => (
