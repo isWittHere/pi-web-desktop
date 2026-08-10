@@ -553,6 +553,7 @@ export function AppShell() {
       parts.usage = bits.join("  ");
     }
     return {
+      sessionId: session?.id,
       title: session?.name ?? session?.firstMessage ?? t("desktop.notificationTaskDone"),
       ...parts,
     };

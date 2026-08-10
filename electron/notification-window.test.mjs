@@ -60,3 +60,15 @@ test("notification popup card is borderless and height adapts to content", () =>
   assert.match(main, /detail\.split\("\\n"\)\.length/);
   assert.match(main, /contentLines \* 19 \+ 24/);
 });
+
+test("main process polls running sessions as a completion fallback", () => {
+  // A frozen hidden renderer misses agent_end, so the popup must not depend
+  // on it alone. The main process polls /api/agent/running, skips sessions the
+  // renderer already reported, and notifies the rest from /api/sessions/[id].
+  assert.match(main, /pollRunningSessions/);
+  assert.match(main, /\/api\/agent\/running/);
+  assert.match(main, /recentlyNotifiedSessions/);
+  assert.match(main, /notifyFinishedSession/);
+  assert.match(main, /startCompletionPolling\(\)/);
+  assert.match(main, /setInterval\(pollRunningSessions, 3000\)/);
+});

@@ -11,6 +11,7 @@ interface ElectronWindowControls {
 }
 
 interface PiDesktopNotificationPayload {
+  sessionId?: string;
   title: string;
   detail?: string;
   /** CSS variable name → value (e.g. "--bg" → "#242424") so the popup matches the active theme. */

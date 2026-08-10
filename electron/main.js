@@ -39,6 +39,15 @@ let notificationReady = false;
 let notificationHideTimer = null;
 let notificationHovered = false;
 
+// Fallback completion detection: the main process polls /api/agent/running so
+// a session finishing while the renderer is frozen/hidden still notifies. A
+// session id is "handled" when the renderer's own notifyDone reaches us, so
+// the fallback does not double-notify. Entries expire after a few minutes.
+const recentlyNotifiedSessions = new Map(); // id -> timestamp
+const NOTIFICATION_HANDLED_TTL_MS = 5 * 60 * 1000;
+let runningPollTimer = null;
+let knownRunningSessionIds = new Set();
+
 function getNotificationBounds() {
   const display = screen.getPrimaryDisplay();
   const wa = display.workArea;
@@ -180,6 +189,10 @@ ipcMain.handle("notification:show", (event, payload) => {
   if (!payload || typeof payload.title !== "string" || !payload.title) {
     return { shown: false };
   }
+  // Mark this session as handled so the polling fallback does not re-notify.
+  if (typeof payload.sessionId === "string" && payload.sessionId) {
+    recentlyNotifiedSessions.set(payload.sessionId, Date.now());
+  }
   showScreenNotification({
     title: payload.title,
     detail: typeof payload.detail === "string" ? payload.detail.slice(0, 120) : undefined,
@@ -203,6 +216,77 @@ ipcMain.on("notification:hover", (_event, hovering) => {
     scheduleNotificationHide();
   }
 });
+
+// ── Fallback completion detection ──────────────────────────────────────
+// The renderer drives notifications while it is alive, but a window hidden to
+// the tray may have its renderer frozen by Chromium, so the agent_end event
+// (and thus the popup) only fires when the window is shown again. Poll the
+// lightweight running endpoint from the main process instead: timers here are
+// never throttled. When a session finishes that the renderer has not already
+// reported (recentlyNotifiedSessions), fetch its session info and notify.
+function httpGetJson(pathname) {
+  return new Promise((resolve, reject) => {
+    http.get(`${URL}${pathname}`, (res) => {
+      res.setEncoding("utf8");
+      let body = "";
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => {
+        try {
+          resolve({ status: res.statusCode, body: JSON.parse(body) });
+        } catch {
+          resolve({ status: res.statusCode, body: null });
+        }
+      });
+    }).on("error", reject);
+  });
+}
+
+async function pollRunningSessions() {
+  try {
+    const res = await httpGetJson("/api/agent/running");
+    const ids = Array.isArray(res.body?.runningSessionIds) ? res.body.runningSessionIds : [];
+    const next = new Set(ids);
+    const finished = [...knownRunningSessionIds].filter((id) => !next.has(id));
+    knownRunningSessionIds = next;
+
+    // Expire stale handled markers.
+    const now = Date.now();
+    for (const [id, ts] of recentlyNotifiedSessions) {
+      if (now - ts > NOTIFICATION_HANDLED_TTL_MS) recentlyNotifiedSessions.delete(id);
+    }
+
+    for (const sessionId of finished) {
+      if (recentlyNotifiedSessions.has(sessionId)) continue; // renderer handled it
+      void notifyFinishedSession(sessionId);
+    }
+  } catch {
+    // Server not reachable yet — retry next tick.
+  }
+}
+
+async function notifyFinishedSession(sessionId) {
+  try {
+    const res = await httpGetJson(`/api/sessions/${encodeURIComponent(sessionId)}`);
+    const info = res.body?.info;
+    if (!info) return;
+    const workspace = info.projectRoot ?? info.cwd ?? "";
+    const name = workspace.split(/[\\/]/).pop() || workspace;
+    const branch = info.worktreeBranch;
+    showScreenNotification({
+      title: info.name ?? info.firstMessage ?? "Task complete",
+      detail: [branch ? `${name} · ${branch}` : name].filter(Boolean).join("\n"),
+    });
+  } catch {
+    // Session info unavailable — nothing we can show.
+  }
+}
+
+// Start polling once the server is expected to be up (app ready). The poll is
+// cheap (one lightweight JSON GET every few seconds).
+function startCompletionPolling() {
+  if (runningPollTimer) return;
+  runningPollTimer = setInterval(pollRunningSessions, 3000);
+}
 
 // Diagnostic log for external-link handling. Also written to a file so the
 // behavior can be verified without watching the terminal (the window's close
@@ -623,6 +707,9 @@ async function bootstrap() {
       return;
     }
   }
+  // Server is up — start the fallback completion poller (main-process timers
+  // are never throttled, so hidden-tray completions still notify).
+  startCompletionPolling();
 }
 
 // ── Single-instance lock ──────────────────────────────────────
@@ -664,6 +751,10 @@ app.on("activate", () => {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
+  if (runningPollTimer) {
+    clearInterval(runningPollTimer);
+    runningPollTimer = null;
+  }
   if (tray) {
     tray.destroy();
     tray = null;

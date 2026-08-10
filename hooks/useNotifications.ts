@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 //   <model>
 //   <cost>  <context>
 export interface NotificationDonePayload {
+  sessionId?: string;
   title: string;
   workspace?: string;
   model?: string;
@@ -79,6 +80,7 @@ export function useNotifications() {
     if (typeof window === "undefined" || !window.piDesktop?.showNotification) return;
     void window.piDesktop
       .showNotification({
+        sessionId: payload.sessionId,
         title: payload.title,
         detail: [payload.workspace, payload.model, payload.usage].filter(Boolean).join("\n"),
         cssVars: collectPopupCssVars(),
