@@ -234,6 +234,23 @@ function isDormantSkillCommand(command: SlashCommandPaletteItem, dormancy: Recor
     && dormancy[command.name.slice("skill:".length)] === true;
 }
 
+/**
+ * The "/" command slot before the caret: the text up to the caret, trimmed
+ * of leading whitespace (a space *before* the slash is tolerated), plus the
+ * index of the slash itself. `caretPos === null` means the caret sits at the
+ * end of the value (the default after programmatic edits). Shared by the
+ * caret-based menu trigger and applySlashCommand.
+ */
+function getSlashSlot(value: string, caretPos: number | null) {
+  const before = caretPos === null ? value : value.slice(0, caretPos);
+  const trimmedBefore = before.trimStart();
+  return {
+    before,
+    trimmedBefore,
+    slashIndex: before.length - trimmedBefore.length,
+  };
+}
+
 export function buildSlashCommandLayout(
   commands: SlashCommandPaletteItem[],
   dormancy: Record<string, boolean>,
@@ -500,6 +517,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const bashExcluded = bashMode && trimmedValue.startsWith("!!");
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  // Caret position used by the caret-based slash-menu trigger. null means the
+  // caret is at the end of the value (the default after programmatic edits).
+  const [slashCaretPos, setSlashCaretPos] = useState<number | null>(null);
   // Hover feedback only — never moves the keyboard selection.
   const [slashHoverIndex, setSlashHoverIndex] = useState<number | null>(null);
   const [skillDormancy, setSkillDormancy] = useState<Record<string, boolean>>({});
@@ -843,12 +863,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const openSlashTrigger = useCallback(() => {
     const ta = textareaRef.current;
     const current = ta?.value ?? value;
-    if (current.startsWith("/")) {
+    const trimmed = current.trimStart();
+    if (trimmed.startsWith("/")) {
       requestAnimationFrame(() => { ta?.focus(); });
       return;
     }
-    const newVal = `/${current}`;
-    setValue(newVal);
+    // Prefixed commands always open the menu: the slash becomes the first
+    // non-whitespace character and the caret sits right after it, so the
+    // caret-based trigger shows the full list. Existing text stays in the
+    // input and is replaced if a command is selected — matching the typing
+    // flow.
+    setSlashCaretPos(1);
+    setValue(`/${trimmed}`);
     setAtQuery(null);
     requestAnimationFrame(() => {
       const el = textareaRef.current;
@@ -1019,8 +1045,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     clearInput();
   }, [value, attachedImages, isStreaming, onBash, onBuiltinCommand, onSend, clearInput, onAudioUnlock]);
 
-  const slashQuery = value.startsWith("/") && !/\s/.test(value.slice(1))
-    ? value.slice(1).toLowerCase()
+  // Slash menu trigger — caret-based, per the interaction rules:
+  //   1. the slash is the first non-whitespace character of the input
+  //      (mirrors the `!` bash mode and handleSend's trimmed routing),
+  //   2. the caret sits right after the contiguous characters following "/",
+  //   3. those characters (slash → caret) filter the menu,
+  //   4. a space between the slash and the caret disables the menu.
+  // Only the text before the caret matters, so pre-existing message text after
+  // the caret never blocks the menu — and the caret is never obstructed.
+  const { trimmedBefore } = getSlashSlot(value, slashCaretPos);
+  const slashQuery = trimmedBefore.startsWith("/") && !/\s/.test(trimmedBefore.slice(1))
+    ? trimmedBefore.slice(1).toLowerCase()
     : null;
 
   const matchedSlashCommands = (() => {
@@ -1073,6 +1108,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // Recomputed from the text before the caret on every change/caret move.
   // Disabled entirely when there is no cwd (new session without a directory).
   const updateAtQuery = useCallback((text: string, cursor: number | null) => {
+    // The slash-menu trigger is also caret-based (the text between the slash
+    // and the caret filters the command list), so track the caret here — the
+    // same event stream that feeds the @ file menu.
+    setSlashCaretPos(cursor);
     if (!cwd) {
       setAtQuery(null);
       return;
@@ -1226,18 +1265,29 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [applyAutoHeight]);
 
   const applySlashCommand = useCallback((command: SlashCommandPaletteItem) => {
-    const nextValue = `/${command.name} `;
+    // Replace only the slash → caret command slot with `/${name} `; the
+    // leading whitespace (allowed before the slash) and everything after the
+    // caret (the user's message text) survive, so selecting a command never
+    // wipes the rest of the input. The caret lands right after the inserted
+    // command so further typing becomes its arguments. The menu can only be
+    // open while a slash slot exists, so the slot is always present here.
+    const caret = slashCaretPos ?? value.length;
+    const { before, slashIndex } = getSlashSlot(value, slashCaretPos);
+    const inserted = `/${command.name} `;
+    const nextValue = `${before.slice(0, slashIndex)}${inserted}${value.slice(caret)}`;
+    const nextCaret = slashIndex + inserted.length;
     setValue(nextValue);
+    setSlashCaretPos(nextCaret);
     setSlashMenuOpen(false);
     setSlashActiveIndex(0);
     requestAnimationFrame(() => {
       const ta = textareaRef.current;
       if (!ta) return;
       ta.focus();
-      ta.setSelectionRange(nextValue.length, nextValue.length);
+      ta.setSelectionRange(nextCaret, nextCaret);
       applyAutoHeight();
     });
-  }, [applyAutoHeight]);
+  }, [value, slashCaretPos, applyAutoHeight]);
 
   const sendQueued = useCallback((mode: "steer" | "followup") => {
     const msg = value.trim();
@@ -1304,12 +1354,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       }
 
       if (slashMenuOpen && slashQuery !== null) {
-        if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+        // Menu navigation is Up/Down only — Left/Right stay free so the caret
+        // can move along the command text (the caret-based trigger re-filters
+        // from the new position and closes once a space is crossed).
+        if (e.key === "ArrowDown") {
           e.preventDefault();
           setSlashActiveIndex((i) => Math.min(Math.max(0, filteredSlashCommands.length - 1), i + 1));
           return;
         }
-        if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+        if (e.key === "ArrowUp") {
           e.preventDefault();
           setSlashActiveIndex((i) => Math.max(0, i - 1));
           return;
