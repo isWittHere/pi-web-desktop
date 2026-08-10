@@ -43,6 +43,7 @@ async function loadModels(cwd: string): Promise<ModelsData> {
     id: model.id,
     name: model.name,
     provider: model.provider,
+    api: model.api,
   })).sort(compareModelEntries);
 
   for (const model of scope.visible) {

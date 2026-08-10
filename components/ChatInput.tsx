@@ -53,6 +53,7 @@ interface ModelOption {
   provider: string;
   modelId: string;
   name: string;
+  api?: string;
 }
 
 interface Props {
@@ -72,7 +73,7 @@ interface Props {
   model?: { provider: string; modelId: string } | null;
   isAutoModelSelection?: boolean;
   modelNames?: Record<string, string>;
-  modelList?: { id: string; name: string; provider: string }[];
+  modelList?: { id: string; name: string; provider: string; api?: string }[];
   /** `provider:modelId` → whether the model accepts image input. */
   imageInputByModel?: Record<string, boolean>;
   modelScopeWarnings?: string[];
@@ -1486,7 +1487,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // Build model options: prefer modelList (has provider info), fallback to modelNames
   const modelOptions: ModelOption[] = (() => {
     if (modelList && modelList.length > 0) {
-      return modelList.map((m) => ({ provider: m.provider, modelId: m.id, name: m.name })).sort(compareModelOptions);
+      return modelList.map((m) => ({ provider: m.provider, modelId: m.id, name: m.name, api: m.api })).sort(compareModelOptions);
     }
     return Object.entries(modelNames ?? {}).map(([modelId, name]) => ({
       provider: model?.provider ?? "unknown",
@@ -1503,10 +1504,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     else modelsByProvider.push({ provider: opt.provider, options: [opt] });
   }
 
-  const displayModelName = model
-    ? (modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)?.name ?? model.modelId)
-    : null;
-  const currentName = displayModelName;
+  const currentModelOption = model
+    ? modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)
+    : undefined;
+  const currentName = currentModelOption?.name ?? model?.modelId ?? null;
 
   // Image input is only available for models whose registry entry declares
   // `input` to include "image". Unknown models (not in the visible scope, or
@@ -2766,7 +2767,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       e.currentTarget.style.color = "var(--text-muted)";
                     }}
                   >
-                    <ProviderIcon id={model?.provider ?? "unknown"} size={14} />
+                    <ProviderIcon id={model?.provider ?? "unknown"} api={currentModelOption?.api} size={14} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
                     {isStreaming && <ClockIcon size={11} weight="bold" color="var(--accent)" aria-hidden="true" />}
                     <CaretDownIcon
@@ -2914,7 +2915,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
                                 >
-                                  <ProviderIcon id={opt.provider} size={14} />
+                                  <ProviderIcon id={opt.provider} api={opt.api} size={14} />
                                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
                                   {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                                   <span
@@ -2995,7 +2996,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
                                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
                                 >
-                                  <ProviderIcon id={opt.provider} size={14} />
+                                  <ProviderIcon id={opt.provider} api={opt.api} size={14} />
                                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
                                   {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                                   <span

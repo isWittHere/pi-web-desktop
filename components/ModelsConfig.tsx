@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from "react";
 import {
   CheckIcon,
-  CpuIcon,
   EyeIcon,
   EyeSlashIcon,
   MagnifyingGlassIcon,
@@ -12,6 +11,14 @@ import {
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon } from "@/components/ProviderIcon";
+import {
+  getProviderIconMode,
+  getProviderIconModesVersion,
+  PROVIDER_ICON_MODES,
+  setProviderIconMode,
+  subscribeProviderIconModes,
+  type ProviderIconMode,
+} from "@/lib/provider-icon";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -269,6 +276,10 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
       </Field>
 
+      <Field label={t("desktop.providerIcon")}>
+        <IconModePicker providerId={name} api={provider.api} />
+      </Field>
+
       <Field label={t("desktop.modelsHeaders")}>
         <HeaderListEditor
           headers={provider.headers}
@@ -278,6 +289,52 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
           {t("desktop.modelsHeadersHelp")}
         </span>
       </Field>
+    </div>
+  );
+}
+
+// ── Provider icon mode picker ─────────────────────────────────────────────────
+
+const ICON_MODE_LABEL_KEYS: Record<ProviderIconMode, string> = {
+  auto: "desktop.providerIconAuto",
+  api: "desktop.providerIconApi",
+  letter: "desktop.providerIconLetter",
+};
+
+/** Segmented 3-way picker (auto / api / letter) with live icon previews. */
+function IconModePicker({ providerId, api }: { providerId: string; api?: string }) {
+  const t = useModelTranslation();
+  useSyncExternalStore(subscribeProviderIconModes, getProviderIconModesVersion, () => 0);
+  const current = getProviderIconMode(providerId);
+
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {PROVIDER_ICON_MODES.map((m) => {
+        const isActive = current === m;
+        return (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setProviderIconMode(providerId, m)}
+            aria-pressed={isActive}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "4px 10px",
+              borderRadius: 5,
+              border: "1px solid var(--border)",
+              background: isActive ? "var(--bg-selected)" : "var(--bg-panel)",
+              color: isActive ? "var(--accent)" : "var(--text-muted)",
+              cursor: "pointer", fontSize: 11,
+              transition: "background 0.12s, color 0.12s",
+            }}
+            onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-panel)"; }}
+          >
+            <ProviderIcon id={providerId} api={api} size={12} mode={m} />
+            {t(ICON_MODE_LABEL_KEYS[m])}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1555,7 +1612,7 @@ export function ModelsConfig({
                       onMouseEnter={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "none"; }}
                     >
-                      <CpuIcon size={11} style={{ color: "var(--text-dim)", flexShrink: 0 }} />
+                      <ProviderIcon id={pName} api={pData.api} size={12} />
                       <span style={{ fontSize: 12, fontWeight: isProviderSelected ? 600 : 400, color: "var(--text)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {pName}
                       </span>
