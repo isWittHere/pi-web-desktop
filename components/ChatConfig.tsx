@@ -17,6 +17,19 @@ export const NOTIFICATION_DURATION_OPTIONS: { value: NotificationDuration; label
   { value: "forever", labelKey: "desktop.notificationDurationForever" },
 ];
 
+function isNotificationDuration(value: string | null): value is NotificationDuration {
+  return !!value && NOTIFICATION_DURATION_OPTIONS.some((opt) => opt.value === value);
+}
+
+export function getStoredNotificationDuration(): NotificationDuration {
+  try {
+    const stored = localStorage.getItem(NOTIFICATION_DURATION_KEY);
+    return isNotificationDuration(stored) ? stored : "60"; // default 1 minute
+  } catch {
+    return "60";
+  }
+}
+
 const STORAGE_KEY = "pi-input-shortcut";
 const MARKDOWN_LIST_KEY = "pi-markdown-list-continue";
 
@@ -34,18 +47,6 @@ function getStoredMarkdownList(): boolean {
     return localStorage.getItem(MARKDOWN_LIST_KEY) !== "off";
   } catch {
     return true;
-  }
-}
-
-function getStoredNotificationDuration(): NotificationDuration {
-  try {
-    const stored = localStorage.getItem(NOTIFICATION_DURATION_KEY);
-    if (stored === "60" || stored === "180" || stored === "300" || stored === "forever") {
-      return stored;
-    }
-    return "60"; // default 1 minute
-  } catch {
-    return "60";
   }
 }
 

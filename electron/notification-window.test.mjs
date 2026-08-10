@@ -72,7 +72,7 @@ test("notification duration setting flows to the main process", () => {
   assert.match(main, /Number\.isFinite\(secs\)/);
   assert.match(main, /ipcMain\.on\("notification:dismiss"/);
   const hook = readFileSync(new URL("../hooks/useNotifications.ts", import.meta.url), "utf8");
-  assert.match(hook, /duration: getNotificationDurationSetting\(\)/);
+  assert.match(hook, /duration: getStoredNotificationDuration\(\)/);
 });
 
 test("main process polls running sessions as a completion fallback", () => {
