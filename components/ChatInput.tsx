@@ -2183,7 +2183,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 )}
               </div>
             )}
-            {inputFocused && (
             <div
               style={{
                 display: "flex",
@@ -2193,6 +2192,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 borderRadius: 7,
                 background: "var(--bg-panel)",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.07)",
+                // Always mounted so the focus-gated visibility never reflows
+                // the right-anchored actions row. Disabled steer/queue buttons
+                // swallow mouse events entirely (no mousedown fires), so a
+                // click on them cannot be stopped from blurring the textarea —
+                // fading out via opacity keeps this group's reserved width
+                // stable and the steer/queue buttons under the cursor.
+                opacity: inputFocused ? 1 : 0,
+                pointerEvents: inputFocused ? "auto" : "none",
+                transition: "opacity 0.12s ease",
               }}
             >
               {/* Maximize / restore the composer height to the manual ceiling.
@@ -2200,6 +2208,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   does not hide this button before the click registers. */}
               <button
                 type="button"
+                tabIndex={inputFocused ? 0 : -1}
+                aria-hidden={!inputFocused}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   if (manualHeight !== null) {
@@ -2231,7 +2241,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 {manualHeight !== null ? <ArrowsInIcon size={15} /> : <ArrowsOutIcon size={15} />}
               </button>
             </div>
-            )}
           </div>
           <div className="chat-input-editor-row" style={{ borderColor: bashMode ? "var(--tool-bg)" : undefined }}>
           {/* Highlight layer: same text, same metrics, positioned exactly over
