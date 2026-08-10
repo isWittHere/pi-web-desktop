@@ -4,6 +4,7 @@ import React, { useMemo, useRef, useState, useCallback, useEffect, useImperative
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
+import { continueMarkdownList } from "@/lib/markdown-list";
 import { isBase64ImageWithinLimits } from "@/lib/image-attachments";
 import type { TextContent, UserMessage } from "@/lib/types";
 import {
@@ -528,6 +529,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       return localStorage.getItem("pi-input-shortcut") === "ctrl-enter" ? "ctrl-enter" : "enter";
     } catch { return "enter"; }
   });
+  // Markdown list continuation on new lines (Settings → Chat toggle). Stored as
+  // "on"/"off"; absent means enabled.
+  const [markdownListContinue, setMarkdownListContinue] = useState(() => {
+    try { return localStorage.getItem("pi-markdown-list-continue") !== "off"; } catch { return true; }
+  });
   const [atQuery, setAtQuery] = useState<AtQueryMatch | null>(null);
   const [atMenuOpen, setAtMenuOpen] = useState(false);
   const [atActiveIndex, setAtActiveIndex] = useState(0);
@@ -1016,6 +1022,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, []);
 
   useEffect(() => {
+    const handler = () => {
+      try { setMarkdownListContinue(localStorage.getItem("pi-markdown-list-continue") !== "off"); } catch { /* ignore */ }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
+
+  useEffect(() => {
     return () => {
       attachedImagesRef.current.forEach(revokeImagePreview);
     };
@@ -1421,12 +1435,38 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         return;
       }
 
-      if (e.key === "Enter" && !e.shiftKey) {
-        // Ctrl+Enter mode: Enter inserts newline, Ctrl+Enter sends
-        if (inputShortcut === "ctrl-enter" && !(e.ctrlKey || e.metaKey)) {
-          // Let the textarea handle the newline naturally
-          return;
+      // Newline-intent Enters: plain Enter in ctrl-enter mode, or Shift+Enter
+      // in any mode. When Markdown list continuation is on, re-emit the current
+      // line's structural prefix instead of a bare newline (the menu and IME
+      // branches above already took precedence).
+      const isNewlineEnter = e.shiftKey
+        || (inputShortcut === "ctrl-enter" && !(e.ctrlKey || e.metaKey));
+      if (e.key === "Enter" && isNewlineEnter) {
+        if (!isComposing && !recentlyComposed && markdownListContinue) {
+          const ta = textareaRef.current;
+          const start = ta?.selectionStart ?? value.length;
+          const end = ta?.selectionEnd ?? start;
+          const continuation = continueMarkdownList(value, start, end);
+          if (continuation) {
+            e.preventDefault();
+            setValue(continuation.value);
+            setSlashCaretPos(continuation.caret);
+            setAtQuery(null);
+            requestAnimationFrame(() => {
+              const el = textareaRef.current;
+              if (!el) return;
+              el.focus();
+              el.setSelectionRange(continuation.caret, continuation.caret);
+              applyAutoHeight();
+            });
+            return;
+          }
         }
+        // No structural prefix: let the textarea handle the newline naturally.
+        return;
+      }
+
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (isStreaming && (onSteer || onFollowUp)) {
           // Default Enter sends as steer if available, else followup
@@ -1436,7 +1476,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
     },
-    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, inputShortcut, cwd, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, openAtCompletion]
+    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, inputShortcut, markdownListContinue, cwd, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, openAtCompletion, applyAutoHeight]
   );
 
   const handleInput = useCallback(() => {
