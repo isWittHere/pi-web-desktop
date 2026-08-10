@@ -86,3 +86,37 @@ test("main process polls running sessions as a completion fallback", () => {
   assert.match(main, /startCompletionPolling\(\)/);
   assert.match(main, /setInterval\(pollRunningSessions, 3000\)/);
 });
+
+test("notification card click navigates to the finished session", () => {
+  // Clicking the card must raise the main window AND ask the renderer to
+  // select the session that finished. The sessionId is carried end to end:
+  // renderer -> showScreenNotification data -> popup -> clicked IPC -> main
+  // window navigate event -> SessionSidebar selects it.
+  const showBlock = main.slice(main.indexOf("ipcMain.handle(\"notification:show\""), main.indexOf("ipcMain.on(\"notification:dismiss\""));
+  assert.match(showBlock, /sessionId: typeof payload\.sessionId/);
+  assert.match(main, /notification:navigate/);
+  assert.match(main, /mainWindow\.webContents\.send\("notification:navigate", sessionId\)/);
+  const html = readFileSync(new URL("./notification-window.html", import.meta.url), "utf8");
+  assert.match(html, /currentSessionId/);
+  assert.match(html, /onClicked\(currentSessionId\)/);
+  const preload = readFileSync(new URL("./preload.js", import.meta.url), "utf8");
+  assert.match(preload, /onClicked: \(sessionId\)/);
+  assert.match(preload, /notification:navigate/);
+  // The sidebar resolves the id back to a SessionInfo and selects it.
+  const sidebar = readFileSync(new URL("../components/SessionSidebar.tsx", import.meta.url), "utf8");
+  assert.match(sidebar, /onNotificationNavigate/);
+  assert.match(sidebar, /onSelectSessionRef\.current\?\.\(session\)/);
+});
+
+test("fallback card carries session id and cleans skill XML titles", () => {
+  // The main-process fallback must mark the session handled (so a renderer
+  // notifyDone right after is suppressed by the repeat guard) and collapse
+  // SDK-expanded <skill> blocks in the title like the session list does.
+  assert.match(main, /NOTIFICATION_REPEAT_GUARD_MS/);
+  assert.match(main, /recentlyNotifiedSessions\.set\(sessionId, Date\.now\(\)\)/);
+  assert.match(main, /cleanSessionTitle\(/);
+  assert.match(main, /name="\(\[\^\"\]\+\)"/);
+  // Renderer path applies the same cleanup via lib/skill-block.
+  const shell = readFileSync(new URL("../components/AppShell.tsx", import.meta.url), "utf8");
+  assert.match(shell, /getSessionDisplayFirstMessage\(session\.firstMessage\)/);
+});

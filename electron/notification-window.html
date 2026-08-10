@@ -111,9 +111,13 @@
     const titleEl = document.getElementById("title");
     const detailEl = document.getElementById("detail");
     const root = document.documentElement;
+    // Session the current card belongs to (if any) — sent back on click so
+    // the main window can select that conversation.
+    let currentSessionId = undefined;
 
     window.piNotification && window.piNotification.onData(function (payload) {
       if (!payload) return;
+      currentSessionId = typeof payload.sessionId === "string" ? payload.sessionId : undefined;
       if (payload.cssVars) {
         for (const key in payload.cssVars) {
           root.style.setProperty(key, payload.cssVars[key]);
@@ -135,7 +139,7 @@
     });
 
     card.addEventListener("click", function () {
-      if (window.piNotification) window.piNotification.onClicked();
+      if (window.piNotification) window.piNotification.onClicked(currentSessionId);
     });
 
     // Dismiss button hides the card without raising the main window.

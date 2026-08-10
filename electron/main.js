@@ -46,6 +46,12 @@ let notificationDurationMs = NOTIFICATION_DURATION_MS; // latest show duration
 // the fallback does not double-notify. Entries expire after a few minutes.
 const recentlyNotifiedSessions = new Map(); // id -> timestamp
 const NOTIFICATION_HANDLED_TTL_MS = 5 * 60 * 1000;
+// A fallback card shown by the main process marks the session handled; if the
+// renderer's own notifyDone lands right after (window restored from tray),
+// suppress the duplicate card within this short window. Long enough to cover
+// the 3s poll + IPC latency, short enough that a genuine re-run of the same
+// session minutes later still notifies.
+const NOTIFICATION_REPEAT_GUARD_MS = 30 * 1000;
 let runningPollTimer = null;
 let knownRunningSessionIds = new Set();
 
@@ -195,8 +201,15 @@ ipcMain.handle("notification:show", (event, payload) => {
     return { shown: false };
   }
   // Mark this session as handled so the polling fallback does not re-notify.
+  // Also guard against double cards: if a fallback card for this session was
+  // just shown (window restored from tray, renderer catches up), stay silent.
   if (typeof payload.sessionId === "string" && payload.sessionId) {
-    recentlyNotifiedSessions.set(payload.sessionId, Date.now());
+    const now = Date.now();
+    const prev = recentlyNotifiedSessions.get(payload.sessionId);
+    if (prev !== undefined && now - prev < NOTIFICATION_REPEAT_GUARD_MS) {
+      return { shown: false };
+    }
+    recentlyNotifiedSessions.set(payload.sessionId, now);
   }
   // Honor the configured display duration (chat settings). "forever" keeps
   // the card until dismissed; anything else is parsed as seconds.
@@ -207,6 +220,7 @@ ipcMain.handle("notification:show", (event, payload) => {
     notificationDurationMs = Number.isFinite(secs) && secs > 0 ? secs * 1000 : NOTIFICATION_DURATION_MS;
   }
   showScreenNotification({
+    sessionId: typeof payload.sessionId === "string" ? payload.sessionId : undefined,
     title: payload.title,
     detail: typeof payload.detail === "string" ? payload.detail.slice(0, 120) : undefined,
     cssVars: payload.cssVars && typeof payload.cssVars === "object" ? payload.cssVars : undefined,
@@ -214,10 +228,15 @@ ipcMain.handle("notification:show", (event, payload) => {
   return { shown: true };
 });
 
-// Clicking the popup raises the main window and hides the popup.
-ipcMain.on("notification:clicked", () => {
+// Clicking the popup raises the main window, hides the popup, and — when the
+// card belongs to a session — asks the renderer to select that session so the
+// user lands on the conversation that just finished.
+ipcMain.on("notification:clicked", (_event, sessionId) => {
   hideNotificationWindow();
   showMainWindow();
+  if (typeof sessionId === "string" && sessionId && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("notification:navigate", sessionId);
+  }
 });
 
 // The popup's dismiss (×) button only hides the card — it does not raise the
@@ -291,13 +310,29 @@ async function notifyFinishedSession(sessionId) {
     const workspace = info.projectRoot ?? info.cwd ?? "";
     const name = workspace.split(/[\\/]/).pop() || workspace;
     const branch = info.worktreeBranch;
+    // Mark handled so a renderer notifyDone arriving right after (window
+    // restored from tray) is suppressed by the repeat guard, not double-shown.
+    recentlyNotifiedSessions.set(sessionId, Date.now());
     showScreenNotification({
-      title: info.name ?? info.firstMessage ?? "Task complete",
+      sessionId,
+      title: cleanSessionTitle(info.name ?? info.firstMessage ?? "Task complete"),
       detail: branch ? `${name} · ${branch}` : name,
     });
   } catch {
     // Session info unavailable — nothing we can show.
   }
+}
+
+// Collapse an SDK-expanded <skill> block in a stored first user message back
+// to the /skill:name command the user actually typed (mirrors
+// lib/skill-block.ts so the popup title matches the session list). Plain
+// messages pass through untouched.
+function cleanSessionTitle(text) {
+  if (typeof text !== "string" || !text) return text;
+  const match = /^<skill name="([^"]+)" location="[^"]*">\n[\s\S]*?\n<\/skill>(?:\n\n([\s\S]+))?$/.exec(text);
+  if (!match) return text;
+  const args = (match[2] ?? "").trim();
+  return `/skill:${match[1]}${args ? ` ${args}` : ""}`;
 }
 
 // Start polling once the server is expected to be up (app ready). The poll is

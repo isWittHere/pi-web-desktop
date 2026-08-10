@@ -38,11 +38,12 @@ interface Window {
     showItemInFolder: (fullPath: string) => Promise<boolean>;
     getPathForFile: (file: File) => string;
     showNotification: (payload: PiDesktopNotificationPayload) => Promise<PiDesktopNotificationResult>;
+    onNotificationNavigate: (callback: (sessionId: string) => void) => () => void;
   };
   // Bridge used by the standalone notification popup window
   piNotification?: {
     onData: (callback: (payload: PiDesktopNotificationPayload) => void) => () => void;
-    onClicked: () => void;
+    onClicked: (sessionId?: string) => void;
     onDismiss: () => void;
     onHover: (hovering: boolean) => void;
   };

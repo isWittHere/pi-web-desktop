@@ -554,7 +554,11 @@ export function AppShell() {
     }
     return {
       sessionId: session?.id,
-      title: session?.name ?? session?.firstMessage ?? t("desktop.notificationTaskDone"),
+      // Collapse SDK-expanded <skill> blocks in the stored first message to
+      // /skill:name, matching the session list titles (lib/skill-block.ts).
+      title: session?.name
+        ?? (session?.firstMessage ? getSessionDisplayFirstMessage(session.firstMessage) : undefined)
+        ?? t("desktop.notificationTaskDone"),
       ...parts,
     };
   }, [t]);
