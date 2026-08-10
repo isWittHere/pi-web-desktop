@@ -232,9 +232,9 @@ function httpGetJson(pathname) {
       res.on("data", (chunk) => { body += chunk; });
       res.on("end", () => {
         try {
-          resolve({ status: res.statusCode, body: JSON.parse(body) });
+          resolve(JSON.parse(body));
         } catch {
-          resolve({ status: res.statusCode, body: null });
+          resolve(null);
         }
       });
     }).on("error", reject);
@@ -243,8 +243,8 @@ function httpGetJson(pathname) {
 
 async function pollRunningSessions() {
   try {
-    const res = await httpGetJson("/api/agent/running");
-    const ids = Array.isArray(res.body?.runningSessionIds) ? res.body.runningSessionIds : [];
+    const body = await httpGetJson("/api/agent/running");
+    const ids = Array.isArray(body?.runningSessionIds) ? body.runningSessionIds : [];
     const next = new Set(ids);
     const finished = [...knownRunningSessionIds].filter((id) => !next.has(id));
     knownRunningSessionIds = next;
@@ -266,15 +266,15 @@ async function pollRunningSessions() {
 
 async function notifyFinishedSession(sessionId) {
   try {
-    const res = await httpGetJson(`/api/sessions/${encodeURIComponent(sessionId)}`);
-    const info = res.body?.info;
+    const body = await httpGetJson(`/api/sessions/${encodeURIComponent(sessionId)}`);
+    const info = body?.info;
     if (!info) return;
     const workspace = info.projectRoot ?? info.cwd ?? "";
     const name = workspace.split(/[\\/]/).pop() || workspace;
     const branch = info.worktreeBranch;
     showScreenNotification({
       title: info.name ?? info.firstMessage ?? "Task complete",
-      detail: [branch ? `${name} · ${branch}` : name].filter(Boolean).join("\n"),
+      detail: branch ? `${name} · ${branch}` : name,
     });
   } catch {
     // Session info unavailable — nothing we can show.
