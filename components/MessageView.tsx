@@ -186,7 +186,12 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
 function haveSameWrittenFiles(previous: WrittenFile[] | undefined, next: WrittenFile[] | undefined): boolean {
   if (previous === next) return true;
   if (!previous || !next || previous.length !== next.length) return false;
-  return previous.every((file, i) => file.filePath === next[i]?.filePath);
+  return previous.every((file, i) => {
+    const other = next[i];
+    return file.filePath === other?.filePath
+      && file.additions === other?.additions
+      && file.deletions === other?.deletions;
+  });
 }
 
 function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent }: {

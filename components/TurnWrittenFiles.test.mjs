@@ -43,3 +43,21 @@ test("renders a button per file showing the basename and full path", () => {
 test("renders nothing when no files were written", () => {
   assert.equal(render({ files: [], onOpenFile() {} }), "");
 });
+
+test("renders addition and deletion counts next to the filename", () => {
+  const html = render({
+    files: [{ filePath: "/abs/out/report.html", additions: 12, deletions: 3 }],
+    onOpenFile() {},
+  });
+  assert.match(html, /\+12/);
+  assert.match(html, /-3/);
+});
+
+test("omits counts when a file has no diff stats", () => {
+  const html = render({
+    files: [{ filePath: "/abs/out/plain.md" }],
+    onOpenFile() {},
+  });
+  assert.ok(!html.includes("accent-green"));
+  assert.ok(!html.includes("accent-red"));
+});
