@@ -224,7 +224,7 @@ export function DisplayConfig() {
             label={`${t("desktop.borderVisibility")} (${borderDepth})`}
           />
           <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-            {[0, 25, 50, 75, 100].map((d) => {
+            {[25, 50, 75, 100].map((d) => {
               const active = borderDepth === d;
               const previewBorder = d <= 50
                 ? `color-mix(in srgb, var(--border-orig) ${d * 2}%, var(--bg) ${100 - d * 2}%)`
