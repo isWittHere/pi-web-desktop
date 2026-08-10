@@ -262,13 +262,6 @@ export function isReadToolName(name: string): boolean {
     lower.includes("_read") || lower.includes("_get");
 }
 
-export function isEditToolName(name: string): boolean {
-  const lower = name.toLowerCase();
-  return lower === "edit" || lower.startsWith("edit_") || lower.includes("str_replace") ||
-    lower.includes("replace_editor") || lower.includes("_edit") ||
-    lower.startsWith("write") || lower.includes("_write");
-}
-
 // ---------------------------------------------------------------------------
 // Target extraction
 // ---------------------------------------------------------------------------
