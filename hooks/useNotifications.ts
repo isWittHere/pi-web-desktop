@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { NOTIFICATION_DURATION_KEY, type NotificationDuration as NotificationDurationSetting } from "@/components/ChatConfig";
 
 // Screen-level completion notifications.
 //
@@ -27,6 +28,19 @@ export interface NotificationDonePayload {
   workspace?: string;
   model?: string;
   usage?: string;
+}
+
+// Popup display duration, read from the chat settings (default 60s).
+// "forever" keeps the card until the user hovers away/dismisses it.
+export type { NotificationDurationSetting };
+
+export function getNotificationDurationSetting(): NotificationDurationSetting {
+  try {
+    const stored = localStorage.getItem(NOTIFICATION_DURATION_KEY);
+    return stored === "60" || stored === "180" || stored === "300" || stored === "forever" ? stored : "60";
+  } catch {
+    return "60";
+  }
 }
 
 // CSS variables read from <html> and pushed to the popup window. Only the
@@ -83,6 +97,7 @@ export function useNotifications() {
         sessionId: payload.sessionId,
         title: payload.title,
         detail: [payload.workspace, payload.model, payload.usage].filter(Boolean).join("\n"),
+        duration: getNotificationDurationSetting(),
         cssVars: collectPopupCssVars(),
       })
       .catch((err) => {

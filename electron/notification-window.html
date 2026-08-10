@@ -63,6 +63,29 @@
     color: var(--text-muted);
     white-space: pre-line;
     overflow: hidden;
+    /* leave room for the dismiss button in the bottom-right corner */
+    padding-right: 20px;
+  }
+  #dismiss {
+    position: absolute;
+    right: 6px;
+    bottom: 5px;
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+    opacity: 0.65;
+  }
+  #dismiss:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    color: var(--text);
   }
 </style>
 </head>
@@ -76,6 +99,7 @@
       <div id="title">Task complete</div>
     </div>
     <div id="detail"></div>
+    <button id="dismiss" type="button" aria-label="Dismiss">✕</button>
   </div>
   <script>
     "use strict";
@@ -112,6 +136,13 @@
 
     card.addEventListener("click", function () {
       if (window.piNotification) window.piNotification.onClicked();
+    });
+
+    // Dismiss button hides the card without raising the main window.
+    const dismissEl = document.getElementById("dismiss");
+    dismissEl.addEventListener("click", function (event) {
+      event.stopPropagation(); // do not trigger the card's raise-main-window click
+      if (window.piNotification) window.piNotification.onDismiss();
     });
 
     // Hover keeps the card alive: the main process pauses the auto-hide timer

@@ -38,6 +38,7 @@ let notificationDataPending = null;
 let notificationReady = false;
 let notificationHideTimer = null;
 let notificationHovered = false;
+let notificationDurationMs = NOTIFICATION_DURATION_MS; // latest show duration
 
 // Fallback completion detection: the main process polls /api/agent/running so
 // a session finishing while the renderer is frozen/hidden still notifies. A
@@ -67,9 +68,9 @@ function hideNotificationWindow() {
   }
 }
 
-// Auto-hide timer helpers: the popup hides NOTIFICATION_DURATION_MS after it
-// is shown, but hovering over it pauses the countdown so the user can read the
-// card. Pause = clear the timer; resume = start a fresh full countdown.
+// Auto-hide timer helpers: the popup hides after its display duration, but
+// hovering over it pauses the countdown so the user can read the card.
+// Pause = clear the timer; resume = start a fresh full countdown.
 function cancelNotificationHide() {
   if (notificationHideTimer) {
     clearTimeout(notificationHideTimer);
@@ -79,7 +80,11 @@ function cancelNotificationHide() {
 
 function scheduleNotificationHide() {
   cancelNotificationHide();
-  notificationHideTimer = setTimeout(hideNotificationWindow, NOTIFICATION_DURATION_MS);
+  // "forever" (Infinity) keeps the card until the user hovers away or clicks
+  // the dismiss button — never auto-hide.
+  if (Number.isFinite(notificationDurationMs)) {
+    notificationHideTimer = setTimeout(hideNotificationWindow, notificationDurationMs);
+  }
 }
 
 function ensureNotificationWindow() {
@@ -193,6 +198,14 @@ ipcMain.handle("notification:show", (event, payload) => {
   if (typeof payload.sessionId === "string" && payload.sessionId) {
     recentlyNotifiedSessions.set(payload.sessionId, Date.now());
   }
+  // Honor the configured display duration (chat settings). "forever" keeps
+  // the card until dismissed; anything else is parsed as seconds.
+  if (payload.duration === "forever") {
+    notificationDurationMs = Infinity;
+  } else {
+    const secs = Number(payload.duration);
+    notificationDurationMs = Number.isFinite(secs) && secs > 0 ? secs * 1000 : NOTIFICATION_DURATION_MS;
+  }
   showScreenNotification({
     title: payload.title,
     detail: typeof payload.detail === "string" ? payload.detail.slice(0, 120) : undefined,
@@ -205,6 +218,12 @@ ipcMain.handle("notification:show", (event, payload) => {
 ipcMain.on("notification:clicked", () => {
   hideNotificationWindow();
   showMainWindow();
+});
+
+// The popup's dismiss (×) button only hides the card — it does not raise the
+// main window, unlike clicking the card body.
+ipcMain.on("notification:dismiss", () => {
+  hideNotificationWindow();
 });
 
 // Hover over the popup pauses its auto-hide countdown; leaving resumes it.

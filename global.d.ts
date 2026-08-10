@@ -14,6 +14,8 @@ interface PiDesktopNotificationPayload {
   sessionId?: string;
   title: string;
   detail?: string;
+  /** Popup display duration in seconds, or "forever" to keep it until dismissed. */
+  duration?: string;
   /** CSS variable name → value (e.g. "--bg" → "#242424") so the popup matches the active theme. */
   cssVars?: Record<string, string>;
 }
@@ -41,6 +43,7 @@ interface Window {
   piNotification?: {
     onData: (callback: (payload: PiDesktopNotificationPayload) => void) => () => void;
     onClicked: () => void;
+    onDismiss: () => void;
     onHover: (hovering: boolean) => void;
   };
 }

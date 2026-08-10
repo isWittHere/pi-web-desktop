@@ -49,16 +49,30 @@ test("main window disables background throttling for hidden-tray runs", () => {
 });
 
 test("notification popup card is borderless and height adapts to content", () => {
-  // The window itself is the card: no border/container chrome, and its height
-  // is computed from the number of content lines (title + detail rows) so it
-  // never clips and never leaves dead space.
+  // The window itself is the card: no border/container chrome on #card, and
+  // its height is computed from the number of content lines (title + detail
+  // rows) so it never clips and never leaves dead space. The dismiss (×)
+  // button is required too.
   const html = readFileSync(new URL("./notification-window.html", import.meta.url), "utf8");
-  assert.doesNotMatch(html, /border:/);
+  const cardBlock = html.slice(html.indexOf("#card {"), html.indexOf("#head {"));
+  assert.doesNotMatch(cardBlock, /border:/);
   assert.match(html, /#head/);
   assert.match(html, /#logo/);
   assert.doesNotMatch(html, /Pi Agent/);
+  assert.match(html, /#dismiss/);
   assert.match(main, /detail\.split\("\\n"\)\.length/);
   assert.match(main, /contentLines \* 19 \+ 24/);
+});
+
+test("notification duration setting flows to the main process", () => {
+  // The chat setting (localStorage pi-notification-duration) is sent with each
+  // popup request; "forever" disables auto-hide, numeric values set seconds.
+  assert.match(main, /notificationDurationMs/);
+  assert.match(main, /payload\.duration === "forever"/);
+  assert.match(main, /Number\.isFinite\(secs\)/);
+  assert.match(main, /ipcMain\.on\("notification:dismiss"/);
+  const hook = readFileSync(new URL("../hooks/useNotifications.ts", import.meta.url), "utf8");
+  assert.match(hook, /duration: getNotificationDurationSetting\(\)/);
 });
 
 test("main process polls running sessions as a completion fallback", () => {

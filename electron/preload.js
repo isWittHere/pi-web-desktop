@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld("piNotification", {
     return () => ipcRenderer.removeListener("notification:data", listener);
   },
   onClicked: () => ipcRenderer.send("notification:clicked"),
+  // Dismiss (×) button: hides the card without raising the main window.
+  onDismiss: () => ipcRenderer.send("notification:dismiss"),
   // Hover state — the main process pauses/resumes the auto-hide timer.
   onHover: (hovering) => ipcRenderer.send("notification:hover", hovering),
 });
