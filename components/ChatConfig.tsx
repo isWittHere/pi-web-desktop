@@ -26,8 +26,10 @@ function getStoredMarkdownList(): boolean {
   }
 }
 
-function broadcastStorageChange(key: string, value: string | null) {
+function persistSetting(key: string, value: string) {
   try {
+    localStorage.setItem(key, value);
+    // Broadcast so other windows/panels (and the chat input) pick it up.
     window.dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
   } catch {
     // Ignore storage errors.
@@ -40,35 +42,22 @@ export function ChatConfig() {
   const [markdownList, setMarkdownList] = useState<boolean>(getStoredMarkdownList);
 
   useEffect(() => {
-    const handler = () => setShortcut(getStoredShortcut());
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, []);
-
-  useEffect(() => {
-    const handler = () => setMarkdownList(getStoredMarkdownList());
+    const handler = () => {
+      setShortcut(getStoredShortcut());
+      setMarkdownList(getStoredMarkdownList());
+    };
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
   }, []);
 
   const setShortcutAndPersist = useCallback((value: InputShortcut) => {
     setShortcut(value);
-    try {
-      localStorage.setItem(STORAGE_KEY, value);
-    } catch {
-      // Ignore storage errors.
-    }
-    broadcastStorageChange(STORAGE_KEY, value);
+    persistSetting(STORAGE_KEY, value);
   }, []);
 
   const setMarkdownListAndPersist = useCallback((checked: boolean) => {
     setMarkdownList(checked);
-    try {
-      localStorage.setItem(MARKDOWN_LIST_KEY, checked ? "on" : "off");
-    } catch {
-      // Ignore storage errors.
-    }
-    broadcastStorageChange(MARKDOWN_LIST_KEY, checked ? "on" : "off");
+    persistSetting(MARKDOWN_LIST_KEY, checked ? "on" : "off");
   }, []);
 
   return (

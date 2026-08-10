@@ -27,13 +27,12 @@ export function continueMarkdownList(
   // Enter replaces the selected range first; the caret base is its start.
   const start = Math.min(selectionStart, selectionEnd);
   const end = Math.max(selectionStart, selectionEnd);
-  const base = start;
   const effective = end > start
     ? value.slice(0, start) + value.slice(end)
     : value;
 
-  const lineStart = effective.lastIndexOf("\n", base - 1) + 1;
-  const line = effective.slice(lineStart, base);
+  const lineStart = effective.lastIndexOf("\n", start - 1) + 1;
+  const line = effective.slice(lineStart, start);
 
   const indent = line.match(/^\s*/)?.[0] ?? "";
   let rest = line.slice(indent.length);
@@ -67,7 +66,7 @@ export function continueMarkdownList(
 
   const insert = `\n${nextPrefix}`;
   return {
-    value: effective.slice(0, base) + insert + effective.slice(base),
-    caret: base + insert.length,
+    value: effective.slice(0, start) + insert + effective.slice(start),
+    caret: start + insert.length,
   };
 }
