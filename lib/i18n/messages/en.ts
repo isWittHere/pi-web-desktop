@@ -445,6 +445,8 @@ export const enLocale = {
     "desktop.noActiveSession": "No active session",
     "desktop.sessionHasNoBranches": "This session has no branches",
     "desktop.copyMessage": "Copy message",
+    "desktop.filesWritten": "Files changed",
+    "desktop.openWrittenFile": "Open {name}",
     "desktop.editFromHere": "Edit from here — branches within this session",
     "desktop.creatingNewSession": "Creating new session…",
     "desktop.newSessionFromHere": "New session — creates an independent copy from here",

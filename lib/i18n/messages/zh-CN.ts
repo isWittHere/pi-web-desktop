@@ -445,6 +445,8 @@ export const zhCNLocale = {
     "desktop.noActiveSession": "没有活动会话",
     "desktop.sessionHasNoBranches": "此会话没有分支",
     "desktop.copyMessage": "复制消息",
+    "desktop.filesWritten": "改动的文件",
+    "desktop.openWrittenFile": "打开 {name}",
     "desktop.editFromHere": "从此处编辑 — 在此会话内创建分支",
     "desktop.creatingNewSession": "正在创建新会话…",
     "desktop.newSessionFromHere": "新建会话 — 从此处创建独立副本",

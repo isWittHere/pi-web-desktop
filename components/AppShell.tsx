@@ -621,8 +621,8 @@ export function AppShell() {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
 
-  const handleOpenLinkedFile = useCallback((filePath: string) => {
-    handleOpenFile(filePath, getFileName(filePath), selectedSession?.id ?? null);
+  const handleOpenLinkedFile = useCallback((filePath: string, options?: { initialDisplayMode?: "diff" }) => {
+    handleOpenFile(filePath, getFileName(filePath), selectedSession?.id ?? null, options);
   }, [handleOpenFile, selectedSession?.id]);
 
   const handleCloseFileTab = useCallback((tabId: string) => {

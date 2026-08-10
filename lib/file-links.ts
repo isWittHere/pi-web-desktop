@@ -117,3 +117,39 @@ export function resolveLocalFileHref(
   if (candidateKind === "relative" && relativeRoot && !isPathInside(filePath, relativeRoot)) return null;
   return filePath;
 }
+
+/**
+ * Resolve a raw filesystem path (as passed to a `write`/`edit` tool call)
+ * against an optional base directory.
+ *
+ * Unlike {@link resolveLocalFileHref}, this treats the value strictly as a
+ * path, never as a link: characters such as `#`, `?`, and `:digits` that have
+ * special meaning in hrefs and source references are preserved unchanged.
+ */
+export function resolveLocalFilePath(filePath: string | undefined, baseDir?: string): string | null {
+  if (!filePath) return null;
+
+  const windowsStyle = /^[a-zA-Z]:[\\/]/.test(filePath) ||
+    filePath.startsWith("\\\\") ||
+    (baseDir !== undefined && (/^[a-zA-Z]:[\\/]/.test(baseDir) || baseDir.startsWith("\\\\")));
+  const normalizeSlashes = (value: string) => windowsStyle ? value.replace(/\\/g, "/") : value;
+  const normalizedPath = normalizeSlashes(filePath);
+  const normalizedBase = baseDir ? normalizeSlashes(baseDir).replace(/\/+$/, "") : undefined;
+
+  const isDriveAbsolute = /^[a-zA-Z]:\//.test(normalizedPath);
+  const isUncAbsolute = normalizedPath.startsWith("//");
+  let candidate: string;
+
+  if (isDriveAbsolute || isUncAbsolute) {
+    candidate = normalizedPath;
+  } else if (normalizedPath.startsWith("/")) {
+    const windowsRoot = normalizedBase?.match(/^([a-zA-Z]:)(?:\/|$)/)?.[1]
+      ?? normalizedBase?.match(/^(\/\/[^/]+\/[^/]+)(?:\/|$)/)?.[1];
+    candidate = windowsRoot ? `${windowsRoot}${normalizedPath}` : normalizedPath;
+  } else {
+    if (!normalizedBase) return null;
+    candidate = `${normalizedBase}/${normalizedPath}`;
+  }
+
+  return normalizeLocalPath(candidate);
+}
