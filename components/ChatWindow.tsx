@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
+import { cssPx } from "@/lib/ui-scale";
 import { collectProcessContentBlocks, splitAssistantContentBlocks } from "@/lib/process-content";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { MessageView } from "./MessageView";
@@ -228,7 +229,9 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
       // (steps + streaming output) is visible below it.
       const userMsg = lastUserMsgRef.current;
       if (userMsg) {
-        const userMsgTop = userMsg.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+        // rect diff is physical under CSS zoom while scrollTop is CSS px:
+        // convert so the anchor lands exactly on the message top at any scale.
+        const userMsgTop = cssPx(userMsg.getBoundingClientRect().top - container.getBoundingClientRect().top) + container.scrollTop;
         container.scrollTop = Math.max(0, userMsgTop - 16);
         updateChatFades();
         return;

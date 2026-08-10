@@ -15,7 +15,7 @@ import { toCwdRelativeMentions } from "@/lib/file-mentions";
 import { tokenizeMentions } from "@/lib/mention-tokens";
 import { useFileIndex, useSkillNames } from "@/hooks/useProjectContext";
 import { encodeFilePathForApi } from "@/lib/file-paths";
-import { cssPx } from "@/lib/ui-scale";
+import { cssPx, getUiScale } from "@/lib/ui-scale";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableHeight } from "@/hooks/useResizableHeight";
@@ -1525,7 +1525,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       // menus never cover the message list's header rows — not the window.
       const inputTop = el.getBoundingClientRect().top;
       const areaTop = messagesScrollRef?.current?.getBoundingClientRect().top ?? 0;
-      setPopupMaxHeight(Math.max(48, Math.round(inputTop - 12 - areaTop)));
+      // rect tops are physical under CSS zoom; the cap feeds a CSS maxHeight
+      // that zoom paints at scale, so convert the distance before subtracting
+      // the CSS margins.
+      setPopupMaxHeight(Math.max(48, Math.round((inputTop - areaTop) / getUiScale() - 12)));
     };
     measure();
     window.addEventListener("resize", measure);

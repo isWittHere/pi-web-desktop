@@ -10,6 +10,7 @@ import type {
   SessionTreeNode,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
+import { cssPx } from "@/lib/ui-scale";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -1724,7 +1725,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const container = scrollContainerRef.current;
     const el = lastUserMsgRef.current;
     if (!container || !el) return;
-    const elAbsTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+    const elAbsTop = cssPx(el.getBoundingClientRect().top - container.getBoundingClientRect().top) + container.scrollTop;
     ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
     container.scrollTo({ top: elAbsTop - 16, behavior: "smooth" });
   }, []);
