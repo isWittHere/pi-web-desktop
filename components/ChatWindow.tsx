@@ -33,7 +33,10 @@ interface Props {
    *  ChatInput draft key so typed text is keyed to the draft, not to the
    *  cwd. Empty when no draft is open. */
   newSessionDraftId?: string | null;
-  onAgentEnd?: () => void;
+  /** Fired when the agent finishes this session's run. Carries the model,
+   *  computed stats and live context usage at completion so the shell can
+   *  surface them in completion feedback without racing state updates. */
+  onAgentEnd?: (info: { model: { provider: string; modelId: string } | null; stats: SessionStatsInfo | null; contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null }) => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
   modelsRefreshKey?: number;
@@ -57,6 +60,9 @@ interface Props {
   onSoundToggle?: () => void;
   playDoneSound?: () => void;
   unlockAudio?: (force?: boolean) => void;
+  /** Completion-notification state — same shape as the sound toggle. */
+  notificationsEnabled?: boolean;
+  onNotificationsToggle?: () => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -128,7 +134,7 @@ function withAssistantBlocks(
 
 
 
-export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, onContentReady }: Props) {
+export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, notificationsEnabled, onNotificationsToggle, onContentReady }: Props) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
 
@@ -141,11 +147,25 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
   const soundEnabledRef = useRef(soundEnabled);
   soundEnabledRef.current = soundEnabled;
   const soundedExtensionDialogIdRef = useRef<string | null>(null);
+  // Latest model in use, kept in a ref so wrappedOnAgentEnd (a stable
+  // callback) can surface it at completion without re-creating itself.
+  const modelRef = useRef<{ provider: string; modelId: string } | null>(null);
+  const agentEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrappedOnAgentEnd = useCallback(() => {
     if (soundEnabledRef.current) {
       playDoneSoundRef.current();
     }
-    onAgentEnd?.();
+    // onAgentEnd fires right after the session reload resolves — React has not
+    // re-rendered yet, so the refs still hold pre-reload stats. Defer one tick
+    // so the completed message's usage/cost/context are present.
+    if (agentEndTimerRef.current) clearTimeout(agentEndTimerRef.current);
+    agentEndTimerRef.current = setTimeout(() => {
+      onAgentEnd?.({
+        model: modelRef.current,
+        stats: sessionStatsRef.current,
+        contextUsage: contextUsageRef.current,
+      });
+    }, 120);
   }, [onAgentEnd]);
 
   // 稳定化 onEditContent 引用，配合 React.memo 防止历史消息重渲染
@@ -175,6 +195,10 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     session, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
   });
+
+  // Keep the latest model so wrappedOnAgentEnd (stable callback) can surface
+  // the model in use at completion without re-creating itself.
+  modelRef.current = displayModelValue;
 
   useEffect(() => {
     if (!extensionDialog || soundedExtensionDialogIdRef.current === extensionDialog.id) return;
@@ -344,6 +368,10 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     onSessionStatsChange?.(sessionStatsRef.current);
   }, [statsKey, onSessionStatsChange]);
   useEffect(() => () => { onSessionStatsChange?.(null); }, [onSessionStatsChange]);
+  // Clear a pending deferred agent-end notification on unmount.
+  useEffect(() => () => {
+    if (agentEndTimerRef.current) clearTimeout(agentEndTimerRef.current);
+  }, []);
 
   // Push context usage up to AppShell as well.
   const ctxKey = contextUsage
@@ -635,6 +663,8 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
                 showSoundLabel
                 soundEnabled={soundEnabled}
                 onSoundToggle={onSoundToggle}
+                notificationsEnabled={notificationsEnabled}
+                onNotificationsToggle={onNotificationsToggle}
                 onCompact={session ? handleCompact : undefined}
                 isCompacting={isCompacting}
                 compactError={compactError}
@@ -1013,6 +1043,8 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
               showChat={true}
               soundEnabled={soundEnabled}
               onSoundToggle={onSoundToggle}
+              notificationsEnabled={notificationsEnabled}
+              onNotificationsToggle={onNotificationsToggle}
               onCompact={session ? handleCompact : undefined}
               isCompacting={isCompacting}
               compactError={compactError}

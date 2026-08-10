@@ -13,6 +13,7 @@ import { AppTitleBar } from "./AppTitleBar";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { useTheme } from "@/hooks/useTheme";
 import { useAudio } from "@/hooks/useAudio";
+import { useNotifications } from "@/hooks/useNotifications";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
@@ -49,6 +50,20 @@ import type { ProjectTrustStatus } from "@/lib/api-types";
 
 type SessionCopyField = "file" | "id";
 
+// Short label for a path shown in the completion popup: the last path segment
+// (project folder name), handling both / and \ separators and trailing slashes.
+function lastPathSegment(p: string): string {
+  const cleaned = p.replace(/[\\/]+$/, "");
+  const parts = cleaned.split(/[\\/]/);
+  return parts[parts.length - 1] || cleaned;
+}
+
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,6 +74,7 @@ export function AppShell() {
   // the AudioContext unlocked by a ChatInput gesture is the same one the
   // sidebar plays through.
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio, soundEnabledRef } = useAudio();
+  const { notificationsEnabled, onNotificationsToggle, notifyDone } = useNotifications();
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
@@ -518,17 +534,46 @@ export function AppShell() {
     router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
   }, [router, hydrateSelectedSession, contentDone]);
 
-  const handleAgentEnd = useCallback(() => {
+  // Build the completion popup content for a session that just finished.
+  const buildDonePayload = useCallback((session: SessionInfo | null, model: { provider: string; modelId: string } | null, stats: SessionStatsInfo | null, ctx: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
+    const workspace = session ? lastPathSegment(session.projectRoot ?? session.cwd) : undefined;
+    const branch = session?.worktreeBranch;
+    const cost = stats?.sessionId === session?.id && stats?.cost ? stats.cost : 0;
+    const parts: { workspace?: string; model?: string; usage?: string } = {};
+    if (workspace) parts.workspace = branch ? `${workspace} · ${branch}` : workspace;
+    if (model?.modelId) parts.model = model.modelId;
+    if (cost > 0 || ctx?.contextWindow) {
+      const bits: string[] = [];
+      if (cost > 0) bits.push(cost >= 0.01 ? `$${cost.toFixed(2)}` : "<$0.01");
+      if (ctx?.contextWindow) {
+        const used = ctx.tokens ?? 0;
+        const pct = ctx.percent !== null && ctx.percent !== undefined ? `${ctx.percent.toFixed(0)}%` : null;
+        bits.push(pct ? `${formatTokenCount(used)}/${formatTokenCount(ctx.contextWindow)} (${pct})` : `${formatTokenCount(used)}/${formatTokenCount(ctx.contextWindow)}`);
+      }
+      parts.usage = bits.join("  ");
+    }
+    return {
+      title: session?.name ?? session?.firstMessage ?? t("desktop.notificationTaskDone"),
+      ...parts,
+    };
+  }, [t]);
+
+  const handleAgentEnd = useCallback((info: { model: { provider: string; modelId: string } | null; stats: SessionStatsInfo | null; contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null }) => {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
-  }, []);
+    // Screen-level completion notification (only shown when the app is not focused).
+    notifyDone(buildDonePayload(selectedSession, info.model, info.stats, info.contextUsage));
+  }, [buildDonePayload, notifyDone, selectedSession]);
 
   // A session that finished while not open in the chat area (other workspace,
   // or a second session of the current workspace) — play the completion sound
   // when enabled, like the open session's own end tone.
-  const handleBackgroundTaskDone = useCallback(() => {
+  const handleBackgroundTaskDone = useCallback((session: SessionInfo) => {
     if (soundEnabledRef.current) playDoneSound();
-  }, [playDoneSound, soundEnabledRef]);
+    // Background sessions have no live stats/model in this shell; surface
+    // workspace/branch and title only.
+    notifyDone(buildDonePayload(session, null, null, null));
+  }, [buildDonePayload, notifyDone, playDoneSound, soundEnabledRef]);
 
   const handleSessionForked = useCallback((newSessionId: string) => {
     setRefreshKey((k) => k + 1);
@@ -898,6 +943,8 @@ export function AppShell() {
               onSoundToggle={onSoundToggle}
               playDoneSound={playDoneSound}
               unlockAudio={unlockAudio}
+              notificationsEnabled={notificationsEnabled}
+              onNotificationsToggle={onNotificationsToggle}
             />
           ) : showPlaceholder ? (
             activeCwd ? (

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+<title>Pi Notification</title>
+<style>
+  /* Default dark palette (mirrors globals.css). Overridden at runtime with
+     the active pi CLI theme variables pushed over IPC, so the popup matches
+     whatever theme the user has selected in the main window. */
+  :root {
+    --bg-card: #242424;
+    --text: #e6e6e6;
+    --text-muted: #9a9a9a;
+    --accent: #5fa8ff;
+  }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    overflow: hidden;
+    background: var(--bg-card);
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: "IA Writer Quattro", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  /* The window itself is the card: opaque bg (kept in sync with --bg-card by
+     the main process), no border/container, content padded directly. */
+  #card {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    padding: 10px 14px 12px;
+    cursor: pointer;
+    animation: slide-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  #card:hover { background: color-mix(in srgb, var(--text) 4%, var(--bg-card)); }
+  @keyframes slide-in {
+    from { transform: translateX(30px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  #head {
+    display: flex; align-items: center; gap: 6px;
+    min-width: 0;
+  }
+  #logo {
+    flex: 0 0 auto;
+    width: 13px; height: 13px;
+    color: var(--accent);
+  }
+  #title {
+    flex: 1 1 auto; min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #detail {
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    white-space: pre-line;
+    overflow: hidden;
+  }
+</style>
+</head>
+<body>
+  <div id="card" role="status" aria-live="polite">
+    <div id="head">
+      <svg id="logo" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" xmlns="http://www.w3.org/2000/svg">
+        <path clip-rule="evenodd" d="M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5z"></path>
+        <path d="M17.5 12H23v11h-5.5V12z"></path>
+      </svg>
+      <div id="title">Task complete</div>
+    </div>
+    <div id="detail"></div>
+  </div>
+  <script>
+    "use strict";
+    // The popup window is a separate BrowserWindow whose content is pushed
+    // over IPC by the main process. We only render whatever the main process
+    // sends; nothing here touches the filesystem or the network (CSP above
+    // blocks both). Values are written via textContent (never innerHTML).
+    const card = document.getElementById("card");
+    const titleEl = document.getElementById("title");
+    const detailEl = document.getElementById("detail");
+    const root = document.documentElement;
+
+    window.piNotification && window.piNotification.onData(function (payload) {
+      if (!payload) return;
+      if (payload.cssVars) {
+        for (const key in payload.cssVars) {
+          root.style.setProperty(key, payload.cssVars[key]);
+        }
+      }
+      if (typeof payload.title === "string" && payload.title) {
+        titleEl.textContent = payload.title;
+      }
+      if (typeof payload.detail === "string" && payload.detail) {
+        detailEl.textContent = payload.detail;
+        detailEl.style.display = "";
+      } else {
+        detailEl.style.display = "none";
+      }
+      // restart the slide-in animation on each data push
+      card.style.animation = "none";
+      void card.offsetWidth;
+      card.style.animation = "";
+    });
+
+    card.addEventListener("click", function () {
+      if (window.piNotification) window.piNotification.onClicked();
+    });
+
+    // Hover keeps the card alive: the main process pauses the auto-hide timer
+    // while the mouse is over the popup and restarts it on leave.
+    card.addEventListener("mouseenter", function () {
+      if (window.piNotification) window.piNotification.onHover(true);
+    });
+    card.addEventListener("mouseleave", function () {
+      if (window.piNotification) window.piNotification.onHover(false);
+    });
+  </script>
+</body>
+</html>

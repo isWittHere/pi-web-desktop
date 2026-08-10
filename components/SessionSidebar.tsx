@@ -58,8 +58,9 @@ interface Props {
   /** Hide both workspace controls on the empty welcome page. */
   showWorkspaceControls?: boolean;
   /** Fired when a session that is not open in the chat area finishes running
-   *  (other workspace, or a second session of the current workspace). */
-  onBackgroundTaskDone?: () => void;
+   *  (other workspace, or a second session of the current workspace). Carries
+   *  the finished session so the shell can surface its workspace/branch. */
+  onBackgroundTaskDone?: (session: SessionInfo) => void;
 }
 
 interface WorktreeEntry {
@@ -346,6 +347,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
+  // Latest session list, kept in a ref so the running-completion effect can
+  // resolve a finished session id to its SessionInfo without depending on
+  // allSessions identity in its deps array.
+  const allSessionsRef = useRef<SessionInfo[]>(allSessions);
+  useEffect(() => { allSessionsRef.current = allSessions; }, [allSessions]);
   // Holds the latest onBackgroundTaskDone so the effect below can keep its
   // deps array identical to the pre-feature version — a changing callback
   // reference must not resize/reshuffle the deps (React errors on that).
@@ -476,7 +482,13 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
     // A background completion should also ring — the open session's own end
     // tone is handled by ChatWindow, so anything else that finished counts.
-    if (completedInBackground.length > 0) onBackgroundTaskDoneRef.current?.();
+    if (completedInBackground.length > 0) {
+      // Surface the most recently finished background session (in completion
+      // order, the last of the batch) so the shell can show its context.
+      const finished = completedInBackground[completedInBackground.length - 1];
+      const session = allSessionsRef.current.find((s) => s.id === finished);
+      if (session) onBackgroundTaskDoneRef.current?.(session);
+    }
 
     previousRunningSessionIdsRef.current = runningSessionIds;
   }, [runningSessionIds, selectedSessionId]);
