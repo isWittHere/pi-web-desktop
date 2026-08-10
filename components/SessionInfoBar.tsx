@@ -6,6 +6,8 @@ import {
   ArrowsInLineVertical,
   BellRinging,
   BellSlash,
+  BellSimpleRinging,
+  BellSimpleSlash,
   Check,
   ClockCounterClockwise,
   Copy,
@@ -31,6 +33,9 @@ export interface SessionInfoBarProps {
   showChat: boolean;
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
+  /** Completion-notification state — same shape as the sound toggle. */
+  notificationsEnabled?: boolean;
+  onNotificationsToggle?: () => void;
   onCompact?: () => void;
   isCompacting?: boolean;
   compactError?: string | null;
@@ -58,6 +63,8 @@ export function SessionInfoBar({
   showChat,
   soundEnabled,
   onSoundToggle,
+  notificationsEnabled,
+  onNotificationsToggle,
   onCompact,
   isCompacting,
   compactError,
@@ -181,6 +188,22 @@ export function SessionInfoBar({
           {showSoundLabel && (
             <span style={{ marginLeft: 4 }}>
               {soundEnabled ? translate("desktop.soundLabelOn") : translate("desktop.soundLabelOff")}
+            </span>
+          )}
+        </button>
+      )}
+      {onNotificationsToggle && (
+        <button
+          type="button"
+          className="session-info-bar-button"
+          onClick={onNotificationsToggle}
+          title={notificationsEnabled ? translate("desktop.disableCompletionNotification") : translate("desktop.enableCompletionNotification")}
+          aria-label={notificationsEnabled ? translate("desktop.disableCompletionNotification") : translate("desktop.enableCompletionNotification")}
+        >
+          {notificationsEnabled ? <BellSimpleRinging size={13} /> : <BellSimpleSlash size={13} />}
+          {showSoundLabel && (
+            <span style={{ marginLeft: 4 }}>
+              {notificationsEnabled ? translate("desktop.notificationLabelOn") : translate("desktop.notificationLabelOff")}
             </span>
           )}
         </button>

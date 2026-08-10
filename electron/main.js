@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage, screen, shell } = require("electron");
 const { fork } = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -21,6 +21,291 @@ const URL = `http://${HOSTNAME}:${PORT}`;
 let mainWindow = null;
 let serverProcess = null;
 let tray = null;
+
+// ── Screen-level completion notification popup ─────────────────────────
+// A single frameless, always-on-top, skipTaskbar BrowserWindow shown at the
+// top-right of the primary display when a task finishes while the user is
+// not focused on the app. Content + theme CSS variables are pushed over IPC
+// from the renderer; the window is created lazily and reused (show/hide)
+// instead of being destroyed between notifications.
+const NOTIFICATION_WIDTH = 320;
+const NOTIFICATION_HEIGHT = 104;
+const NOTIFICATION_MARGIN = 16;
+const NOTIFICATION_DURATION_MS = 6000;
+
+let notificationWindow = null;
+let notificationDataPending = null;
+let notificationReady = false;
+let notificationHideTimer = null;
+let notificationHovered = false;
+let notificationDurationMs = NOTIFICATION_DURATION_MS; // latest show duration
+
+// Fallback completion detection: the main process polls /api/agent/running so
+// a session finishing while the renderer is frozen/hidden still notifies. A
+// session id is "handled" when the renderer's own notifyDone reaches us, so
+// the fallback does not double-notify. Entries expire after a few minutes.
+const recentlyNotifiedSessions = new Map(); // id -> timestamp
+const NOTIFICATION_HANDLED_TTL_MS = 5 * 60 * 1000;
+let runningPollTimer = null;
+let knownRunningSessionIds = new Set();
+
+function getNotificationBounds() {
+  const display = screen.getPrimaryDisplay();
+  const wa = display.workArea;
+  return {
+    x: wa.x + wa.width - NOTIFICATION_WIDTH - NOTIFICATION_MARGIN,
+    y: wa.y + NOTIFICATION_MARGIN,
+    width: NOTIFICATION_WIDTH,
+    height: NOTIFICATION_HEIGHT,
+  };
+}
+
+function hideNotificationWindow() {
+  cancelNotificationHide();
+  notificationHovered = false;
+  if (notificationWindow && !notificationWindow.isDestroyed() && notificationWindow.isVisible()) {
+    notificationWindow.hide();
+  }
+}
+
+// Auto-hide timer helpers: the popup hides after its display duration, but
+// hovering over it pauses the countdown so the user can read the card.
+// Pause = clear the timer; resume = start a fresh full countdown.
+function cancelNotificationHide() {
+  if (notificationHideTimer) {
+    clearTimeout(notificationHideTimer);
+    notificationHideTimer = null;
+  }
+}
+
+function scheduleNotificationHide() {
+  cancelNotificationHide();
+  // "forever" (Infinity) keeps the card until the user hovers away or clicks
+  // the dismiss button — never auto-hide.
+  if (Number.isFinite(notificationDurationMs)) {
+    notificationHideTimer = setTimeout(hideNotificationWindow, notificationDurationMs);
+  }
+}
+
+function ensureNotificationWindow() {
+  if (notificationWindow && !notificationWindow.isDestroyed()) return notificationWindow;
+  notificationWindow = new BrowserWindow({
+    ...getNotificationBounds(),
+    frame: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    // NOTE: focusable:false is NOT used. On Windows a focusable:false +
+    // transparent always-on-top window may fail to paint entirely (known
+    // Electron/Chromium issue). showInactive() already keeps the popup from
+    // stealing focus; the window may briefly become focusable but that is
+    // harmless because we hide it automatically after a few seconds.
+    show: false,
+    // Opaque window (see setBackgroundColor below): transparent windows are
+    // the top suspect for "popup never paints" on Windows.
+    transparent: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  // Keep the popup above other windows (incl. fullscreen apps) and on the
+  // current workspace on macOS/Linux. Windows does not need the workspace part.
+  notificationWindow.setAlwaysOnTop(true, "screen-saver");
+  if (process.platform !== "win32") {
+    notificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
+
+  // Opaque background so the card renders reliably on Windows (transparent
+  // always-on-top windows can fail to paint). Overwritten with the active
+  // theme card color when the first payload arrives.
+  notificationWindow.setBackgroundColor("#1a1a1a");
+
+  // The popup is a purely local, data-driven card. Never allow it to navigate
+  // away from its own file (defense-in-depth against any injection vector).
+  notificationWindow.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("file://")) event.preventDefault();
+  });
+  notificationWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
+  notificationWindow.webContents.on("did-finish-load", () => {
+    notificationReady = true;
+    if (notificationDataPending) {
+      const data = notificationDataPending;
+      notificationDataPending = null;
+      showScreenNotification(data);
+    }
+  });
+  notificationWindow.on("closed", () => {
+    notificationWindow = null;
+    notificationReady = false;
+  });
+
+  // Load the popup page (without this the window never fires did-finish-load
+  // and the popup never appears).
+  notificationWindow.loadFile(path.join(__dirname, "notification-window.html"));
+  return notificationWindow;
+}
+
+function showScreenNotification(data) {
+  const win = ensureNotificationWindow();
+  if (!notificationReady) {
+    // Window still loading its file — stash the payload and show on ready.
+    notificationDataPending = data;
+    return;
+  }
+  // Size the window to the content: one title line plus each detail line
+  // (workspace, model, usage). Tighter than a fixed height and never clips.
+  const detailLines = typeof data.detail === "string" && data.detail ? data.detail.split("\n").length : 0;
+  const contentLines = 1 + detailLines; // title row + detail rows
+  const height = Math.max(56, contentLines * 19 + 24); // padding 10+12, line ~19
+  const bounds = getNotificationBounds();
+  win.setBounds({ ...bounds, height });
+  // Match the window's opaque background to the card color so the card
+  // appears to float (window bg == card bg, no visible edge seam).
+  if (data && data.cssVars && data.cssVars["--bg-card"]) {
+    win.setBackgroundColor(data.cssVars["--bg-card"]);
+  }
+  win.webContents.send("notification:data", data);
+  win.showInactive(); // show without taking focus
+  // If the user is currently hovering the popup, do not restart the countdown
+  // (a new notification just refreshed the card underneath the cursor).
+  if (!notificationHovered) scheduleNotificationHide();
+}
+
+// Renderer asks for a screen notification. The popup is only shown when the
+// main window is NOT focused (the user is elsewhere); when the app is in
+// focus an in-app toast would be enough, so we stay silent to avoid
+// duplicating feedback. Returns whether a notification was shown.
+ipcMain.handle("notification:show", (event, payload) => {
+  const mainVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
+  const mainFocused = mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused();
+  // Suppress only when the user is actively looking at the app (visible AND
+  // focused). Hidden-to-tray or minimized windows must not suppress.
+  if (mainVisible && mainFocused) {
+    return { shown: false };
+  }
+  if (!payload || typeof payload.title !== "string" || !payload.title) {
+    return { shown: false };
+  }
+  // Mark this session as handled so the polling fallback does not re-notify.
+  if (typeof payload.sessionId === "string" && payload.sessionId) {
+    recentlyNotifiedSessions.set(payload.sessionId, Date.now());
+  }
+  // Honor the configured display duration (chat settings). "forever" keeps
+  // the card until dismissed; anything else is parsed as seconds.
+  if (payload.duration === "forever") {
+    notificationDurationMs = Infinity;
+  } else {
+    const secs = Number(payload.duration);
+    notificationDurationMs = Number.isFinite(secs) && secs > 0 ? secs * 1000 : NOTIFICATION_DURATION_MS;
+  }
+  showScreenNotification({
+    title: payload.title,
+    detail: typeof payload.detail === "string" ? payload.detail.slice(0, 120) : undefined,
+    cssVars: payload.cssVars && typeof payload.cssVars === "object" ? payload.cssVars : undefined,
+  });
+  return { shown: true };
+});
+
+// Clicking the popup raises the main window and hides the popup.
+ipcMain.on("notification:clicked", () => {
+  hideNotificationWindow();
+  showMainWindow();
+});
+
+// The popup's dismiss (×) button only hides the card — it does not raise the
+// main window, unlike clicking the card body.
+ipcMain.on("notification:dismiss", () => {
+  hideNotificationWindow();
+});
+
+// Hover over the popup pauses its auto-hide countdown; leaving resumes it.
+ipcMain.on("notification:hover", (_event, hovering) => {
+  notificationHovered = !!hovering;
+  if (notificationHovered) {
+    cancelNotificationHide();
+  } else if (notificationWindow && !notificationWindow.isDestroyed() && notificationWindow.isVisible()) {
+    scheduleNotificationHide();
+  }
+});
+
+// ── Fallback completion detection ──────────────────────────────────────
+// The renderer drives notifications while it is alive, but a window hidden to
+// the tray may have its renderer frozen by Chromium, so the agent_end event
+// (and thus the popup) only fires when the window is shown again. Poll the
+// lightweight running endpoint from the main process instead: timers here are
+// never throttled. When a session finishes that the renderer has not already
+// reported (recentlyNotifiedSessions), fetch its session info and notify.
+function httpGetJson(pathname) {
+  return new Promise((resolve, reject) => {
+    http.get(`${URL}${pathname}`, (res) => {
+      res.setEncoding("utf8");
+      let body = "";
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch {
+          resolve(null);
+        }
+      });
+    }).on("error", reject);
+  });
+}
+
+async function pollRunningSessions() {
+  try {
+    const body = await httpGetJson("/api/agent/running");
+    const ids = Array.isArray(body?.runningSessionIds) ? body.runningSessionIds : [];
+    const next = new Set(ids);
+    const finished = [...knownRunningSessionIds].filter((id) => !next.has(id));
+    knownRunningSessionIds = next;
+
+    // Expire stale handled markers.
+    const now = Date.now();
+    for (const [id, ts] of recentlyNotifiedSessions) {
+      if (now - ts > NOTIFICATION_HANDLED_TTL_MS) recentlyNotifiedSessions.delete(id);
+    }
+
+    for (const sessionId of finished) {
+      if (recentlyNotifiedSessions.has(sessionId)) continue; // renderer handled it
+      void notifyFinishedSession(sessionId);
+    }
+  } catch {
+    // Server not reachable yet — retry next tick.
+  }
+}
+
+async function notifyFinishedSession(sessionId) {
+  try {
+    const body = await httpGetJson(`/api/sessions/${encodeURIComponent(sessionId)}`);
+    const info = body?.info;
+    if (!info) return;
+    const workspace = info.projectRoot ?? info.cwd ?? "";
+    const name = workspace.split(/[\\/]/).pop() || workspace;
+    const branch = info.worktreeBranch;
+    showScreenNotification({
+      title: info.name ?? info.firstMessage ?? "Task complete",
+      detail: branch ? `${name} · ${branch}` : name,
+    });
+  } catch {
+    // Session info unavailable — nothing we can show.
+  }
+}
+
+// Start polling once the server is expected to be up (app ready). The poll is
+// cheap (one lightweight JSON GET every few seconds).
+function startCompletionPolling() {
+  if (runningPollTimer) return;
+  runningPollTimer = setInterval(pollRunningSessions, 3000);
+}
 
 // Diagnostic log for external-link handling. Also written to a file so the
 // behavior can be verified without watching the terminal (the window's close
@@ -180,6 +465,11 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      // Keep timers/SSE event handling running while the window is hidden to
+      // the tray. Without this Chromium throttles the hidden renderer, so a
+      // background session's completion is only noticed when the window is
+      // shown again (events pile up until the renderer wakes).
+      backgroundThrottling: false,
     },
   });
 
@@ -436,6 +726,9 @@ async function bootstrap() {
       return;
     }
   }
+  // Server is up — start the fallback completion poller (main-process timers
+  // are never throttled, so hidden-tray completions still notify).
+  startCompletionPolling();
 }
 
 // ── Single-instance lock ──────────────────────────────────────
@@ -477,6 +770,10 @@ app.on("activate", () => {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
+  if (runningPollTimer) {
+    clearInterval(runningPollTimer);
+    runningPollTimer = null;
+  }
   if (tray) {
     tray.destroy();
     tray = null;

@@ -10,6 +10,20 @@ interface ElectronWindowControls {
   onMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
 }
 
+interface PiDesktopNotificationPayload {
+  sessionId?: string;
+  title: string;
+  detail?: string;
+  /** Popup display duration in seconds, or "forever" to keep it until dismissed. */
+  duration?: string;
+  /** CSS variable name → value (e.g. "--bg" → "#242424") so the popup matches the active theme. */
+  cssVars?: Record<string, string>;
+}
+
+interface PiDesktopNotificationResult {
+  shown: boolean;
+}
+
 interface Window {
   electron?: {
     isElectron: true;
@@ -23,5 +37,13 @@ interface Window {
     openThemeDocs: () => Promise<void>;
     showItemInFolder: (fullPath: string) => Promise<boolean>;
     getPathForFile: (file: File) => string;
+    showNotification: (payload: PiDesktopNotificationPayload) => Promise<PiDesktopNotificationResult>;
+  };
+  // Bridge used by the standalone notification popup window
+  piNotification?: {
+    onData: (callback: (payload: PiDesktopNotificationPayload) => void) => () => void;
+    onClicked: () => void;
+    onDismiss: () => void;
+    onHover: (hovering: boolean) => void;
   };
 }
