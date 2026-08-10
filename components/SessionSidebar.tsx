@@ -2071,12 +2071,9 @@ function SessionItem({
   const [hovered, setHovered] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
-  const [renameCaretIndex, setRenameCaretIndex] = useState(0);
-  const [renameCaretLeft, setRenameCaretLeft] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const renameMeasureRef = useRef<HTMLSpanElement>(null);
 
   const title = session.name
     || (session.isDraft
@@ -2084,16 +2081,9 @@ function SessionItem({
         : getSessionDisplayFirstMessage(session.firstMessage).slice(0, 50))
     || session.id.slice(0, 12);
 
-  // A two-pixel overlay gives the otherwise native one-pixel input caret a
-  // clearer visual weight while the title is edited in place.
-  useLayoutEffect(() => {
-    if (renaming) setRenameCaretLeft(renameMeasureRef.current?.getBoundingClientRect().width ?? 0);
-  }, [renaming, renameValue, renameCaretIndex]);
-
   const startRename = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
     setRenameValue(title);
-    setRenameCaretIndex(title.length);
     setRenaming(true);
     setTimeout(() => inputRef.current?.select(), 0);
   }, [title]);
@@ -2303,41 +2293,10 @@ function SessionItem({
                     borderRadius: 3,
                   }}
                 >
-                  <span
-                    ref={renameMeasureRef}
-                    aria-hidden="true"
-                    style={{
-                      position: "absolute",
-                      visibility: "hidden",
-                      whiteSpace: "pre",
-                      font: "inherit",
-                      lineHeight: "inherit",
-                    }}
-                  >
-                    {renameValue.slice(0, renameCaretIndex)}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      position: "absolute",
-                      top: 2,
-                      bottom: 2,
-                      left: renameCaretLeft,
-                      width: 2,
-                      background: "var(--accent)",
-                      borderRadius: 1,
-                      animation: "blink 1s step-end infinite",
-                      pointerEvents: "none",
-                    }}
-                  />
                   <input
                   ref={inputRef}
                   value={renameValue}
-                  onChange={(e) => {
-                    setRenameValue(e.target.value);
-                    setRenameCaretIndex(e.target.selectionStart ?? e.target.value.length);
-                  }}
-                  onSelect={(e) => setRenameCaretIndex(e.currentTarget.selectionEnd ?? 0)}
+                  onChange={(e) => setRenameValue(e.target.value)}
                   onBlur={commitRename}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -2364,7 +2323,7 @@ function SessionItem({
                     color: "inherit",
                     font: "inherit",
                     lineHeight: "inherit",
-                    caretColor: "transparent",
+                    caretColor: "var(--text)",
                   }}
                   />
                 </div>
