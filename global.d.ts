@@ -12,6 +12,10 @@ interface ElectronWindowControls {
 
 interface PiDesktopNotificationPayload {
   sessionId?: string;
+  /** Id of the session currently open in the main window (if any). Used by the
+   *  main process to decide whether to suppress: only suppress when the window
+   *  is visible+focused AND the finished session is this one. */
+  focusedSessionId?: string;
   title: string;
   detail?: string;
   /** Popup display duration in seconds, or "forever" to keep it until dismissed. */

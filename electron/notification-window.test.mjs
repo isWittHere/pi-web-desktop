@@ -30,6 +30,29 @@ test("notification popup suppress logic requires visible AND focused", () => {
   assert.match(main, /mainVisible && mainFocused/);
 });
 
+test("suppression also requires the finished session to be the open one", () => {
+  // The card is only suppressed when the user is watching the conversation
+  // that finished: window visible+focused AND sessionId === focusedSessionId.
+  // Background completions (any other session) must always notify.
+  assert.match(main, /sessionId === payload\.focusedSessionId/);
+  assert.match(main, /isFocusedSession/);
+  assert.match(main, /mainVisible && mainFocused && isFocusedSession/);
+  // The renderer reports the open session id on every show request.
+  const shell = readFileSync(new URL("../components/AppShell.tsx", import.meta.url), "utf8");
+  assert.match(shell, /focusedSessionId: selectedSession\?\.id/);
+  const hook = readFileSync(new URL("../hooks/useNotifications.ts", import.meta.url), "utf8");
+  assert.match(hook, /focusedSessionId: payload\.focusedSessionId/);
+});
+
+test("fallback polling skips while the main window is focused", () => {
+  // The poll exists for frozen/hidden renderers. While the window is visible
+  // and focused the renderer drives notifications itself, so the poll must
+  // not fire a stale fallback card for the session the user is watching.
+  assert.match(main, /mainWindow\.isVisible\(\) && mainWindow\.isFocused\(\)/);
+  const pollBlock = main.slice(main.indexOf("async function pollRunningSessions"), main.indexOf("async function notifyFinishedSession"));
+  assert.match(pollBlock, /knownRunningSessionIds = new Set\(\);/);
+});
+
 test("notification popup pauses auto-hide while hovered", () => {
   // Hover must cancel the auto-hide timer and leave must restart it, so the
   // card stays readable while the mouse is over it.
@@ -111,11 +134,15 @@ test("notification card click navigates to the finished session", () => {
 test("fallback card carries session id and cleans skill XML titles", () => {
   // The main-process fallback must mark the session handled (so a renderer
   // notifyDone right after is suppressed by the repeat guard) and collapse
-  // SDK-expanded <skill> blocks in the title like the session list does.
+  // SDK-expanded <skill> blocks in the title like the session list does. It
+  // also fills model + $cost detail lines from the session stats so the card
+  // is as informative as the renderer's own.
   assert.match(main, /NOTIFICATION_REPEAT_GUARD_MS/);
   assert.match(main, /recentlyNotifiedSessions\.set\(sessionId, Date\.now\(\)\)/);
   assert.match(main, /cleanSessionTitle\(/);
   assert.match(main, /name="\(\[\^\"\]\+\)"/);
+  assert.match(main, /stats\?\.model\?\.modelId/);
+  assert.match(main, /stats\.cost >= 0\.01/);
   // Renderer path applies the same cleanup via lib/skill-block.
   const shell = readFileSync(new URL("../components/AppShell.tsx", import.meta.url), "utf8");
   assert.match(shell, /getSessionDisplayFirstMessage\(session\.firstMessage\)/);

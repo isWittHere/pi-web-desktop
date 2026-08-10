@@ -112,6 +112,43 @@ function projectTreeForResponse<T extends { entry: { id: string }; children: T[]
   return projectedRoots;
 }
 
+// Lightweight completion stats for the notification popup. Mirrors
+// AgentSession.getSessionStats: the last model_change entry is the model in
+// use, and usage is accumulated from assistant/toolResult messages and
+// compaction/branch_summary entries (usage.cost is an object with a total).
+// Unlike the live session we cannot reproduce context usage (needs the model
+// runtime), so the popup shows model + cost only for background sessions.
+function computeSessionStats(entries: unknown[]) {
+  let model: { provider: string; modelId: string } | null = null;
+  const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+  const addUsage = (usage: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: { total?: number } } | undefined) => {
+    if (!usage) return;
+    totals.input += usage.input ?? 0;
+    totals.output += usage.output ?? 0;
+    totals.cacheRead += usage.cacheRead ?? 0;
+    totals.cacheWrite += usage.cacheWrite ?? 0;
+    totals.cost += usage.cost?.total ?? 0;
+  };
+  for (const entry of entries as Array<Record<string, unknown>>) {
+    if (entry.type === "model_change") {
+      model = { provider: String(entry.provider ?? ""), modelId: String(entry.modelId ?? "") };
+    } else if (entry.type === "message") {
+      const message = entry.message as { role?: string; usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: { total?: number } } } | undefined;
+      if (message?.role === "assistant" || message?.role === "toolResult") {
+        addUsage(message.usage);
+      }
+    } else if ((entry.type === "compaction" || entry.type === "branch_summary") && entry.usage) {
+      addUsage(entry.usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: { total?: number } });
+    }
+  }
+  const totalTokens = totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
+  return {
+    model,
+    cost: totals.cost,
+    tokens: { ...totals, total: totalTokens },
+  };
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -175,6 +212,8 @@ export async function GET(
       leafId,
       tree,
       context,
+      // Completion stats for the notification popup (model + accumulated cost).
+      stats: computeSessionStats(entries),
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

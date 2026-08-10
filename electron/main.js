@@ -185,16 +185,19 @@ function showScreenNotification(data) {
   if (!notificationHovered) scheduleNotificationHide();
 }
 
-// Renderer asks for a screen notification. The popup is only shown when the
-// main window is NOT focused (the user is elsewhere); when the app is in
-// focus an in-app toast would be enough, so we stay silent to avoid
-// duplicating feedback. Returns whether a notification was shown.
+// Renderer asks for a screen notification. The popup is suppressed only when
+// the user is actively looking at the finished conversation — i.e. the window
+// is visible AND focused AND that session is the one open in the chat area.
+// Background completions (any other session) always notify, as do hidden or
+// unfocused windows. Returns whether a notification was shown.
 ipcMain.handle("notification:show", (event, payload) => {
   const mainVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
   const mainFocused = mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused();
-  // Suppress only when the user is actively looking at the app (visible AND
-  // focused). Hidden-to-tray or minimized windows must not suppress.
-  if (mainVisible && mainFocused) {
+  const isFocusedSession = typeof payload?.sessionId === "string" && payload.sessionId && payload.sessionId === payload.focusedSessionId;
+  // Suppress only when the user is watching the finished conversation itself
+  // (visible AND focused AND the open session). Hidden-to-tray, minimized or
+  // unfocused windows must not suppress; neither may other sessions' cards.
+  if (mainVisible && mainFocused && isFocusedSession) {
     return { shown: false };
   }
   if (!payload || typeof payload.title !== "string" || !payload.title) {
@@ -280,6 +283,15 @@ function httpGetJson(pathname) {
 }
 
 async function pollRunningSessions() {
+  // While the main window is visible and focused the renderer is alive and
+  // drives notifications itself (open session suppressed, background sessions
+  // notified with full stats). Polling exists for frozen/hidden renderers, so
+  // skip the whole round-trip when the user is actively using the app — this
+  // also prevents a stale fallback card for the session the user is watching.
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && mainWindow.isFocused()) {
+    knownRunningSessionIds = new Set();
+    return;
+  }
   try {
     const body = await httpGetJson("/api/agent/running");
     const ids = Array.isArray(body?.runningSessionIds) ? body.runningSessionIds : [];
@@ -307,16 +319,23 @@ async function notifyFinishedSession(sessionId) {
     const body = await httpGetJson(`/api/sessions/${encodeURIComponent(sessionId)}`);
     const info = body?.info;
     if (!info) return;
+    const stats = body?.stats;
     const workspace = info.projectRoot ?? info.cwd ?? "";
     const name = workspace.split(/[\\/]/).pop() || workspace;
     const branch = info.worktreeBranch;
+    const detailBits = [branch ? `${name} · ${branch}` : name];
+    // Match the renderer card's detail lines: model, then $cost.
+    if (stats?.model?.modelId) detailBits.push(stats.model.modelId);
+    if (typeof stats?.cost === "number" && stats.cost > 0) {
+      detailBits.push(stats.cost >= 0.01 ? `$${stats.cost.toFixed(2)}` : "<$0.01");
+    }
     // Mark handled so a renderer notifyDone arriving right after (window
     // restored from tray) is suppressed by the repeat guard, not double-shown.
     recentlyNotifiedSessions.set(sessionId, Date.now());
     showScreenNotification({
       sessionId,
       title: cleanSessionTitle(info.name ?? info.firstMessage ?? "Task complete"),
-      detail: branch ? `${name} · ${branch}` : name,
+      detail: detailBits.join("\n"),
     });
   } catch {
     // Session info unavailable — nothing we can show.

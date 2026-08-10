@@ -24,6 +24,10 @@ import { getStoredNotificationDuration } from "@/components/ChatConfig";
 //   <cost>  <context>
 export interface NotificationDonePayload {
   sessionId?: string;
+  /** Id of the session currently open in the main window (if any) — lets the
+   *  main process suppress only cards for the conversation the user is
+   *  actually looking at (window visible+focused), never background ones. */
+  focusedSessionId?: string;
   title: string;
   workspace?: string;
   model?: string;
@@ -85,6 +89,7 @@ export function useNotifications() {
     void window.piDesktop
       .showNotification({
         sessionId: payload.sessionId,
+        focusedSessionId: payload.focusedSessionId,
         title: payload.title,
         detail: [payload.workspace, payload.model, payload.usage].filter(Boolean).join("\n"),
         duration: getStoredNotificationDuration(),
