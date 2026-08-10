@@ -2117,12 +2117,23 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 {isStreaming && onSteer && (
                   <button
                     type="button"
-                    onClick={() => sendQueued("steer")}
+                    onClick={() => {
+                      if (!canQueueStreamingMessage) return;
+                      sendQueued("steer");
+                    }}
                     // onMouseDown preventDefault keeps focus in the textarea so
-                    // the maximize group (which is focus-gated) does not unmount
-                    // and shift the floating actions row under the cursor.
+                    // the maximize group (which is focus-gated and must stay
+                    // collapsed with zero space while unfocused) does not unmount
+                    // and shift the right-anchored actions row under the cursor.
+                    // The button is intentionally NOT `disabled`: a disabled
+                    // button swallows mouse events (no mousedown fires), so the
+                    // blur could not be prevented and the maximize group would
+                    // still collapse under the cursor. `aria-disabled` + the
+                    // onClick guard below preserve the disabled semantics while
+                    // keeping the pointer event path live.
                     onMouseDown={(e) => e.preventDefault()}
-                    disabled={!canQueueStreamingMessage}
+                    aria-disabled={!canQueueStreamingMessage}
+                    tabIndex={canQueueStreamingMessage ? 0 : -1}
                     title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.injectMessageNow")}
                     aria-label={t("desktop.steer")}
                     style={{
@@ -2151,10 +2162,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 {isStreaming && onFollowUp && (
                   <button
                     type="button"
-                    onClick={() => sendQueued("followup")}
-                    // Same focus-preservation guard as the steer button above.
+                    onClick={() => {
+                      if (!canQueueStreamingMessage) return;
+                      sendQueued("followup");
+                    }}
+                    // Same focus-preservation guard as the steer button above:
+                    // never `disabled`, keeps the pointer event path live.
                     onMouseDown={(e) => e.preventDefault()}
-                    disabled={!canQueueStreamingMessage}
+                    aria-disabled={!canQueueStreamingMessage}
+                    tabIndex={canQueueStreamingMessage ? 0 : -1}
                     title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.queueMessageAfterFinish")}
                     aria-label={t("desktop.followUp")}
                     style={{
@@ -2183,6 +2199,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 )}
               </div>
             )}
+            {inputFocused && (
             <div
               style={{
                 display: "flex",
@@ -2192,15 +2209,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 borderRadius: 7,
                 background: "var(--bg-panel)",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.07)",
-                // Always mounted so the focus-gated visibility never reflows
-                // the right-anchored actions row. Disabled steer/queue buttons
-                // swallow mouse events entirely (no mousedown fires), so a
-                // click on them cannot be stopped from blurring the textarea —
-                // fading out via opacity keeps this group's reserved width
-                // stable and the steer/queue buttons under the cursor.
-                opacity: inputFocused ? 1 : 0,
-                pointerEvents: inputFocused ? "auto" : "none",
-                transition: "opacity 0.12s ease",
               }}
             >
               {/* Maximize / restore the composer height to the manual ceiling.
@@ -2208,8 +2216,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   does not hide this button before the click registers. */}
               <button
                 type="button"
-                tabIndex={inputFocused ? 0 : -1}
-                aria-hidden={!inputFocused}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   if (manualHeight !== null) {
@@ -2241,6 +2247,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 {manualHeight !== null ? <ArrowsInIcon size={15} /> : <ArrowsOutIcon size={15} />}
               </button>
             </div>
+            )}
           </div>
           <div className="chat-input-editor-row" style={{ borderColor: bashMode ? "var(--tool-bg)" : undefined }}>
           {/* Highlight layer: same text, same metrics, positioned exactly over
