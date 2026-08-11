@@ -2,8 +2,8 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowClockwise, CaretDown, CaretRight, Check, CircleDashed, ClockCounterClockwise, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple, X } from "@phosphor-icons/react";
-import type { SessionInfo } from "@/lib/types";
+import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FolderOpen, FunnelSimple, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, SealCheck, Tag, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
+import type { SessionInfo, SessionMark } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { getDraft } from "@/lib/draft-store";
@@ -11,7 +11,7 @@ import { getLastWorkspace } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { useI18n } from "@/hooks/useI18n";
-import { useContextMenu } from "./ContextMenu";
+import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { QuickChangesPanel } from "./QuickChangesPanel";
 
@@ -304,6 +304,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onSessionsLoaded, onNoContentToWaitFor }: Props) {
   const { t } = useI18n();
+  const { openMenu } = useContextMenu();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -339,6 +340,8 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // and sessionSearch drives live filtering of the visible session rows.
   const [searchOpen, setSearchOpen] = useState(false);
   const [sessionSearch, setSessionSearch] = useState("");
+  // null = show every mark; otherwise only sessions carrying this mark.
+  const [markFilter, setMarkFilter] = useState<SessionMark | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
@@ -983,6 +986,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const filteredSessions = selectedProject
     ? allRows.filter((s) => (s.projectRoot ?? s.cwd) === selectedProject)
     : allRows;
+  // Narrow by status mark before the text search (null filter = all marks).
+  const markFilteredSessions = markFilter
+    ? filteredSessions.filter((s) => s.mark === markFilter)
+    : filteredSessions;
   const showWorktreeSwitcher = Boolean(
     worktreeState?.isGit
     && worktreeState.isTopLevel
@@ -1018,7 +1025,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // visible project's sessions, never crosses into other workspaces.
   const searchQuery = sessionSearch.trim().toLowerCase();
   const searchScopedSessions = searchQuery
-    ? filteredSessions.filter((s) => {
+    ? markFilteredSessions.filter((s) => {
         const title = s.name
           || (s.isDraft
               ? (getSessionDisplayFirstMessage(s.firstMessage).slice(0, 50) || t("desktop.newSessionDraft"))
@@ -1026,10 +1033,24 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           || s.id.slice(0, 12);
         return title.toLowerCase().includes(searchQuery);
       })
-    : filteredSessions;
+    : markFilteredSessions;
 
   // Build parent-child tree within the filtered set
   const sessionTree = buildSessionTree(searchScopedSessions);
+
+  // Mark-filter picker anchored to the filter button (not the pointer).
+  const openMarkFilterMenu = useCallback((e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    openMenu(rect.left, rect.bottom + 4, [
+      {
+        label: t("desktop.markFilterAll"),
+        icon: <CircleDashed size={13} weight="regular" aria-hidden="true" />,
+        checked: markFilter === null,
+        onSelect: () => setMarkFilter(null),
+      },
+      ...markMenuEntries(t, markFilter, (m) => setMarkFilter(m)),
+    ]);
+  }, [markFilter, openMenu, t]);
 
   const currentWt = worktreeState?.worktrees.find((w) => w.path === selectedCwd)
     ?? worktreeState?.worktrees.find((w) => w.isMain)
@@ -1351,6 +1372,32 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 }}
               />
             </div>
+            <button
+              onClick={openMarkFilterMenu}
+              title={t("desktop.markFilter")}
+              aria-label={t("desktop.markFilter")}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 24, height: 24, padding: 0,
+                background: "none", border: "none",
+                color: markFilter ? SESSION_MARK_COLORS[markFilter] : "var(--text-dim)",
+                cursor: "pointer", borderRadius: 5, flexShrink: 0,
+                transition: "color 0.12s, background 0.12s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+            >
+              {markFilter ? (
+                (() => {
+                  const Icon = SESSION_MARK_ICONS[markFilter];
+                  return (
+                    <Icon size={13} weight={markFilter === "completed" ? "fill" : "regular"} aria-hidden="true" />
+                  );
+                })()
+              ) : (
+                <FunnelSimple size={13} weight="regular" aria-hidden="true" />
+              )}
+            </button>
             <button
               onClick={() => { setSearchOpen(false); setSessionSearch(""); }}
               title={t("desktop.exitSearch")}
@@ -1856,7 +1903,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           )}
           {!loading && !error && searchScopedSessions.length === 0 && (
             <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-              {searchQuery ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
+              {searchQuery || markFilter ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
             </div>
           )}
           {sessionTree.map((node) => (
@@ -1879,6 +1926,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 onSessionDeleted?.(id);
                 loadSessions();
               }}
+              onMarked={() => loadSessions(false, true)}
               onDeleteDraft={onDeleteDraft}
               onRenameDraft={onRenameDraft}
               depth={0}
@@ -2012,6 +2060,7 @@ function SessionTreeItem({
   onSelectSession,
   onRenamed,
   onSessionDeleted,
+  onMarked,
   onDeleteDraft,
   onRenameDraft,
   depth,
@@ -2024,6 +2073,7 @@ function SessionTreeItem({
   onSelectSession: (s: SessionRow) => void;
   onRenamed?: (id: string, name: string) => void;
   onSessionDeleted?: (id: string) => void;
+  onMarked?: () => void;
   onDeleteDraft?: (id: string) => void;
   onRenameDraft?: (id: string, name: string) => void;
   depth: number;
@@ -2056,6 +2106,7 @@ function SessionTreeItem({
           onClick={() => onSelectSession(node.session)}
           onRenamed={onRenamed}
           onDeleted={(id) => onSessionDeleted?.(id)}
+          onMarked={onMarked}
           onDeleteDraft={onDeleteDraft}
           onRenameDraft={onRenameDraft}
           depth={depth}
@@ -2077,6 +2128,7 @@ function SessionTreeItem({
               onSelectSession={onSelectSession}
               onRenamed={onRenamed}
               onSessionDeleted={onSessionDeleted}
+              onMarked={onMarked}
               onDeleteDraft={onDeleteDraft}
               onRenameDraft={onRenameDraft}
               depth={depth + 1}
@@ -2153,6 +2205,72 @@ function UnreadSessionIndicator() {
   );
 }
 
+/** Visual + label metadata for the four session status marks. */
+const SESSION_MARK_ICONS = {
+  completed: SealCheck,
+  discussion: ChatCircle,
+  pending: ClockCountdown,
+  abandoned: XCircle,
+} as const;
+
+const SESSION_MARK_COLORS = {
+  completed: "var(--accent-green)",
+  discussion: "var(--accent-blue)",
+  pending: "var(--accent-orange)",
+  abandoned: "var(--text-dim)",
+} as const;
+
+const SESSION_MARK_LABEL_KEYS = {
+  completed: "desktop.markCompleted",
+  discussion: "desktop.markDiscussion",
+  pending: "desktop.markPending",
+  abandoned: "desktop.markAbandoned",
+} as const;
+
+const SESSION_MARK_ORDER: SessionMark[] = ["completed", "discussion", "pending", "abandoned"];
+
+/**
+ * Build the four mark options for a context menu (row mark submenu and the
+ * search filter picker share the same labels/icons/checked state).
+ */
+function markMenuEntries(
+  t: (key: string) => string,
+  activeMark: SessionMark | null,
+  onPick: (mark: SessionMark) => void,
+): ContextMenuItem[] {
+  return SESSION_MARK_ORDER.map((mark) => {
+    const Icon = SESSION_MARK_ICONS[mark];
+    return {
+      label: t(SESSION_MARK_LABEL_KEYS[mark]),
+      icon: <Icon size={13} weight="regular" aria-hidden="true" />,
+      checked: activeMark === mark,
+      onSelect: () => onPick(mark),
+    };
+  });
+}
+
+/** Small icon + text badge shown after the message count in a session row. */
+function SessionMarkBadge({ mark }: { mark: SessionMark }) {
+  const { t } = useI18n();
+  const Icon = SESSION_MARK_ICONS[mark];
+  const label = t(SESSION_MARK_LABEL_KEYS[mark]);
+  return (
+    <span
+      title={label}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        color: SESSION_MARK_COLORS[mark],
+        flexShrink: 0,
+      }}
+    >
+      <Icon size={11} weight={mark === "completed" ? "fill" : "regular"} aria-hidden="true" />
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+    </span>
+  );
+}
+
 function SessionItem({
   session,
   isSelected,
@@ -2161,6 +2279,7 @@ function SessionItem({
   onClick,
   onRenamed,
   onDeleted,
+  onMarked,
   onDeleteDraft,
   onRenameDraft,
   depth = 0,
@@ -2175,6 +2294,8 @@ function SessionItem({
   onClick: () => void;
   onRenamed?: (id: string, name: string) => void;
   onDeleted?: (id: string) => void;
+  /** Called after a mark change is persisted so the parent can refresh the list. */
+  onMarked?: () => void;
   onDeleteDraft?: (id: string) => void;
   onRenameDraft?: (id: string, name: string) => void;
   depth?: number;
@@ -2249,6 +2370,21 @@ function SessionItem({
     setConfirmDelete(false);
   }, []);
 
+  // Persist a status mark (or clear it with null); the row then refreshes via
+  // onMarked. Appends a custom entry, so it is safe while the session runs.
+  const setMark = useCallback(async (mark: SessionMark | null) => {
+    try {
+      await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mark }),
+      });
+      onMarked?.();
+    } catch {
+      // ignore
+    }
+  }, [session.id, onMarked]);
+
   const { openMenu } = useContextMenu();
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -2278,16 +2414,39 @@ function SessionItem({
       },
       { type: "separator" },
       {
+        label: t("desktop.mark"),
+        icon: <Tag size={13} weight="regular" aria-hidden="true" />,
+        // Drafts have no saved .jsonl yet, so a mark cannot be persisted.
+        disabled: session.isDraft === true,
+        submenu: markMenuEntries(t, session.mark ?? null, (mark) => setMark(mark === session.mark ? null : mark)),
+      },
+      { type: "separator" },
+      {
         label: t("desktop.delete"),
         icon: <Trash size={13} weight="regular" aria-hidden="true" />,
         danger: true,
         onSelect: () => handleDeleteClick(),
       },
     ]);
-  }, [confirmDelete, renaming, deleting, openMenu, session.id, session.isDraft, startRename, handleDeleteClick, t]);
+  }, [confirmDelete, renaming, deleting, openMenu, session.id, session.isDraft, session.mark, startRename, handleDeleteClick, setMark, t]);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
   const ITEM_HEIGHT = 50;
+  // Marked rows (completed/pending) grow their accent line on hover/selection.
+  // The line is a non-layout overlay scaled with transform, so the text never
+  // shifts when it grows.
+  const markLineActive = !confirmDelete
+    && (session.mark === "completed" || session.mark === "pending")
+    && (isSelected || hovered);
+  // Unified left line: delete-confirm red, completed green, pending orange,
+  // otherwise none. Rendered as a borderless overlay so it hugs the edge.
+  const lineColor = confirmDelete
+    ? "#ef4444"
+    : session.mark === "completed"
+      ? "var(--accent-green)"
+      : session.mark === "pending"
+        ? "var(--accent-orange)"
+        : null;
 
   return (
     <div
@@ -2305,15 +2464,34 @@ function SessionItem({
         background: confirmDelete
           ? "rgba(239,68,68,0.06)"
           : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
-        borderLeft: confirmDelete
-          ? "2px solid #ef4444"
-          : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
+        borderLeft: "none",
         transition: "background 0.1s",
+        position: "relative",
         opacity: deleting ? 0.5 : 1,
         gap: 6,
         overflow: "hidden",
       }}
     >
+      {/* Left accent line overlay: absolute at the row edge (no border on the
+          row itself), scaleX(0.5) for the 2px resting width, scaleX(1) for the
+          4px hover/selection width. Dashed only for pending marks. */}
+      {lineColor && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 4,
+            borderLeft: `${session.mark === "pending" && !confirmDelete ? "dashed" : "solid"} 4px ${lineColor}`,
+            transform: `scaleX(${markLineActive ? 1 : 0.5})`,
+            transformOrigin: "left center",
+            transition: "transform 0.15s ease",
+            pointerEvents: "none",
+          }}
+        />
+      )}
       {confirmDelete ? (
         /* ── Delete confirmation: same height, two flat buttons ── */
         <>
@@ -2443,7 +2621,17 @@ function SessionItem({
                   />
                 </div>
               ) : (
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
+                <span
+                  style={{
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1,
+                    // Completed/abandoned sessions read as settled: fade the title.
+                    ...(session.mark === "completed" || session.mark === "abandoned"
+                      ? { color: "var(--text-muted)" }
+                      : {}),
+                    // Abandoned sessions additionally get a strikethrough.
+                    ...(session.mark === "abandoned" ? { textDecoration: "line-through" } : {}),
+                  }}
+                >
                   {title}
                 </span>
               )}
@@ -2516,6 +2704,9 @@ function SessionItem({
               {session.isDraft
                 ? <span>{t("desktop.unsent")}</span>
                 : <span>{t("desktop.messagesCount", { count: session.messageCount })}</span>}
+              {!session.isDraft && session.mark && (
+                <SessionMarkBadge mark={session.mark} />
+              )}
               {session.worktreeBranch && (
                 <span
                   title={t("desktop.worktree", { cwd: session.cwd })}

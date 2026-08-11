@@ -11,6 +11,9 @@ import {
   readSessionHeader,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
+import type { SessionMark } from "@/lib/types";
+
+const SESSION_MARKS: readonly SessionMark[] = ["completed", "discussion", "pending", "abandoned"];
 
 // BranchNavigator still traverses recursively, so keep the response tree shallow.
 const MAX_PROJECTED_TREE_DEPTH = 200;
@@ -220,23 +223,32 @@ export async function GET(
   }
 }
 
-// PATCH /api/sessions/[id]  body: { name: string }
+// PATCH /api/sessions/[id]  body: { name?: string, mark?: SessionMark | null }
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   try {
-    const { name } = await req.json() as { name?: string };
-    if (typeof name !== "string") {
-      return NextResponse.json({ error: "name is required" }, { status: 400 });
+    const { name, mark } = await req.json() as { name?: string; mark?: SessionMark | null };
+    if (typeof name !== "string" && mark === undefined) {
+      return NextResponse.json({ error: "name or mark is required" }, { status: 400 });
+    }
+    if (mark !== undefined && mark !== null && !SESSION_MARKS.includes(mark)) {
+      return NextResponse.json({ error: "invalid mark" }, { status: 400 });
     }
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
     const sm = SessionManager.open(filePath);
-    sm.appendSessionInfo(name.trim());
+    if (typeof name === "string") {
+      sm.appendSessionInfo(name.trim());
+    }
+    if (mark !== undefined) {
+      // Append-only custom entry; the latest entry wins when reading (null clears).
+      sm.appendCustomEntry("session-mark", { mark });
+    }
     invalidateSessionListCache();
     return NextResponse.json({ ok: true });
   } catch (error) {
