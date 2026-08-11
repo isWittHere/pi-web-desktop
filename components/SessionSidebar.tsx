@@ -1469,6 +1469,35 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             <MagnifyingGlass size={13} weight="regular" aria-hidden="true" />
           </button>
           <button
+            onClick={openMarkFilterMenu}
+            title={t("desktop.markFilter")}
+            aria-label={t("desktop.markFilter")}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 26, height: 26, padding: 0,
+              background: "none",
+              border: "none",
+              color: markFilter ? SESSION_MARK_COLORS[markFilter] : "var(--text-dim)",
+              cursor: "pointer",
+              borderRadius: 5,
+              flexShrink: 0,
+              transition: "color 0.3s, background 0.3s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+          >
+            {markFilter ? (
+              (() => {
+                const Icon = SESSION_MARK_ICONS[markFilter];
+                return (
+                  <Icon size={13} weight={markFilter === "completed" ? "fill" : "regular"} aria-hidden="true" />
+                );
+              })()
+            ) : (
+              <FunnelSimple size={13} weight="regular" aria-hidden="true" />
+            )}
+          </button>
+          <button
             onClick={handleNewSession}
             disabled={!selectedCwd}
             title={selectedCwd ? t("desktop.newSessionIn", { cwd: selectedCwd }) : t("desktop.selectProjectFirst")}
