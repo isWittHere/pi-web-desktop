@@ -286,6 +286,8 @@ export const enLocale = {
     "desktop.delete": "Delete",
     "desktop.rename": "Rename",
     "desktop.regenerateTitle": "Regenerate title",
+    "desktop.titleModelMissing": "No title model configured — pick one in Settings → Chat",
+    "desktop.regenerateTitleDraft": "Drafts have no saved history to name yet",
     "desktop.draft": "Draft",
     "desktop.newSessionDraft": "New session",
     "desktop.expandForks": "Expand forks",

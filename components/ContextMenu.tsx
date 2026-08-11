@@ -24,6 +24,11 @@ export interface ContextMenuItem {
   danger?: boolean;
   disabled?: boolean;
   /**
+   * Hover tooltip shown for this item (e.g. explaining why it is disabled).
+   * Rendered via the native `title` attribute.
+   */
+  title?: string;
+  /**
    * When set, selecting the item keeps the menu open and briefly shows this
    * label in place of `label` (e.g. "Copied" after a copy action), then the
    * menu closes itself.
@@ -377,6 +382,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             role="menuitem"
             aria-disabled={disabled || undefined}
             aria-haspopup={hasSubmenu ? "menu" : undefined}
+            title={item.title}
             onClick={() => selectItem(index, item)}
             onMouseEnter={() => {
               if (disabled) return;
@@ -469,6 +475,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
                   key={subIndex}
                   role="menuitem"
                   aria-disabled={subDisabled || undefined}
+                  title={subItem.title}
                   onClick={() => selectSubmenuItem(subItem)}
                   onMouseEnter={() => { if (!subDisabled) setSubmenuActiveIndex(subIndex); }}
                   onMouseLeave={() => { if (submenuActiveIndex === subIndex) setSubmenuActiveIndex(-1); }}

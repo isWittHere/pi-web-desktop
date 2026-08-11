@@ -10,6 +10,7 @@ import { getDraft } from "@/lib/draft-store";
 import { getLastWorkspace } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
+import { getTitleModel } from "@/lib/title-settings";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
@@ -2413,6 +2414,9 @@ function SessionItem({
     // Inline rename / delete-confirm / delete-in-flight take over the row:
     // don't let a stray right-click open a menu on top of them.
     if (confirmDelete || renaming || deleting) return;
+    // A title model must be configured before titles can be generated; the
+    // menu item is disabled (with a tooltip) until one is picked in Settings.
+    const titleModelConfigured = getTitleModel() !== null;
     openMenu(e.clientX, e.clientY, [
       {
         label: t("desktop.rename"),
@@ -2423,9 +2427,17 @@ function SessionItem({
         label: t("desktop.regenerateTitle"),
         icon: <TextAa size={13} weight="regular" aria-hidden="true" />,
         // Drafts have no saved .jsonl yet, so there is no history to name.
-        disabled: session.isDraft === true || titleGeneratingId === session.id,
+        disabled: session.isDraft === true
+          || !titleModelConfigured
+          || titleGeneratingId === session.id,
+        title: !titleModelConfigured
+          ? t("desktop.titleModelMissing")
+          : session.isDraft === true
+            ? t("desktop.regenerateTitleDraft")
+            : undefined,
         onSelect: () => onRegenerateTitle?.(session.id),
       },
+      { type: "separator" },
       {
         label: t("desktop.viewFullHistory"),
         icon: <ClockCounterClockwise size={13} weight="regular" aria-hidden="true" />,
@@ -2439,7 +2451,6 @@ function SessionItem({
           );
         },
       },
-      { type: "separator" },
       {
         label: t("desktop.mark"),
         icon: <Tag size={13} weight="regular" aria-hidden="true" />,

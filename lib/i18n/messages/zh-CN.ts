@@ -286,6 +286,8 @@ export const zhCNLocale = {
     "desktop.delete": "删除",
     "desktop.rename": "重命名",
     "desktop.regenerateTitle": "重新生成标题",
+    "desktop.titleModelMissing": "尚未配置标题生成模型——请在 设置 → 聊天 中选择一个",
+    "desktop.regenerateTitleDraft": "草稿尚无已保存的历史可供命名",
     "desktop.draft": "草稿",
     "desktop.newSessionDraft": "新会话",
     "desktop.expandForks": "展开分支",
