@@ -11,7 +11,7 @@ import { getLastWorkspace } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { useI18n } from "@/hooks/useI18n";
-import { useContextMenu } from "./ContextMenu";
+import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { QuickChangesPanel } from "./QuickChangesPanel";
 
@@ -1048,30 +1048,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         checked: markFilter === null,
         onSelect: () => setMarkFilter(null),
       },
-      {
-        label: t("desktop.markCompleted"),
-        icon: <SealCheck size={13} weight="regular" aria-hidden="true" />,
-        checked: markFilter === "completed",
-        onSelect: () => setMarkFilter("completed"),
-      },
-      {
-        label: t("desktop.markDiscussion"),
-        icon: <ChatCircle size={13} weight="regular" aria-hidden="true" />,
-        checked: markFilter === "discussion",
-        onSelect: () => setMarkFilter("discussion"),
-      },
-      {
-        label: t("desktop.markPending"),
-        icon: <ClockCountdown size={13} weight="regular" aria-hidden="true" />,
-        checked: markFilter === "pending",
-        onSelect: () => setMarkFilter("pending"),
-      },
-      {
-        label: t("desktop.markAbandoned"),
-        icon: <XCircle size={13} weight="regular" aria-hidden="true" />,
-        checked: markFilter === "abandoned",
-        onSelect: () => setMarkFilter("abandoned"),
-      },
+      ...markMenuEntries(t, markFilter, (m) => setMarkFilter(m)),
     ]);
   }, [markFilter, openMenu, t]);
 
@@ -1399,7 +1376,6 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               onClick={openMarkFilterMenu}
               title={t("desktop.markFilter")}
               aria-label={t("desktop.markFilter")}
-              aria-expanded={markFilter !== null}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 24, height: 24, padding: 0,
@@ -2251,6 +2227,28 @@ const SESSION_MARK_LABEL_KEYS = {
   abandoned: "desktop.markAbandoned",
 } as const;
 
+const SESSION_MARK_ORDER: SessionMark[] = ["completed", "discussion", "pending", "abandoned"];
+
+/**
+ * Build the four mark options for a context menu (row mark submenu and the
+ * search filter picker share the same labels/icons/checked state).
+ */
+function markMenuEntries(
+  t: (key: string) => string,
+  activeMark: SessionMark | null,
+  onPick: (mark: SessionMark) => void,
+): ContextMenuItem[] {
+  return SESSION_MARK_ORDER.map((mark) => {
+    const Icon = SESSION_MARK_ICONS[mark];
+    return {
+      label: t(SESSION_MARK_LABEL_KEYS[mark]),
+      icon: <Icon size={13} weight="regular" aria-hidden="true" />,
+      checked: activeMark === mark,
+      onSelect: () => onPick(mark),
+    };
+  });
+}
+
 /** Small icon + text badge shown after the message count in a session row. */
 function SessionMarkBadge({ mark }: { mark: SessionMark }) {
   const { t } = useI18n();
@@ -2420,33 +2418,7 @@ function SessionItem({
         icon: <Tag size={13} weight="regular" aria-hidden="true" />,
         // Drafts have no saved .jsonl yet, so a mark cannot be persisted.
         disabled: session.isDraft === true,
-        submenu: [
-          {
-            label: t("desktop.markCompleted"),
-            icon: <SealCheck size={13} weight="regular" aria-hidden="true" />,
-            checked: session.mark === "completed",
-            // Selecting the active mark again clears it.
-            onSelect: () => setMark(session.mark === "completed" ? null : "completed"),
-          },
-          {
-            label: t("desktop.markDiscussion"),
-            icon: <ChatCircle size={13} weight="regular" aria-hidden="true" />,
-            checked: session.mark === "discussion",
-            onSelect: () => setMark(session.mark === "discussion" ? null : "discussion"),
-          },
-          {
-            label: t("desktop.markPending"),
-            icon: <ClockCountdown size={13} weight="regular" aria-hidden="true" />,
-            checked: session.mark === "pending",
-            onSelect: () => setMark(session.mark === "pending" ? null : "pending"),
-          },
-          {
-            label: t("desktop.markAbandoned"),
-            icon: <XCircle size={13} weight="regular" aria-hidden="true" />,
-            checked: session.mark === "abandoned",
-            onSelect: () => setMark(session.mark === "abandoned" ? null : "abandoned"),
-          },
-        ],
+        submenu: markMenuEntries(t, session.mark ?? null, (mark) => setMark(mark === session.mark ? null : mark)),
       },
       { type: "separator" },
       {

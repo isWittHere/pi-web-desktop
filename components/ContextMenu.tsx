@@ -34,8 +34,9 @@ export interface ContextMenuItem {
   /**
    * One level of nested options, rendered as a flyout submenu on hover/click.
    * Selecting the parent opens (or closes) the submenu instead of acting.
+   * Nested submenus are not rendered, so the type forbids them.
    */
-  submenu?: ContextMenuItem[];
+  submenu?: Omit<ContextMenuItem, "submenu">[];
   onSelect?: () => void | Promise<void>;
 }
 
