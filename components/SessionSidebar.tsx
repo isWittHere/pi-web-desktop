@@ -2460,6 +2460,9 @@ function SessionItem({
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
   const ITEM_HEIGHT = 50;
+  // Marked rows (completed/pending) grow their accent line on hover/selection.
+  const markLineActive = (session.mark === "completed" || session.mark === "pending")
+    && (isSelected || hovered);
 
   return (
     <div
@@ -2480,11 +2483,11 @@ function SessionItem({
         borderLeft: confirmDelete
           ? "2px solid #ef4444"
           : session.mark === "completed"
-            ? "2px solid var(--accent-green)"
+            ? `${markLineActive ? 4 : 2}px solid var(--accent-green)`
             : session.mark === "pending"
-              ? "2px dashed var(--accent-orange)"
+              ? `${markLineActive ? 4 : 2}px dashed var(--accent-orange)`
               : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
-        transition: "background 0.1s",
+        transition: "background 0.1s, borderLeftWidth 0.15s ease",
         opacity: deleting ? 0.5 : 1,
         gap: 6,
         overflow: "hidden",
