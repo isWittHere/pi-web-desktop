@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FolderOpen, FunnelSimple, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, SealCheck, Tag, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
+import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FolderOpen, FunnelSimple, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, SealCheck, Tag, TextAa, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
 import type { SessionInfo, SessionMark } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
@@ -10,6 +10,7 @@ import { getDraft } from "@/lib/draft-store";
 import { getLastWorkspace } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
+import { getTitleModel } from "@/lib/title-settings";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
@@ -47,6 +48,10 @@ interface Props {
   onCwdChange?: (cwd: string | null, projectRoot?: string | null, isAutoSelect?: boolean) => void;
   /** Fired when a session is renamed, so the top bar title can update. */
   onSessionRenamed?: (id: string, name: string) => void;
+  /** Fired when a session title is regenerated via the context menu. */
+  onRegenerateTitle?: (sessionId: string) => void;
+  /** Session id currently having its title regenerated (disables the menu item). */
+  titleGeneratingId?: string | null;
   onOpenFile?: (filePath: string, fileName: string, options?: { initialDisplayMode?: "diff" }) => void;
   explorerRefreshKey?: number;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
@@ -302,7 +307,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onSessionsLoaded, onNoContentToWaitFor }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor }: Props) {
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -1927,6 +1932,8 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 loadSessions();
               }}
               onMarked={() => loadSessions(false, true)}
+              onRegenerateTitle={onRegenerateTitle}
+              titleGeneratingId={titleGeneratingId}
               onDeleteDraft={onDeleteDraft}
               onRenameDraft={onRenameDraft}
               depth={0}
@@ -2061,6 +2068,8 @@ function SessionTreeItem({
   onRenamed,
   onSessionDeleted,
   onMarked,
+  onRegenerateTitle,
+  titleGeneratingId,
   onDeleteDraft,
   onRenameDraft,
   depth,
@@ -2074,6 +2083,8 @@ function SessionTreeItem({
   onRenamed?: (id: string, name: string) => void;
   onSessionDeleted?: (id: string) => void;
   onMarked?: () => void;
+  onRegenerateTitle?: (sessionId: string) => void;
+  titleGeneratingId?: string | null;
   onDeleteDraft?: (id: string) => void;
   onRenameDraft?: (id: string, name: string) => void;
   depth: number;
@@ -2107,6 +2118,8 @@ function SessionTreeItem({
           onRenamed={onRenamed}
           onDeleted={(id) => onSessionDeleted?.(id)}
           onMarked={onMarked}
+          onRegenerateTitle={onRegenerateTitle}
+          titleGeneratingId={titleGeneratingId}
           onDeleteDraft={onDeleteDraft}
           onRenameDraft={onRenameDraft}
           depth={depth}
@@ -2129,6 +2142,8 @@ function SessionTreeItem({
               onRenamed={onRenamed}
               onSessionDeleted={onSessionDeleted}
               onMarked={onMarked}
+              onRegenerateTitle={onRegenerateTitle}
+              titleGeneratingId={titleGeneratingId}
               onDeleteDraft={onDeleteDraft}
               onRenameDraft={onRenameDraft}
               depth={depth + 1}
@@ -2280,6 +2295,8 @@ function SessionItem({
   onRenamed,
   onDeleted,
   onMarked,
+  onRegenerateTitle,
+  titleGeneratingId,
   onDeleteDraft,
   onRenameDraft,
   depth = 0,
@@ -2296,6 +2313,10 @@ function SessionItem({
   onDeleted?: (id: string) => void;
   /** Called after a mark change is persisted so the parent can refresh the list. */
   onMarked?: () => void;
+  /** Called to trigger title regeneration for this session (context menu). */
+  onRegenerateTitle?: (sessionId: string) => void;
+  /** Session id currently having its title regenerated (disables the menu item). */
+  titleGeneratingId?: string | null;
   onDeleteDraft?: (id: string) => void;
   onRenameDraft?: (id: string, name: string) => void;
   depth?: number;
@@ -2393,12 +2414,30 @@ function SessionItem({
     // Inline rename / delete-confirm / delete-in-flight take over the row:
     // don't let a stray right-click open a menu on top of them.
     if (confirmDelete || renaming || deleting) return;
+    // A title model must be configured before titles can be generated; the
+    // menu item is disabled (with a tooltip) until one is picked in Settings.
+    const titleModelConfigured = getTitleModel() !== null;
     openMenu(e.clientX, e.clientY, [
       {
         label: t("desktop.rename"),
         icon: <PencilSimple size={13} weight="regular" aria-hidden="true" />,
         onSelect: () => startRename(),
       },
+      {
+        label: t("desktop.regenerateTitle"),
+        icon: <TextAa size={13} weight="regular" aria-hidden="true" />,
+        // Drafts have no saved .jsonl yet, so there is no history to name.
+        disabled: session.isDraft === true
+          || !titleModelConfigured
+          || titleGeneratingId === session.id,
+        title: !titleModelConfigured
+          ? t("desktop.titleModelMissing")
+          : session.isDraft === true
+            ? t("desktop.regenerateTitleDraft")
+            : undefined,
+        onSelect: () => onRegenerateTitle?.(session.id),
+      },
+      { type: "separator" },
       {
         label: t("desktop.viewFullHistory"),
         icon: <ClockCounterClockwise size={13} weight="regular" aria-hidden="true" />,
@@ -2412,7 +2451,6 @@ function SessionItem({
           );
         },
       },
-      { type: "separator" },
       {
         label: t("desktop.mark"),
         icon: <Tag size={13} weight="regular" aria-hidden="true" />,
@@ -2428,7 +2466,7 @@ function SessionItem({
         onSelect: () => handleDeleteClick(),
       },
     ]);
-  }, [confirmDelete, renaming, deleting, openMenu, session.id, session.isDraft, session.mark, startRename, handleDeleteClick, setMark, t]);
+  }, [confirmDelete, renaming, deleting, openMenu, session.id, session.isDraft, session.mark, titleGeneratingId, startRename, handleDeleteClick, setMark, onRegenerateTitle, t]);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
   const ITEM_HEIGHT = 50;
