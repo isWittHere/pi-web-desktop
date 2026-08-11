@@ -282,6 +282,9 @@ export interface SessionTreeNode {
   compressedEntryIds?: string[];
 }
 
+/** User-assigned status mark for a session, persisted as a custom jsonl entry. */
+export type SessionMark = "completed" | "discussion" | "pending" | "abandoned";
+
 export interface SessionInfo {
   path: string;
   id: string;
@@ -292,6 +295,8 @@ export interface SessionInfo {
   messageCount: number;
   firstMessage: string;
   parentSessionId?: string; // set if this session was forked from another
+  /** User-assigned status mark (完成/讨论/待定/废弃), persisted in the session file. */
+  mark?: SessionMark;
   /** Main repo root shared by all worktrees of this cwd (cwd itself for non-git dirs).
    *  Always set by the server; optional because the client builds transient
    *  SessionInfo objects before the first refresh. Fall back to cwd. */

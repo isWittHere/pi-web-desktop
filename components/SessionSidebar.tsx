@@ -2,8 +2,8 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowClockwise, CaretDown, CaretRight, Check, CircleDashed, ClockCounterClockwise, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple, X } from "@phosphor-icons/react";
-import type { SessionInfo } from "@/lib/types";
+import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, SealCheck, Tag, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
+import type { SessionInfo, SessionMark } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { getDraft } from "@/lib/draft-store";
@@ -1879,6 +1879,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 onSessionDeleted?.(id);
                 loadSessions();
               }}
+              onMarked={() => loadSessions(false, true)}
               onDeleteDraft={onDeleteDraft}
               onRenameDraft={onRenameDraft}
               depth={0}
@@ -2012,6 +2013,7 @@ function SessionTreeItem({
   onSelectSession,
   onRenamed,
   onSessionDeleted,
+  onMarked,
   onDeleteDraft,
   onRenameDraft,
   depth,
@@ -2024,6 +2026,7 @@ function SessionTreeItem({
   onSelectSession: (s: SessionRow) => void;
   onRenamed?: (id: string, name: string) => void;
   onSessionDeleted?: (id: string) => void;
+  onMarked?: () => void;
   onDeleteDraft?: (id: string) => void;
   onRenameDraft?: (id: string, name: string) => void;
   depth: number;
@@ -2056,6 +2059,7 @@ function SessionTreeItem({
           onClick={() => onSelectSession(node.session)}
           onRenamed={onRenamed}
           onDeleted={(id) => onSessionDeleted?.(id)}
+          onMarked={onMarked}
           onDeleteDraft={onDeleteDraft}
           onRenameDraft={onRenameDraft}
           depth={depth}
@@ -2077,6 +2081,7 @@ function SessionTreeItem({
               onSelectSession={onSelectSession}
               onRenamed={onRenamed}
               onSessionDeleted={onSessionDeleted}
+              onMarked={onMarked}
               onDeleteDraft={onDeleteDraft}
               onRenameDraft={onRenameDraft}
               depth={depth + 1}
@@ -2153,6 +2158,50 @@ function UnreadSessionIndicator() {
   );
 }
 
+/** Visual + label metadata for the four session status marks. */
+const SESSION_MARK_ICONS = {
+  completed: SealCheck,
+  discussion: ChatCircle,
+  pending: ClockCountdown,
+  abandoned: XCircle,
+} as const;
+
+const SESSION_MARK_COLORS = {
+  completed: "var(--accent-green)",
+  discussion: "var(--accent-blue)",
+  pending: "var(--accent-orange)",
+  abandoned: "var(--text-dim)",
+} as const;
+
+const SESSION_MARK_LABEL_KEYS = {
+  completed: "desktop.markCompleted",
+  discussion: "desktop.markDiscussion",
+  pending: "desktop.markPending",
+  abandoned: "desktop.markAbandoned",
+} as const;
+
+/** Small icon + text badge shown after the message count in a session row. */
+function SessionMarkBadge({ mark }: { mark: SessionMark }) {
+  const { t } = useI18n();
+  const Icon = SESSION_MARK_ICONS[mark];
+  const label = t(SESSION_MARK_LABEL_KEYS[mark]);
+  return (
+    <span
+      title={label}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 3,
+        color: SESSION_MARK_COLORS[mark],
+        flexShrink: 0,
+      }}
+    >
+      <Icon size={9} weight={mark === "completed" ? "fill" : "regular"} aria-hidden="true" />
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+    </span>
+  );
+}
+
 function SessionItem({
   session,
   isSelected,
@@ -2161,6 +2210,7 @@ function SessionItem({
   onClick,
   onRenamed,
   onDeleted,
+  onMarked,
   onDeleteDraft,
   onRenameDraft,
   depth = 0,
@@ -2175,6 +2225,8 @@ function SessionItem({
   onClick: () => void;
   onRenamed?: (id: string, name: string) => void;
   onDeleted?: (id: string) => void;
+  /** Called after a mark change is persisted so the parent can refresh the list. */
+  onMarked?: () => void;
   onDeleteDraft?: (id: string) => void;
   onRenameDraft?: (id: string, name: string) => void;
   depth?: number;
@@ -2249,6 +2301,21 @@ function SessionItem({
     setConfirmDelete(false);
   }, []);
 
+  // Persist a status mark (or clear it with null); the row then refreshes via
+  // onMarked. Appends a custom entry, so it is safe while the session runs.
+  const setMark = useCallback(async (mark: SessionMark | null) => {
+    try {
+      await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mark }),
+      });
+      onMarked?.();
+    } catch {
+      // ignore
+    }
+  }, [session.id, onMarked]);
+
   const { openMenu } = useContextMenu();
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -2278,13 +2345,47 @@ function SessionItem({
       },
       { type: "separator" },
       {
+        label: t("desktop.mark"),
+        icon: <Tag size={13} weight="regular" aria-hidden="true" />,
+        // Drafts have no saved .jsonl yet, so a mark cannot be persisted.
+        disabled: session.isDraft === true,
+        submenu: [
+          {
+            label: t("desktop.markCompleted"),
+            icon: <SealCheck size={13} weight="regular" aria-hidden="true" />,
+            checked: session.mark === "completed",
+            // Selecting the active mark again clears it.
+            onSelect: () => setMark(session.mark === "completed" ? null : "completed"),
+          },
+          {
+            label: t("desktop.markDiscussion"),
+            icon: <ChatCircle size={13} weight="regular" aria-hidden="true" />,
+            checked: session.mark === "discussion",
+            onSelect: () => setMark(session.mark === "discussion" ? null : "discussion"),
+          },
+          {
+            label: t("desktop.markPending"),
+            icon: <ClockCountdown size={13} weight="regular" aria-hidden="true" />,
+            checked: session.mark === "pending",
+            onSelect: () => setMark(session.mark === "pending" ? null : "pending"),
+          },
+          {
+            label: t("desktop.markAbandoned"),
+            icon: <XCircle size={13} weight="regular" aria-hidden="true" />,
+            checked: session.mark === "abandoned",
+            onSelect: () => setMark(session.mark === "abandoned" ? null : "abandoned"),
+          },
+        ],
+      },
+      { type: "separator" },
+      {
         label: t("desktop.delete"),
         icon: <Trash size={13} weight="regular" aria-hidden="true" />,
         danger: true,
         onSelect: () => handleDeleteClick(),
       },
     ]);
-  }, [confirmDelete, renaming, deleting, openMenu, session.id, session.isDraft, startRename, handleDeleteClick, t]);
+  }, [confirmDelete, renaming, deleting, openMenu, session.id, session.isDraft, session.mark, startRename, handleDeleteClick, setMark, t]);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
   const ITEM_HEIGHT = 50;
@@ -2516,6 +2617,9 @@ function SessionItem({
               {session.isDraft
                 ? <span>{t("desktop.unsent")}</span>
                 : <span>{t("desktop.messagesCount", { count: session.messageCount })}</span>}
+              {!session.isDraft && session.mark && (
+                <SessionMarkBadge mark={session.mark} />
+              )}
               {session.worktreeBranch && (
                 <span
                   title={t("desktop.worktree", { cwd: session.cwd })}

@@ -4,9 +4,9 @@ import {
   buildSessionContext as piBuildSessionContext,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
-import { closeSync, openSync, readSync } from "fs";
+import { closeSync, openSync, readSync, statSync } from "fs";
 import { normalize as normalizePath } from "path";
-import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext } from "./types";
+import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext, SessionMark } from "./types";
 import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize";
 import { resolveProject, type ProjectInfo } from "./worktree";
@@ -41,6 +41,7 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       parentSessionId: s.parentSessionPath ? pathToId.get(normalizePath(s.parentSessionPath)) : undefined,
       projectRoot: project?.projectRoot ?? s.cwd,
       ...(project?.isWorktree && project.branch ? { worktreeBranch: project.branch } : {}),
+      mark: readSessionMark(s.path),
     };
   });
 }
@@ -150,6 +151,55 @@ export function invalidateSessionPathCache(sessionId: string): void {
   pathCache.delete(sessionId);
   if (filePath && reverseCache.get(filePath) === sessionId) {
     reverseCache.delete(filePath);
+  }
+}
+
+/**
+ * Latest user-assigned mark for a session file, read from its tail.
+ *
+ * Marks are appended as `custom` entries (customType "session-mark", written
+ * by PATCH /api/sessions/[id]) and session files are append-only, so the
+ * newest mark is always near the end. A trailing `{ mark: null }` entry
+ * explicitly clears the mark; the last entry wins either way. Only the final
+ * 128KB is scanned — large tool results or images further up the file can
+ * never hide a mark, since marks are always appended after them.
+ */
+export function readSessionMark(filePath: string): SessionMark | undefined {
+  const SESSION_MARK_CUSTOM_TYPE = "session-mark";
+  const SESSION_MARK_TAIL_BYTES = 128 * 1024;
+  try {
+    const size = statSync(filePath).size;
+    if (size <= 0) return undefined;
+    const readLen = Math.min(size, SESSION_MARK_TAIL_BYTES);
+    const fd = openSync(filePath, "r");
+    try {
+      const buffer = Buffer.allocUnsafe(readLen);
+      const bytesRead = readSync(fd, buffer, 0, readLen, size - readLen);
+      const text = buffer.subarray(0, bytesRead).toString("utf8");
+      // Drop the first line fragment (it may start mid-line) and scan the rest.
+      const newlineIndex = text.indexOf("\n");
+      const tail = newlineIndex === -1 ? text : text.slice(newlineIndex + 1);
+      let mark: SessionMark | undefined;
+      for (const line of tail.split("\n")) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line) as {
+            type?: string;
+            customType?: string;
+            data?: { mark?: SessionMark | null };
+          };
+          if (entry.type !== "custom" || entry.customType !== SESSION_MARK_CUSTOM_TYPE) continue;
+          mark = entry.data?.mark ?? undefined;
+        } catch {
+          // skip malformed lines
+        }
+      }
+      return mark;
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return undefined;
   }
 }
 
