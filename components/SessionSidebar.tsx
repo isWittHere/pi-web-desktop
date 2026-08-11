@@ -2461,6 +2461,8 @@ function SessionItem({
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
   const ITEM_HEIGHT = 50;
   // Marked rows (completed/pending) grow their accent line on hover/selection.
+  // The line is a non-layout overlay scaled with transform, so the text never
+  // shifts when it grows.
   const markLineActive = (session.mark === "completed" || session.mark === "pending")
     && (isSelected || hovered);
 
@@ -2482,17 +2484,38 @@ function SessionItem({
           : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
         borderLeft: confirmDelete
           ? "2px solid #ef4444"
-          : session.mark === "completed"
-            ? `${markLineActive ? 4 : 2}px solid var(--accent-green)`
-            : session.mark === "pending"
-              ? `${markLineActive ? 4 : 2}px dashed var(--accent-orange)`
-              : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
-        transition: "background 0.1s, borderLeftWidth 0.15s ease",
+          : isSelected && session.mark !== "completed" && session.mark !== "pending"
+            ? "2px solid var(--accent)"
+            : "2px solid transparent",
+        transition: "background 0.1s",
+        position: "relative",
         opacity: deleting ? 0.5 : 1,
         gap: 6,
         overflow: "hidden",
       }}
     >
+      {/* Mark line overlay: absolutely positioned so growing it never moves
+          the row content. scaleX(0.5) renders the same 2px as an unmarked
+          row's border; hover/selection animates it to full 4px width. */}
+      {!confirmDelete && (session.mark === "completed" || session.mark === "pending") && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 4,
+            borderLeft: session.mark === "completed"
+              ? "4px solid var(--accent-green)"
+              : "4px dashed var(--accent-orange)",
+            transform: markLineActive ? "scaleX(1)" : "scaleX(0.5)",
+            transformOrigin: "left center",
+            transition: "transform 0.15s ease",
+            pointerEvents: "none",
+          }}
+        />
+      )}
       {confirmDelete ? (
         /* ── Delete confirmation: same height, two flat buttons ── */
         <>
