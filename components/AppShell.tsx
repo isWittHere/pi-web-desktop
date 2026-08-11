@@ -519,10 +519,10 @@ export function AppShell() {
   /**
    * Generate (or regenerate) a session title via POST /api/sessions/[id]/auto-name.
    *
-   * Reads the title-model setting from localStorage; skips silently when auto
-   * mode is disabled or no model is configured. Manual calls (right-click
-   * menu) set `titleGeneratingId` so the sidebar disables the menu item, and
-   * refresh the list + selected-session name on success.
+   * While a generation is in flight the session id is tracked in
+   * `titleGeneratingId` so the sidebar row title breathes and the context-menu
+   * item is disabled. Auto mode skips silently when the toggle or a title
+   * model is missing; manual (right-click) failures simply leave the old title.
    */
   const generateTitleForSession = useCallback(async (
     sessionId: string,
@@ -530,7 +530,7 @@ export function AppShell() {
     mode: "first" | "regenerate",
     manual = false,
   ) => {
-    if (manual) setTitleGeneratingId(sessionId);
+    setTitleGeneratingId(sessionId);
     try {
       // Auto mode requires the user toggle; manual mode runs regardless.
       if (!manual && !getTitleAutoEnabled()) return;
@@ -555,10 +555,10 @@ export function AppShell() {
       setSelectedSession((prev) => (prev && prev.id === sessionId ? { ...prev, name: title } : prev));
       setRefreshKey((k) => k + 1);
     } catch {
-      // Auto mode stays silent; manual mode surfaces the failure via the
-      // disabled-menu-item cycle (the menu itself closes on selection).
+      // Auto mode stays silent; manual mode leaves the old title unchanged
+      // (the user can retry from the context menu).
     } finally {
-      if (manual) setTitleGeneratingId(null);
+      setTitleGeneratingId(null);
     }
   }, []);
 
@@ -920,6 +920,7 @@ export function AppShell() {
         onToggleFilePanel={() => setRightPanelOpen((v) => !v)}
         onOpenSettings={() => openSettings("models")}
         sessionTitle={sessionTitle}
+        titleGenerating={titleGeneratingId === selectedSession?.id}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
       />
       {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (

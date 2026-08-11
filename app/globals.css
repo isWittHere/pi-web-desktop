@@ -744,6 +744,16 @@ pre, code {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* Session title while its title is being regenerated: gentle opacity
+   pulse that reads as "working on it" without shifting layout. */
+.session-title-generating {
+  animation: session-title-breathe 1.6s ease-in-out infinite;
+}
+@keyframes session-title-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
 .group\/process .process-tab-error {
   background-color: rgba(248, 113, 113, 0.06);
   background-image: repeating-linear-gradient(

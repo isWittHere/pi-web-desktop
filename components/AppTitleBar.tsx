@@ -39,6 +39,8 @@ interface AppTitleBarProps {
   onToggleFilePanel: () => void;
   onOpenSettings: () => void;
   sessionTitle: string | null;
+  /** True while the selected session's title is being regenerated. */
+  titleGenerating?: boolean;
   onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
 }
 
@@ -110,6 +112,7 @@ export function AppTitleBar({
   onToggleFilePanel,
   onOpenSettings,
   sessionTitle,
+  titleGenerating = false,
   onWorkspaceControlsHostChange,
 }: AppTitleBarProps) {
   const { isElectron, isMac, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
@@ -196,6 +199,7 @@ export function AppTitleBar({
         >
           {sessionTitle && (
             <span
+              className={titleGenerating ? "session-title-generating" : undefined}
               style={{
                 fontSize: 12,
                 fontWeight: 500,

@@ -2698,6 +2698,7 @@ function SessionItem({
                     // Abandoned sessions additionally get a strikethrough.
                     ...(session.mark === "abandoned" ? { textDecoration: "line-through" } : {}),
                   }}
+                  className={titleGeneratingId === session.id ? "session-title-generating" : undefined}
                 >
                   {title}
                 </span>
