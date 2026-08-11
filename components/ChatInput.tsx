@@ -985,18 +985,44 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [applyAutoHeight, value]);
 
   // Mirror the textarea's internal scroll onto the highlight layer (auto
-  // height cap / manual resize both make the textarea scroll). Runs after
-  // every render so height changes settle before the offset is recomputed.
+  // height cap / manual resize both make the textarea scroll). Also mirror
+  // the textarea's content-box width: when the vertical scrollbar appears it
+  // consumes ~4px inside the textarea, shrinking its wrap width — the
+  // highlight layer (left:0/right:0) stays wider, so the caret (a textarea
+  // artifact) wraps earlier than the visible glyphs (highlight-layer
+  // artifacts) and drifts ahead of the text by ~half a cell per line. Runs
+  // after every render so height changes settle before the offset is
+  // recomputed.
   const syncHighlightScroll = useCallback(() => {
     const ta = textareaRef.current;
     const layer = highlightLayerRef.current;
     if (!ta || !layer) return;
     const offset = ta.scrollTop > 0 ? -ta.scrollTop : 0;
     layer.style.transform = offset ? `translateY(${offset}px)` : "";
+    // clientWidth excludes the scrollbar gutter, so mirroring it keeps both
+    // layers wrapping at the same columns in every state. Skip 0 (hidden
+    // textarea) — the observer below re-syncs once it gets a size again.
+    const width = ta.clientWidth;
+    if (width > 0 && layer.style.width !== `${width}px`) {
+      layer.style.width = `${width}px`;
+    }
   }, []);
   useEffect(() => {
     syncHighlightScroll();
   });
+
+  // The per-render sync covers typing, mode switches, and manual resizes,
+  // but the scrollbar can appear/disappear (content growing past the auto
+  // cap or the fixed shell height) or the window can resize without any
+  // React render. A ResizeObserver on the textarea fires on those content-box
+  // changes and re-syncs the highlight width + scroll offset.
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const observer = new ResizeObserver(() => syncHighlightScroll());
+    observer.observe(ta);
+    return () => observer.disconnect();
+  }, [syncHighlightScroll]);
 
   // Switching between auto and fixed manual height: fixed mode lets flex
   // stretch fill the shell (clear any stale inline height), auto mode
