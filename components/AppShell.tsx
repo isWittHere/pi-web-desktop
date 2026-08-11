@@ -570,7 +570,8 @@ export function AppShell() {
   const handleAgentEnd = useCallback((info: { model: { provider: string; modelId: string } | null; stats: SessionStatsInfo | null; contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null }) => {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
-    // Screen-level completion notification (only shown when the app is not focused).
+    // Screen-level completion notification — the main process suppresses it
+    // only when this session is the one open in a visible+focused window.
     notifyDone(buildDonePayload(selectedSession, info.model, info.stats, info.contextUsage));
   }, [buildDonePayload, notifyDone, selectedSession]);
 
@@ -581,6 +582,8 @@ export function AppShell() {
   // back from the session file (there is no live stats handle in this shell).
   const handleBackgroundTaskDone = useCallback(async (session: SessionInfo) => {
     if (soundEnabledRef.current) playDoneSound();
+    // Notifications off — skip the stats fetch entirely (sound is independent).
+    if (!notificationsEnabled) return;
     let model: { provider: string; modelId: string } | null = null;
     let stats: SessionStatsInfo | null = null;
     try {
@@ -601,7 +604,7 @@ export function AppShell() {
       // Stats unavailable — keep the basic workspace/branch card.
     }
     notifyDone(buildDonePayload(session, model, stats, null));
-  }, [buildDonePayload, notifyDone, playDoneSound, soundEnabledRef]);
+  }, [buildDonePayload, notifyDone, notificationsEnabled, playDoneSound, soundEnabledRef]);
 
   const handleSessionForked = useCallback((newSessionId: string) => {
     setRefreshKey((k) => k + 1);
