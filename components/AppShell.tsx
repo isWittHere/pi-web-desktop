@@ -43,6 +43,7 @@ import {
 import { clearLastOpen, getLastOpen, setLastOpen, setLastWorkspace, workspaceKeyOf } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
+import { getTitleAutoEnabled, getTitleModel } from "@/lib/title-settings";
 import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -110,6 +111,9 @@ export function AppShell() {
   }, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
+  // Session id currently having its title regenerated (disables the sidebar
+  // menu item and guards against double-triggering).
+  const [titleGeneratingId, setTitleGeneratingId] = useState<string | null>(null);
   // ── Startup splash (readiness signal) ──────────────────────────────────
   // The CSS-only body::before Pi logo stays visible until the whole startup
   // chain is ready: session list loaded + workspace auto-selected, and the
@@ -512,6 +516,52 @@ export function AppShell() {
       .catch(() => {});
   }, []);
 
+  /**
+   * Generate (or regenerate) a session title via POST /api/sessions/[id]/auto-name.
+   *
+   * Reads the title-model setting from localStorage; skips silently when auto
+   * mode is disabled or no model is configured. Manual calls (right-click
+   * menu) set `titleGeneratingId` so the sidebar disables the menu item, and
+   * refresh the list + selected-session name on success.
+   */
+  const generateTitleForSession = useCallback(async (
+    sessionId: string,
+    firstMessageOrTurns: string | undefined,
+    mode: "first" | "regenerate",
+    manual = false,
+  ) => {
+    if (manual) setTitleGeneratingId(sessionId);
+    try {
+      // Auto mode requires the user toggle; manual mode runs regardless.
+      if (!manual && !getTitleAutoEnabled()) return;
+      const titleModel = getTitleModel();
+      if (!titleModel) return;
+      const body: Record<string, unknown> = {
+        mode,
+        provider: titleModel.provider,
+        modelId: titleModel.modelId,
+      };
+      if (mode === "first" && firstMessageOrTurns) body.firstMessage = firstMessageOrTurns;
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/auto-name`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({})) as { title?: string; error?: string };
+      if (!res.ok || !data.title) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const title = data.title.trim();
+      setSelectedSession((prev) => (prev && prev.id === sessionId ? { ...prev, name: title } : prev));
+      setRefreshKey((k) => k + 1);
+    } catch {
+      // Auto mode stays silent; manual mode surfaces the failure via the
+      // disabled-menu-item cycle (the menu itself closes on selection).
+    } finally {
+      if (manual) setTitleGeneratingId(null);
+    }
+  }, []);
+
   // Called by ChatWindow when a new session gets its real id from pi
   const handleSessionCreated = useCallback((session: SessionInfo) => {
     setNewSessionCwd(null);
@@ -532,7 +582,11 @@ export function AppShell() {
     setActiveDraftId(null);
     hydrateSelectedSession(session.id);
     router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
-  }, [router, hydrateSelectedSession, contentDone]);
+
+    // Auto-generate a first title from the session's first user message.
+    // Fire-and-forget: never blocks the chat flow and stays silent on failure.
+    void generateTitleForSession(session.id, session.firstMessage, "first");
+  }, [router, hydrateSelectedSession, contentDone, generateTitleForSession]);
 
   // Build the completion popup content for a session that just finished.
   const buildDonePayload = useCallback((session: SessionInfo | null, model: { provider: string; modelId: string } | null, stats: SessionStatsInfo | null, ctx: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
@@ -808,6 +862,8 @@ export function AppShell() {
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}
         onSessionRenamed={handleSessionRenamed}
+        onRegenerateTitle={(sessionId) => void generateTitleForSession(sessionId, undefined, "regenerate", true)}
+        titleGeneratingId={titleGeneratingId}
         selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
