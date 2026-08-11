@@ -1044,18 +1044,25 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const sessionTree = buildSessionTree(searchScopedSessions);
 
   // Mark-filter picker anchored to the filter button (not the pointer).
+  // Counts reflect the sessions the filter will actually narrow — the
+  // current project's rows (filteredSessions), matching markFilteredSessions.
   const openMarkFilterMenu = useCallback((e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
+    const counts = new Map<SessionMark, number>();
+    for (const s of filteredSessions) {
+      if (s.mark) counts.set(s.mark, (counts.get(s.mark) ?? 0) + 1);
+    }
     openMenu(rect.left, rect.bottom + 4, [
       {
         label: t("desktop.markFilterAll"),
         icon: <CircleDashed size={13} weight="regular" aria-hidden="true" />,
         checked: markFilter === null,
+        hint: filteredSessions.length,
         onSelect: () => setMarkFilter(null),
       },
-      ...markMenuEntries(t, markFilter, (m) => setMarkFilter(m)),
+      ...markMenuEntries(t, markFilter, (m) => setMarkFilter(m), counts),
     ]);
-  }, [markFilter, openMenu, t]);
+  }, [markFilter, openMenu, t, filteredSessions]);
 
   const currentWt = worktreeState?.worktrees.find((w) => w.path === selectedCwd)
     ?? worktreeState?.worktrees.find((w) => w.isMain)
@@ -2275,12 +2282,15 @@ const SESSION_MARK_ORDER: SessionMark[] = ["completed", "discussion", "pending",
 
 /**
  * Build the four mark options for a context menu (row mark submenu and the
- * search filter picker share the same labels/icons/checked state).
+ * search filter picker share the same labels/icons/checked state). When
+ * `counts` is provided (filter picker), each entry shows how many sessions
+ * in the current scope carry that mark.
  */
 function markMenuEntries(
   t: (key: string) => string,
   activeMark: SessionMark | null,
   onPick: (mark: SessionMark) => void,
+  counts?: Map<SessionMark, number>,
 ): ContextMenuItem[] {
   return SESSION_MARK_ORDER.map((mark) => {
     const Icon = SESSION_MARK_ICONS[mark];
@@ -2288,6 +2298,7 @@ function markMenuEntries(
       label: t(SESSION_MARK_LABEL_KEYS[mark]),
       icon: <Icon size={13} weight="regular" aria-hidden="true" />,
       checked: activeMark === mark,
+      hint: counts ? (counts.get(mark) ?? 0) : undefined,
       onSelect: () => onPick(mark),
     };
   });

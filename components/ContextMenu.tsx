@@ -36,6 +36,8 @@ export interface ContextMenuItem {
   feedbackLabel?: string;
   /** Show a check mark in the icon slot (e.g. the currently active option). */
   checked?: boolean;
+  /** Right-aligned secondary text (e.g. a count). Rendered dim and small. */
+  hint?: ReactNode;
   /**
    * One level of nested options, rendered as a flyout submenu on hover/click.
    * Selecting the parent opens (or closes) the submenu instead of acting.
@@ -431,6 +433,19 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
               {showingFeedback ? item.feedbackLabel : item.label}
             </span>
+            {item.hint !== undefined && (
+              <span
+                style={{
+                  flexShrink: 0,
+                  marginLeft: 12,
+                  color: "var(--text-dim)",
+                  fontSize: 11,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {item.hint}
+              </span>
+            )}
             {hasSubmenu && (
               <CaretRight
                 size={10}
@@ -514,6 +529,19 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
                     {subItem.label}
                   </span>
+                  {subItem.hint !== undefined && (
+                    <span
+                      style={{
+                        flexShrink: 0,
+                        marginLeft: 12,
+                        color: "var(--text-dim)",
+                        fontSize: 11,
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {subItem.hint}
+                    </span>
+                  )}
                 </div>
               );
             })}
