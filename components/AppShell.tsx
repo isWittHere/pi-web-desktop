@@ -526,7 +526,7 @@ export function AppShell() {
    */
   const generateTitleForSession = useCallback(async (
     sessionId: string,
-    firstMessageOrTurns: string | undefined,
+    firstMessage: string | undefined,
     mode: "first" | "regenerate",
     manual = false,
   ) => {
@@ -541,7 +541,7 @@ export function AppShell() {
         provider: titleModel.provider,
         modelId: titleModel.modelId,
       };
-      if (mode === "first" && firstMessageOrTurns) body.firstMessage = firstMessageOrTurns;
+      if (mode === "first" && firstMessage) body.firstMessage = firstMessage;
       const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/auto-name`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

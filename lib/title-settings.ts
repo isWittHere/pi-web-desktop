@@ -9,8 +9,8 @@
  *   until the user picks a model in Settings → Chat).
  */
 
-export const TITLE_AUTO_KEY = "pi-title-auto";
-export const TITLE_MODEL_KEY = "pi-title-model";
+const TITLE_AUTO_KEY = "pi-title-auto";
+const TITLE_MODEL_KEY = "pi-title-model";
 
 export function getTitleAutoEnabled(): boolean {
   try {

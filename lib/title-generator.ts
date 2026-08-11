@@ -37,9 +37,6 @@ export interface TitleTurn {
 interface BlockLike {
   type?: string;
   text?: unknown;
-  thinking?: unknown;
-  data?: unknown;
-  source?: { type?: string; data?: unknown };
 }
 
 function blockText(block: BlockLike): string | undefined {
@@ -222,10 +219,6 @@ export interface GeneratedTitle {
   };
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
  * Generate a session title with an already-configured model.
  *
@@ -237,7 +230,6 @@ function errorMessage(error: unknown): string {
  */
 export async function generateSessionTitle(options: GenerateTitleOptions): Promise<GeneratedTitle> {
   const { provider, modelId, turns, signal } = options;
-  const turnsForPrompt = turns.length > 0 ? turns : [{ role: "user" as const, text: "New session" }];
 
   // Defaults to getAgentDir()/models.json + auth.json, exactly like the model
   // config UI and the /api/models-config/test route.
@@ -260,7 +252,7 @@ export async function generateSessionTitle(options: GenerateTitleOptions): Promi
   // trailing user message is not mistaken for an active question.
   const messages: Message[] = [{
     role: "user",
-    content: [{ type: "text", text: buildTitlePromptText(turnsForPrompt) }],
+    content: [{ type: "text", text: buildTitlePromptText(turns) }],
     timestamp: Date.now(),
   } as Message];
 
@@ -309,7 +301,9 @@ export async function generateSessionTitle(options: GenerateTitleOptions): Promi
       } : {}),
     };
   } catch (error) {
-    throw new Error(errorMessage(error));
+    // Preserve the original Error (stack) when present; normalize otherwise.
+    if (error instanceof Error) throw error;
+    throw new Error(String(error));
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener("abort", onAbort);
