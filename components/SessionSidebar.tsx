@@ -2484,9 +2484,7 @@ function SessionItem({
           : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
         borderLeft: confirmDelete
           ? "2px solid #ef4444"
-          : isSelected && session.mark !== "completed" && session.mark !== "pending"
-            ? "2px solid var(--accent)"
-            : "2px solid transparent",
+          : "2px solid transparent",
         transition: "background 0.1s",
         position: "relative",
         opacity: deleting ? 0.5 : 1,
