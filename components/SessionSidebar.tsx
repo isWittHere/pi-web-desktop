@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FolderOpen, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, SealCheck, Tag, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
+import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FolderOpen, FunnelSimple, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, SealCheck, Tag, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
 import type { SessionInfo, SessionMark } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
@@ -304,6 +304,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onSessionsLoaded, onNoContentToWaitFor }: Props) {
   const { t } = useI18n();
+  const { openMenu } = useContextMenu();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -339,6 +340,8 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // and sessionSearch drives live filtering of the visible session rows.
   const [searchOpen, setSearchOpen] = useState(false);
   const [sessionSearch, setSessionSearch] = useState("");
+  // null = show every mark; otherwise only sessions carrying this mark.
+  const [markFilter, setMarkFilter] = useState<SessionMark | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
@@ -983,6 +986,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const filteredSessions = selectedProject
     ? allRows.filter((s) => (s.projectRoot ?? s.cwd) === selectedProject)
     : allRows;
+  // Narrow by status mark before the text search (null filter = all marks).
+  const markFilteredSessions = markFilter
+    ? filteredSessions.filter((s) => s.mark === markFilter)
+    : filteredSessions;
   const showWorktreeSwitcher = Boolean(
     worktreeState?.isGit
     && worktreeState.isTopLevel
@@ -1018,7 +1025,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // visible project's sessions, never crosses into other workspaces.
   const searchQuery = sessionSearch.trim().toLowerCase();
   const searchScopedSessions = searchQuery
-    ? filteredSessions.filter((s) => {
+    ? markFilteredSessions.filter((s) => {
         const title = s.name
           || (s.isDraft
               ? (getSessionDisplayFirstMessage(s.firstMessage).slice(0, 50) || t("desktop.newSessionDraft"))
@@ -1026,10 +1033,47 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           || s.id.slice(0, 12);
         return title.toLowerCase().includes(searchQuery);
       })
-    : filteredSessions;
+    : markFilteredSessions;
 
   // Build parent-child tree within the filtered set
   const sessionTree = buildSessionTree(searchScopedSessions);
+
+  // Mark-filter picker anchored to the filter button (not the pointer).
+  const openMarkFilterMenu = useCallback((e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    openMenu(rect.left, rect.bottom + 4, [
+      {
+        label: t("desktop.markFilterAll"),
+        icon: <CircleDashed size={13} weight="regular" aria-hidden="true" />,
+        checked: markFilter === null,
+        onSelect: () => setMarkFilter(null),
+      },
+      {
+        label: t("desktop.markCompleted"),
+        icon: <SealCheck size={13} weight="regular" aria-hidden="true" />,
+        checked: markFilter === "completed",
+        onSelect: () => setMarkFilter("completed"),
+      },
+      {
+        label: t("desktop.markDiscussion"),
+        icon: <ChatCircle size={13} weight="regular" aria-hidden="true" />,
+        checked: markFilter === "discussion",
+        onSelect: () => setMarkFilter("discussion"),
+      },
+      {
+        label: t("desktop.markPending"),
+        icon: <ClockCountdown size={13} weight="regular" aria-hidden="true" />,
+        checked: markFilter === "pending",
+        onSelect: () => setMarkFilter("pending"),
+      },
+      {
+        label: t("desktop.markAbandoned"),
+        icon: <XCircle size={13} weight="regular" aria-hidden="true" />,
+        checked: markFilter === "abandoned",
+        onSelect: () => setMarkFilter("abandoned"),
+      },
+    ]);
+  }, [markFilter, openMenu, t]);
 
   const currentWt = worktreeState?.worktrees.find((w) => w.path === selectedCwd)
     ?? worktreeState?.worktrees.find((w) => w.isMain)
@@ -1351,6 +1395,24 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 }}
               />
             </div>
+            <button
+              onClick={openMarkFilterMenu}
+              title={t("desktop.markFilter")}
+              aria-label={t("desktop.markFilter")}
+              aria-expanded={markFilter !== null}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 24, height: 24, padding: 0,
+                background: "none", border: "none",
+                color: markFilter ? "var(--accent)" : "var(--text-dim)",
+                cursor: "pointer", borderRadius: 5, flexShrink: 0,
+                transition: "color 0.12s, background 0.12s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+            >
+              <FunnelSimple size={13} weight={markFilter ? "fill" : "regular"} aria-hidden="true" />
+            </button>
             <button
               onClick={() => { setSearchOpen(false); setSessionSearch(""); }}
               title={t("desktop.exitSearch")}
@@ -1856,7 +1918,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           )}
           {!loading && !error && searchScopedSessions.length === 0 && (
             <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-              {searchQuery ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
+              {searchQuery || markFilter ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
             </div>
           )}
           {sessionTree.map((node) => (

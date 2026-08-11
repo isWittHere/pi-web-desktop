@@ -83,6 +83,8 @@ export const zhCNLocale = {
     "desktop.close": "关闭",
     "desktop.viewFullHistory": "查看完整历史",
     "desktop.mark": "标记",
+    "desktop.markFilter": "按标记筛选",
+    "desktop.markFilterAll": "全部标记",
     "desktop.markCompleted": "完成",
     "desktop.markDiscussion": "讨论",
     "desktop.markPending": "待定",

@@ -83,6 +83,8 @@ export const enLocale = {
     "desktop.close": "Close",
     "desktop.viewFullHistory": "View full history",
     "desktop.mark": "Mark",
+    "desktop.markFilter": "Filter by mark",
+    "desktop.markFilterAll": "All marks",
     "desktop.markCompleted": "Completed",
     "desktop.markDiscussion": "Discussion",
     "desktop.markPending": "Pending",
