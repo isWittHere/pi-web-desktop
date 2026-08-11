@@ -1404,14 +1404,23 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 24, height: 24, padding: 0,
                 background: "none", border: "none",
-                color: markFilter ? "var(--accent)" : "var(--text-dim)",
+                color: markFilter ? SESSION_MARK_COLORS[markFilter] : "var(--text-dim)",
                 cursor: "pointer", borderRadius: 5, flexShrink: 0,
                 transition: "color 0.12s, background 0.12s",
               }}
               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
             >
-              <FunnelSimple size={13} weight={markFilter ? "fill" : "regular"} aria-hidden="true" />
+              {markFilter ? (
+                (() => {
+                  const Icon = SESSION_MARK_ICONS[markFilter];
+                  return (
+                    <Icon size={13} weight={markFilter === "completed" ? "fill" : "regular"} aria-hidden="true" />
+                  );
+                })()
+              ) : (
+                <FunnelSimple size={13} weight="regular" aria-hidden="true" />
+              )}
             </button>
             <button
               onClick={() => { setSearchOpen(false); setSessionSearch(""); }}
