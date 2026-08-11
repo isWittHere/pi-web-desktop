@@ -5,12 +5,14 @@ import { getStoredNotificationDuration } from "@/components/ChatConfig";
 
 // Screen-level completion notifications.
 //
-// When a task finishes while the user is not focused on the app, we ask the
-// Electron main process (via the preload bridge) to show a small frameless
-// popup at the top-right of the display. The main process decides whether to
-// actually show it (it stays silent when the app is focused, since the user
-// can see the chat stream anyway); the renderer only supplies content and the
-// current theme CSS variables so the popup matches the active pi CLI theme.
+// When a task finishes while the user is not watching that conversation, we
+// ask the Electron main process (via the preload bridge) to show a small
+// frameless popup at the top-right of the display. The main process decides
+// whether to actually show it: it suppresses only the card for the session
+// currently open in a visible+focused window (the user can see that chat
+// stream anyway) — background completions, hidden or unfocused windows always
+// notify. The renderer only supplies content and the current theme CSS
+// variables so the popup matches the active pi CLI theme.
 //
 // In plain browser mode (window.piDesktop is undefined) this degrades to a
 // no-op — no system notification, no error.
@@ -24,6 +26,10 @@ import { getStoredNotificationDuration } from "@/components/ChatConfig";
 //   <cost>  <context>
 export interface NotificationDonePayload {
   sessionId?: string;
+  /** Id of the session currently open in the main window (if any) — lets the
+   *  main process suppress only cards for the conversation the user is
+   *  actually looking at (window visible+focused), never background ones. */
+  focusedSessionId?: string;
   title: string;
   workspace?: string;
   model?: string;
@@ -85,6 +91,7 @@ export function useNotifications() {
     void window.piDesktop
       .showNotification({
         sessionId: payload.sessionId,
+        focusedSessionId: payload.focusedSessionId,
         title: payload.title,
         detail: [payload.workspace, payload.model, payload.usage].filter(Boolean).join("\n"),
         duration: getStoredNotificationDuration(),

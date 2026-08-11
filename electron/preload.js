@@ -32,6 +32,13 @@ contextBridge.exposeInMainWorld("piDesktop", {
   // Returns { shown: boolean } — false when the main window is focused or
   // the payload is invalid, so callers can decide on in-app fallback.
   showNotification: (payload) => ipcRenderer.invoke("notification:show", payload),
+  // Clicking a notification card asks the renderer to select that session
+  // (the main process already raised/focused the window).
+  onNotificationNavigate: (callback) => {
+    const listener = (_event, sessionId) => callback(sessionId);
+    ipcRenderer.on("notification:navigate", listener);
+    return () => ipcRenderer.removeListener("notification:navigate", listener);
+  },
 });
 
 // Bridge used by the standalone notification popup window (loaded from
@@ -43,7 +50,7 @@ contextBridge.exposeInMainWorld("piNotification", {
     ipcRenderer.on("notification:data", listener);
     return () => ipcRenderer.removeListener("notification:data", listener);
   },
-  onClicked: () => ipcRenderer.send("notification:clicked"),
+  onClicked: (sessionId) => ipcRenderer.send("notification:clicked", sessionId),
   // Dismiss (×) button: hides the card without raising the main window.
   onDismiss: () => ipcRenderer.send("notification:dismiss"),
   // Hover state — the main process pauses/resumes the auto-hide timer.

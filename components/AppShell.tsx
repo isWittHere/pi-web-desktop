@@ -554,27 +554,57 @@ export function AppShell() {
     }
     return {
       sessionId: session?.id,
-      title: session?.name ?? session?.firstMessage ?? t("desktop.notificationTaskDone"),
+      // The session currently open in the main window — lets the main process
+      // suppress only the card for the conversation the user is looking at
+      // (window visible+focused), while background completions always notify.
+      focusedSessionId: selectedSession?.id,
+      // Collapse SDK-expanded <skill> blocks in the stored first message to
+      // /skill:name, matching the session list titles (lib/skill-block.ts).
+      title: session?.name
+        ?? (session?.firstMessage ? getSessionDisplayFirstMessage(session.firstMessage) : undefined)
+        ?? t("desktop.notificationTaskDone"),
       ...parts,
     };
-  }, [t]);
+  }, [t, selectedSession]);
 
   const handleAgentEnd = useCallback((info: { model: { provider: string; modelId: string } | null; stats: SessionStatsInfo | null; contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null }) => {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
-    // Screen-level completion notification (only shown when the app is not focused).
+    // Screen-level completion notification — the main process suppresses it
+    // only when this session is the one open in a visible+focused window.
     notifyDone(buildDonePayload(selectedSession, info.model, info.stats, info.contextUsage));
   }, [buildDonePayload, notifyDone, selectedSession]);
 
   // A session that finished while not open in the chat area (other workspace,
   // or a second session of the current workspace) — play the completion sound
-  // when enabled, like the open session's own end tone.
-  const handleBackgroundTaskDone = useCallback((session: SessionInfo) => {
+  // when enabled, like the open session's own end tone. The card carries the
+  // same shape as the open session's: last model + accumulated cost are read
+  // back from the session file (there is no live stats handle in this shell).
+  const handleBackgroundTaskDone = useCallback(async (session: SessionInfo) => {
     if (soundEnabledRef.current) playDoneSound();
-    // Background sessions have no live stats/model in this shell; surface
-    // workspace/branch and title only.
-    notifyDone(buildDonePayload(session, null, null, null));
-  }, [buildDonePayload, notifyDone, playDoneSound, soundEnabledRef]);
+    // Notifications off — skip the stats fetch entirely (sound is independent).
+    if (!notificationsEnabled) return;
+    let model: { provider: string; modelId: string } | null = null;
+    let stats: SessionStatsInfo | null = null;
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(session.id)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const s = data?.stats;
+        if (s?.model?.modelId) model = s.model;
+        if (typeof s?.cost === "number" && s.cost > 0) {
+          stats = {
+            sessionId: session.id,
+            cost: s.cost,
+            tokens: s.tokens ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          } as SessionStatsInfo;
+        }
+      }
+    } catch {
+      // Stats unavailable — keep the basic workspace/branch card.
+    }
+    notifyDone(buildDonePayload(session, model, stats, null));
+  }, [buildDonePayload, notifyDone, notificationsEnabled, playDoneSound, soundEnabledRef]);
 
   const handleSessionForked = useCallback((newSessionId: string) => {
     setRefreshKey((k) => k + 1);

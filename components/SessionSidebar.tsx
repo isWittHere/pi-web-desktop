@@ -357,6 +357,18 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // reference must not resize/reshuffle the deps (React errors on that).
   const onBackgroundTaskDoneRef = useRef(onBackgroundTaskDone);
   useEffect(() => { onBackgroundTaskDoneRef.current = onBackgroundTaskDone; });
+  // Clicking a notification card asks the shell to jump to the session that
+  // finished. The main process raised/focused the window already; we only
+  // need to select the target conversation (it may not be the open one).
+  const onSelectSessionRef = useRef(onSelectSession);
+  useEffect(() => { onSelectSessionRef.current = onSelectSession; });
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.piDesktop?.onNotificationNavigate) return;
+    return window.piDesktop.onNotificationNavigate((sessionId) => {
+      const session = allSessionsRef.current.find((s) => s.id === sessionId);
+      if (session) onSelectSessionRef.current?.(session);
+    });
+  }, []);
   // Once a lightweight running snapshot arrives it owns the dynamic state;
   // late /api/sessions responses cannot revive an older embedded snapshot.
   const runningSnapshotAuthoritativeRef = useRef(false);

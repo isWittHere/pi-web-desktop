@@ -46,6 +46,12 @@ let notificationDurationMs = NOTIFICATION_DURATION_MS; // latest show duration
 // the fallback does not double-notify. Entries expire after a few minutes.
 const recentlyNotifiedSessions = new Map(); // id -> timestamp
 const NOTIFICATION_HANDLED_TTL_MS = 5 * 60 * 1000;
+// A fallback card shown by the main process marks the session handled; if the
+// renderer's own notifyDone lands right after (window restored from tray),
+// suppress the duplicate card within this short window. Long enough to cover
+// the 3s poll + IPC latency, short enough that a genuine re-run of the same
+// session minutes later still notifies.
+const NOTIFICATION_REPEAT_GUARD_MS = 30 * 1000;
 let runningPollTimer = null;
 let knownRunningSessionIds = new Set();
 
@@ -179,24 +185,34 @@ function showScreenNotification(data) {
   if (!notificationHovered) scheduleNotificationHide();
 }
 
-// Renderer asks for a screen notification. The popup is only shown when the
-// main window is NOT focused (the user is elsewhere); when the app is in
-// focus an in-app toast would be enough, so we stay silent to avoid
-// duplicating feedback. Returns whether a notification was shown.
+// Renderer asks for a screen notification. The popup is suppressed only when
+// the user is actively looking at the finished conversation — i.e. the window
+// is visible AND focused AND that session is the one open in the chat area.
+// Background completions (any other session) always notify, as do hidden or
+// unfocused windows. Returns whether a notification was shown.
 ipcMain.handle("notification:show", (event, payload) => {
   const mainVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
   const mainFocused = mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused();
-  // Suppress only when the user is actively looking at the app (visible AND
-  // focused). Hidden-to-tray or minimized windows must not suppress.
-  if (mainVisible && mainFocused) {
+  const isFocusedSession = typeof payload?.sessionId === "string" && payload.sessionId && payload.sessionId === payload.focusedSessionId;
+  // Suppress only when the user is watching the finished conversation itself
+  // (visible AND focused AND the open session). Hidden-to-tray, minimized or
+  // unfocused windows must not suppress; neither may other sessions' cards.
+  if (mainVisible && mainFocused && isFocusedSession) {
     return { shown: false };
   }
   if (!payload || typeof payload.title !== "string" || !payload.title) {
     return { shown: false };
   }
   // Mark this session as handled so the polling fallback does not re-notify.
+  // Also guard against double cards: if a fallback card for this session was
+  // just shown (window restored from tray, renderer catches up), stay silent.
   if (typeof payload.sessionId === "string" && payload.sessionId) {
-    recentlyNotifiedSessions.set(payload.sessionId, Date.now());
+    const now = Date.now();
+    const prev = recentlyNotifiedSessions.get(payload.sessionId);
+    if (prev !== undefined && now - prev < NOTIFICATION_REPEAT_GUARD_MS) {
+      return { shown: false };
+    }
+    recentlyNotifiedSessions.set(payload.sessionId, now);
   }
   // Honor the configured display duration (chat settings). "forever" keeps
   // the card until dismissed; anything else is parsed as seconds.
@@ -207,6 +223,7 @@ ipcMain.handle("notification:show", (event, payload) => {
     notificationDurationMs = Number.isFinite(secs) && secs > 0 ? secs * 1000 : NOTIFICATION_DURATION_MS;
   }
   showScreenNotification({
+    sessionId: typeof payload.sessionId === "string" ? payload.sessionId : undefined,
     title: payload.title,
     detail: typeof payload.detail === "string" ? payload.detail.slice(0, 120) : undefined,
     cssVars: payload.cssVars && typeof payload.cssVars === "object" ? payload.cssVars : undefined,
@@ -214,10 +231,15 @@ ipcMain.handle("notification:show", (event, payload) => {
   return { shown: true };
 });
 
-// Clicking the popup raises the main window and hides the popup.
-ipcMain.on("notification:clicked", () => {
+// Clicking the popup raises the main window, hides the popup, and — when the
+// card belongs to a session — asks the renderer to select that session so the
+// user lands on the conversation that just finished.
+ipcMain.on("notification:clicked", (_event, sessionId) => {
   hideNotificationWindow();
   showMainWindow();
+  if (typeof sessionId === "string" && sessionId && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("notification:navigate", sessionId);
+  }
 });
 
 // The popup's dismiss (×) button only hides the card — it does not raise the
@@ -261,6 +283,15 @@ function httpGetJson(pathname) {
 }
 
 async function pollRunningSessions() {
+  // While the main window is visible and focused the renderer is alive and
+  // drives notifications itself (open session suppressed, background sessions
+  // notified with full stats). Polling exists for frozen/hidden renderers, so
+  // skip the whole round-trip when the user is actively using the app — this
+  // also prevents a stale fallback card for the session the user is watching.
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && mainWindow.isFocused()) {
+    knownRunningSessionIds = new Set();
+    return;
+  }
   try {
     const body = await httpGetJson("/api/agent/running");
     const ids = Array.isArray(body?.runningSessionIds) ? body.runningSessionIds : [];
@@ -288,16 +319,39 @@ async function notifyFinishedSession(sessionId) {
     const body = await httpGetJson(`/api/sessions/${encodeURIComponent(sessionId)}`);
     const info = body?.info;
     if (!info) return;
+    const stats = body?.stats;
     const workspace = info.projectRoot ?? info.cwd ?? "";
     const name = workspace.split(/[\\/]/).pop() || workspace;
     const branch = info.worktreeBranch;
+    const detailBits = [branch ? `${name} · ${branch}` : name];
+    // Match the renderer card's detail lines: model, then $cost.
+    if (stats?.model?.modelId) detailBits.push(stats.model.modelId);
+    if (typeof stats?.cost === "number" && stats.cost > 0) {
+      detailBits.push(stats.cost >= 0.01 ? `$${stats.cost.toFixed(2)}` : "<$0.01");
+    }
+    // Mark handled so a renderer notifyDone arriving right after (window
+    // restored from tray) is suppressed by the repeat guard, not double-shown.
+    recentlyNotifiedSessions.set(sessionId, Date.now());
     showScreenNotification({
-      title: info.name ?? info.firstMessage ?? "Task complete",
-      detail: branch ? `${name} · ${branch}` : name,
+      sessionId,
+      title: cleanSessionTitle(info.name ?? info.firstMessage ?? "Task complete"),
+      detail: detailBits.join("\n"),
     });
   } catch {
     // Session info unavailable — nothing we can show.
   }
+}
+
+// Collapse an SDK-expanded <skill> block in a stored first user message back
+// to the /skill:name command the user actually typed (mirrors
+// lib/skill-block.ts so the popup title matches the session list). Plain
+// messages pass through untouched.
+function cleanSessionTitle(text) {
+  if (typeof text !== "string" || !text) return text;
+  const match = /^<skill name="([^"]+)" location="[^"]*">\n[\s\S]*?\n<\/skill>(?:\n\n([\s\S]+))?$/.exec(text);
+  if (!match) return text;
+  const args = (match[2] ?? "").trim();
+  return `/skill:${match[1]}${args ? ` ${args}` : ""}`;
 }
 
 // Start polling once the server is expected to be up (app ready). The poll is
