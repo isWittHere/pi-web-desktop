@@ -2479,7 +2479,11 @@ function SessionItem({
           : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
         borderLeft: confirmDelete
           ? "2px solid #ef4444"
-          : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
+          : session.mark === "completed"
+            ? "2px solid var(--accent-green)"
+            : session.mark === "pending"
+              ? "2px dashed var(--accent-orange)"
+              : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
         transition: "background 0.1s",
         opacity: deleting ? 0.5 : 1,
         gap: 6,
@@ -2615,7 +2619,17 @@ function SessionItem({
                   />
                 </div>
               ) : (
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
+                <span
+                  style={{
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1,
+                    // Completed/abandoned sessions read as settled: fade the title.
+                    ...(session.mark === "completed" || session.mark === "abandoned"
+                      ? { color: "var(--text-muted)" }
+                      : {}),
+                    // Abandoned sessions additionally get a strikethrough.
+                    ...(session.mark === "abandoned" ? { textDecoration: "line-through" } : {}),
+                  }}
+                >
                   {title}
                 </span>
               )}
