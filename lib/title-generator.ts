@@ -17,11 +17,11 @@ const TITLE_MAX_TOKENS = 128;
 const MAX_TITLE_LENGTH = 60;
 const MAX_ROUNDS = 2;
 
-export const TITLE_PROMPT = `Create a concise title for this coding-agent chat session based on the conversation above.
+export const TITLE_PROMPT = `Create a concise title for this chat session based on the conversation above.
 
 Requirements:
 - Match the primary language used in the conversation (中文 or English).
-- Describe the user's concrete goal or the work done, not the act of chatting.
+- Describe the user's concrete goal, question, or topic — not the act of chatting.
 - Use 4-12 words for space-separated languages, or 8-24 characters for CJK text.
 - Do not call any tools.
 - Return only the title as plain text: no quotes, labels, markdown, or explanation.`;
@@ -109,6 +109,51 @@ export function extractRecentTurns(
   return sliced;
 }
 
+/** CJK (Chinese/Japanese/Korean) letter, used to pick speaker labels. */
+const CJK_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
+
+/**
+ * Pick speaker labels that match the conversation's primary language so the
+ * model sees the excerpt as a document to name, not a chat to continue.
+ * Returns [userLabel, assistantLabel] already wrapped in markdown bold with
+ * the right colon for the language.
+ */
+function speakerLabels(turns: TitleTurn[]): [string, string] {
+  let cjkChars = 0;
+  let latinChars = 0;
+  for (const turn of turns) {
+    for (const char of turn.text) {
+      if (CJK_RE.test(char)) cjkChars += 1;
+      else if (/[a-zA-Z]/.test(char)) latinChars += 1;
+    }
+  }
+  return cjkChars >= latinChars
+    ? ["**用户：**", "**助手：**"]
+    : ["**User:**", "**Assistant:**"];
+}
+
+/**
+ * Build the single-user-message prompt text for title generation.
+ *
+ * The conversation excerpt is rendered as a marked-up document (speaker
+ * labels, `---` separators) rather than as user/assistant turns, so the model
+ * treats it as reference material for a naming task — never as a chat it
+ * should continue. TITLE_PROMPT follows after a final separator.
+ */
+export function buildTitlePromptText(turns: TitleTurn[]): string {
+  const turnsForPrompt = turns.length > 0 ? turns : [{ role: "user" as const, text: "New session" }];
+  const [userLabel, assistantLabel] = speakerLabels(turnsForPrompt);
+
+  const lines: string[] = ["## 会话内容"];
+  for (const turn of turnsForPrompt) {
+    const label = turn.role === "user" ? userLabel : assistantLabel;
+    lines.push(`${label}\n${turn.text}`);
+    lines.push("---");
+  }
+  lines.push(TITLE_PROMPT);
+  return lines.join("\n");
+}
+
 /**
  * Strip wrapper punctuation/labels from a raw model reply so it can be used
  * verbatim as a session title.
@@ -185,12 +230,10 @@ function errorMessage(error: unknown): string {
  * Generate a session title with an already-configured model.
  *
  * Resolves the model + auth from the user's real `~/.pi/agent/models.json`
- * and `auth.json`, then runs a single-shot, tool-less completion. The title
- * instruction is folded into the trailing user message (or appended as a new
- * user message) rather than sent as the system prompt: some models treat an
- * unanswered trailing user message as an active request, and the title
- * instruction appended after it keeps the run focused on naming, not
- * answering.
+ * and `auth.json`, then runs a single-shot, tool-less completion. The
+ * conversation excerpt and title instruction are combined into one user
+ * message (see `buildTitlePromptText`), so the request is a naming task —
+ * never a chat continuation the model could keep answering.
  */
 export async function generateSessionTitle(options: GenerateTitleOptions): Promise<GeneratedTitle> {
   const { provider, modelId, turns, signal } = options;
@@ -211,27 +254,15 @@ export async function generateSessionTitle(options: GenerateTitleOptions): Promi
     throw new Error(`No API key found for "${provider}"`);
   }
 
-  const turnsWithPrompt = [...turnsForPrompt];
-  const last = turnsWithPrompt[turnsWithPrompt.length - 1];
-  if (last && last.role === "user") {
-    // Fold the title request into the trailing user message so the provider
-    // does not receive two consecutive user messages.
-    last.text = `${last.text}\n\n${TITLE_PROMPT}`;
-  } else {
-    turnsWithPrompt.push({ role: "user", text: TITLE_PROMPT });
-  }
-
-  // Minimal text-only messages: no tool calls/thinking/tool results, so the
-  // provider adapters only need `role` + `content`. Assistant turns carry a
-  // zeroed `usage` because the context estimator reads it when scanning for a
-  // trailing assistant message. `transformMessages` tolerates the remaining
-  // missing optional fields (cross-model checks degrade safely).
-  const messages: Message[] = turnsWithPrompt.map((turn) => ({
-    role: turn.role,
-    content: [{ type: "text", text: turn.text }],
-    ...(turn.role === "assistant" ? { usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 } } : {}),
+  // Single user message: the excerpt is rendered as a marked-up document
+  // (speaker labels + separators) followed by TITLE_PROMPT. This keeps the
+  // request a naming task, never a chat continuation, so an unanswered
+  // trailing user message is not mistaken for an active question.
+  const messages: Message[] = [{
+    role: "user",
+    content: [{ type: "text", text: buildTitlePromptText(turnsForPrompt) }],
     timestamp: Date.now(),
-  }) as Message);
+  } as Message];
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TITLE_TIMEOUT_MS);
