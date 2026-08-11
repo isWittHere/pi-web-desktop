@@ -7,10 +7,12 @@ import {
   EyeSlashIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  StarIcon,
 } from "@phosphor-icons/react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon } from "@/components/ProviderIcon";
+import type { DiscoveredModel } from "@/lib/model-discovery";
 import {
   getProviderIconMode,
   getProviderIconModesVersion,
@@ -84,6 +86,12 @@ type ModelTestState =
   | { phase: "success"; latencyMs?: number; status?: number; responseText?: string }
   | { phase: "error"; message: string; latencyMs?: number; status?: number };
 
+type ModelDiscoveryState =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "success"; models: DiscoveredModel[]; endpoint: string }
+  | { phase: "error"; message: string };
+
 type Selection =
   | { type: "provider"; name: string }
   | { type: "model"; providerName: string; index: number }
@@ -98,6 +106,38 @@ function useModelTranslation() {
     (key: string, values?: Record<string, string | number>) => t(key, values),
     [t],
   );
+}
+
+const FAVORITE_MODELS_KEY = "pi-favorite-models";
+
+function readFavoriteModels(): Set<string> {
+  try {
+    const stored = localStorage.getItem(FAVORITE_MODELS_KEY);
+    return stored ? new Set<string>(JSON.parse(stored)) : new Set<string>();
+  } catch {
+    return new Set<string>();
+  }
+}
+
+/** Favorite state shared with the ChatInput model selector (`provider:modelId`). */
+function useFavoriteModels(): { favorites: Set<string>; toggleFavorite: (key: string) => void } {
+  const [favorites, setFavorites] = useState<Set<string>>(() => readFavoriteModels());
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === FAVORITE_MODELS_KEY) setFavorites(readFavoriteModels());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  const toggleFavorite = useCallback((key: string) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try { localStorage.setItem(FAVORITE_MODELS_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+  return { favorites, toggleFavorite };
 }
 
 // ── Form field helpers ────────────────────────────────────────────────────────
@@ -225,12 +265,18 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 // ── Provider detail ───────────────────────────────────────────────────────────
 
-function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
+function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddModels }: {
   name: string; provider: ProviderEntry;
   onChange: (p: ProviderEntry) => void; onRename: (n: string) => void; onDelete: () => void;
+  onAddModels: (models: DiscoveredModel[]) => void;
 }) {
   const t = useModelTranslation();
   const [editingName, setEditingName] = useState(name);
+  const [discoveryState, setDiscoveryState] = useState<ModelDiscoveryState>({ phase: "idle" });
+  const [discoveryQuery, setDiscoveryQuery] = useState("");
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+  const discoveryRequestIdRef = useRef(0);
+  const selectShownRef = useRef<HTMLInputElement>(null);
   useEffect(() => setEditingName(name), [name]);
   const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) => onChange({ ...provider, [k]: v });
 
@@ -238,6 +284,79 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
     if (!provider.api) onChange({ ...provider, api: "openai-completions" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider.api]);
+
+  useEffect(() => {
+    discoveryRequestIdRef.current += 1;
+    setDiscoveryState({ phase: "idle" });
+    setDiscoveryQuery("");
+    setSelectedModelIds([]);
+  }, [name, provider.baseUrl, provider.api, provider.apiKey]);
+
+  const handleDiscoverModels = useCallback(async () => {
+    if (!provider.baseUrl?.trim() || discoveryState.phase === "loading") return;
+    const requestId = ++discoveryRequestIdRef.current;
+    setDiscoveryState({ phase: "loading" });
+    setSelectedModelIds([]);
+    try {
+      const res = await fetch("/api/models-config/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerName: name, provider: { ...provider, models: undefined } }),
+      });
+      const data = await res.json() as { models?: DiscoveredModel[]; endpoint?: string; error?: string };
+      if (requestId !== discoveryRequestIdRef.current) return;
+      if (!res.ok || data.error || !data.models) {
+        setDiscoveryState({ phase: "error", message: data.error ?? `HTTP ${res.status}` });
+        return;
+      }
+      setDiscoveryState({ phase: "success", models: data.models, endpoint: data.endpoint ?? provider.baseUrl ?? "" });
+    } catch (error) {
+      if (requestId !== discoveryRequestIdRef.current) return;
+      setDiscoveryState({ phase: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  }, [discoveryState.phase, name, provider]);
+
+  const existingModelIds = new Set((provider.models ?? []).map((model) => model.id));
+  const discoveredModels = discoveryState.phase === "success" ? discoveryState.models : [];
+  const normalizedDiscoveryQuery = discoveryQuery.trim().toLocaleLowerCase();
+  const filteredDiscoveredModels = discoveredModels.filter((model) => !normalizedDiscoveryQuery
+    || model.id.toLocaleLowerCase().includes(normalizedDiscoveryQuery)
+    || model.name?.toLocaleLowerCase().includes(normalizedDiscoveryQuery));
+  const shownDiscoveredModels = filteredDiscoveredModels.slice(0, 300);
+  const selectableShownIds = shownDiscoveredModels
+    .filter((model) => !existingModelIds.has(model.id))
+    .map((model) => model.id);
+  const selectedCount = selectedModelIds.filter((id) => !existingModelIds.has(id)).length;
+  const allShownSelected = selectableShownIds.length > 0
+    && selectableShownIds.every((id) => selectedModelIds.includes(id));
+  const someShownSelected = !allShownSelected
+    && selectableShownIds.some((id) => selectedModelIds.includes(id));
+
+  useEffect(() => {
+    if (selectShownRef.current) selectShownRef.current.indeterminate = someShownSelected;
+  }, [someShownSelected]);
+
+  const toggleDiscoveredModel = (id: string) => {
+    setSelectedModelIds((current) => current.includes(id)
+      ? current.filter((entry) => entry !== id)
+      : [...current, id]);
+  };
+
+  const toggleShownModels = () => {
+    const shownIds = new Set(selectableShownIds);
+    setSelectedModelIds((current) => allShownSelected
+      ? current.filter((id) => !shownIds.has(id))
+      : Array.from(new Set([...current, ...selectableShownIds])));
+  };
+
+  const addSelectedModels = () => {
+    if (discoveryState.phase !== "success") return;
+    const selected = new Set(selectedModelIds);
+    const additions = discoveryState.models.filter((model) => selected.has(model.id) && !existingModelIds.has(model.id));
+    if (additions.length === 0) return;
+    onAddModels(additions);
+    setSelectedModelIds([]);
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -275,6 +394,78 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
       <Field label={t("desktop.modelsApi")}>
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
       </Field>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={handleDiscoverModels}
+            disabled={!provider.baseUrl?.trim() || discoveryState.phase === "loading"}
+            style={{ padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 5, fontSize: 11, cursor: (!provider.baseUrl?.trim() || discoveryState.phase === "loading") ? "not-allowed" : "pointer", color: (!provider.baseUrl?.trim() || discoveryState.phase === "loading") ? "var(--text-dim)" : "var(--text-muted)" }}>
+            {discoveryState.phase === "loading" ? t("desktop.modelsImportingModels") : t("desktop.modelsImportModels")}
+          </button>
+          {discoveryState.phase === "success" && (
+            <>
+              <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  ref={selectShownRef}
+                  type="checkbox"
+                  checked={allShownSelected}
+                  onChange={toggleShownModels}
+                  aria-label={t("desktop.modelsImportSelectShown")}
+                  style={{ margin: 0, cursor: "pointer" }}
+                />
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("desktop.modelsImportSelectShown")}</span>
+              </span>
+              <button onClick={addSelectedModels} disabled={selectedCount === 0}
+                style={{ padding: "4px 8px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: selectedCount === 0 ? "not-allowed" : "pointer", fontSize: 11, opacity: selectedCount === 0 ? 0.5 : 1 }}>
+                {selectedCount > 0 ? t("desktop.modelsImportAddSelectedCount", { count: selectedCount }) : t("desktop.modelsImportAddSelected")}
+              </button>
+            </>
+          )}
+        </div>
+        {discoveryState.phase === "error" && (
+          <span style={{ fontSize: 11, color: "#ef4444" }}>{discoveryState.message}</span>
+        )}
+        {discoveryState.phase === "success" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <input
+              value={discoveryQuery}
+              onChange={(e) => setDiscoveryQuery(e.target.value)}
+              placeholder={t("desktop.modelsImportFilter", { count: discoveryState.models.length })}
+              aria-label={t("desktop.modelsImportFilterLabel")}
+              style={{ ...inputStyle, fontSize: 11 }}
+            />
+            <div style={{ maxHeight: 240, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg-panel)" }}>
+              {filteredDiscoveredModels.length === 0 ? (
+                <div style={{ padding: 10, color: "var(--text-dim)", fontSize: 11 }}>{t("desktop.modelsImportNoMatches")}</div>
+              ) : shownDiscoveredModels.map((model) => {
+                const alreadyAdded = existingModelIds.has(model.id);
+                const isSelected = selectedModelIds.includes(model.id);
+                return (
+                  <label key={model.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", cursor: alreadyAdded ? "default" : "pointer", opacity: alreadyAdded ? 0.55 : 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={alreadyAdded || isSelected}
+                      disabled={alreadyAdded}
+                      onChange={() => toggleDiscoveredModel(model.id)}
+                      style={{ margin: 0, cursor: alreadyAdded ? "default" : "pointer" }}
+                    />
+                    <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{model.id}</span>
+                    {model.name && model.name !== model.id && (
+                      <span style={{ fontSize: 10, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180 }}>{model.name}</span>
+                    )}
+                    {alreadyAdded && <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0 }}>{t("desktop.modelsImportAdded")}</span>}
+                  </label>
+                );
+              })}
+            </div>
+            <span title={discoveryState.endpoint} style={{ fontSize: 10, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {shownDiscoveredModels.length < filteredDiscoveredModels.length
+                ? t("desktop.modelsImportShowing", { shown: shownDiscoveredModels.length, total: filteredDiscoveredModels.length })
+                : t("desktop.modelsImportFetched", { count: discoveryState.models.length })}
+            </span>
+          </div>
+        )}
+      </div>
 
       <Field label={t("desktop.providerIcon")}>
         <IconModePicker providerId={name} api={provider.api} />
@@ -572,12 +763,16 @@ function ModelDetail({
   providerName,
   provider,
   model,
+  isFavorite,
+  onToggleFavorite,
   onChange,
   onDelete,
 }: {
   providerName: string;
   provider: ProviderEntry;
   model: ModelEntry;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
   onChange: (m: ModelEntry) => void;
   onDelete: () => void;
 }) {
@@ -702,7 +897,23 @@ function ModelDetail({
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <Field label={t("desktop.modelsIdRequired")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label={t("desktop.modelsName")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("desktop.modelsDisplayName")} /></Field>
+        <Field label={t("desktop.modelsName")}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("desktop.modelsDisplayName")} />
+            </div>
+            <button
+              type="button"
+              onClick={onToggleFavorite}
+              disabled={!model.id.trim()}
+              aria-label={isFavorite ? t("desktop.unfavorite") : t("desktop.favorite")}
+              title={isFavorite ? t("desktop.unfavorite") : t("desktop.favorite")}
+              style={{ padding: 0, background: "none", border: "none", cursor: model.id.trim() ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", flexShrink: 0, opacity: model.id.trim() ? 1 : 0.4 }}
+            >
+              <StarIcon size={16} weight={isFavorite ? "fill" : "regular"} color={isFavorite ? "var(--accent)" : "var(--text-muted)"} />
+            </button>
+          </div>
+        </Field>
       </div>
 
       <Field label={t("desktop.modelsApiOverride")}>
@@ -1338,6 +1549,7 @@ export function ModelsConfig({
 }) {
   const t = useModelTranslation();
   const isMobile = useIsMobile();
+  const { favorites: favoriteModels, toggleFavorite } = useFavoriteModels();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1391,6 +1603,20 @@ export function ModelsConfig({
 
   const updateProvider = useCallback((name: string, p: ProviderEntry) => {
     setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [name]: p } }));
+  }, []);
+
+  const addDiscoveredModels = useCallback((providerName: string, discovered: DiscoveredModel[]) => {
+    setConfig((prev) => {
+      const provider = prev.providers?.[providerName] ?? {};
+      const models = [...(provider.models ?? [])];
+      const existingIds = new Set(models.map((model) => model.id));
+      for (const discoveredModel of discovered) {
+        if (existingIds.has(discoveredModel.id)) continue;
+        existingIds.add(discoveredModel.id);
+        models.push({ id: discoveredModel.id, name: discoveredModel.name });
+      }
+      return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
+    });
   }, []);
 
   const renameProvider = useCallback((oldName: string, newName: string) => {
@@ -1506,6 +1732,7 @@ export function ModelsConfig({
           onChange={(p) => updateProvider(selection.name, p)}
           onRename={(n) => renameProvider(selection.name, n)}
           onDelete={() => deleteProvider(selection.name)}
+          onAddModels={(models) => addDiscoveredModels(selection.name, models)}
         />
       );
     }
@@ -1518,6 +1745,8 @@ export function ModelsConfig({
         providerName={selection.providerName}
         provider={provider}
         model={model}
+        isFavorite={favoriteModels.has(`${selection.providerName}:${model.id}`)}
+        onToggleFavorite={() => toggleFavorite(`${selection.providerName}:${model.id}`)}
         onChange={(m) => updateModel(selection.providerName, selection.index, m)}
         onDelete={() => removeModel(selection.providerName, selection.index)}
       />
@@ -1621,6 +1850,7 @@ export function ModelsConfig({
                     {/* Model rows */}
                     {models.map((m, i) => {
                       const isModelSelected = selection?.type === "model" && selection.providerName === pName && selection.index === i;
+                      const isFav = favoriteModels.has(`${pName}:${m.id}`);
                       return (
                         <div
                           key={i}
@@ -1632,9 +1862,13 @@ export function ModelsConfig({
                           <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: m.id ? "var(--text-muted)" : "var(--text-dim)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {m.id || t("desktop.modelsNewModel")}
                           </span>
-                          {m.reasoning && (
-                            <span style={{ fontSize: 9, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
-                          )}
+                          <StarIcon
+                            size={11}
+                            weight={isFav ? "fill" : "regular"}
+                            color={isFav ? "var(--accent)" : "var(--text-dim)"}
+                            style={{ flexShrink: 0, opacity: isFav ? 1 : 0.45 }}
+                            aria-hidden="true"
+                          />
                         </div>
                       );
                     })}
