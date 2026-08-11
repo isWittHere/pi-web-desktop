@@ -2463,8 +2463,18 @@ function SessionItem({
   // Marked rows (completed/pending) grow their accent line on hover/selection.
   // The line is a non-layout overlay scaled with transform, so the text never
   // shifts when it grows.
-  const markLineActive = (session.mark === "completed" || session.mark === "pending")
+  const markLineActive = !confirmDelete
+    && (session.mark === "completed" || session.mark === "pending")
     && (isSelected || hovered);
+  // Unified left line: delete-confirm red, completed green, pending orange,
+  // otherwise none. Rendered as a borderless overlay so it hugs the edge.
+  const lineColor = confirmDelete
+    ? "#ef4444"
+    : session.mark === "completed"
+      ? "var(--accent-green)"
+      : session.mark === "pending"
+        ? "var(--accent-orange)"
+        : null;
 
   return (
     <div
@@ -2482,9 +2492,7 @@ function SessionItem({
         background: confirmDelete
           ? "rgba(239,68,68,0.06)"
           : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
-        borderLeft: confirmDelete
-          ? "2px solid #ef4444"
-          : "2px solid transparent",
+        borderLeft: "none",
         transition: "background 0.1s",
         position: "relative",
         opacity: deleting ? 0.5 : 1,
@@ -2492,10 +2500,10 @@ function SessionItem({
         overflow: "hidden",
       }}
     >
-      {/* Mark line overlay: absolutely positioned so growing it never moves
-          the row content. scaleX(0.5) renders the same 2px as an unmarked
-          row's border; hover/selection animates it to full 4px width. */}
-      {!confirmDelete && (session.mark === "completed" || session.mark === "pending") && (
+      {/* Left accent line overlay: absolute at the row edge (no border on the
+          row itself), scaleX(0.5) for the 2px resting width, scaleX(1) for the
+          4px hover/selection width. Dashed only for pending marks. */}
+      {lineColor && (
         <div
           aria-hidden="true"
           style={{
@@ -2504,10 +2512,8 @@ function SessionItem({
             top: 0,
             bottom: 0,
             width: 4,
-            borderLeft: session.mark === "completed"
-              ? "4px solid var(--accent-green)"
-              : "4px dashed var(--accent-orange)",
-            transform: markLineActive ? "scaleX(1)" : "scaleX(0.5)",
+            borderLeft: `${session.mark === "pending" && !confirmDelete ? "dashed" : "solid"} 4px ${lineColor}`,
+            transform: `scaleX(${markLineActive ? 1 : 0.5})`,
             transformOrigin: "left center",
             transition: "transform 0.15s ease",
             pointerEvents: "none",
