@@ -2191,12 +2191,12 @@ function SessionMarkBadge({ mark }: { mark: SessionMark }) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 3,
+        gap: 4,
         color: SESSION_MARK_COLORS[mark],
         flexShrink: 0,
       }}
     >
-      <Icon size={9} weight={mark === "completed" ? "fill" : "regular"} aria-hidden="true" />
+      <Icon size={11} weight={mark === "completed" ? "fill" : "regular"} aria-hidden="true" />
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
     </span>
   );
