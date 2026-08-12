@@ -63,7 +63,7 @@ test("delegates event stream readiness and reconnection to AgentEventConnection"
   assert.match(source, /const EVENT_STREAM_READY_TIMEOUT_MS = 60_000/);
   assert.match(ensureSource, /eventConnectionRef\.current!\.ensureConnected\(sid\)/);
   assert.match(maintainSource, /eventConnectionRef\.current!\.maintain\(sid\)/);
-  assert.match(crossTabSource, /if \(!session\?\.id \|\| !sessionRunning\) return;["\s]*?maintainEventsConnected\(session\.id\)/);
+  assert.match(crossTabSource, /if \(!session\?\.id \|\| !sessionRunning\) return;[\s\S]*?maintainEventsConnected\(session\.id\)/);
   assert.doesNotMatch(source, /EVENT_STREAM_CONNECT_TIMEOUT_MS/);
   assert.doesNotMatch(source, /connectEvents\(/);
 });

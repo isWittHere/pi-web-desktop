@@ -1024,10 +1024,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     switch (event.type) {
       case "connected": {
         // A (re)established stream announces the agent's current readiness.
-        // When it reports a live run, re-arm the running state; the replayed
-        // message_start snapshot that follows restores the streaming bubble.
-        dispatch({ type: "end" });
+        // When it reports a live run, clear any stale streaming bubble and
+        // re-arm the running state; the replayed message_start snapshot that
+        // follows restores the streaming bubble.
         if (event.isStreaming === true) {
+          dispatch({ type: "end" });
           cancelEventStreamGrace();
           sdkAgentActiveRef.current = true;
           agentRunningRef.current = true;
