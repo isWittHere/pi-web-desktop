@@ -1,4 +1,4 @@
-export type FileViewerDisplayMode = "source" | "preview" | "diff";
+type FileViewerDisplayMode = "source" | "preview" | "diff";
 
 export interface FileViewerState {
   displayMode: FileViewerDisplayMode;
