@@ -2229,7 +2229,6 @@ function TimeGroupHeader({
         letterSpacing: "0.07em",
       }}
     >
-      <CaretRight size={9} weight="regular" style={{ transform: collapsed ? "none" : "rotate(90deg)", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {t(timeBucketKey(bucket), { count })}
       </span>
