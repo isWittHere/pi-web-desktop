@@ -52,6 +52,18 @@ function formatTokenCount(n: number): string {
   return String(n);
 }
 
+/** Compact human duration: "2h 3m" / "3m 4s" / "5s". */
+function formatDuration(ms: number): string {
+  if (ms <= 0) return "0s";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 type SessionCopyField = "file" | "id";
 
 export function SessionInfoBar({
@@ -466,6 +478,10 @@ export function SessionInfoBar({
                       </div>
                     );
 
+                    // Estimated active time (agent working, excluding human idle).
+                    const totalActiveMs = sessionStats.totalActiveMs ?? 0;
+                    const activeTimeStr = formatDuration(totalActiveMs);
+
                     return (
                       <>
                         {/* Session Info — direct display */}
@@ -485,6 +501,7 @@ export function SessionInfoBar({
                             <div className="session-stats-section-title">{translate("desktop.sessionInfoTokens")}</div>
                             <div className="session-stats-compact-grid">
                               {tokenRows.map(([label, val]) => row(label, val))}
+                              {totalActiveMs > 0 && row(translate("desktop.sessionInfoActiveTime"), activeTimeStr)}
                             </div>
                           </div>
                         </div>

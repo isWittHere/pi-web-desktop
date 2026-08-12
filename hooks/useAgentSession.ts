@@ -28,6 +28,8 @@ export interface SessionData {
     thinkingLevel: string;
     model: { provider: string; modelId: string } | null;
   };
+  /** Estimated active (non-idle) wall-clock time from the session file. */
+  totalActiveMs?: number;
   /** Server-side session metadata; modified (file mtime) anchors the cache. */
   info?: { modified?: string };
 }
@@ -434,7 +436,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const displayModel = isNew ? (newSessionModel ?? newSessionDefaultModel) : currentModel;
 
   const sessionStats = useMemo(() => {
-    if (sessionStatsOverride) return sessionStatsOverride;
+    if (sessionStatsOverride) {
+      return { ...sessionStatsOverride, totalActiveMs: data?.totalActiveMs };
+    }
     const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
     let cost = 0;
     let userMessages = 0;
@@ -468,9 +472,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       totalMessages: messages.length,
       tokens,
       cost,
+      totalActiveMs: data?.totalActiveMs,
       ...(contextUsage ? { contextUsage } : {}),
     } satisfies SessionStatsInfo;
-  }, [messages, sessionStatsOverride, contextUsage, data?.filePath, session?.id, session?.name]);
+  }, [messages, sessionStatsOverride, contextUsage, data?.filePath, data?.totalActiveMs, session?.id, session?.name]);
 
   // Apply a loaded session snapshot (messages, tree, leaf, metadata) to the
   // hook state. Shared by the full load path and the cache fast path.

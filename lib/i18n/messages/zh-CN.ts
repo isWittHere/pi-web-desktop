@@ -117,6 +117,7 @@ export const zhCNLocale = {
     "desktop.sessionInfoCacheWrite": "缓存写入",
     "desktop.sessionInfoCost": "费用",
     "desktop.sessionInfoContext": "上下文",
+    "desktop.sessionInfoActiveTime": "活跃时长",
     "desktop.copyFilePath": "复制文件路径",
     "desktop.copySessionId": "复制会话 ID",
     "desktop.sendMessageForSessionInfo": "发送消息或运行 /session 以加载会话信息",

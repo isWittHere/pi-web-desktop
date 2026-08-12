@@ -11,6 +11,7 @@ import {
   readSessionHeader,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
+import { computeSessionTotalActiveMs } from "@/lib/session-timing";
 import type { SessionMark } from "@/lib/types";
 
 const SESSION_MARKS: readonly SessionMark[] = ["completed", "discussion", "pending", "abandoned"];
@@ -177,12 +178,13 @@ export async function GET(
     }
 
     const sm = SessionManager.open(filePath);
-    const entries = sm.getEntries() as never;
+    const entries = sm.getEntries();
     const leafId = sm.getLeafId();
     const tree = projectTreeForResponse(sm.getTree());
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
-    const context = buildSessionContext(entries, leafId, { deferThinking, deferToolResultImages });
+    const context = buildSessionContext(entries as never, leafId, { deferThinking, deferToolResultImages });
+    const totalActiveMs = computeSessionTotalActiveMs(entries);
 
     const header = sm.getHeader();
     let modified = header?.timestamp ?? new Date().toISOString();
@@ -215,6 +217,8 @@ export async function GET(
       leafId,
       tree,
       context,
+      // Estimated active (non-idle) wall-clock time across the session file.
+      totalActiveMs,
       // Completion stats for the notification popup (model + accumulated cost).
       stats: computeSessionStats(entries),
     });

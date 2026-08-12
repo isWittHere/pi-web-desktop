@@ -117,6 +117,7 @@ export const enLocale = {
     "desktop.sessionInfoCacheWrite": "Cache Write",
     "desktop.sessionInfoCost": "Cost",
     "desktop.sessionInfoContext": "Context",
+    "desktop.sessionInfoActiveTime": "Active Time",
     "desktop.copyFilePath": "Copy file path",
     "desktop.copySessionId": "Copy session ID",
     "desktop.sendMessageForSessionInfo": "Send a message or run /session to load session info",

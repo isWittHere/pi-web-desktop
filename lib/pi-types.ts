@@ -46,6 +46,8 @@ export interface SessionStatsInfo {
   };
   cost: number;
   contextUsage?: ContextUsage;
+  /** Estimated active (non-idle) wall-clock time across the session file. */
+  totalActiveMs?: number;
 }
 
 interface PromptTemplateLike {
