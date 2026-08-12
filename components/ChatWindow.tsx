@@ -28,6 +28,8 @@ import {
 
 interface Props {
   session: SessionInfo | null;
+  /** True when the sidebar reports this session currently running elsewhere. */
+  sessionRunning?: boolean;
   newSessionCwd: string | null;
   /** Draft session id (when composing in an unsent draft) — used as the
    *  ChatInput draft key so typed text is keyed to the draft, not to the
@@ -134,7 +136,7 @@ function withAssistantBlocks(
 
 
 
-export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, notificationsEnabled, onNotificationsToggle, onContentReady }: Props) {
+export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, notificationsEnabled, onNotificationsToggle, onContentReady }: Props) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
 
@@ -192,7 +194,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
   } = useAgentSession({
-    session, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
+    session, sessionRunning, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
   });
 

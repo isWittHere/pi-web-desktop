@@ -128,7 +128,14 @@ export interface AgentSessionLike {
   };
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
-  readonly agent: { state?: { systemPrompt?: string; thinkingLevel?: string } };
+  readonly agent: {
+    state?: {
+      systemPrompt?: string;
+      thinkingLevel?: string;
+      /** Cumulative assistant message in flight, replayed on SSE reconnect. */
+      streamingMessage?: unknown;
+    };
+  };
   readonly extensionRunner: ExtensionRunnerLike;
   readonly promptTemplates: readonly PromptTemplateLike[];
   readonly resourceLoader: ResourceLoaderLike;
