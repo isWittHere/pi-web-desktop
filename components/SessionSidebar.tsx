@@ -1071,31 +1071,21 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Time-group the tree roots. Root nodes are bucketed by their own `modified`
   // time (pinned rows first); fork children always stay inside their parent's
-  // group so a tree never splits across headers. While searching or filtering
-  // by mark the groups collapse to a single flat list — the narrowed result is
-  // already small and headers would only add noise — but pinned rows still
-  // float to the top because pinning is an explicit user intent.
+  // group so a tree never splits across headers. Search / mark filtering keeps
+  // the same grouped view (groups are force-expanded while filtering so the
+  // narrowed results stay visible); pinning still floats to the top because it
+  // is an explicit user intent.
   const isFilteredView = Boolean(searchQuery || markFilter);
   const sessionGroups = (() => {
-    if (isFilteredView) {
-      const flatNodes = [...sessionTree].sort((a, b) => {
-        const aPin = a.session.pinned ? 1 : 0;
-        const bPin = b.session.pinned ? 1 : 0;
-        if (aPin !== bPin) return bPin - aPin;
-        return b.session.modified.localeCompare(a.session.modified);
-      });
-      return { flat: flatNodes, grouped: [] as { bucket: TimeBucket; nodes: SessionTreeNode[] }[] };
-    }
     const byBucket = new Map<TimeBucket, SessionTreeNode[]>();
     for (const bucket of TIME_BUCKET_ORDER) byBucket.set(bucket, []);
     for (const node of sessionTree) {
       const bucket = node.session.pinned ? "pinned" : bucketOf(node.session.modified);
       byBucket.get(bucket)!.push(node);
     }
-    const grouped = TIME_BUCKET_ORDER
+    return TIME_BUCKET_ORDER
       .filter((bucket) => byBucket.get(bucket)!.length > 0)
       .map((bucket) => ({ bucket, nodes: byBucket.get(bucket)! }));
-    return { flat: null, grouped };
   })();
 
   // Shared row renderer used by both the grouped and the flat (filtered) views.
@@ -2033,21 +2023,17 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               {searchQuery || markFilter ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
             </div>
           )}
-          {sessionGroups.flat ? (
-            sessionGroups.flat.map((node) => renderTreeItem(node))
-          ) : (
-            sessionGroups.grouped.map(({ bucket, nodes }) => (
-              <div key={bucket}>
-                <TimeGroupHeader
-                  bucket={bucket}
-                  count={countSessionRows(nodes)}
-                  collapsed={collapsedGroups[bucket]}
-                  onToggle={() => toggleGroup(bucket)}
-                />
-                {!collapsedGroups[bucket] && nodes.map((node) => renderTreeItem(node))}
-              </div>
-            ))
-          )}
+          {sessionGroups.map(({ bucket, nodes }) => (
+            <div key={bucket}>
+              <TimeGroupHeader
+                bucket={bucket}
+                count={countSessionRows(nodes)}
+                collapsed={isFilteredView ? false : collapsedGroups[bucket]}
+                onToggle={() => toggleGroup(bucket)}
+              />
+              {(isFilteredView || !collapsedGroups[bucket]) && nodes.map((node) => renderTreeItem(node))}
+            </div>
+          ))}
         </div>
       )}
 
