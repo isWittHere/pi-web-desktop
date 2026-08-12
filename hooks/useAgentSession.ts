@@ -18,6 +18,10 @@ import { createStreamUpdateScheduler, type StreamUpdateScheduler } from "@/lib/s
 import { AgentEventConnection, AgentEventConnectionError } from "@/lib/agent-event-connection";
 import type { AgentEventLike } from "@/lib/agent-event-wire";
 import { getCachedSession, setCachedSession } from "@/lib/session-cache";
+import { modelKey } from "@/lib/thinking-levels";
+import type { ThinkingLevelOption } from "@/lib/thinking-levels";
+import { useI18n } from "@/hooks/useI18n";
+import type { ModelThinkingProfile } from "@/lib/thinking-profile";
 
 export interface SessionData {
   sessionId: string;
@@ -158,7 +162,7 @@ export interface UseAgentSessionOptions {
   setToolPreset?: (preset: "none" | "default" | "full") => void;
 }
 
-export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type { ThinkingLevelOption } from "@/lib/thinking-levels";
 
 const PROGRAMMATIC_SCROLL_IGNORE_MS = 700;
 const USER_SCROLL_INTENT_MS = 1200;
@@ -307,9 +311,12 @@ type ModelsResponse = {
   models: Record<string, string>;
   modelList?: ModelEntry[];
   defaultModel?: SelectedModel | null;
-  thinkingLevels?: Record<string, string[]>;
-  thinkingLevelMaps?: Record<string, Record<string, string | null>>;
+  defaultThinkingLevel?: ThinkingLevelOption;
   thinkingLevelPins?: Record<string, string>;
+  /** `provider:modelId` → 权威推理强度 profile。 */
+  thinkingProfiles?: Record<string, ModelThinkingProfile>;
+  /** `provider/modelId` → 上次使用该模型实际生效的推理强度。 */
+  thinkingLevelMemory?: Record<string, string>;
   /** `provider:modelId` → whether the model accepts image input. */
   imageInput?: Record<string, boolean>;
   modelScopeWarnings?: string[];
@@ -326,6 +333,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   } = opts;
 
   const isNew = session === null && newSessionCwd !== null;
+  const { t } = useI18n();
 
   const [data, setData] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(!isNew);
@@ -340,8 +348,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<ModelEntry[]>([]);
   const [modelImageInput, setModelImageInput] = useState<Record<string, boolean>>({});
-  const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
-  const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
+  const [modelThinkingProfiles, setModelThinkingProfiles] = useState<Record<string, ModelThinkingProfile>>({});
+  const [modelThinkingLevelPins, setModelThinkingLevelPins] = useState<Record<string, string>>({});
+  const [globalDefaultThinkingLevel, setGlobalDefaultThinkingLevel] = useState<ThinkingLevelOption | undefined>(undefined);
+  const [thinkingLevelMemory, setThinkingLevelMemory] = useState<Record<string, string>>({});
   const [modelScopeWarnings, setModelScopeWarnings] = useState<string[]>([]);
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
   const [newSessionDefaultModel, setNewSessionDefaultModel] = useState<SelectedModel | null>(null);
@@ -490,7 +500,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setEntryIds(d.context.entryIds ?? []);
     setCurrentModelOverride(null);
     setError(null);
-    if (d.context.thinkingLevel && d.context.thinkingLevel !== "off") {
+    if (d.context.thinkingLevel) {
       setThinkingLevel(d.context.thinkingLevel as ThinkingLevelOption);
     }
   }, [setData, setActiveLeafId, setMessages, setEntryIds, setCurrentModelOverride, setError, setThinkingLevel]);
@@ -628,6 +638,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     });
   }, [isNew, newSessionCwd, onSessionCreated]);
 
+  const addNotice = useCallback((notice: { id?: string; message: string; type?: NoticeType }) => {
+    const message = notice.message.trim();
+    if (!message) return;
+    dispatchNotice({
+      type: "add",
+      notice: {
+        id: notice.id ?? createNoticeId(),
+        message,
+        type: notice.type ?? "info",
+      },
+    });
+  }, []);
+
   const ensureNewSession = useCallback(async () => {
     if (sessionIdRef.current) return sessionIdRef.current;
     if (!isNew || !newSessionCwd) return sessionIdRef.current;
@@ -667,6 +690,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (result.thinkingLevel && thinkingLevelOverrideRef.current === selectedThinkingLevel) {
         setThinkingLevel(result.thinkingLevel);
+        // SDK 可能 clamp 用户选择的等级（如模型不支持 max），提示实际生效值。
+        if (selectedThinkingLevel && result.thinkingLevel !== selectedThinkingLevel) {
+          addNotice({ type: "info", message: t("desktop.thinkingLevelClamped", { requested: selectedThinkingLevel, effective: result.thinkingLevel }) });
+        }
       }
       return result.sessionId;
     })();
@@ -677,7 +704,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       ensuringNewSessionRef.current = null;
     }
-  }, [isNew, newSessionCwd, toolPreset]);
+  }, [isNew, newSessionCwd, toolPreset, t, addNotice]);
 
   const loadSlashCommands = useCallback(async () => {
     const sid = sessionIdRef.current ?? await ensureNewSession();
@@ -770,19 +797,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to send extension custom UI input:", e);
     }
-  }, []);
-
-  const addNotice = useCallback((notice: { id?: string; message: string; type?: NoticeType }) => {
-    const message = notice.message.trim();
-    if (!message) return;
-    dispatchNotice({
-      type: "add",
-      notice: {
-        id: notice.id ?? createNoticeId(),
-        message,
-        type: notice.type ?? "info",
-      },
-    });
   }, []);
 
   const handleExtensionUiRequest = useCallback((request: ExtensionUiRequest) => {
@@ -1452,16 +1466,36 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [loadContext]);
 
+  // 模型切换后 SDK 可能重算/clamp 等级：同步显示，并对显式选择被 clamp 的情况提示。
+  const applyModelSwitchLevel = useCallback((resultLevel: string | undefined) => {
+    if (!resultLevel) return;
+    if (resultLevel === thinkingLevel) return;
+    setThinkingLevel(resultLevel as ThinkingLevelOption);
+    const requested = thinkingLevelOverrideRef.current;
+    if (requested && requested !== resultLevel) {
+      addNotice({ type: "info", message: t("desktop.thinkingLevelClamped", { requested, effective: resultLevel }) });
+    }
+  }, [thinkingLevel, setThinkingLevel, addNotice, t]);
+
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
       const selectedModel = { provider, modelId };
       newSessionModelOverrideRef.current = selectedModel;
       setNewSessionModel(selectedModel);
       setPendingModel(selectedModel);
+      // 未显式选择等级时，跟随新模型的 pin / 记忆 / 全局默认。
+      if (thinkingLevelOverrideRef.current === null) {
+        const mk = modelKey(provider, modelId);
+        const level = modelThinkingLevelPins[mk]
+          ?? thinkingLevelMemory[mk]
+          ?? globalDefaultThinkingLevel;
+        setThinkingLevel((level as ThinkingLevelOption | undefined) ?? "auto");
+      }
       const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
       if (!sid) return;
       try {
-        await sendAgentCommand(sid, { type: "set_model", provider, modelId });
+        const result = await sendAgentCommand<{ level?: string }>(sid, { type: "set_model", provider, modelId });
+        applyModelSwitchLevel(result?.level);
       } catch (e) {
         console.error("Failed to set model:", e);
         addNotice({
@@ -1474,8 +1508,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_model", provider, modelId });
+      const result = await sendAgentCommand<{ level?: string }>(sid, { type: "set_model", provider, modelId });
       setCurrentModelOverride({ provider, modelId });
+      applyModelSwitchLevel(result?.level);
     } catch (e) {
       console.error("Failed to set model:", e);
       addNotice({
@@ -1483,7 +1518,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         message: e instanceof Error ? e.message : `Failed to set model: ${String(e)}`,
       });
     }
-  }, [isNew, setNewSessionModel, addNotice]);
+  }, [isNew, setNewSessionModel, addNotice, modelThinkingLevelPins, thinkingLevelMemory, globalDefaultThinkingLevel, applyModelSwitchLevel]);
 
   const handleCompact = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -1511,25 +1546,34 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const d = await res.json() as ModelsResponse;
     setModelNames(d.models);
     setModelImageInput(d.imageInput ?? {});
-    setModelThinkingLevels(d.thinkingLevels ?? {});
-    setModelThinkingLevelMaps(d.thinkingLevelMaps ?? {});
+    setModelThinkingProfiles(d.thinkingProfiles ?? {});
+    setModelThinkingLevelPins(d.thinkingLevelPins ?? {});
+    setGlobalDefaultThinkingLevel(d.defaultThinkingLevel);
+    setThinkingLevelMemory(d.thinkingLevelMemory ?? {});
     setModelScopeWarnings(d.modelScopeWarnings ?? []);
     const nextModelList = d.modelList ?? [];
     setModelList(nextModelList);
     if (isNew && !sessionIdRef.current) {
-      const match = d.defaultModel
-        ? nextModelList.find((m) => m.id === d.defaultModel?.modelId && m.provider === d.defaultModel?.provider)
-        : undefined;
-      const displayModel = match ?? nextModelList[0];
+      // 用户已在 composer 中切换过模型时优先用该模型，否则用服务端默认模型。
+      const defaultMatch = d.defaultModel
+        ? (nextModelList.find((m) => m.id === d.defaultModel?.modelId && m.provider === d.defaultModel?.provider) ?? null)
+        : null;
+      const displayModel = newSessionModel
+        ? { provider: newSessionModel.provider, id: newSessionModel.modelId }
+        : (defaultMatch ?? nextModelList[0] ?? null);
       setNewSessionDefaultModel(displayModel ? { provider: displayModel.provider, modelId: displayModel.id } : null);
-      const pinnedThinkingLevel = displayModel
-        ? d.thinkingLevelPins?.[`${displayModel.provider}/${displayModel.id}`]
-        : undefined;
       if (thinkingLevelOverrideRef.current === null) {
-        setThinkingLevel((pinnedThinkingLevel as ThinkingLevelOption | undefined) ?? "auto");
+        // 优先级：enabledModels pin > per-model 记忆 > 全局默认 > auto
+        const mk = displayModel ? modelKey(displayModel.provider, displayModel.id) : null;
+        const level = mk
+          ? ((d.thinkingLevelPins?.[mk] as ThinkingLevelOption | undefined)
+            ?? (d.thinkingLevelMemory?.[mk] as ThinkingLevelOption | undefined)
+            ?? d.defaultThinkingLevel)
+          : d.defaultThinkingLevel;
+        setThinkingLevel(level ?? "auto");
       }
     }
-  }, [isNew, newSessionCwd, session?.cwd]);
+  }, [isNew, newSessionCwd, session?.cwd, newSessionModel]);
 
   const handleBuiltinSlashCommand = useCallback(async (text: string): Promise<BuiltinSlashCommandResult> => {
     if (!text.startsWith("/")) return { handled: false };
@@ -1703,7 +1747,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_thinking_level", level });
+      // set_thinking_level 返回 clamp 后的实际等级，用于提示与记忆。
+      const result = await sendAgentCommand<{ level?: string }>(sid, { type: "set_thinking_level", level });
+      if (result?.level && result.level !== level) {
+        addNotice({ type: "info", message: t("desktop.thinkingLevelClamped", { requested: level, effective: result.level }) });
+      }
     } catch (e) {
       console.error("Failed to set thinking level:", e);
       addNotice({
@@ -1711,7 +1759,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         message: e instanceof Error ? e.message : `Failed to set thinking level: ${String(e)}`,
       });
     }
-  }, [addNotice]);
+  }, [addNotice, t]);
 
   const handleToolPresetChange = useCallback(async (preset: "none" | "default" | "full") => {
     const toolNames = getToolNamesForPreset(preset);
@@ -1902,7 +1950,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     loading, error, activeLeafId, messages, entryIds, streamState,
-    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,

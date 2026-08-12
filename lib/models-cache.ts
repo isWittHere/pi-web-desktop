@@ -1,11 +1,17 @@
+import type { ModelThinkingProfile } from "./thinking-request-core";
+
 export interface ModelsData {
   models: Record<string, string>;
   modelList: { id: string; name: string; provider: string; api?: string }[];
   defaultModel: { provider: string; modelId: string } | null;
-  thinkingLevels: Record<string, string[]>;
-  thinkingLevelMaps: Record<string, Record<string, string | null>>;
+  /** settings.json 持久化的全局默认 thinking level（最近一次使用，无 per-model 记忆时兑底）。 */
+  defaultThinkingLevel?: string;
   /** `provider/modelId` → thinking level pinned by an enabledModels suffix. */
   thinkingLevelPins: Record<string, string>;
+  /** `provider:modelId` → 权威推理强度 profile（levels/map/requests）。 */
+  thinkingProfiles?: Record<string, ModelThinkingProfile>;
+  /** `provider/modelId` → 上次使用该模型时实际生效的推理强度。 */
+  thinkingLevelMemory?: Record<string, string>;
   /** `provider/modelId` → whether the model accepts image input (Model.input). */
   imageInput: Record<string, boolean>;
   /** Resolver diagnostics when an enabledModels pattern matched no model. */

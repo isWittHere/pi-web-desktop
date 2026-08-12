@@ -1,10 +1,12 @@
 import { stat } from "fs/promises";
 import { resolve } from "path";
 import { createAgentSessionServices, getAgentDir, type SettingsManager } from "@earendil-works/pi-coding-agent";
-import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { loadModelsWithCache, type ModelsData } from "@/lib/models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "@/lib/model-scope";
 import { projectTrustReloadOptions } from "@/lib/project-trust";
+import { buildThinkingProfile } from "@/lib/thinking-profile";
+import type { ModelThinkingProfile } from "@/lib/thinking-request-core";
+import { getThinkingLevelMemory } from "@/lib/thinking-level-memory";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +23,7 @@ function compareModelEntries(
 
 async function loadModels(cwd: string): Promise<ModelsData> {
   const nameMap = new Map<string, string>();
-  const thinkingLevels: Record<string, string[]> = {};
-  const thinkingLevelMaps: Record<string, Record<string, string | null>> = {};
+  const thinkingProfiles: Record<string, ModelThinkingProfile> = {};
   const imageInput: Record<string, boolean> = {};
 
   const agentDir = getAgentDir();
@@ -49,8 +50,7 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   for (const model of scope.visible) {
     const key = `${model.provider}:${model.id}`;
     nameMap.set(key, model.name);
-    thinkingLevels[key] = getSupportedThinkingLevels(model);
-    if (model.thinkingLevelMap) thinkingLevelMaps[key] = model.thinkingLevelMap;
+    thinkingProfiles[key] = buildThinkingProfile(model);
     imageInput[key] = model.input.includes("image");
   }
 
@@ -68,9 +68,10 @@ async function loadModels(cwd: string): Promise<ModelsData> {
     defaultModel: initial.model
       ? { provider: initial.model.provider, modelId: initial.model.id }
       : null,
-    thinkingLevels,
-    thinkingLevelMaps,
+    defaultThinkingLevel: settings.getDefaultThinkingLevel() ?? undefined,
     thinkingLevelPins: scope.thinkingLevelPins,
+    thinkingProfiles,
+    thinkingLevelMemory: getThinkingLevelMemory(),
     imageInput,
     ...(scope.warnings.length > 0 ? { modelScopeWarnings: scope.warnings } : {}),
   };
@@ -80,8 +81,6 @@ const EMPTY_MODELS: ModelsData = {
   models: {},
   modelList: [],
   defaultModel: null,
-  thinkingLevels: {},
-  thinkingLevelMaps: {},
   thinkingLevelPins: {},
   imageInput: {},
 };

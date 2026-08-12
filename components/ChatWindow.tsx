@@ -2,6 +2,7 @@
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
+import { modelProfileKey } from "@/lib/thinking-levels";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { cssPx } from "@/lib/ui-scale";
@@ -177,7 +178,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
 
   const {
     loading, error, messages, entryIds, streamState,
-    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingLevels, modelThinkingLevelMaps, modelScopeWarnings, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -467,13 +468,13 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     return steps[steps.length - 1].label;
   }, [agentRunning, streamState, messages, entryIds, agentPhase, isCompacting, t, toolResultsMap]);
 
-  const availableThinkingLevels = displayModelValue
-    ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
+  const currentThinkingProfile = displayModelValue
+    ? (modelThinkingProfiles[modelProfileKey(displayModelValue.provider, displayModelValue.modelId)] ?? null)
     : null;
 
-  const currentThinkingLevelMap = displayModelValue
-    ? (modelThinkingLevelMaps[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
-    : null;
+  const availableThinkingLevels = currentThinkingProfile?.levels ?? null;
+
+  const currentThinkingLevelMap = currentThinkingProfile?.map ?? null;
 
   const chatInputElement = (
     <ChatInput

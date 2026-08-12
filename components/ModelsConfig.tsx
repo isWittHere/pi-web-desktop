@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import {
   CheckIcon,
   EyeIcon,
@@ -13,6 +13,9 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import type { DiscoveredModel } from "@/lib/model-discovery";
+import type { ModelThinkingProfile, ThinkingRequestSpec } from "@/lib/thinking-request-core";
+import { buildProfileFromFields } from "@/lib/thinking-request-core";
+import { THINKING_LEVELS, type ThinkingLevel } from "@/lib/thinking-levels";
 import {
   hasModelCostDraftValue,
   modelCostToDraft,
@@ -539,9 +542,7 @@ function IconModePicker({ providerId, api }: { providerId: string; api?: string 
 
 // ── ThinkingLevelMap editor ───────────────────────────────────────────────────
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-type ThinkingLevel = typeof THINKING_LEVELS[number];
-
+// 权威等级集合来自 lib/thinking-levels（与选择器、请求共用）。
 const LEVEL_COLORS: Record<ThinkingLevel, string> = {
   off:     "var(--text-dim)",
   minimal: "var(--text-muted)",
@@ -555,9 +556,12 @@ const LEVEL_COLORS: Record<ThinkingLevel, string> = {
 function ThinkingLevelMapEditor({
   value,
   onChange,
+  profile,
 }: {
   value: Record<string, string | null> | undefined;
   onChange: (v: Record<string, string | null> | undefined) => void;
+  /** 已保存状态的权威 profile（/api/models），用于状态标注与请求预览。 */
+  profile?: ModelThinkingProfile | null;
 }) {
   const t = useModelTranslation();
   const map = value ?? {};
@@ -672,6 +676,38 @@ function ThinkingLevelMapEditor({
                 }}
               />
             </div>
+            {/* 实际请求预览 + 状态（来自已保存 profile） */}
+            {(() => {
+              const spec: ThinkingRequestSpec | undefined = profile?.requests?.[level];
+              let preview: string | null = null;
+              if (spec) {
+                if (spec.kind === "effort") preview = t("desktop.modelsThinkingEffort", { value: spec.effort ?? "" });
+                else if (spec.kind === "toggle") preview = spec.enabled ? t("desktop.modelsThinkingOn") : t("desktop.modelsThinkingOff");
+                else if (spec.kind === "budget") preview = t("desktop.modelsThinkingBudget", { tokens: String(spec.budgetTokens ?? "") });
+                else preview = t("desktop.modelsThinkingUnavailable");
+              }
+              let statusHint: string | null = null;
+              if (profile) {
+                const effective = profile.map?.[level];
+                if (effective === null) statusHint = t("desktop.modelsDisabled");
+                else if (profile.levels.includes(level)) statusHint = t("desktop.modelsActive");
+                else statusHint = t("desktop.modelsNotEnabled");
+              }
+              return (
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                  {statusHint && (
+                    <span style={{ fontSize: 9, color: statusHint === t("desktop.modelsActive") ? "var(--text-dim)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      {statusHint}
+                    </span>
+                  )}
+                  {preview && (
+                    <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
+                      {preview}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         );
       })}
@@ -774,6 +810,9 @@ function ModelDetail({
   onToggleFavorite,
   onChange,
   onDelete,
+  profile,
+  memory,
+  onForgetMemory,
 }: {
   providerName: string;
   provider: ProviderEntry;
@@ -782,9 +821,19 @@ function ModelDetail({
   onToggleFavorite: () => void;
   onChange: (m: ModelEntry) => void;
   onDelete: () => void;
+  /** 已保存状态的权威 profile（用于请求预览列）。 */
+  profile?: ModelThinkingProfile | null;
+  /** 该模型的 per-model 记忆（上次实际生效等级）。 */
+  memory?: string | null;
+  onForgetMemory?: () => void;
 }) {
   const t = useModelTranslation();
   const [testState, setTestState] = useState<ModelTestState>({ phase: "idle" });
+  // 编辑态实时预览：模型是 models[] 条目，用户层 thinkingLevelMap 即最终 map（provider-composer 替换语义）。
+  const liveProfile = useMemo(() => {
+    if (!profile) return null;
+    return buildProfileFromFields(profile.meta, model.thinkingLevelMap ?? {});
+  }, [profile, model.thinkingLevelMap]);
   const costFieldLabels = {
     input: t("desktop.modelsCostInput"),
     output: t("desktop.modelsCostOutput"),
@@ -1001,9 +1050,22 @@ function ModelDetail({
                 </button>
               )}
             </div>
+            {memory && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>
+                <span>{t("desktop.modelsLastUsed", { level: memory })}</span>
+                <button
+                  type="button"
+                  onClick={onForgetMemory}
+                  style={{ fontSize: 10, padding: "1px 6px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", cursor: "pointer" }}
+                >
+                  {t("desktop.modelsForgetMemory")}
+                </button>
+              </div>
+            )}
             <ThinkingLevelMapEditor
               value={model.thinkingLevelMap}
               onChange={(v) => set("thinkingLevelMap", v)}
+              profile={liveProfile ?? profile}
             />
           </div>
         </>
@@ -1617,18 +1679,23 @@ export function ModelsConfig({
   embedded = false,
   onCloseAction,
   onSavedAction,
+  cwd,
 }: {
   embedded?: boolean;
   onCloseAction?: () => void;
   onSavedAction?: () => void;
+  cwd?: string | null;
 }) {
   const t = useModelTranslation();
   const isMobile = useIsMobile();
   const { favorites: favoriteModels, toggleFavorite } = useFavoriteModels();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
+  const [profiles, setProfiles] = useState<Record<string, ModelThinkingProfile>>({});
+  const [thinkingLevelMemory, setThinkingLevelMemory] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveWarnings, setSaveWarnings] = useState<string[] | null>(null);
   const [savedOk, setSavedOk] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
@@ -1666,7 +1733,16 @@ export function ModelsConfig({
       .catch(() => setConfig({ providers: {} }))
       .finally(() => setLoading(false));
     refreshAuthenticationProviders();
-  }, [refreshAuthenticationProviders]);
+    // 加载已保存状态的权威推理强度 profile，供请求预览列展示。
+    const modelsUrl = cwd ? `/api/models?cwd=${encodeURIComponent(cwd)}` : "/api/models";
+    fetch(modelsUrl)
+      .then((r) => r.json())
+      .then((d: { thinkingProfiles?: Record<string, ModelThinkingProfile>; thinkingLevelMemory?: Record<string, string> }) => {
+        setProfiles(d.thinkingProfiles ?? {});
+        setThinkingLevelMemory(d.thinkingLevelMemory ?? {});
+      })
+      .catch(() => {});
+  }, [refreshAuthenticationProviders, cwd]);
 
   const addCustomProvider = useCallback(() => {
     let finalName = "new-provider";
@@ -1758,6 +1834,7 @@ export function ModelsConfig({
   const handleSave = useCallback(async () => {
     setSaving(true);
     setSaveError(null);
+    setSaveWarnings(null);
     setSavedOk(false);
     try {
       const res = await fetch("/api/models-config", {
@@ -1765,11 +1842,23 @@ export function ModelsConfig({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
       });
-      const d = await res.json() as { success?: boolean; error?: string };
+      const d = await res.json() as { success?: boolean; error?: string; warnings?: string[] };
       if (!res.ok || d.error) setSaveError(d.error ?? `HTTP ${res.status}`);
       else {
         setSavedOk(true);
+        if (d.warnings?.length) {
+          setSaveWarnings(d.warnings);
+        }
         onSavedAction?.();
+        // 保存后刷新 profile（服务端已重新合并 thinkingLevelMap）。
+        const modelsUrl = cwd ? `/api/models?cwd=${encodeURIComponent(cwd)}` : "/api/models";
+        fetch(modelsUrl)
+          .then((r) => r.json())
+          .then((d2: { thinkingProfiles?: Record<string, ModelThinkingProfile>; thinkingLevelMemory?: Record<string, string> }) => {
+            setProfiles(d2.thinkingProfiles ?? {});
+            setThinkingLevelMemory(d2.thinkingLevelMemory ?? {});
+          })
+          .catch(() => {});
         setTimeout(() => setSavedOk(false), 2000);
       }
     } catch (e) {
@@ -1777,7 +1866,7 @@ export function ModelsConfig({
     } finally {
       setSaving(false);
     }
-  }, [config, onSavedAction]);
+  }, [config, onSavedAction, cwd]);
 
   const providers = Object.entries(config.providers ?? {});
   const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
@@ -1814,6 +1903,7 @@ export function ModelsConfig({
     const provider = config.providers?.[selection.providerName];
     const model = provider?.models?.[selection.index];
     if (!model) return null;
+    const memoryKey = `${selection.providerName}/${model.id}`;
     return (
       <ModelDetail
         key={`${selection.providerName}-${selection.index}`}
@@ -1824,6 +1914,20 @@ export function ModelsConfig({
         onToggleFavorite={() => toggleFavorite(`${selection.providerName}:${model.id}`)}
         onChange={(m) => updateModel(selection.providerName, selection.index, m)}
         onDelete={() => removeModel(selection.providerName, selection.index)}
+        profile={profiles[`${selection.providerName}:${model.id}`]}
+        memory={thinkingLevelMemory[memoryKey] ?? null}
+        onForgetMemory={() => {
+          fetch("/api/thinking-level-memory", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ modelKey: memoryKey }),
+          }).catch(() => {});
+          setThinkingLevelMemory((prev) => {
+            const next = { ...prev };
+            delete next[memoryKey];
+            return next;
+          });
+        }}
       />
     );
   })();
@@ -1989,6 +2093,11 @@ export function ModelsConfig({
 
         {/* Footer */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+          {saveWarnings && (
+            <span style={{ fontSize: 11, color: "#f59e0b", flex: 1, lineHeight: 1.4 }}>
+              {t("desktop.modelsConfigBuiltinConflict", { models: saveWarnings.join(", ") })}
+            </span>
+          )}
           {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
           {!embedded && (
             <button onClick={onCloseAction} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
