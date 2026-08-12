@@ -14,6 +14,13 @@ import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import type { DiscoveredModel } from "@/lib/model-discovery";
 import {
+  hasModelCostDraftValue,
+  modelCostToDraft,
+  parseCompleteModelCost,
+  type ModelCostDraft,
+  type ModelCostKey,
+} from "./models-config-helpers";
+import {
   getProviderIconMode,
   getProviderIconModesVersion,
   PROVIDER_ICON_MODES,
@@ -778,11 +785,45 @@ function ModelDetail({
 }) {
   const t = useModelTranslation();
   const [testState, setTestState] = useState<ModelTestState>({ phase: "idle" });
+  const costFieldLabels = {
+    input: t("desktop.modelsCostInput"),
+    output: t("desktop.modelsCostOutput"),
+    cacheRead: t("desktop.modelsCostCacheRead"),
+    cacheWrite: t("desktop.modelsCostCacheWrite"),
+  } as const;
+  const [costEditing, setCostEditing] = useState(false);
+  const [costDraft, setCostDraft] = useState<ModelCostDraft>(() => modelCostToDraft(model.cost));
+  const costDraftRef = useRef(costDraft);
+  const costTemplateRef = useRef(model.cost);
   const set = <K extends keyof ModelEntry>(k: K, v: ModelEntry[K]) => onChange({ ...model, [k]: v });
-  const costVal = (k: keyof NonNullable<ModelEntry["cost"]>) => model.cost?.[k] !== undefined ? String(model.cost[k]) : "";
-  const setCost = (k: keyof NonNullable<ModelEntry["cost"]>, v: string) => {
-    const n = parseFloat(v);
-    onChange({ ...model, cost: { ...(model.cost ?? {}), [k]: isNaN(n) ? undefined : n } });
+  // Commit a cost draft into the model entry. A blank field counts as 0 so the
+  // saved cost group is always complete (the SDK's calculateCost reads all four
+  // rates; a partial group would produce NaN in usage.cost.total). An all-blank
+  // draft or any invalid value removes the cost group instead of saving junk.
+  const setCost = (key: ModelCostKey, value: string) => {
+    const nextDraft = { ...costDraftRef.current, [key]: value };
+    const completeCost = parseCompleteModelCost(nextDraft);
+    const nextModel = { ...model };
+    costDraftRef.current = nextDraft;
+    setCostDraft(nextDraft);
+    if (completeCost) {
+      nextModel.cost = { ...(costTemplateRef.current ?? {}), ...completeCost };
+      costTemplateRef.current = nextModel.cost;
+    } else {
+      delete nextModel.cost;
+    }
+    onChange(nextModel);
+  };
+  const toggleCostEditing = () => {
+    if (costEditing) {
+      setCostEditing(false);
+      return;
+    }
+    costTemplateRef.current = model.cost;
+    const nextDraft = modelCostToDraft(model.cost);
+    costDraftRef.current = nextDraft;
+    setCostDraft(nextDraft);
+    setCostEditing(true);
   };
   const testSummary = (() => {
     if (testState.phase === "idle") return null;
@@ -980,14 +1021,48 @@ function ModelDetail({
       </div>
 
       <div>
-        <SectionTitle>{t("desktop.modelsCostPerMillionTokens")}</SectionTitle>
-        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
-          {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
-            <Field key={k} label={k}>
-              <NumInput value={costVal(k)} onChange={(v) => setCost(k, v)} placeholder="0" />
-            </Field>
-          ))}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <SectionTitle>{t("desktop.modelsCostPerMillionTokens")}</SectionTitle>
+          <button
+            type="button"
+            onClick={toggleCostEditing}
+            aria-expanded={costEditing}
+            style={{ padding: "2px 4px", border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: 10 }}
+          >
+            {costEditing ? t("desktop.modelsCostDoneEditing") : t("desktop.modelsCostEdit")}
+          </button>
         </div>
+        {costEditing ? (
+          <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
+              <Field key={k} label={costFieldLabels[k]}>
+                <NumInput value={costDraft[k]} onChange={(v) => setCost(k, v)} placeholder="0" />
+              </Field>
+            ))}
+            {hasModelCostDraftValue(costDraft) && !parseCompleteModelCost(costDraft) && (
+              <div aria-live="polite" style={{ gridColumn: "1 / -1", color: "#d97706", fontSize: 10 }}>
+                {t("desktop.modelsCostAllRequired")}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
+            {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => {
+              const value = model.cost?.[k];
+              const missing = value === undefined;
+              return (
+                <div key={k} style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {costFieldLabels[k]}
+                  </div>
+                  <div style={{ marginTop: 3, color: missing ? "var(--text-dim)" : "var(--text)", fontSize: 12, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                    {missing ? t("desktop.modelsCostNotProvided") : `$${String(value)}`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
