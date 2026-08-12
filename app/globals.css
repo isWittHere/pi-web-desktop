@@ -101,6 +101,21 @@
   --git-status-added-bg: #d6eedf;
   --git-status-modified-bg: #f5e6bd;
   --git-status-deleted-bg: #f7d8d8;
+
+  /* Shared control tokens for settings dialogs and panels.
+     These are static values that reference the themed palette above,
+     so they adapt to pi CLI themes automatically and are never
+     overwritten by applyCssVars() (only THEME_CSS_VARS is). */
+  --control-height: 30px;
+  --control-radius: 6px;
+  --control-pad-x: 10px;
+  --settings-pad-x: 22px;
+  --settings-section-gap: 20px;
+  /* Semantic status colors — alias the theme accents so danger /
+     success / warning states follow the active theme. */
+  --status-success: var(--accent-green);
+  --status-danger: var(--accent-red);
+  --status-warning: var(--accent-orange);
   /* Fixed mix ratios are supported reliably, unlike a percentage custom property. */
   --minimap-preview-user-bg: color-mix(in srgb, var(--accent) 6%, var(--bg-hover));
   --minimap-preview-tool-bg: color-mix(in srgb, var(--accent-green) 6%, var(--bg-hover));

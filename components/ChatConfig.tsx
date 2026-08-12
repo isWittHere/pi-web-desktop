@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { SettingSection, SettingToggle } from "./SettingToggle";
+import { SettingsSelect } from "@/components/settings-ui";
 import { useI18n } from "@/hooks/useI18n";
 import {
   getTitleAutoEnabled,
@@ -156,9 +157,6 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
-      <header style={{ padding: "18px 22px 14px", borderBottom: "1px solid var(--border)" }}>
-        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t("desktop.chat")}</h1>
-      </header>
       <SettingSection title={t("desktop.sessionTitle")} description={t("desktop.sessionTitleDescription")}>
         <SettingToggle
           checked={titleAuto}
@@ -168,28 +166,13 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
         />
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", margin: "0 -14px" }}>
           <span style={{ flex: 1, fontSize: 13, color: "var(--text)" }}>{t("desktop.titleModel")}</span>
-          <select
+          <SettingsSelect
             value={selectedTitleModelValue}
-            onChange={(e) => setTitleModelAndPersist(e.target.value)}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              background: "var(--bg-panel)",
-              color: "var(--text)",
-              fontSize: 13,
-              cursor: "pointer",
-              outline: "none",
-              maxWidth: 260,
-            }}
-          >
-            <option value="">{t("desktop.titleModelNone")}</option>
-            {modelOptions.map((opt) => (
-              <option key={`${opt.provider}:${opt.modelId}`} value={`${opt.provider}:${opt.modelId}`}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            onChange={setTitleModelAndPersist}
+            options={modelOptions.map((opt) => ({ value: `${opt.provider}:${opt.modelId}`, label: opt.label }))}
+            emptyLabel={t("desktop.titleModelNone")}
+            style={{ maxWidth: 260 }}
+          />
         </div>
       </SettingSection>
       <SettingSection title={t("desktop.inputShortcut")} description={t("desktop.inputShortcutDescription")}>
@@ -210,24 +193,11 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
       <SettingSection title={t("desktop.notificationDuration")} description={t("desktop.notificationDurationDescription")}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", margin: "0 -14px" }}>
           <span style={{ flex: 1, fontSize: 13, color: "var(--text)" }}>{t("desktop.notificationDurationLabel")}</span>
-          <select
+          <SettingsSelect
             value={notificationDuration}
-            onChange={(e) => setNotificationDurationAndPersist(e.target.value as NotificationDuration)}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              background: "var(--bg-panel)",
-              color: "var(--text)",
-              fontSize: 13,
-              cursor: "pointer",
-              outline: "none",
-            }}
-          >
-            {NOTIFICATION_DURATION_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-            ))}
-          </select>
+            onChange={(v) => setNotificationDurationAndPersist(v as NotificationDuration)}
+            options={NOTIFICATION_DURATION_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
+          />
         </div>
       </SettingSection>
     </div>

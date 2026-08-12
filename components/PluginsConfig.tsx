@@ -5,6 +5,8 @@ import { PlusIcon } from "@phosphor-icons/react";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
+import { Toggle } from "@/components/Toggle";
+import { SettingsInput, SettingsButton, SettingsBadge } from "@/components/settings-ui";
 import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
 
 type Translate = ReturnType<typeof useI18n>["t"];
@@ -63,9 +65,9 @@ function findInstalledPackage(
 
 function statusColor(status: PluginPackageInfo["status"]): string {
   if (status === "loaded") return "var(--accent)";
-  if (status === "installed") return "#f59e0b";
+  if (status === "installed") return "var(--status-warning)";
   if (status === "disabled") return "var(--text-dim)";
-  return "#ef4444";
+  return "var(--status-danger)";
 }
 
 function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
@@ -160,82 +162,9 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
 function ScopeTag({ scope }: { scope: PluginScope }) {
   const { t } = useI18n();
   return (
-    <span
-      style={{
-        fontSize: 10,
-        padding: "1px 5px",
-        borderRadius: 3,
-        flexShrink: 0,
-        background: scope === "project" ? "rgba(99,102,241,0.12)" : "rgba(120,120,120,0.12)",
-        color: scope === "project" ? "rgba(99,102,241,0.85)" : "var(--text-dim)",
-      }}
-    >
+    <SettingsBadge tone={scope === "project" ? "project" : "muted"}>
       {t(`desktop.${scope}`)}
-    </span>
-  );
-}
-
-function buttonStyle(disabled?: boolean, danger?: boolean): React.CSSProperties {
-  return {
-    padding: "6px 12px",
-    background: danger ? "rgba(239,68,68,0.08)" : "none",
-    border: "1px solid var(--border)",
-    borderRadius: 6,
-    color: danger ? "#ef4444" : "var(--text-muted)",
-    cursor: disabled ? "not-allowed" : "pointer",
-    fontSize: 12,
-    opacity: disabled ? 0.5 : 1,
-  };
-}
-
-function Toggle({
-  enabled,
-  loading,
-  onToggle,
-  label,
-}: {
-  enabled: boolean;
-  loading: boolean;
-  onToggle: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={loading}
-      title={label}
-      aria-label={label}
-      aria-pressed={enabled}
-      style={{
-        flexShrink: 0,
-        width: 40,
-        height: 22,
-        borderRadius: 11,
-        border: "none",
-        padding: 0,
-        cursor: loading ? "wait" : "pointer",
-        background: enabled ? "var(--accent)" : "var(--border)",
-        position: "relative",
-        transition: "background 0.18s",
-        outline: "none",
-        opacity: loading ? 0.65 : 1,
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: 3,
-          left: enabled ? 21 : 3,
-          width: 16,
-          height: 16,
-          borderRadius: "50%",
-          background: "var(--bg)",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
-          transition: "left 0.18s cubic-bezier(.4,0,.2,1)",
-        }}
-      />
-    </button>
+    </SettingsBadge>
   );
 }
 
@@ -333,11 +262,11 @@ function AddPluginPanel({
         <label htmlFor="plugin-source" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
           {t("desktop.pluginSource")}
         </label>
-        <input
+        <SettingsInput
           id="plugin-source"
-          ref={inputRef}
+          inputRef={inputRef}
           value={source}
-          onChange={(e) => onSourceChange(e.target.value)}
+          onChange={onSourceChange}
           onPaste={(e) => {
             const pasted = e.clipboardData.getData("text");
             const normalized = normalizePluginSourceInput(pasted);
@@ -347,18 +276,7 @@ function AddPluginPanel({
           }}
           onBlur={(e) => onSourceChange(normalizePluginSourceInput(e.currentTarget.value))}
           placeholder="npm:@scope/package"
-          style={{
-            width: "100%",
-            height: 36,
-            padding: "0 11px",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            background: "var(--bg-panel)",
-            color: "var(--text)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            outline: "none",
-          }}
+          mono
           onKeyDown={(e) => {
             if (e.key === "Enter" && source.trim() && !busy) onInstall();
           }}
@@ -367,19 +285,9 @@ function AddPluginPanel({
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SegmentedScope value={scope} onChange={onScopeChange} />
-        <button
-          type="button"
-          onClick={onInstall}
-          disabled={busy || !source.trim()}
-          style={{
-            ...buttonStyle(busy || !source.trim()),
-            background: "var(--accent)",
-            color: "white",
-            borderColor: "var(--accent)",
-          }}
-        >
+        <SettingsButton variant="primary" onClick={onInstall} disabled={busy || !source.trim()}>
           {busy ? t("desktop.installing") : t("desktop.install")}
-        </button>
+        </SettingsButton>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -421,7 +329,7 @@ function AddPluginPanel({
       </div>
 
       {actionError && (
-        <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>
+        <div style={{ fontSize: 12, color: "var(--status-danger)", whiteSpace: "pre-wrap" }}>
           {actionError}
         </div>
       )}
@@ -459,36 +367,20 @@ function PackageDetail({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, minWidth: 0, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 180, flex: 1 }}>
           <Toggle
-            enabled={enabled}
+            checked={enabled}
             loading={busy || reloadBusy}
-            onToggle={() => onAction(pkg.disabled ? "enable" : "disable", pkg)}
+            onChange={() => onAction(pkg.disabled ? "enable" : "disable", pkg)}
             label={pkg.disabled ? t("desktop.enablePackage") : t("desktop.disablePackage")}
           />
           <ScopeTag scope={pkg.scope} />
           {pkg.disabled ? (
-            <span
-              style={{
-                fontSize: 10,
-                padding: "1px 5px",
-                borderRadius: 3,
-                background: "rgba(120,120,120,0.12)",
-                color: "var(--text-dim)",
-              }}
-            >
+            <SettingsBadge tone="muted">
               {t("desktop.disabled")}
-            </span>
+            </SettingsBadge>
           ) : pkg.filtered && (
-            <span
-              style={{
-                fontSize: 10,
-                padding: "1px 5px",
-                borderRadius: 3,
-                background: "rgba(245,158,11,0.12)",
-                color: "#d97706",
-              }}
-            >
+            <SettingsBadge tone="warning">
               {t("desktop.filtered")}
-            </span>
+            </SettingsBadge>
           )}
           <span
             style={{
@@ -505,28 +397,26 @@ function PackageDetail({
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button
+          <SettingsButton
             onClick={() => onAction("update", pkg)}
             disabled={busy || reloadBusy}
-            style={buttonStyle(busy || reloadBusy)}
           >
             {busyKey === `update:${key}` ? t("desktop.updating") : t("desktop.update")}
-          </button>
-          <button
+          </SettingsButton>
+          <SettingsButton
             onClick={onReloadSession}
             disabled={!sessionId || reloadBusy || busy}
-            style={buttonStyle(!sessionId || reloadBusy || busy)}
             title={sessionId ? t("desktop.reloadCurrentSession") : t("desktop.openSessionToReload")}
           >
             {reloadBusy ? t("desktop.reloading") : t("desktop.reloadSession")}
-          </button>
-          <button
+          </SettingsButton>
+          <SettingsButton
+            variant="danger"
             onClick={() => onAction("remove", pkg)}
             disabled={busy || reloadBusy}
-            style={buttonStyle(busy || reloadBusy, true)}
           >
             {busyKey === `remove:${key}` ? t("desktop.removing") : t("desktop.remove")}
-          </button>
+          </SettingsButton>
         </div>
       </div>
 
@@ -552,7 +442,7 @@ function PackageDetail({
         <div style={{ color: "var(--text-dim)" }}>{t("desktop.installedPath")}</div>
         <div
           style={{
-            color: pkg.installedPath ? "var(--text-muted)" : "#ef4444",
+            color: pkg.installedPath ? "var(--text-muted)" : "var(--status-danger)",
             fontFamily: "var(--font-mono)",
             overflowWrap: "anywhere",
           }}
@@ -573,12 +463,12 @@ function PackageDetail({
       </div>
 
       {actionMessage && (
-        <div style={{ fontSize: 12, color: "#16a34a" }}>
+        <div style={{ fontSize: 12, color: "var(--status-success)" }}>
           {actionMessage}
         </div>
       )}
       {actionError && (
-        <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>
+        <div style={{ fontSize: 12, color: "var(--status-danger)", whiteSpace: "pre-wrap" }}>
           {actionError}
         </div>
       )}
@@ -768,7 +658,7 @@ export function PluginsConfig({
                   {t("desktop.loading")}
                 </div>
               ) : error ? (
-                <div style={{ padding: "10px 8px", fontSize: 11, color: "#ef4444" }}>
+                <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--status-danger)" }}>
                   {error}
                 </div>
               ) : packages.length === 0 ? (
@@ -964,7 +854,7 @@ export function PluginsConfig({
             {data?.diagnostics.length ? (
               <span
                 title={data.diagnostics.map((d) => `${d.type}: ${d.source ? `${d.source}: ` : ""}${d.message}`).join("\n")}
-                style={{ color: data.diagnostics.some((d) => d.type === "error") ? "#ef4444" : "#d97706" }}
+                style={{ color: data.diagnostics.some((d) => d.type === "error") ? "var(--status-danger)" : "var(--status-warning)" }}
               >
                 {t("desktop.diagnosticsCount", {
                   count: data.diagnostics.length,
@@ -984,13 +874,13 @@ export function PluginsConfig({
               </span>
             )}
           </div>
-          <button onClick={() => void loadPlugins()} disabled={loading || busyKey !== null} style={buttonStyle(loading || busyKey !== null)}>
+          <SettingsButton onClick={() => void loadPlugins()} disabled={loading || busyKey !== null}>
             {t("desktop.refresh")}
-          </button>
+          </SettingsButton>
           {!embedded && (
-            <button onClick={onCloseAction} style={buttonStyle(false)}>
+            <SettingsButton onClick={onCloseAction}>
               {t("desktop.close")}
-            </button>
+            </SettingsButton>
           )}
         </div>
       </div>

@@ -77,7 +77,7 @@ const underlineOnHover = {
 
 function ConfigSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <section style={{ padding: "20px 22px", borderBottom: "1px solid var(--border)" }}>
+    <section style={{ padding: "var(--settings-section-gap) var(--settings-pad-x)", borderBottom: "1px solid var(--border)" }}>
       <h2 style={{ margin: 0, fontSize: 14, fontWeight: 650, color: "var(--text)" }}>{title}</h2>
       <p style={{ margin: "5px 0 16px", fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}>{description}</p>
       {children}
@@ -157,9 +157,6 @@ export function DisplayConfig() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
-      <header style={{ padding: "18px 22px 14px", borderBottom: "1px solid var(--border)" }}>
-        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t("desktop.display")}</h1>
-      </header>
 
       {/* ── Theme ── */}
       <ConfigSection title={t("desktop.theme")} description={t("desktop.themeDescription")}>

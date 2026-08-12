@@ -87,7 +87,9 @@ export function SettingsModal({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("desktop.settings")}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+              {t(tabs.find((tab) => tab.id === activeTab)?.labelKey ?? "desktop.settings")}
+            </span>
             {activeTab === "models" ? (
               <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 ~/.pi/agent/models.json

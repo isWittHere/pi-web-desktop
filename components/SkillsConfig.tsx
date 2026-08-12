@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { PlusIcon } from "@phosphor-icons/react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
+import { Toggle } from "@/components/Toggle";
+import { SettingsInput, SettingsButton, SettingsBadge } from "@/components/settings-ui";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -41,55 +43,6 @@ function shortVersion(version: string | undefined, unknown: string): string {
   return version ? version.slice(0, 8) : unknown;
 }
 
-function Toggle({
-  enabled,
-  loading,
-  onToggle,
-}: {
-  enabled: boolean;
-  loading: boolean;
-  onToggle: () => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <button
-      onClick={onToggle}
-      disabled={loading}
-      title={
-        enabled
-          ? t("desktop.visibleInModelPrompt")
-          : t("desktop.hiddenFromModelPrompt")
-      }
-      style={{
-        flexShrink: 0,
-        width: 40,
-        height: 22,
-        borderRadius: 11,
-        border: "none",
-        padding: 0,
-        cursor: loading ? "wait" : "pointer",
-        background: enabled ? "var(--accent)" : "var(--border)",
-        position: "relative",
-        transition: "background 0.18s",
-        outline: "none",
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: 3,
-          left: enabled ? 21 : 3,
-          width: 16,
-          height: 16,
-          borderRadius: "50%",
-          background: "var(--bg)",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
-          transition: "left 0.18s cubic-bezier(.4,0,.2,1)",
-        }}
-      />
-    </button>
-  );
-}
 
 function SkillDetail({
   skill,
@@ -119,6 +72,9 @@ function SkillDetail({
   const { t } = useI18n();
   const label = sourceLabel(skill);
   const enabled = !skill.disableModelInvocation;
+  const toggleLabel = enabled
+    ? t("desktop.visibleInModelPrompt")
+    : t("desktop.hiddenFromModelPrompt");
 
   function displayPath(p: string): string {
     if (label === "project" && p.startsWith(cwd)) {
@@ -132,22 +88,9 @@ function SkillDetail({
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Path + tag + toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-        <span
-          style={{
-            fontSize: 10,
-            padding: "1px 5px",
-            borderRadius: 3,
-            flexShrink: 0,
-            background:
-              label === "project"
-                ? "rgba(99,102,241,0.12)"
-                : "rgba(120,120,120,0.12)",
-            color:
-              label === "project" ? "rgba(99,102,241,0.8)" : "var(--text-dim)",
-          }}
-        >
+        <SettingsBadge tone={label === "project" ? "project" : "muted"}>
           {t(`desktop.${label}`)}
-        </span>
+        </SettingsBadge>
         <span
           style={{
             fontFamily: "var(--font-mono)",
@@ -162,12 +105,13 @@ function SkillDetail({
           {displayPath(skill.filePath)}
         </span>
         <Toggle
-          enabled={enabled}
+          checked={enabled}
           loading={toggling}
-          onToggle={() => onToggle(skill)}
+          onChange={() => onToggle(skill)}
+          label={toggleLabel}
         />
         {saveError && (
-          <span style={{ fontSize: 12, color: "#f87171", flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: "var(--status-danger)", flexShrink: 0 }}>
             {saveError}
           </span>
         )}
@@ -241,29 +185,20 @@ function SkillDetail({
               {shortVersion(updateStatus?.currentVersion ?? skill.install.versionHash, t("desktop.unknown"))}
             </span>
             {skill.install.canCheckForUpdates && (
-              <button
+              <SettingsButton
+                size="sm"
                 onClick={onCheckUpdate}
                 disabled={checkingUpdate || updating}
-                style={{
-                  padding: "4px 9px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 5,
-                  background: "none",
-                  color: "var(--text-muted)",
-                  cursor: checkingUpdate || updating ? "not-allowed" : "pointer",
-                  opacity: checkingUpdate || updating ? 0.5 : 1,
-                  fontSize: 11,
-                }}
               >
                 {t("desktop.check")}
-              </button>
+              </SettingsButton>
             )}
             {updateStatus?.state === "update-available" && (
               <span
                 style={{
                   fontFamily: "var(--font-mono)",
                   fontSize: 12,
-                  color: "#d97706",
+                  color: "var(--status-warning)",
                 }}
               >
                 {shortVersion(updateStatus.latestVersion, t("desktop.unknown"))}
@@ -277,9 +212,9 @@ function SkillDetail({
                   color: checkingUpdate
                     ? "var(--accent)"
                     : updateStatus?.state === "up-to-date"
-                      ? "#16a34a"
+                      ? "var(--status-success)"
                       : updateStatus?.state === "error"
-                          ? "#ef4444"
+                          ? "var(--status-danger)"
                           : "var(--text-dim)",
                 }}
               >
@@ -293,27 +228,18 @@ function SkillDetail({
               </span>
             )}
             {updateStatus?.state === "update-available" && (
-              <button
+              <SettingsButton
+                size="sm"
+                variant="primary"
                 onClick={onUpdate}
                 disabled={updating || checkingUpdate}
-                style={{
-                  padding: "4px 10px",
-                  border: "none",
-                  borderRadius: 5,
-                  background: "var(--accent)",
-                  color: "#fff",
-                  cursor: updating || checkingUpdate ? "not-allowed" : "pointer",
-                  opacity: updating || checkingUpdate ? 0.5 : 1,
-                  fontSize: 11,
-                  fontWeight: 600,
-                }}
               >
                 {updating ? t("desktop.updating") : t("desktop.update")}
-              </button>
+              </SettingsButton>
             )}
           </div>
           {updateError && (
-            <span style={{ fontSize: 12, color: "#ef4444" }}>{updateError}</span>
+            <span style={{ fontSize: 12, color: "var(--status-danger)" }}>{updateError}</span>
           )}
         </div>
       )}
@@ -461,42 +387,24 @@ function AddSkillPanel({
 
         {/* Search row */}
         <div style={{ display: "flex", gap: 8 }}>
-          <input
-            ref={inputRef}
+          <SettingsInput
+            inputRef={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
             onKeyDown={(e) => {
               if (e.key === "Enter") search(query);
             }}
             placeholder={t("desktop.skillSearchPlaceholder")}
-            style={{
-              flex: 1,
-              padding: "7px 10px",
-              fontSize: 13,
-              background: "var(--bg-panel)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              color: "var(--text)",
-              outline: "none",
-            }}
+            style={{ flex: 1 }}
           />
-          <button
+          <SettingsButton
+            variant="primary"
             onClick={() => search(query)}
             disabled={searching || !query.trim()}
-            style={{
-              padding: "7px 16px",
-              fontSize: 13,
-              borderRadius: 6,
-              border: "none",
-              background: "var(--accent)",
-              color: "#fff",
-              cursor: searching || !query.trim() ? "not-allowed" : "pointer",
-              opacity: searching || !query.trim() ? 0.5 : 1,
-              flexShrink: 0,
-            }}
+            style={{ flexShrink: 0 }}
           >
             {searching ? t("desktop.searching") : t("desktop.search")}
-          </button>
+          </SettingsButton>
         </div>
 
         {/* Scope + install path row */}
@@ -549,11 +457,11 @@ function AddSkillPanel({
 
         {/* Errors */}
         {searchError && (
-          <div style={{ fontSize: 12, color: "#f87171" }}>{searchError}</div>
+          <div style={{ fontSize: 12, color: "var(--status-danger)" }}>{searchError}</div>
         )}
         {installError && (
           <div
-            style={{ fontSize: 12, color: "#f87171", wordBreak: "break-word" }}
+            style={{ fontSize: 12, color: "var(--status-danger)", wordBreak: "break-word" }}
           >
             {installError}
           </div>
@@ -654,9 +562,9 @@ function AddSkillPanel({
                       isInstalled || isInstalling || installing !== null
                         ? "not-allowed"
                         : "pointer",
-                    background: isInstalled ? "rgba(34,197,94,0.1)" : "none",
+                    background: isInstalled ? "color-mix(in srgb, var(--status-success) 10%, transparent)" : "none",
                     color: isInstalled
-                      ? "#16a34a"
+                      ? "var(--status-success)"
                       : isInstalling
                         ? "var(--accent)"
                         : "var(--text-muted)",
@@ -953,7 +861,7 @@ export function SkillsConfig({
                   style={{
                     padding: "10px 8px",
                     fontSize: 11,
-                    color: "#f87171",
+                    color: "var(--status-danger)",
                   }}
                 >
                   {error}
@@ -1128,7 +1036,7 @@ export function SkillsConfig({
                                   <span
                                     title={t("desktop.updateAvailable")}
                                     style={{
-                                      color: "#d97706",
+                                      color: "var(--status-warning)",
                                       fontSize: 13,
                                       lineHeight: 1,
                                       flexShrink: 0,
@@ -1258,30 +1166,17 @@ export function SkillsConfig({
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {skills.some((skill) => Boolean(skill.install)) && (
-              <button
+              <SettingsButton
                 onClick={() => void checkForUpdates()}
                 disabled={checkingAll || updatingSkill !== null}
-                style={{
-                  padding: "6px 12px",
-                  background: "none",
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  color: "var(--text-muted)",
-                  cursor:
-                    checkingAll || updatingSkill !== null
-                      ? "not-allowed"
-                      : "pointer",
-                  opacity: checkingAll || updatingSkill !== null ? 0.5 : 1,
-                  fontSize: 12,
-                }}
               >
                 {checkingAll ? t("desktop.checking") : t("desktop.checkUpdates")}
-              </button>
+              </SettingsButton>
             )}
             {Object.values(updateStatuses).filter(
               (status) => status.state === "update-available",
             ).length > 0 && (
-              <span style={{ fontSize: 12, color: "#d97706" }}>
+              <span style={{ fontSize: 12, color: "var(--status-warning)" }}>
                 {t("desktop.updatesCount")
                   .replace(
                     "{count}",
@@ -1299,12 +1194,9 @@ export function SkillsConfig({
             )}
           </div>
           {!embedded && (
-            <button
-              onClick={onCloseAction}
-              style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}
-            >
+            <SettingsButton onClick={onCloseAction}>
               {t("desktop.close")}
-            </button>
+            </SettingsButton>
           )}
         </div>
       </div>

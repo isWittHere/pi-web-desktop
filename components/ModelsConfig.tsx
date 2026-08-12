@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import {
   CheckIcon,
-  EyeIcon,
-  EyeSlashIcon,
   MagnifyingGlassIcon,
   PlusIcon,
   StarIcon,
@@ -12,6 +10,15 @@ import {
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon } from "@/components/ProviderIcon";
+import {
+  SettingsField,
+  SettingsInput,
+  SettingsSecretInput,
+  SettingsNumInput,
+  SettingsSelect,
+  SettingsButton,
+  inputStyle,
+} from "@/components/settings-ui";
 import type { DiscoveredModel } from "@/lib/model-discovery";
 import type { ModelThinkingProfile, ThinkingRequestSpec } from "@/lib/thinking-request-core";
 import { buildProfileFromFields } from "@/lib/thinking-request-core";
@@ -151,113 +158,10 @@ function useFavoriteModels(): { favorites: Set<string>; toggleFavorite: (key: st
 }
 
 // ── Form field helpers ────────────────────────────────────────────────────────
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-const inputStyle = {
-  padding: "6px 9px",
-  background: "var(--bg-panel)",
-  border: "1px solid var(--border)",
-  borderRadius: 5,
-  color: "var(--text)",
-  fontSize: 12,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box" as const,
-};
-
-function TextInput({ value, onChange, placeholder, mono }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean }) {
-  return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-    style={{ ...inputStyle, fontFamily: mono ? "var(--font-mono)" : "inherit" }} />;
-}
-
-function SecretTextInput({
-  value,
-  onChange,
-  placeholder,
-  mono,
-  onKeyDown,
-  autoComplete = "off",
-  spellCheck = false,
-  style,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  mono?: boolean;
-  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
-  autoComplete?: string;
-  spellCheck?: boolean;
-  style?: React.CSSProperties;
-}) {
-  const t = useModelTranslation();
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!value) setVisible(false);
-  }, [value]);
-
-  return (
-    <div style={{ position: "relative", width: "100%", ...style }}>
-      <input
-        type={visible ? "text" : "password"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder={placeholder}
-        style={{ ...inputStyle, paddingRight: 34, fontFamily: mono ? "var(--font-mono)" : "inherit" }}
-        autoComplete={autoComplete}
-        spellCheck={spellCheck}
-      />
-      <button
-        type="button"
-        onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? t("desktop.modelsHideApiKey") : t("desktop.modelsShowApiKey")}
-        title={visible ? t("desktop.modelsHideApiKey") : t("desktop.modelsShowApiKey")}
-        style={{
-          position: "absolute",
-          right: 5,
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: 24,
-          height: 24,
-          padding: 0,
-          border: "none",
-          background: "transparent",
-          color: "var(--text-dim)",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {visible ? <EyeSlashIcon size={15} /> : <EyeIcon size={15} />}
-      </button>
-    </div>
-  );
-}
-
-function NumInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />;
-}
-
-function Select({ value, onChange, options, required }: { value: string; onChange: (v: string) => void; options: readonly string[]; required?: boolean }) {
-  const t = useModelTranslation();
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
-      style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)" }}>
-      {!required && <option value="">{t("desktop.modelsInheritNone")}</option>}
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
-    </select>
-  );
-}
+// Shared control primitives live in components/settings-ui.tsx
+// (SettingsField / SettingsInput / SettingsSecretInput / SettingsNumInput /
+// SettingsSelect / inputStyle). Only the checkbox row and the section title
+// stay local.
 
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -372,38 +276,38 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <SectionTitle>{t("desktop.modelsProvider")}</SectionTitle>
-        <button onClick={onDelete}
-          style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11 }}>
+        <SettingsButton variant="danger" size="sm" onClick={onDelete}>
           {t("desktop.delete")}
-        </button>
+        </SettingsButton>
       </div>
 
-      <Field label={t("desktop.modelsProviderName")}>
-        <TextInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
+      <SettingsField label={t("desktop.modelsProviderName")}>
+        <SettingsInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
         {editingName !== name && editingName.trim() && (
           <button onClick={() => onRename(editingName.trim())}
             style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}>
             {t("desktop.rename")}
           </button>
         )}
-      </Field>
+      </SettingsField>
 
-      <Field label={t("desktop.modelsBaseUrl")}>
-        <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
+      <SettingsField label={t("desktop.modelsBaseUrl")}>
+        <SettingsInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
           placeholder="https://api.example.com/v1" mono />
-      </Field>
+      </SettingsField>
 
-      <Field label={t("desktop.modelsApiKey")}>
-        <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
-          placeholder={t("desktop.modelsApiKeyPlaceholder")} mono />
+      <SettingsField label={t("desktop.modelsApiKey")}>
+        <SettingsSecretInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
+          placeholder={t("desktop.modelsApiKeyPlaceholder")} mono
+          showLabel={t("desktop.modelsShowApiKey")} hideLabel={t("desktop.modelsHideApiKey")} />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
           {t("desktop.modelsApiKeyHelp")}
         </span>
-      </Field>
+      </SettingsField>
 
-      <Field label={t("desktop.modelsApi")}>
-        <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
-      </Field>
+      <SettingsField label={t("desktop.modelsApi")}>
+        <SettingsSelect value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
+      </SettingsField>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -433,7 +337,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
           )}
         </div>
         {discoveryState.phase === "error" && (
-          <span style={{ fontSize: 11, color: "#ef4444" }}>{discoveryState.message}</span>
+          <span style={{ fontSize: 11, color: "var(--status-danger)" }}>{discoveryState.message}</span>
         )}
         {discoveryState.phase === "success" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -477,11 +381,11 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
         )}
       </div>
 
-      <Field label={t("desktop.providerIcon")}>
+      <SettingsField label={t("desktop.providerIcon")}>
         <IconModePicker providerId={name} api={provider.api} />
-      </Field>
+      </SettingsField>
 
-      <Field label={t("desktop.modelsHeaders")}>
+      <SettingsField label={t("desktop.modelsHeaders")}>
         <HeaderListEditor
           headers={provider.headers}
           onChange={(headers) => set("headers", headers)}
@@ -489,7 +393,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
           {t("desktop.modelsHeadersHelp")}
         </span>
-      </Field>
+      </SettingsField>
     </div>
   );
 }
@@ -773,16 +677,6 @@ function HeaderListEditor({ headers, onChange }: {
     const next = entries.filter((_, j) => j !== row);
     onChange(Object.keys(next).length ? Object.fromEntries(next) : undefined);
   };
-  const rowBtnStyle = {
-    padding: "6px 9px",
-    background: "none",
-    border: "1px solid rgba(239,68,68,0.3)",
-    borderRadius: 4,
-    color: "#ef4444",
-    cursor: "pointer",
-    fontSize: 11,
-    lineHeight: 1,
-  } satisfies React.CSSProperties;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {entries.map(([k, v], i) => (
@@ -791,7 +685,7 @@ function HeaderListEditor({ headers, onChange }: {
             placeholder="Header-Name" style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
           <input value={v} onChange={(e) => setEntry(i, k, e.target.value)}
             placeholder="value" style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
-          <button onClick={() => removeEntry(i)} style={rowBtnStyle}>✕</button>
+          <SettingsButton variant="danger" size="sm" onClick={() => removeEntry(i)} style={{ flexShrink: 0 }}>✕</SettingsButton>
         </div>
       ))}
       <button onClick={() => onChange({ ...(headers ?? {}), "": "" })}
@@ -962,8 +856,8 @@ function ModelDetail({
             style={{
               height: 24,
               padding: "0 8px",
-              background: testState.phase === "success" ? "#16a34a" : "none",
-              border: `1px solid ${testState.phase === "success" ? "#16a34a" : "var(--border)"}`,
+              background: testState.phase === "success" ? "var(--status-success)" : "none",
+              border: `1px solid ${testState.phase === "success" ? "var(--status-success)" : "var(--border)"}`,
               borderRadius: 4,
               color: testState.phase === "success" ? "#fff" : (!model.id.trim() || testState.phase === "testing") ? "var(--text-dim)" : "var(--text-muted)",
               cursor: (!model.id.trim() || testState.phase === "testing") ? "not-allowed" : "pointer",
@@ -978,19 +872,18 @@ function ModelDetail({
             {testState.phase === "success" && <CheckIcon size={11} />}
             {testState.phase === "testing" ? t("desktop.modelsTesting") : testState.phase === "success" ? t("desktop.modelsOk") : t("desktop.modelsTest")}
           </button>
-          <button onClick={onDelete}
-            style={{ height: 24, padding: "0 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11, boxSizing: "border-box" }}>
+          <SettingsButton variant="danger" size="sm" onClick={onDelete}>
             {t("desktop.modelsRemove")}
-          </button>
+          </SettingsButton>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label={t("desktop.modelsIdRequired")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label={t("desktop.modelsName")}>
+        <SettingsField label={t("desktop.modelsIdRequired")}><SettingsInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></SettingsField>
+        <SettingsField label={t("desktop.modelsName")}>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("desktop.modelsDisplayName")} />
+              <SettingsInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("desktop.modelsDisplayName")} />
             </div>
             <button
               type="button"
@@ -1003,14 +896,15 @@ function ModelDetail({
               <StarIcon size={16} weight={isFavorite ? "fill" : "regular"} color={isFavorite ? "var(--accent)" : "var(--text-muted)"} />
             </button>
           </div>
-        </Field>
+        </SettingsField>
       </div>
 
-      <Field label={t("desktop.modelsApiOverride")}>
-        <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
-      </Field>
+      <SettingsField label={t("desktop.modelsApiOverride")}>
+        <SettingsSelect value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS}
+          emptyLabel={t("desktop.modelsInheritNone")} />
+      </SettingsField>
 
-      <Field label={t("desktop.modelsHeaders")}>
+      <SettingsField label={t("desktop.modelsHeaders")}>
         <HeaderListEditor
           headers={model.headers}
           onChange={(headers) => set("headers", headers)}
@@ -1018,7 +912,7 @@ function ModelDetail({
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
           {t("desktop.modelsHeadersModelHelp")}
         </span>
-      </Field>
+      </SettingsField>
 
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         <Check label={t("desktop.modelsReasoningThinking")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
@@ -1072,14 +966,14 @@ function ModelDetail({
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label={t("desktop.modelsContextWindow")}>
-          <NumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""}
+        <SettingsField label={t("desktop.modelsContextWindow")}>
+          <SettingsNumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""}
             onChange={(v) => set("contextWindow", v ? parseInt(v) : undefined)} placeholder="128000" />
-        </Field>
-        <Field label={t("desktop.modelsMaxOutputTokens")}>
-          <NumInput value={model.maxTokens !== undefined ? String(model.maxTokens) : ""}
+        </SettingsField>
+        <SettingsField label={t("desktop.modelsMaxOutputTokens")}>
+          <SettingsNumInput value={model.maxTokens !== undefined ? String(model.maxTokens) : ""}
             onChange={(v) => set("maxTokens", v ? parseInt(v) : undefined)} placeholder="16384" />
-        </Field>
+        </SettingsField>
       </div>
 
       <div>
@@ -1097,12 +991,12 @@ function ModelDetail({
         {costEditing ? (
           <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
-              <Field key={k} label={costFieldLabels[k]}>
-                <NumInput value={costDraft[k]} onChange={(v) => setCost(k, v)} placeholder="0" />
-              </Field>
+              <SettingsField key={k} label={costFieldLabels[k]}>
+                <SettingsNumInput value={costDraft[k]} onChange={(v) => setCost(k, v)} placeholder="0" />
+              </SettingsField>
             ))}
             {hasModelCostDraftValue(costDraft) && !parseCompleteModelCost(costDraft) && (
-              <div aria-live="polite" style={{ gridColumn: "1 / -1", color: "#d97706", fontSize: 10 }}>
+              <div aria-live="polite" style={{ gridColumn: "1 / -1", color: "var(--status-warning)", fontSize: 10 }}>
                 {t("desktop.modelsCostAllRequired")}
               </div>
             )}
@@ -1276,8 +1170,8 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <SectionTitle>{t("desktop.modelsSubscription")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.loggedIn ? "#4ade80" : "var(--text-dim)" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "var(--status-success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: provider.loggedIn ? "var(--status-success)" : "var(--text-dim)" }}>
             {provider.loggedIn ? t("desktop.modelsConnected") : t("desktop.modelsNotConnected")}
           </span>
         </div>
@@ -1366,10 +1260,10 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{loginState.message}</p>
         )}
         {loginState.phase === "success" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#4ade80" }}>{t("desktop.modelsConnectedSuccessfully")}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--status-success)" }}>{t("desktop.modelsConnectedSuccessfully")}</p>
         )}
         {loginState.phase === "error" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{loginState.message}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--status-danger)" }}>{loginState.message}</p>
         )}
       </div>
 
@@ -1391,12 +1285,9 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
               {provider.loggedIn ? t("desktop.modelsReLogin") : t("desktop.modelsLogin")}
             </button>
             {provider.loggedIn && (
-              <button
-                onClick={handleLogout}
-                style={{ padding: "5px 12px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, color: "#ef4444", cursor: "pointer", fontSize: 12 }}
-              >
+              <SettingsButton variant="danger" onClick={handleLogout}>
                 {t("desktop.modelsDisconnect")}
-              </button>
+              </SettingsButton>
             )}
           </>
         )}
@@ -1473,8 +1364,8 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <SectionTitle>{t("desktop.modelsApiKey")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.configured ? "#4ade80" : "var(--text-dim)" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--status-success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: provider.configured ? "var(--status-success)" : "var(--text-dim)" }}>
             {provider.configured ? t("desktop.modelsConfigured") : t("desktop.modelsNotConfigured")}
           </span>
         </div>
@@ -1490,9 +1381,9 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
           })}
       </p>
 
-      <Field label={t("desktop.modelsApiKey")}>
+      <SettingsField label={t("desktop.modelsApiKey")}>
         <div style={{ display: "flex", gap: 6 }}>
-          <SecretTextInput
+          <SettingsSecretInput
             value={apiKey}
             onChange={setApiKey}
             onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
@@ -1501,13 +1392,15 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
             autoComplete="off"
             spellCheck={false}
             mono
+            showLabel={t("desktop.modelsShowApiKey")}
+            hideLabel={t("desktop.modelsHideApiKey")}
           />
           <button
             onClick={handleSave}
             disabled={saving || !apiKey.trim() || savedOk}
             style={{
               padding: "6px 12px",
-              background: savedOk ? "#16a34a" : apiKey.trim() ? "var(--accent)" : "var(--bg-panel)",
+              background: savedOk ? "var(--status-success)" : apiKey.trim() ? "var(--accent)" : "var(--bg-panel)",
               border: "none", borderRadius: 5,
               color: (apiKey.trim() || savedOk) ? "#fff" : "var(--text-dim)",
               cursor: (saving || !apiKey.trim() || savedOk) ? "not-allowed" : "pointer",
@@ -1519,23 +1412,19 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
             {savedOk ? t("desktop.modelsSaved") : saving ? t("desktop.modelsSaving") : t("desktop.modelsSave")}
           </button>
         </div>
-      </Field>
+      </SettingsField>
 
-      {error && <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{error}</p>}
+      {error && <p style={{ margin: 0, fontSize: 12, color: "var(--status-danger)" }}>{error}</p>}
 
       {provider.configured && (
-        <button
+        <SettingsButton
+          variant="danger"
           onClick={handleRemove}
           disabled={removing}
-          style={{
-            alignSelf: "flex-start", padding: "5px 12px",
-            background: "none", border: "1px solid rgba(239,68,68,0.3)",
-            borderRadius: 5, color: "#ef4444",
-            cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
-          }}
+          style={{ alignSelf: "flex-start" }}
         >
           {removing ? t("desktop.modelsRemoving") : t("desktop.modelsDisconnect")}
-        </button>
+        </SettingsButton>
       )}
     </div>
   );
@@ -2094,11 +1983,11 @@ export function ModelsConfig({
         {/* Footer */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
           {saveWarnings && (
-            <span style={{ fontSize: 11, color: "#f59e0b", flex: 1, lineHeight: 1.4 }}>
+            <span style={{ fontSize: 11, color: "var(--status-warning)", flex: 1, lineHeight: 1.4 }}>
               {t("desktop.modelsConfigBuiltinConflict", { models: saveWarnings.join(", ") })}
             </span>
           )}
-          {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
+          {saveError && <span style={{ fontSize: 12, color: "var(--status-danger)", flex: 1 }}>{saveError}</span>}
           {!embedded && (
             <button onClick={onCloseAction} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
               {t("desktop.cancel")}
@@ -2108,7 +1997,7 @@ export function ModelsConfig({
             position: "relative",
             padding: "6px 16px",
             minWidth: 92,
-            background: savedOk ? "#16a34a" : saving ? "var(--bg-panel)" : "var(--accent)",
+            background: savedOk ? "var(--status-success)" : saving ? "var(--bg-panel)" : "var(--accent)",
             border: "none", borderRadius: 6,
             color: savedOk ? "#fff" : saving ? "var(--text-muted)" : "#fff",
             cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
