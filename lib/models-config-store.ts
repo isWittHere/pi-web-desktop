@@ -143,6 +143,7 @@ export function writeModelsConfig(
   const dir = dirname(modelsPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const normalized = normalizeModelsConfigCosts(sanitizeModelsConfig(data));
+  const nextContent = JSON.stringify(normalized, null, 2);
 
   // Never let an empty save silently wipe a real configuration.
   const existing = readModelsConfig(modelsPath);
@@ -152,7 +153,7 @@ export function writeModelsConfig(
     throw new ModelsConfigWriteError(existingModels, incomingModels);
   }
 
-  backupModelsConfig(modelsPath, JSON.stringify(normalized, null, 2));
-  writePrivateFileAtomicSync(modelsPath, JSON.stringify(normalized, null, 2));
+  backupModelsConfig(modelsPath, nextContent);
+  writePrivateFileAtomicSync(modelsPath, nextContent);
   invalidateModelsCache();
 }
