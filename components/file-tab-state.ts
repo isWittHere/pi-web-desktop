@@ -63,6 +63,21 @@ export function saveFileViewerState(
   const index = tabs.findIndex((tab) => tab.id === tabId);
   if (index === -1 || (tabs[index].viewerRevision ?? 0) !== viewerRevision) return tabs;
 
+  // Bail out when the state is unchanged. Without this, every unmount of a
+  // viewer (tab switch, panel close) produced a fresh Tab array, which flowed
+  // into the FileViewer's initialState prop and re-ran its load effect, whose
+  // cleanup saved again — an AppShell-level setState loop.
+  const current = tabs[index].viewerState;
+  if (
+    current
+    && current.displayMode === viewerState.displayMode
+    && current.wrapLines === viewerState.wrapLines
+    && current.scrollTop === viewerState.scrollTop
+    && current.scrollLeft === viewerState.scrollLeft
+  ) {
+    return tabs;
+  }
+
   const next = [...tabs];
   next[index] = { ...next[index], viewerState };
   return next;
