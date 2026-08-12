@@ -37,6 +37,20 @@ function renderMarkdown(markdown, isStreaming = false) {
   );
 }
 
+test("keeps single-tilde CJK numeric ranges literal instead of striking them", () => {
+  const html = renderMarkdown("5~7U 保证金 × 100~200倍杠杆");
+
+  assert.doesNotMatch(html, /<del>/);
+  assert.match(html, /5~7U/);
+  assert.match(html, /100~200倍/);
+});
+
+test("still renders double-tilde strikethrough", () => {
+  const html = renderMarkdown("~~gone~~");
+
+  assert.match(html, /<del>gone<\/del>/);
+});
+
 test("opens non-file markdown links in a safe new tab", () => {
   const html = renderMarkdown("[docs](https://example.com/docs)");
 

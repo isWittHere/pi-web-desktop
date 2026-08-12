@@ -54,8 +54,13 @@ const markdownSanitizeSchema = {
   strip: [...(defaultSchema.strip || []), "iframe", "object", "style", "form"],
 };
 
+// singleTilde:false requires ~~double~~ tildes for strikethrough. A single `~`
+// is the standard CJK numeric-range separator (e.g. "5~7U", "100~200倍"), and
+// GFM's default single-tilde strikethrough silently mangled such ranges.
+const remarkGfmOptions = { singleTilde: false } as const;
+
 export const markdownRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [
-  remarkGfm,
+  [remarkGfm, remarkGfmOptions],
   remarkMath,
   remarkFrontmatter,
   remarkFrontmatterToCode,
