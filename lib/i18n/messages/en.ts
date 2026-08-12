@@ -571,5 +571,6 @@ export const enLocale = {
     "desktop.markdownInvalidMermaidDiagram": "Invalid Mermaid diagram",
     "desktop.markdownRenderingMermaidDiagram": "Rendering Mermaid diagram",
     "desktop.markdownPlainText": "text",
+    "desktop.largeMessageReveal": "Message content is very large ({size}). Click to view as plain text — markdown rendering is disabled to keep the page responsive.",
   },
 } satisfies LocalePlugin;

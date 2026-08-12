@@ -571,5 +571,6 @@ export const zhCNLocale = {
     "desktop.markdownInvalidMermaidDiagram": "无效的 Mermaid 图表",
     "desktop.markdownRenderingMermaidDiagram": "正在渲染 Mermaid 图表",
     "desktop.markdownPlainText": "文本",
+    "desktop.largeMessageReveal": "消息内容过大（{size}）。点击以纯文本查看 — 已禁用 markdown 渲染以避免页面卡顿。",
   },
 } satisfies LocalePlugin;

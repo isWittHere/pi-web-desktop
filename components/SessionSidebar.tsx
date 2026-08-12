@@ -10,6 +10,7 @@ import { getDraft } from "@/lib/draft-store";
 import { getLastWorkspace } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
+import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { getTitleModel } from "@/lib/title-settings";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -430,6 +431,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     // the first load may reuse a list already fetched by the restore path.
     loadSessions(isFirst, !isFirst);
   }, [loadSessions, refreshKey]);
+
+  // Browser storage is unavailable during server rendering. Restore the panel
+  // preference after hydration so a collapsed explorer stays collapsed on reload.
+  useEffect(() => {
+    setExplorerOpen(loadExplorerOpen());
+  }, []);
 
   // Persist unread markers so they survive a browser refresh before the user
   // has actually opened the completed session.
@@ -1992,7 +1999,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         >
           <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
             <button
-              onClick={() => setExplorerOpen((v) => !v)}
+              onClick={() => setExplorerOpen((open) => {
+                const next = !open;
+                saveExplorerOpen(next);
+                return next;
+              })}
               style={{
                 display: "flex",
                 alignItems: "center",
