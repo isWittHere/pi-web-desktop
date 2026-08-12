@@ -4,16 +4,16 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowsInLineVertical,
+  ArrowsSplit,
   BellRinging,
   BellSlash,
-  BellSimpleRinging,
-  BellSimpleSlash,
+  ChatCentered,
+  ChatCenteredSlash,
   Check,
   ClockCounterClockwise,
   Copy,
   Database,
   FileText,
-  GitBranch,
 } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -200,7 +200,7 @@ export function SessionInfoBar({
           title={notificationsEnabled ? translate("desktop.disableCompletionNotification") : translate("desktop.enableCompletionNotification")}
           aria-label={notificationsEnabled ? translate("desktop.disableCompletionNotification") : translate("desktop.enableCompletionNotification")}
         >
-          {notificationsEnabled ? <BellSimpleRinging size={13} /> : <BellSimpleSlash size={13} />}
+          {notificationsEnabled ? <ChatCentered size={13} /> : <ChatCenteredSlash size={13} />}
           {showSoundLabel && (
             <span style={{ marginLeft: 4 }}>
               {notificationsEnabled ? translate("desktop.notificationLabelOn") : translate("desktop.notificationLabelOff")}
@@ -231,7 +231,7 @@ export function SessionInfoBar({
             aria-label={translate("desktop.branches")}
             aria-pressed={activePanel === "branches"}
           >
-            <GitBranch size={13} aria-hidden="true" />
+            <ArrowsSplit size={13} aria-hidden="true" style={{ transform: "rotate(-90deg)" }} />
           </button>
           {activePanel === "branches" && (
             <>
