@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { writePrivateFileAtomicSync } from "./atomic-file";
@@ -66,6 +66,61 @@ function sanitizeModelsConfig(data: Record<string, unknown>): Record<string, unk
   return { ...data, providers };
 }
 
+/** Count models with a non-blank id across all providers. */
+function countRealModels(data: Record<string, unknown>): number {
+  if (!isRecord(data.providers)) return 0;
+  let count = 0;
+  for (const provider of Object.values(data.providers)) {
+    if (!isRecord(provider) || !Array.isArray(provider.models)) continue;
+    for (const model of provider.models) {
+      if (isRecord(model) && typeof model.id === "string" && model.id.trim().length > 0) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * Guard against a near-empty save clobbering a real configuration.
+ *
+ * The settings UI sends the whole models.json it loaded, so a save performed
+ * from an incomplete load (or a stray blank provider row) can silently wipe
+ * every configured model. Refuse a write that would replace real models with
+ * none, and keep a backup of the previous file either way.
+ */
+export class ModelsConfigWriteError extends Error {
+  readonly existingModelCount: number;
+  readonly incomingModelCount: number;
+
+  constructor(existingModelCount: number, incomingModelCount: number) {
+    super(
+      `Refusing to overwrite ${existingModelCount} configured model${existingModelCount === 1 ? "" : "s"} `
+      + `with an empty configuration (${incomingModelCount} model${incomingModelCount === 1 ? "" : "s"}). `
+      + "Your models.json was preserved.",
+    );
+    this.existingModelCount = existingModelCount;
+    this.incomingModelCount = incomingModelCount;
+    this.name = "ModelsConfigWriteError";
+  }
+}
+
+export function getModelsConfigBackupPath(modelsPath = getModelsConfigPath()): string {
+  return `${modelsPath}.bak`;
+}
+
+/** Copy the current file aside before an overwrite; a no-op when absent/identical. */
+function backupModelsConfig(modelsPath: string, nextContent: string): void {
+  if (!existsSync(modelsPath)) return;
+  try {
+    if (readFileSync(modelsPath, "utf8") === nextContent) return;
+    copyFileSync(modelsPath, getModelsConfigBackupPath(modelsPath));
+  } catch {
+    // Backup is best-effort; never block a write on it.
+  }
+}
+
+
 export function getModelsConfigPath(): string {
   return join(getAgentDir(), "models.json");
 }
@@ -88,6 +143,16 @@ export function writeModelsConfig(
   const dir = dirname(modelsPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const normalized = normalizeModelsConfigCosts(sanitizeModelsConfig(data));
+
+  // Never let an empty save silently wipe a real configuration.
+  const existing = readModelsConfig(modelsPath);
+  const existingModels = countRealModels(existing);
+  const incomingModels = countRealModels(normalized);
+  if (existingModels > 0 && incomingModels === 0) {
+    throw new ModelsConfigWriteError(existingModels, incomingModels);
+  }
+
+  backupModelsConfig(modelsPath, JSON.stringify(normalized, null, 2));
   writePrivateFileAtomicSync(modelsPath, JSON.stringify(normalized, null, 2));
   invalidateModelsCache();
 }
