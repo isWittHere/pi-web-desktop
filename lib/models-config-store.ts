@@ -82,25 +82,73 @@ function countRealModels(data: Record<string, unknown>): number {
 }
 
 /**
+ * Providers that previously carried essential connection credentials
+ * (baseUrl and/or apiKey) but whose replacement omits them entirely. Such a
+ * provider object was reconstructed from partial data — the UI never strips
+ * baseUrl, and apiKey removal goes through the auth routes, not this file.
+ */
+function missingProviderCredentials(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): string[] {
+  if (!isRecord(existing.providers) || !isRecord(incoming.providers)) return [];
+  const missing: string[] = [];
+  for (const [providerId, oldProvider] of Object.entries(existing.providers)) {
+    if (!isRecord(oldProvider)) continue;
+    const hadBaseUrl = typeof oldProvider.baseUrl === "string" && oldProvider.baseUrl.length > 0;
+    const hadApiKey = typeof oldProvider.apiKey === "string" && oldProvider.apiKey.length > 0;
+    if (!hadBaseUrl && !hadApiKey) continue;
+
+    const newProvider = incoming.providers[providerId];
+    if (!isRecord(newProvider)) continue;
+    const hasBaseUrl = typeof newProvider.baseUrl === "string" && newProvider.baseUrl.length > 0;
+    const hasApiKey = typeof newProvider.apiKey === "string" && newProvider.apiKey.length > 0;
+    if (hadBaseUrl && !hasBaseUrl) missing.push(`${providerId} (baseUrl)`);
+    else if (hadApiKey && !hasApiKey) missing.push(`${providerId} (apiKey)`);
+  }
+  return missing;
+}
+
+/**
  * Guard against a near-empty save clobbering a real configuration.
  *
  * The settings UI sends the whole models.json it loaded, so a save performed
  * from an incomplete load (or a stray blank provider row) can silently wipe
  * every configured model. Refuse a write that would replace real models with
- * none, and keep a backup of the previous file either way.
+ * none, or that drops a provider's essential credentials, and keep a backup
+ * of the previous file either way.
  */
 export class ModelsConfigWriteError extends Error {
   readonly existingModelCount: number;
   readonly incomingModelCount: number;
+  readonly missingProviderCredentials: string[];
 
-  constructor(existingModelCount: number, incomingModelCount: number) {
+  constructor(
+    existingModelCount: number,
+    incomingModelCount: number,
+    missingProviderCredentials: string[] = [],
+  ) {
+    const plural = (n: number): string => (n === 1 ? "" : "s");
+    const details = [];
+    if (existingModelCount > 0 && incomingModelCount === 0) {
+      details.push(
+        `refusing to overwrite ${existingModelCount} configured model${plural(existingModelCount)} `
+        + `with an empty configuration (${incomingModelCount} model${plural(incomingModelCount)})`,
+      );
+    }
+    if (missingProviderCredentials.length > 0) {
+      details.push(
+        `providers missing credentials that were previously configured: ${missingProviderCredentials.join(", ")}`,
+      );
+    }
     super(
-      `Refusing to overwrite ${existingModelCount} configured model${existingModelCount === 1 ? "" : "s"} `
-      + `with an empty configuration (${incomingModelCount} model${incomingModelCount === 1 ? "" : "s"}). `
-      + "Your models.json was preserved.",
+      details.length > 0
+        ? `Models config not saved — ${details.join("; ")}. Your models.json was preserved.`
+        : "Models config not saved. Your models.json was preserved.",
     );
     this.existingModelCount = existingModelCount;
     this.incomingModelCount = incomingModelCount;
+    this.missingProviderCredentials = missingProviderCredentials;
     this.name = "ModelsConfigWriteError";
   }
 }
@@ -145,12 +193,14 @@ export function writeModelsConfig(
   const normalized = normalizeModelsConfigCosts(sanitizeModelsConfig(data));
   const nextContent = JSON.stringify(normalized, null, 2);
 
-  // Never let an empty save silently wipe a real configuration.
+  // Never let an empty save silently wipe a real configuration, nor let a
+  // partially reconstructed save drop providers' connection credentials.
   const existing = readModelsConfig(modelsPath);
   const existingModels = countRealModels(existing);
   const incomingModels = countRealModels(normalized);
-  if (existingModels > 0 && incomingModels === 0) {
-    throw new ModelsConfigWriteError(existingModels, incomingModels);
+  const missingCredentials = missingProviderCredentials(existing, normalized);
+  if ((existingModels > 0 && incomingModels === 0) || missingCredentials.length > 0) {
+    throw new ModelsConfigWriteError(existingModels, incomingModels, missingCredentials);
   }
 
   backupModelsConfig(modelsPath, nextContent);
