@@ -406,6 +406,20 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     }
     return history;
   }, [messages]);
+  // Stable Map identity: `messages` doesn't change during streaming updates
+  // (the streaming message lives in streamState), so memoized MessageViews
+  // skip re-rendering on every message_update event. An inline `new Map()`
+  // in the render IIFE below used to defeat MessageView's memo() on each
+  // streamed chunk by handing it a fresh identity every render.
+  const toolResultsMap = useMemo(() => {
+    const map = new Map<string, ToolResultMessage>();
+    for (const msg of messages) {
+      if (msg.role === "toolResult") {
+        map.set((msg as ToolResultMessage).toolCallId, msg as ToolResultMessage);
+      }
+    }
+    return map;
+  }, [messages]);
   const messageRefs = useMessageRefs(visibleMessages.length);
 
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
@@ -704,13 +718,6 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
               <ExtensionWidgets widgets={aboveEditorWidgets} />
 
             {(() => {
-              const toolResultsMap = new Map<string, ToolResultMessage>();
-              for (const msg of messages) {
-                if (msg.role === "toolResult") {
-                  toolResultsMap.set((msg as ToolResultMessage).toolCallId, msg as ToolResultMessage);
-                }
-              }
-
               let lastUserIdx = -1;
               for (let i = messages.length - 1; i >= 0; i--) {
                 if (messages[i].role === "user") { lastUserIdx = i; break; }
