@@ -16,6 +16,7 @@ import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { createStreamUpdateScheduler, type StreamUpdateScheduler } from "@/lib/stream-update-scheduler";
 import { AgentEventConnection, AgentEventConnectionError } from "@/lib/agent-event-connection";
+import type { AgentEventLike } from "@/lib/agent-event-wire";
 import { getCachedSession, setCachedSession } from "@/lib/session-cache";
 
 export interface SessionData {
@@ -58,11 +59,6 @@ function streamReducer(state: StreamingState, action: StreamAction): StreamingSt
     default:
       return state;
   }
-}
-
-interface AgentEvent {
-  type: string;
-  [key: string]: unknown;
 }
 
 interface CompactCommandResult {
@@ -384,7 +380,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const rpcPromptPendingRef = useRef(false);
   const notifiedPromptRunIdRef = useRef(-1);
   const bashRunningRef = useRef(false);
-  const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
+  const handleAgentEventRef = useRef<((event: AgentEventLike) => void) | null>(null);
   const initialScrollDoneRef = useRef(false);
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
@@ -420,7 +416,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   if (!eventConnectionRef.current) {
     eventConnectionRef.current = new AgentEventConnection({
       createSource: (sid) => new EventSource(`/api/agent/${encodeURIComponent(sid)}/events`),
-      onEvent: (event) => handleAgentEventRef.current?.(event as AgentEvent),
+      onEvent: (event) => handleAgentEventRef.current?.(event),
       shouldMaintain: (sid) => (
         sessionHookMountedRef.current
         && sessionIdRef.current === sid
@@ -1025,7 +1021,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunningRef.current = agentRunning;
   }, [agentRunning]);
 
-  const handleAgentEvent = useCallback((event: AgentEvent) => {
+  const handleAgentEvent = useCallback((event: AgentEventLike) => {
     switch (event.type) {
       case "connected": {
         // A (re)established stream announces the agent's current readiness.
