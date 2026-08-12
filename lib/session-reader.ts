@@ -41,7 +41,7 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       parentSessionId: s.parentSessionPath ? pathToId.get(normalizePath(s.parentSessionPath)) : undefined,
       projectRoot: project?.projectRoot ?? s.cwd,
       ...(project?.isWorktree && project.branch ? { worktreeBranch: project.branch } : {}),
-      mark: readSessionMark(s.path),
+      ...readSessionFlags(s.path),
     };
   });
 }
@@ -155,22 +155,29 @@ export function invalidateSessionPathCache(sessionId: string): void {
 }
 
 /**
- * Latest user-assigned mark for a session file, read from its tail.
+ * User-assigned flags for a session file (status mark + pinned), read from
+ * its tail in a single scan.
  *
- * Marks are appended as `custom` entries (customType "session-mark", written
- * by PATCH /api/sessions/[id]) and session files are append-only, so the
- * newest mark is always near the end. A trailing `{ mark: null }` entry
- * explicitly clears the mark; the last entry wins either way. Only the final
- * 128KB is scanned — large tool results or images further up the file can
- * never hide a mark, since marks are always appended after them.
+ * Flags are appended as `custom` entries (customType "session-mark" /
+ * "session-pin", written by PATCH /api/sessions/[id]) and session files are
+ * append-only, so the newest value is always near the end. A trailing
+ * `{ mark: null }` entry clears the mark; the last entry wins either way.
+ * Only the final 128KB is scanned — large tool results or images further up
+ * the file can never hide a flag, since flags are always appended after them.
  */
-export function readSessionMark(filePath: string): SessionMark | undefined {
+export interface SessionFlags {
+  mark?: SessionMark;
+  pinned?: boolean;
+}
+
+export function readSessionFlags(filePath: string): SessionFlags {
   const SESSION_MARK_CUSTOM_TYPE = "session-mark";
-  const SESSION_MARK_TAIL_BYTES = 128 * 1024;
+  const SESSION_PIN_CUSTOM_TYPE = "session-pin";
+  const TAIL_BYTES = 128 * 1024;
   try {
     const size = statSync(filePath).size;
-    if (size <= 0) return undefined;
-    const readLen = Math.min(size, SESSION_MARK_TAIL_BYTES);
+    if (size <= 0) return {};
+    const readLen = Math.min(size, TAIL_BYTES);
     const fd = openSync(filePath, "r");
     try {
       const buffer = Buffer.allocUnsafe(readLen);
@@ -179,28 +186,37 @@ export function readSessionMark(filePath: string): SessionMark | undefined {
       // Drop the first line fragment (it may start mid-line) and scan the rest.
       const newlineIndex = text.indexOf("\n");
       const tail = newlineIndex === -1 ? text : text.slice(newlineIndex + 1);
-      let mark: SessionMark | undefined;
+      const flags: SessionFlags = {};
       for (const line of tail.split("\n")) {
         if (!line.trim()) continue;
         try {
           const entry = JSON.parse(line) as {
             type?: string;
             customType?: string;
-            data?: { mark?: SessionMark | null };
+            data?: { mark?: SessionMark | null; pinned?: boolean };
           };
-          if (entry.type !== "custom" || entry.customType !== SESSION_MARK_CUSTOM_TYPE) continue;
-          mark = entry.data?.mark ?? undefined;
+          if (entry.type !== "custom") continue;
+          if (entry.customType === SESSION_MARK_CUSTOM_TYPE) {
+            flags.mark = entry.data?.mark ?? undefined;
+          } else if (entry.customType === SESSION_PIN_CUSTOM_TYPE) {
+            flags.pinned = entry.data?.pinned === true;
+          }
         } catch {
           // skip malformed lines
         }
       }
-      return mark;
+      return flags;
     } finally {
       closeSync(fd);
     }
   } catch {
-    return undefined;
+    return {};
   }
+}
+
+/** Convenience wrapper — latest user-assigned mark, if any. */
+export function readSessionMark(filePath: string): SessionMark | undefined {
+  return readSessionFlags(filePath).mark;
 }
 
 export function readSessionHeader(filePath: string): SessionHeader | null {
