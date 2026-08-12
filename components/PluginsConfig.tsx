@@ -642,7 +642,7 @@ export function PluginsConfig({
         <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
           <div
             style={{
-              width: isMobile ? "100%" : 245,
+              width: isMobile ? "100%" : 220,
               maxHeight: isMobile ? "calc(40vh / var(--app-ui-scale, 1))" : undefined,
               borderRight: isMobile ? "none" : "1px solid var(--border)",
               borderBottom: isMobile ? "1px solid var(--border)" : "none",
@@ -675,6 +675,7 @@ export function PluginsConfig({
                         fontWeight: 600,
                         color: "var(--text-dim)",
                         textTransform: "uppercase",
+                        letterSpacing: "0.06em",
                       }}
                     >
                       {t(`desktop.${group.scope}`)}

@@ -181,6 +181,13 @@ html.dark {
   box-sizing: border-box;
 }
 
+/* Settings dialogs & panels: keyboard focus ring. Inline `outline: none`
+   was removed from the shared settings controls so this rule can apply. */
+.settings-dialog :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* Catppuccin file icons use Latte in light mode and Mocha in dark mode.
    The URLs are supplied per icon by components/FileIcons.tsx. */
 .catppuccin-file-icon {

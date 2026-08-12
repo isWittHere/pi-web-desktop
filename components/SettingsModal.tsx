@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChatCenteredText, Cpu, Monitor, Plug, Stack, X } from "@phosphor-icons/react";
 import { ChatConfig } from "./ChatConfig";
 import { DisplayConfig } from "./DisplayConfig";
@@ -42,6 +42,12 @@ export function SettingsModal({
   const [activeTab, setActiveTab] = useState<SettingsTab>(
     initialTab === "skills" || initialTab === "plugins" ? (cwd ? initialTab : "display") : initialTab,
   );
+  const dialogRef = useRef<HTMLElement>(null);
+
+  // Focus the dialog on open so keyboard users land inside immediately.
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
 
   return (
     <div
@@ -57,8 +63,14 @@ export function SettingsModal({
       onClick={(event) => {
         if (event.target === event.currentTarget) onCloseAction();
       }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onCloseAction();
+      }}
     >
       <section
+        ref={dialogRef}
+        tabIndex={-1}
+        className="settings-dialog"
         role="dialog"
         aria-modal="true"
         aria-label={t("desktop.settings")}

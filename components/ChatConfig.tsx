@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { SettingSection, SettingToggle } from "./SettingToggle";
-import { SettingsSelect } from "@/components/settings-ui";
+import { SettingToggle } from "./SettingToggle";
+import { SettingsSection, SettingsSelect } from "@/components/settings-ui";
 import { useI18n } from "@/hooks/useI18n";
 import {
   getTitleAutoEnabled,
@@ -157,7 +157,7 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
-      <SettingSection title={t("desktop.sessionTitle")} description={t("desktop.sessionTitleDescription")}>
+      <SettingsSection title={t("desktop.sessionTitle")} description={t("desktop.sessionTitleDescription")}>
         <SettingToggle
           checked={titleAuto}
           onChange={setTitleAutoAndPersist}
@@ -174,23 +174,23 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
             style={{ maxWidth: 260 }}
           />
         </div>
-      </SettingSection>
-      <SettingSection title={t("desktop.inputShortcut")} description={t("desktop.inputShortcutDescription")}>
+      </SettingsSection>
+      <SettingsSection title={t("desktop.inputShortcut")} description={t("desktop.inputShortcutDescription")}>
         <SettingToggle
           checked={shortcut === "ctrl-enter"}
           onChange={(checked) => setShortcutAndPersist(checked ? "ctrl-enter" : "enter")}
           label={t("desktop.useCtrlEnter")}
           description={t("desktop.useCtrlEnterDescription")}
         />
-      </SettingSection>
-      <SettingSection title={t("desktop.markdownListContinue")} description={t("desktop.markdownListContinueDescription")}>
+      </SettingsSection>
+      <SettingsSection title={t("desktop.markdownListContinue")} description={t("desktop.markdownListContinueDescription")}>
         <SettingToggle
           checked={markdownList}
           onChange={setMarkdownListAndPersist}
           label={t("desktop.markdownListContinueLabel")}
         />
-      </SettingSection>
-      <SettingSection title={t("desktop.notificationDuration")} description={t("desktop.notificationDurationDescription")}>
+      </SettingsSection>
+      <SettingsSection title={t("desktop.notificationDuration")} description={t("desktop.notificationDurationDescription")}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", margin: "0 -14px" }}>
           <span style={{ flex: 1, fontSize: 13, color: "var(--text)" }}>{t("desktop.notificationDurationLabel")}</span>
           <SettingsSelect
@@ -199,7 +199,7 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
             options={NOTIFICATION_DURATION_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
           />
         </div>
-      </SettingSection>
+      </SettingsSection>
     </div>
   );
 }

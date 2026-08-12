@@ -54,7 +54,6 @@ export function Toggle({
         position: "relative",
         transition: "background 0.18s ease",
         opacity: busy ? 0.65 : 1,
-        outline: "none",
       }}
     >
       <span

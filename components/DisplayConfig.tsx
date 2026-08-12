@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link, Check } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
+import { SettingsSection } from "@/components/settings-ui";
 import type { ThemeSetInfo } from "@/lib/theme";
 
 // ── Tag / chip helpers ───────────────────────────────────────────────────────
@@ -74,16 +75,6 @@ const underlineOnHover = {
     e.currentTarget.style.textDecoration = "none";
   },
 };
-
-function ConfigSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
-  return (
-    <section style={{ padding: "var(--settings-section-gap) var(--settings-pad-x)", borderBottom: "1px solid var(--border)" }}>
-      <h2 style={{ margin: 0, fontSize: 14, fontWeight: 650, color: "var(--text)" }}>{title}</h2>
-      <p style={{ margin: "5px 0 16px", fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}>{description}</p>
-      {children}
-    </section>
-  );
-}
 
 // ── Border depth icon ───────────────────────────────────────────────────────
 
@@ -159,7 +150,7 @@ export function DisplayConfig() {
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
 
       {/* ── Theme ── */}
-      <ConfigSection title={t("desktop.theme")} description={t("desktop.themeDescription")}>
+      <SettingsSection title={t("desktop.theme")} description={t("desktop.themeDescription")}>
         {/* Color Scheme */}
         <SectionLabel
           icon={<PaintBrush size={14} weight="fill" />}
@@ -284,10 +275,10 @@ export function DisplayConfig() {
             {t("desktop.noCustomThemesHint2")}
           </p>
         )}
-      </ConfigSection>
+      </SettingsSection>
 
       {/* ── Text Size ── */}
-      <ConfigSection title={t("desktop.textSize")} description={t("desktop.textSizeDescription")}>
+      <SettingsSection title={t("desktop.textSize")} description={t("desktop.textSizeDescription")}>
         <div style={tagGroupStyle}>
           {[0.9, 1, 1.1, 1.2, 1.25, 1.3, 1.35].map((s) => {
             const active = fontScale === s;
@@ -305,10 +296,10 @@ export function DisplayConfig() {
             );
           })}
         </div>
-      </ConfigSection>
+      </SettingsSection>
 
       {/* ── Language ── */}
-      <ConfigSection title={t("desktop.language")} description={t("desktop.languageDescription")}>
+      <SettingsSection title={t("desktop.language")} description={t("desktop.languageDescription")}>
         <div style={tagGroupStyle}>
           {(["en", "zh-CN"] as const).map((lang) => {
             const active = (lang === "zh-CN") ? language === "zh-CN" : language !== "zh-CN";
@@ -325,7 +316,7 @@ export function DisplayConfig() {
             );
           })}
         </div>
-      </ConfigSection>
+      </SettingsSection>
     </div>
   );
 }

@@ -1848,7 +1848,7 @@ export function ModelsConfig({
 
           {/* Left: tree */}
           <div style={{
-            width: isMobile ? "100%" : 210,
+            width: isMobile ? "100%" : 220,
             maxHeight: isMobile ? "calc(40vh / var(--app-ui-scale, 1))" : undefined,
             borderRight: isMobile ? "none" : "1px solid var(--border)",
             borderBottom: isMobile ? "1px solid var(--border)" : "none",

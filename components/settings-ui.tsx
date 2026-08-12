@@ -21,10 +21,29 @@ export const inputStyle: CSSProperties = {
   borderRadius: "var(--control-radius)",
   color: "var(--text)",
   fontSize: 13,
-  outline: "none",
   width: "100%",
   boxSizing: "border-box",
 };
+
+/**
+ * Settings section: title + description + controls as a flat full-width
+ * block separated from the next section by a hairline divider. This is the
+ * classic settings-page rhythm — sections stack with a `borderBottom` line.
+ */
+export function SettingsSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  return (
+    <section
+      style={{
+        padding: "var(--settings-section-gap) var(--settings-pad-x)",
+        borderBottom: "1px solid var(--border)",
+      }}
+    >
+      <h2 style={{ margin: 0, fontSize: 14, fontWeight: 650, color: "var(--text)" }}>{title}</h2>
+      <p style={{ margin: "5px 0 14px", fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}>{description}</p>
+      <div>{children}</div>
+    </section>
+  );
+}
 
 /** Field wrapper: small muted label above the control. */
 export function SettingsField({ label, children }: { label: string; children: ReactNode }) {
@@ -203,7 +222,6 @@ const buttonBase: CSSProperties = {
   borderRadius: "var(--control-radius)",
   cursor: "pointer",
   fontSize: 12,
-  outline: "none",
   boxSizing: "border-box",
   transition: "background 0.12s, border-color 0.12s, color 0.12s",
   whiteSpace: "nowrap",

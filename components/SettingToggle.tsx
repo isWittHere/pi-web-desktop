@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { Toggle } from "./Toggle";
 
 /** Row layout: label + description on the left, switch on the right. */
@@ -76,23 +75,5 @@ export function SettingToggle({
         loading={loading}
       />
     </label>
-  );
-}
-
-export function SettingSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  return (
-    <section style={{ padding: "var(--settings-section-gap) var(--settings-pad-x)", borderBottom: "1px solid var(--border)" }}>
-      <h2 style={{ margin: 0, fontSize: 14, fontWeight: 650, color: "var(--text)" }}>{title}</h2>
-      <p style={{ margin: "5px 0 14px", fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}>{description}</p>
-      <div>{children}</div>
-    </section>
   );
 }
