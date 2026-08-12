@@ -435,12 +435,6 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     if (!agentRunning && !streamState.isStreaming) return null;
     const stepLabelTs = (key: string) => t(key as Parameters<typeof t>[0]);
 
-    const toolResultsMap = new Map<string, ToolResultMessage>();
-    for (const msg of messages) {
-      if (msg.role === "toolResult") {
-        toolResultsMap.set((msg as ToolResultMessage).toolCallId, msg as ToolResultMessage);
-      }
-    }
     let lastUserIdx = -1;
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "user") { lastUserIdx = i; break; }
@@ -470,7 +464,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
     }
     if (hasStreamingAnswer) return t("desktop.sessionStatusOutput" as Parameters<typeof t>[0]);
     return steps[steps.length - 1].label;
-  }, [agentRunning, streamState, messages, entryIds, agentPhase, isCompacting, t]);
+  }, [agentRunning, streamState, messages, entryIds, agentPhase, isCompacting, t, toolResultsMap]);
 
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
