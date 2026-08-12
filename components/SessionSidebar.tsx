@@ -1088,7 +1088,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       .map((bucket) => ({ bucket, nodes: byBucket.get(bucket)! }));
   })();
 
-  // Shared row renderer used by both the grouped and the flat (filtered) views.
+  // Shared row renderer for every session row in a time group.
   const renderTreeItem = (node: SessionTreeNode) => (
     <SessionTreeItem
       key={node.session.id}

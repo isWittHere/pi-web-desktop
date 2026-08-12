@@ -219,11 +219,6 @@ export function readSessionMark(filePath: string): SessionMark | undefined {
   return readSessionFlags(filePath).mark;
 }
 
-/** Convenience wrapper — whether the session is pinned. */
-export function readSessionPin(filePath: string): boolean {
-  return readSessionFlags(filePath).pinned === true;
-}
-
 export function readSessionHeader(filePath: string): SessionHeader | null {
   const fd = openSync(filePath, "r");
   try {
