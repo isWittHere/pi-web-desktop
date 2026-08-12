@@ -1112,6 +1112,7 @@ export function AppShell() {
                 activeFileTab.viewerRevision ?? 0,
                 viewerState,
               )}
+              onAtMention={handleAtMention}
               onOpenFile={(filePath) => handleOpenFile(
                 filePath,
                 getFileName(filePath),

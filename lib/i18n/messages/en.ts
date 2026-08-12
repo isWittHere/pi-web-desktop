@@ -173,6 +173,7 @@ export const enLocale = {
     "desktop.dropOutsideProjectConfirmMany": "Copy {count} files outside the project into it so they can be referenced?",
     "desktop.attachContext": "Add context",
     "desktop.attachFileReference": "Reference file",
+    "desktop.insertFileMention": "Insert file mention into chat",
     "desktop.attachSkillCommand": "Skill command",
     "desktop.disableCompletionSound": "Disable completion sound",
     "desktop.enableCompletionSound": "Enable completion sound",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useContext, useMemo, useLayoutEffect, type MouseEvent } from "react";
-import { DownloadSimple } from "@phosphor-icons/react";
+import { At, DownloadSimple } from "@phosphor-icons/react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import ReactMarkdown from "react-markdown";
 import { useI18n } from "@/hooks/useI18n";
@@ -30,6 +30,8 @@ interface Props {
   cwd?: string;
   sourceSessionId?: string | null;
   onOpenFile?: (filePath: string) => void;
+  /** Insert this file's relative path into the chat input (@ mention). */
+  onAtMention?: (relativePath: string, isDir: boolean) => void;
   initialDisplayMode?: "diff";
   /** Viewer state to restore when the file is re-opened (tab switch). */
   initialState?: FileViewerState;
@@ -83,6 +85,37 @@ function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceS
     >
       <DownloadSimple size={11} aria-hidden="true" />
     </a>
+  );
+}
+
+/** @ button — insert this file's relative path into the chat input. */
+function MentionButton({ filePath, cwd, onAtMention }: { filePath: string; cwd?: string; onAtMention?: (relativePath: string, isDir: boolean) => void }) {
+  const { t } = useI18n();
+
+  return (
+    <button
+      type="button"
+      onClick={() => onAtMention?.(getRelativeFilePath(filePath, cwd), false)}
+      title={t("desktop.insertFileMention")}
+      aria-label={t("desktop.insertFileMention")}
+      disabled={!onAtMention}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        height: 20,
+        padding: "0 5px",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border)",
+        borderRadius: 4,
+        color: onAtMention ? "var(--text-muted)" : "var(--text-dim)",
+        cursor: onAtMention ? "pointer" : "not-allowed",
+        flexShrink: 0,
+        opacity: onAtMention ? 1 : 0.55,
+      }}
+    >
+      <At size={11} aria-hidden="true" />
+    </button>
   );
 }
 
@@ -756,7 +789,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
   );
 }
 
-export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDisplayMode, initialState, onStateChange }: Props) {
+export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMention, initialDisplayMode, initialState, onStateChange }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
@@ -766,10 +799,10 @@ export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initial
   if (isDocumentPreviewPath(filePath)) {
     return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} initialDisplayMode={initialDisplayMode} initialState={initialState} onStateChange={onStateChange} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onAtMention={onAtMention} initialDisplayMode={initialDisplayMode} initialState={initialState} onStateChange={onStateChange} />;
 }
 
-function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDisplayMode, initialState, onStateChange }: Props) {
+function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMention, initialDisplayMode, initialState, onStateChange }: Props) {
   const { t } = useI18n();
   // Restore per-tab viewer state: display mode first, then wrap + scroll.
   // The markdown/html default-preview auto-switch only applies on a fresh open
@@ -1092,6 +1125,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
             </button>
           </div>
         )}
+        <MentionButton filePath={filePath} cwd={cwd} onAtMention={onAtMention} />
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
 

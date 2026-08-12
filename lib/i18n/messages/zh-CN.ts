@@ -173,6 +173,7 @@ export const zhCNLocale = {
     "desktop.dropOutsideProjectConfirmMany": "将项目外的 {count} 个文件复制到项目内以便引用？",
     "desktop.attachContext": "添加上下文",
     "desktop.attachFileReference": "引用文件",
+    "desktop.insertFileMention": "将文件引用插入聊天",
     "desktop.attachSkillCommand": "技能命令",
     "desktop.disableCompletionSound": "关闭完成提示音",
     "desktop.enableCompletionSound": "开启完成提示音",
