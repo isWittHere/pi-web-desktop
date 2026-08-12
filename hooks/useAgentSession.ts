@@ -16,6 +16,7 @@ import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { createStreamUpdateScheduler, type StreamUpdateScheduler } from "@/lib/stream-update-scheduler";
 import { AgentEventConnection, AgentEventConnectionError } from "@/lib/agent-event-connection";
+import type { AgentEventLike } from "@/lib/agent-event-wire";
 import { getCachedSession, setCachedSession } from "@/lib/session-cache";
 
 export interface SessionData {
@@ -58,11 +59,6 @@ function streamReducer(state: StreamingState, action: StreamAction): StreamingSt
     default:
       return state;
   }
-}
-
-interface AgentEvent {
-  type: string;
-  [key: string]: unknown;
 }
 
 interface CompactCommandResult {
@@ -384,7 +380,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const rpcPromptPendingRef = useRef(false);
   const notifiedPromptRunIdRef = useRef(-1);
   const bashRunningRef = useRef(false);
-  const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
+  const handleAgentEventRef = useRef<((event: AgentEventLike) => void) | null>(null);
   const initialScrollDoneRef = useRef(false);
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
@@ -420,7 +416,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   if (!eventConnectionRef.current) {
     eventConnectionRef.current = new AgentEventConnection({
       createSource: (sid) => new EventSource(`/api/agent/${encodeURIComponent(sid)}/events`),
-      onEvent: (event) => handleAgentEventRef.current?.(event as AgentEvent),
+      onEvent: (event) => handleAgentEventRef.current?.(event),
       shouldMaintain: (sid) => (
         sessionHookMountedRef.current
         && sessionIdRef.current === sid
@@ -1025,7 +1021,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunningRef.current = agentRunning;
   }, [agentRunning]);
 
-  const handleAgentEvent = useCallback((event: AgentEvent) => {
+  const handleAgentEvent = useCallback((event: AgentEventLike) => {
     switch (event.type) {
       case "connected": {
         // A (re)established stream announces the agent's current readiness.
@@ -1280,6 +1276,45 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
 
+    // The event stream is a streaming enhancement, not a send gate. The
+    // server buffers and replays events (plus a streaming snapshot) for late
+    // joiners, and the reconciliation loop settles a run even when no stream
+    // ever attaches (session switched away, hidden window, cold start past
+    // the readiness deadline) — so a failed handshake must never drop the
+    // user's message.
+    const connectEventStream = (sid: string) => {
+      void ensureEventsConnected(sid).catch((error) => {
+        if (error instanceof AgentEventConnectionError) {
+          console.warn("Event stream unavailable; reconciliation will settle the run:", error.message);
+        } else {
+          console.error("Unexpected event stream error:", error);
+        }
+      });
+    };
+
+    // Give the message back to the composer when it definitively never
+    // reached the server. Text is restored via insertIfEmpty; image
+    // attachments cannot be reconstructed, so surface them in a notice.
+    const restoreUnsentMessage = () => {
+      if (trimmedMessage) opts.chatInputRef?.current?.insertIfEmpty(message);
+      if (images?.length) {
+        addNotice({ type: "error", message: "Message was not sent. Image attachments were not restored — please re-attach them." });
+      }
+    };
+
+    // Drop the optimistic bubble when the send definitively failed.
+    const removeOptimisticUserMessage = () => {
+      const optimisticKey = optimisticUserMessageKeyRef.current;
+      if (optimisticKey) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          return last?.role === "user" && userMessageKey(last) === optimisticKey
+            ? prev.slice(0, -1)
+            : prev;
+        });
+      }
+    };
+
     let sentSessionId: string | null = null;
     let promptRequestStarted = false;
     try {
@@ -1296,7 +1331,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               await sendAgentCommand(sid, { type: "set_model", provider: selectedModel.provider, modelId: selectedModel.modelId });
             }
           }
-          await ensureEventsConnected(sid);
           promptRequestStarted = true;
           await sendAgentCommand(sid, {
             type: "prompt",
@@ -1304,16 +1338,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ...(piImages?.length ? { images: piImages } : {}),
           });
           promoteNewSession(1, message);
+          connectEventStream(sid);
         }
       } else if (session) {
         sentSessionId = session.id;
-        await ensureEventsConnected(session.id);
         promptRequestStarted = true;
         await sendAgentCommand(session.id, {
           type: "prompt",
           message,
           ...(piImages?.length ? { images: piImages } : {}),
         });
+        connectEventStream(session.id);
       }
       if (isSlashCommandPrompt && sentSessionId) {
         void waitForPromptSettlement(sentSessionId, promptRunId);
@@ -1323,30 +1358,28 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // A failed POST may still have reached the server. Preserve SSE and let
       // reconciliation settle it rather than hiding a real run.
       if (promptRequestStarted && sentSessionId) {
+        // An HTTP error response means the server saw and rejected the
+        // prompt — it was never queued, so give the text back. A transport
+        // failure is ambiguous (the request may have landed); reconciliation
+        // settles it without restoring, to avoid a duplicate resend.
+        if (e instanceof Error && !(e instanceof TypeError)) {
+          restoreUnsentMessage();
+        }
         void waitForPromptSettlement(sentSessionId, promptRunId);
         return;
       }
       rpcPromptPendingRef.current = false;
       closeEvents();
-      if (e instanceof AgentEventConnectionError) {
-        const optimisticKey = optimisticUserMessageKeyRef.current;
-        if (optimisticKey) {
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            return last?.role === "user" && userMessageKey(last) === optimisticKey
-              ? prev.slice(0, -1)
-              : prev;
-          });
-        }
-        addNotice({ type: "error", message: e.message });
-      }
+      removeOptimisticUserMessage();
+      addNotice({ type: "error", message: e instanceof Error ? e.message : String(e) });
       optimisticUserMessageKeyRef.current = null;
       agentRunningRef.current = false;
       setAgentRunning(false);
       setAgentPhase(null);
       dispatch({ type: "end" });
+      restoreUnsentMessage();
     }
-  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, resetStreamUpdates]);
+  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, opts.chatInputRef, resetStreamUpdates]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;
