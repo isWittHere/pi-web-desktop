@@ -2220,7 +2220,6 @@ function TimeGroupHeader({
         gap: 6,
         padding: "5px 8px 3px",
         background: "var(--bg-panel)",
-        borderBottom: collapsed ? "none" : "1px solid var(--border)",
         cursor: "pointer",
         userSelect: "none",
         fontSize: 10,
