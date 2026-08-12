@@ -30,7 +30,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body translate="no" className="notranslate" style={{ height: "calc(100dvh / var(--app-ui-scale, 1))", display: "flex", flexDirection: "column" }}>
+      <body translate="no" className="notranslate" suppressHydrationWarning style={{ height: "calc(100dvh / var(--app-ui-scale, 1))", display: "flex", flexDirection: "column" }}>
         {children}
       </body>
     </html>

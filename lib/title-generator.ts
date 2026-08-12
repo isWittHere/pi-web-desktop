@@ -79,7 +79,14 @@ export function extractRecentTurns(
   const turns: TitleTurn[] = [];
 
   for (const message of messages) {
-    if (message.role === "user") {
+    // A compaction summary replaces all earlier history, so after heavy
+    // compaction no literal user messages may remain. Treat the summary as a
+    // naming source so title generation still works (pi-web maps a jsonl
+    // `compaction` entry to a custom message with customType "compaction").
+    const isCompactionSummary =
+      message.role === "custom"
+      && (message as { customType?: string }).customType === "compaction";
+    if (message.role === "user" || isCompactionSummary) {
       const text = messageText(message);
       if (!text) continue;
       turns.push({ role: "user", text });
