@@ -227,19 +227,22 @@ export async function GET(
   }
 }
 
-// PATCH /api/sessions/[id]  body: { name?: string, mark?: SessionMark | null }
+// PATCH /api/sessions/[id]  body: { name?: string, mark?: SessionMark | null, pin?: boolean }
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   try {
-    const { name, mark } = await req.json() as { name?: string; mark?: SessionMark | null };
-    if (typeof name !== "string" && mark === undefined) {
-      return NextResponse.json({ error: "name or mark is required" }, { status: 400 });
+    const { name, mark, pin } = await req.json() as { name?: string; mark?: SessionMark | null; pin?: boolean };
+    if (typeof name !== "string" && mark === undefined && pin === undefined) {
+      return NextResponse.json({ error: "name, mark or pin is required" }, { status: 400 });
     }
     if (mark !== undefined && mark !== null && !SESSION_MARKS.includes(mark)) {
       return NextResponse.json({ error: "invalid mark" }, { status: 400 });
+    }
+    if (pin !== undefined && typeof pin !== "boolean") {
+      return NextResponse.json({ error: "invalid pin" }, { status: 400 });
     }
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
@@ -252,6 +255,10 @@ export async function PATCH(
     if (mark !== undefined) {
       // Append-only custom entry; the latest entry wins when reading (null clears).
       sm.appendCustomEntry("session-mark", { mark });
+    }
+    if (pin !== undefined) {
+      // Append-only custom entry; the latest entry wins when reading (false clears).
+      sm.appendCustomEntry("session-pin", { pinned: pin });
     }
     invalidateSessionListCache();
     return NextResponse.json({ ok: true });

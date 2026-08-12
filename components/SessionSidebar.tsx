@@ -2,8 +2,8 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FolderOpen, FunnelSimple, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, SealCheck, Tag, TextAa, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
-import type { SessionInfo, SessionMark } from "@/lib/types";
+import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FolderOpen, FunnelSimple, GitBranch, Lightning, MagnifyingGlass, PencilSimple, Plus, PushPin, SealCheck, Tag, TextAa, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
+import type { SessionInfo, SessionMark, TimeBucket } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { getDraft } from "@/lib/draft-store";
@@ -12,6 +12,8 @@ import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { getTitleModel } from "@/lib/title-settings";
+import { bucketOf, TIME_BUCKET_ORDER, timeBucketKey } from "@/lib/time-groups";
+import { loadCollapsedTimeGroups, saveCollapsedTimeGroups, type CollapsedTimeGroups } from "@/lib/time-group-state";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
@@ -350,6 +352,17 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const [sessionSearch, setSessionSearch] = useState("");
   // null = show every mark; otherwise only sessions carrying this mark.
   const [markFilter, setMarkFilter] = useState<SessionMark | null>(null);
+  // Collapsed state of the session-list time-group headers. "earlier" starts
+  // collapsed (its rows are not rendered until the user expands it) and the
+  // whole set persists across reloads.
+  const [collapsedGroups, setCollapsedGroups] = useState<CollapsedTimeGroups>(() => loadCollapsedTimeGroups());
+  const toggleGroup = useCallback((bucket: TimeBucket) => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [bucket]: !prev[bucket] };
+      saveCollapsedTimeGroups(next);
+      return next;
+    });
+  }, []);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
@@ -1055,6 +1068,66 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Build parent-child tree within the filtered set
   const sessionTree = buildSessionTree(searchScopedSessions);
+
+  // Time-group the tree roots. Root nodes are bucketed by their own `modified`
+  // time (pinned rows first); fork children always stay inside their parent's
+  // group so a tree never splits across headers. While searching or filtering
+  // by mark the groups collapse to a single flat list — the narrowed result is
+  // already small and headers would only add noise — but pinned rows still
+  // float to the top because pinning is an explicit user intent.
+  const isFilteredView = Boolean(searchQuery || markFilter);
+  const sessionGroups = (() => {
+    if (isFilteredView) {
+      const flatNodes = [...sessionTree].sort((a, b) => {
+        const aPin = a.session.pinned ? 1 : 0;
+        const bPin = b.session.pinned ? 1 : 0;
+        if (aPin !== bPin) return bPin - aPin;
+        return b.session.modified.localeCompare(a.session.modified);
+      });
+      return { flat: flatNodes, grouped: [] as { bucket: TimeBucket; nodes: SessionTreeNode[] }[] };
+    }
+    const byBucket = new Map<TimeBucket, SessionTreeNode[]>();
+    for (const bucket of TIME_BUCKET_ORDER) byBucket.set(bucket, []);
+    for (const node of sessionTree) {
+      const bucket = node.session.pinned ? "pinned" : bucketOf(node.session.modified);
+      byBucket.get(bucket)!.push(node);
+    }
+    const grouped = TIME_BUCKET_ORDER
+      .filter((bucket) => byBucket.get(bucket)!.length > 0)
+      .map((bucket) => ({ bucket, nodes: byBucket.get(bucket)! }));
+    return { flat: null, grouped };
+  })();
+
+  // Shared row renderer used by both the grouped and the flat (filtered) views.
+  const renderTreeItem = (node: SessionTreeNode) => (
+    <SessionTreeItem
+      key={node.session.id}
+      node={node}
+      selectedSessionId={selectedSessionId}
+      selectedDraftId={selectedDraftId}
+      runningSessionIds={runningSessionIds}
+      unreadSessionIds={unreadSessionIds}
+      onSelectSession={handleSelectSessionFromList}
+      onRenamed={(id, name) => {
+        // Force a refresh: the shared session-list cache would otherwise
+        // serve the stale pre-rename list and the sidebar row would
+        // keep showing the old name.
+        loadSessions(false, true);
+        onSessionRenamed?.(id, name);
+      }}
+      onSessionDeleted={(id) => {
+        onSessionDeleted?.(id);
+        loadSessions();
+      }}
+      onMarked={() => loadSessions(false, true)}
+      onPinned={() => loadSessions(false, true)}
+      onRegenerateTitle={onRegenerateTitle}
+      titleGeneratingId={titleGeneratingId}
+      onDeleteDraft={onDeleteDraft}
+      onRenameDraft={onRenameDraft}
+      depth={0}
+    />
+  );
 
   // Mark-filter picker anchored to the filter button (not the pointer).
   // Counts reflect the sessions the filter will actually narrow — the
@@ -1960,34 +2033,21 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               {searchQuery || markFilter ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
             </div>
           )}
-          {sessionTree.map((node) => (
-            <SessionTreeItem
-              key={node.session.id}
-              node={node}
-              selectedSessionId={selectedSessionId}
-              selectedDraftId={selectedDraftId}
-              runningSessionIds={runningSessionIds}
-              unreadSessionIds={unreadSessionIds}
-              onSelectSession={handleSelectSessionFromList}
-              onRenamed={(id, name) => {
-                // Force a refresh: the shared session-list cache would otherwise
-                // serve the stale pre-rename list and the sidebar row would
-                // keep showing the old name.
-                loadSessions(false, true);
-                onSessionRenamed?.(id, name);
-              }}
-              onSessionDeleted={(id) => {
-                onSessionDeleted?.(id);
-                loadSessions();
-              }}
-              onMarked={() => loadSessions(false, true)}
-              onRegenerateTitle={onRegenerateTitle}
-              titleGeneratingId={titleGeneratingId}
-              onDeleteDraft={onDeleteDraft}
-              onRenameDraft={onRenameDraft}
-              depth={0}
-            />
-          ))}
+          {sessionGroups.flat ? (
+            sessionGroups.flat.map((node) => renderTreeItem(node))
+          ) : (
+            sessionGroups.grouped.map(({ bucket, nodes }) => (
+              <div key={bucket}>
+                <TimeGroupHeader
+                  bucket={bucket}
+                  count={countSessionRows(nodes)}
+                  collapsed={collapsedGroups[bucket]}
+                  onToggle={() => toggleGroup(bucket)}
+                />
+                {!collapsedGroups[bucket] && nodes.map((node) => renderTreeItem(node))}
+              </div>
+            ))
+          )}
         </div>
       )}
 
@@ -2111,6 +2171,73 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   );
 }
 
+/** Total number of session rows in a tree, including fork children. */
+function countSessionRows(nodes: SessionTreeNode[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    count += 1 + countSessionRows(node.children);
+  }
+  return count;
+}
+
+/**
+ * Sticky, collapsible header for a session-list time group. Sticks to the top
+ * of the scroll container — its opaque panel background covers rows scrolling
+ * underneath — and shows the row count next to the label. When collapsed, the
+ * group's rows are not rendered at all (render-level lazy loading).
+ */
+function TimeGroupHeader({
+  bucket,
+  count,
+  collapsed,
+  onToggle,
+}: {
+  bucket: TimeBucket;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
+      aria-expanded={!collapsed}
+      title={collapsed ? t("desktop.expandGroup") : t("desktop.collapseGroup")}
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "5px 8px 3px",
+        background: "var(--bg-panel)",
+        borderBottom: collapsed ? "none" : "1px solid var(--border)",
+        cursor: "pointer",
+        userSelect: "none",
+        fontSize: 10,
+        fontWeight: 600,
+        color: "var(--text-dim)",
+        textTransform: "uppercase",
+        letterSpacing: "0.07em",
+      }}
+    >
+      <CaretRight size={9} weight="regular" style={{ transform: collapsed ? "none" : "rotate(90deg)", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
+      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {t(timeBucketKey(bucket), { count })}
+      </span>
+    </div>
+  );
+}
+
 function SessionTreeItem({
   node,
   selectedSessionId,
@@ -2121,6 +2248,7 @@ function SessionTreeItem({
   onRenamed,
   onSessionDeleted,
   onMarked,
+  onPinned,
   onRegenerateTitle,
   titleGeneratingId,
   onDeleteDraft,
@@ -2136,6 +2264,7 @@ function SessionTreeItem({
   onRenamed?: (id: string, name: string) => void;
   onSessionDeleted?: (id: string) => void;
   onMarked?: () => void;
+  onPinned?: () => void;
   onRegenerateTitle?: (sessionId: string) => void;
   titleGeneratingId?: string | null;
   onDeleteDraft?: (id: string) => void;
@@ -2171,6 +2300,7 @@ function SessionTreeItem({
           onRenamed={onRenamed}
           onDeleted={(id) => onSessionDeleted?.(id)}
           onMarked={onMarked}
+          onPinned={onPinned}
           onRegenerateTitle={onRegenerateTitle}
           titleGeneratingId={titleGeneratingId}
           onDeleteDraft={onDeleteDraft}
@@ -2195,6 +2325,7 @@ function SessionTreeItem({
               onRenamed={onRenamed}
               onSessionDeleted={onSessionDeleted}
               onMarked={onMarked}
+              onPinned={onPinned}
               onRegenerateTitle={onRegenerateTitle}
               titleGeneratingId={titleGeneratingId}
               onDeleteDraft={onDeleteDraft}
@@ -2352,6 +2483,7 @@ function SessionItem({
   onRenamed,
   onDeleted,
   onMarked,
+  onPinned,
   onRegenerateTitle,
   titleGeneratingId,
   onDeleteDraft,
@@ -2370,6 +2502,8 @@ function SessionItem({
   onDeleted?: (id: string) => void;
   /** Called after a mark change is persisted so the parent can refresh the list. */
   onMarked?: () => void;
+  /** Called after a pin change is persisted so the parent can refresh the list. */
+  onPinned?: () => void;
   /** Called to trigger title regeneration for this session (context menu). */
   onRegenerateTitle?: (sessionId: string) => void;
   /** Session id currently having its title regenerated (disables the menu item). */
@@ -2462,6 +2596,24 @@ function SessionItem({
       // ignore
     }
   }, [session.id, onMarked]);
+
+  // Toggle the pin flag; the row then refreshes via onPinned, which re-buckets
+  // it into (or out of) the pinned group. Appends a custom entry, so it is
+  // safe while the session runs. Drafts have no saved .jsonl to persist to.
+  const togglePin = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (session.isDraft) return;
+    try {
+      await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: !session.pinned }),
+      });
+      onPinned?.();
+    } catch {
+      // ignore
+    }
+  }, [session.id, session.pinned, session.isDraft, onPinned]);
 
   const { openMenu } = useContextMenu();
 
@@ -2752,6 +2904,26 @@ function SessionItem({
               {hovered && !renaming && (
                 <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
                 <button
+                  onClick={togglePin}
+                  title={session.pinned ? t("desktop.unpin") : t("desktop.pin")}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 20, height: 20, padding: 0,
+                    background: "none", border: "none",
+                    borderRadius: 4, color: session.pinned ? "var(--accent)" : "var(--text-dim)",
+                    cursor: "pointer", flexShrink: 0,
+                    transition: "color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!session.pinned) e.currentTarget.style.color = "var(--accent)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!session.pinned) e.currentTarget.style.color = "var(--text-dim)";
+                  }}
+                >
+                  <PushPin size={13} weight={session.pinned ? "fill" : "regular"} aria-hidden="true" />
+                </button>
+                <button
                   onClick={startRename}
                   title={t("desktop.rename")}
                   style={{
@@ -2796,6 +2968,15 @@ function SessionItem({
             </div>
             {/* Metadata row */}
             <div style={{ marginTop: 2, display: "flex", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
+              {session.pinned && (
+                <span
+                  title={t("desktop.pinned")}
+                  aria-label={t("desktop.pinned")}
+                  style={{ display: "inline-flex", alignItems: "center", color: "var(--accent)", flexShrink: 0 }}
+                >
+                  <PushPin size={10} weight="fill" aria-hidden="true" />
+                </span>
+              )}
               <span title={session.modified}>{formatRelativeTime(session.modified, t)}</span>
               {session.isDraft
                 ? <span>{t("desktop.unsent")}</span>
