@@ -731,7 +731,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }));
 
   const processImageFiles = useCallback(async (files: File[]) => {
-    if (isStreaming) return;
     const imageFiles = files.filter((f) => f.type.startsWith("image/"));
     if (!imageFiles.length) return;
     pendingImageCountRef.current += imageFiles.length;
@@ -756,7 +755,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     } finally {
       pendingImageCountRef.current = Math.max(0, pendingImageCountRef.current - imageFiles.length);
     }
-  }, [isStreaming]);
+  }, []);
 
   /** Append `@relative/path ` mention tokens for dropped files. Cursor lands
    *  at the end of the input so the user can keep typing right away. */
@@ -1142,7 +1141,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // over the static viewport-relative caps.
   const atMenuHeightCap = popupMaxHeight === null ? "min(calc(30vh / var(--app-ui-scale, 1)), 240px)" : Math.min(240, popupMaxHeight);
   const slashMenuHeightCap = popupMaxHeight === null ? "min(calc(38vh / var(--app-ui-scale, 1)), 300px)" : Math.min(300, popupMaxHeight);
-  const canQueueStreamingMessage = hasInputText && attachedImages.length === 0;
+  const canQueueStreamingMessage = hasInputText || attachedImages.length > 0;
 
   // ── @ file autocomplete ──────────────────────────────────────────────────
   // Recomputed from the text before the caret on every change/caret move.
@@ -1331,21 +1330,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const sendQueued = useCallback((mode: "steer" | "followup") => {
     const msg = value.trim();
-    // Only queue plain text — images cannot be delivered mid-stream. The action
-    // buttons are also gated by canQueueStreamingMessage, so this single guard
-    // is the source of truth for the keyboard (Enter) path too.
-    if (!msg || attachedImages.length) return;
+    // Images can be delivered mid-stream now (pi accepts them in steering /
+    // follow-up prompts). Pass them through alongside the text; the action
+    // buttons are gated by canQueueStreamingMessage.
+    if (!msg && !attachedImages.length) return;
+    const images = attachedImages.length ? attachedImages : undefined;
     onAudioUnlock?.();
     const streamingBehavior = mode === "steer" ? "steer" : "followUp";
     if (msg.startsWith("/") && onPromptWithStreamingBehavior) {
-      onPromptWithStreamingBehavior(msg, streamingBehavior);
+      onPromptWithStreamingBehavior(msg, streamingBehavior, images);
       clearInput();
       return;
     }
     if (mode === "steer" && onSteer) {
-      onSteer(msg);
+      onSteer(msg, images);
     } else if (mode === "followup" && onFollowUp) {
-      onFollowUp(msg);
+      onFollowUp(msg, images);
     }
     clearInput();
   }, [value, attachedImages, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock]);
@@ -1721,7 +1721,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         type="file"
         accept="image/*"
         multiple
-        disabled={isStreaming}
         style={{ display: "none" }}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
@@ -2260,7 +2259,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     onMouseDown={(e) => e.preventDefault()}
                     aria-disabled={!canQueueStreamingMessage}
                     tabIndex={canQueueStreamingMessage ? 0 : -1}
-                    title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.injectMessageNow")}
+                    title={t("desktop.injectMessageNow")}
                     aria-label={t("desktop.steer")}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center",
@@ -2297,7 +2296,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     onMouseDown={(e) => e.preventDefault()}
                     aria-disabled={!canQueueStreamingMessage}
                     tabIndex={canQueueStreamingMessage ? 0 : -1}
-                    title={attachedImages.length ? t("desktop.imageAttachmentsCannotQueue") : t("desktop.queueMessageAfterFinish")}
+                    title={t("desktop.queueMessageAfterFinish")}
                     aria-label={t("desktop.followUp")}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center",
@@ -2544,21 +2543,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     <button
                       type="button"
                       onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
-                      disabled={isStreaming || !modelSupportsImages}
+                      disabled={!modelSupportsImages}
                       title={!modelSupportsImages
                         ? t("desktop.attachImageModelUnsupported", { model: activeModelName })
-                        : isStreaming ? t("desktop.imageAttachmentsCannotQueue") : undefined}
+                        : undefined}
                       style={{
                         width: "100%", display: "flex", alignItems: "center", gap: 8,
                         padding: "4px 10px", borderRadius: 4,
                         background: "none", border: "none",
-                        color: isStreaming || !modelSupportsImages ? "var(--text-dim)" : "var(--text)",
-                        cursor: isStreaming || !modelSupportsImages ? "not-allowed" : "pointer",
+                        color: modelSupportsImages ? "var(--text)" : "var(--text-dim)",
+                        cursor: modelSupportsImages ? "pointer" : "not-allowed",
                         fontSize: 12, textAlign: "left",
-                        opacity: isStreaming || !modelSupportsImages ? 0.6 : 1,
+                        opacity: modelSupportsImages ? 1 : 0.6,
                         transition: "background 0.1s ease",
                       }}
-                      onMouseEnter={(e) => { if (!isStreaming && modelSupportsImages) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseEnter={(e) => { if (modelSupportsImages) e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                     >
                       <ImageIcon size={14} weight="regular" aria-hidden="true" />

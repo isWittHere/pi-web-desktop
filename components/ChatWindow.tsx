@@ -385,12 +385,11 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
   useEffect(() => () => { onContextUsageChange?.(null); }, [onContextUsageChange]);
 
   const onDrop = useCallback((files: File[]) => {
-    if (agentRunning) return;
     const images = files.filter((file) => file.type.startsWith("image/"));
     const others = files.filter((file) => !file.type.startsWith("image/"));
     if (images.length) chatInputRef?.current?.addImages(images);
     if (others.length) chatInputRef?.current?.addFileMentions(others);
-  }, [agentRunning, chatInputRef]);
+  }, [chatInputRef]);
 
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
 
@@ -544,7 +543,7 @@ export function ChatWindow({ session, newSessionCwd, newSessionDraftId, onAgentE
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {isDragOver && !agentRunning && (
+      {isDragOver && (
         <div
           className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center"
           style={{ background: "color-mix(in srgb, var(--accent) 8%, transparent)" }}
