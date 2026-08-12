@@ -37,16 +37,35 @@ test("keeps the session event stream open through the idle grace window", () => 
   assert.match(agentSettledSource, /scheduleEventStreamClose\(sid\)/);
 });
 
-test("deduplicates same-session event stream connection attempts", () => {
+test("delegates event stream readiness and reconnection to AgentEventConnection", () => {
+  const connectionSource = source.slice(
+    source.indexOf("if (!eventConnectionRef.current) {"),
+    source.indexOf("const setToolPresetState"),
+  );
   const ensureSource = source.slice(
     source.indexOf("const ensureEventsConnected"),
+    source.indexOf("const maintainEventsConnected"),
+  );
+  const maintainSource = source.slice(
+    source.indexOf("const maintainEventsConnected"),
+    source.indexOf("// A different window can start this session"),
+  );
+  const crossTabSource = source.slice(
+    source.indexOf("// A different window can start this session"),
     source.indexOf("const respondToExtensionUi"),
   );
 
-  assert.match(ensureSource, /eventSourceSessionIdRef\.current === sid/);
-  assert.match(ensureSource, /current\.readyState === EventSource\.OPEN/);
-  assert.match(ensureSource, /attempt\?\.source === current && attempt\.pending/);
-  assert.match(source, /const EVENT_STREAM_CONNECT_TIMEOUT_MS = 30_000/);
+  assert.match(source, /new AgentEventConnection\(\{/);
+  assert.match(connectionSource, /shouldMaintain: \(sid\) => \(/);
+  assert.match(connectionSource, /agentRunningRef\.current\s*\|\| eventStreamGraceActiveRef\.current\s*\|\| \(sessionPropIdRef\.current === sid && sessionRunningRef\.current\)/);
+  assert.match(connectionSource, /readinessTimeoutMs: EVENT_STREAM_READY_TIMEOUT_MS/);
+  assert.match(connectionSource, /reconnectDelayMs: EVENT_STREAM_RECONNECT_DELAY_MS/);
+  assert.match(source, /const EVENT_STREAM_READY_TIMEOUT_MS = 60_000/);
+  assert.match(ensureSource, /eventConnectionRef\.current!\.ensureConnected\(sid\)/);
+  assert.match(maintainSource, /eventConnectionRef\.current!\.maintain\(sid\)/);
+  assert.match(crossTabSource, /if \(!session\?\.id \|\| !sessionRunning\) return;["\s]*?maintainEventsConnected\(session\.id\)/);
+  assert.doesNotMatch(source, /EVENT_STREAM_CONNECT_TIMEOUT_MS/);
+  assert.doesNotMatch(source, /connectEvents\(/);
 });
 
 test("preserves desktop terminal provider error notices during agent_end", () => {
