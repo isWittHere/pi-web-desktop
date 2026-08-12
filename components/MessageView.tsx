@@ -46,6 +46,63 @@ const MAX_THINKING_CACHE_ENTRIES = 100;
 const SKILL_TIP_MAX_WIDTH = 340;
 const thinkingContentCache = new Map<string, Promise<string>>();
 
+// CJK chars are ~1 token each (GLM/DeepSeek/GPT-o200k vocabularies); other
+// chars average ~4 chars/token. The old chars/4 estimate under-counted CJK by
+// 4-5x, skewing the streaming TPS badge and estimated-token count for CJK.
+const CJK_PATTERN = /[\u3000-\u30ff\u3400-\u9fff\uf900-\ufaff\u{20000}-\u{2fa1f}\uac00-\ud7af]/u;
+export function estimateTokens(text: string): number {
+  let cjk = 0;
+  let rest = 0;
+  for (const ch of text) {
+    if (CJK_PATTERN.test(ch)) cjk++;
+    else rest++;
+  }
+  return cjk + rest / 4;
+}
+
+interface TokenEstimateCacheEntry {
+  text: string;
+  tokens: number;
+}
+
+export function getTokenEstimateText(block: AssistantContentBlock): string | null {
+  if (block.type === "text") return block.text;
+  if (block.type === "thinking") return block.thinking;
+  if (block.type === "toolCall") return JSON.stringify(block.input ?? {}) ?? "";
+  return null;
+}
+
+function isHighSurrogate(codeUnit: number): boolean {
+  return codeUnit >= 0xd800 && codeUnit <= 0xdbff;
+}
+
+function isLowSurrogate(codeUnit: number): boolean {
+  return codeUnit >= 0xdc00 && codeUnit <= 0xdfff;
+}
+
+/**
+ * Count only the freshly streamed suffix when the text grew since the last
+ * estimate, keeping per-frame cost O(delta) instead of O(whole message).
+ * A streamed delta can complete a surrogate pair that was previously counted
+ * as two non-CJK code points, so the boundary is re-checked for that case.
+ */
+export function estimateUpdatedTokens(previous: TokenEstimateCacheEntry | undefined, text: string): number {
+  if (!previous || !text.startsWith(previous.text)) return estimateTokens(text);
+
+  let baseTokens = previous.tokens;
+  let suffixStart = previous.text.length;
+  if (
+    suffixStart > 0
+    && suffixStart < text.length
+    && isHighSurrogate(previous.text.charCodeAt(suffixStart - 1))
+    && isLowSurrogate(text.charCodeAt(suffixStart))
+  ) {
+    baseTokens -= 1 / 4;
+    suffixStart--;
+  }
+  return baseTokens + estimateTokens(text.slice(suffixStart));
+}
+
 /**
  * Replace the first text block of a user message (preserving image blocks).
  * Used when re-editing a historical message as its compact command form, so
@@ -573,6 +630,29 @@ function AssistantMessageView({
   const [tps, setTps] = useState<number | null>(null);
   const blockItemsRef = useRef(blockItems);
   blockItemsRef.current = blockItems;
+  // Token estimate with an append-only cache: re-running on every streamed
+  // chunk counts only the newly appended suffix, so the cost stays O(delta).
+  const tokenEstimateCacheRef = useRef<Map<number, TokenEstimateCacheEntry>>(new Map());
+  const estimatedTokens = useMemo(() => {
+    if (!isStreaming) {
+      tokenEstimateCacheRef.current = new Map();
+      return 0;
+    }
+    const nextCache = new Map<number, TokenEstimateCacheEntry>();
+    let total = 0;
+    for (const { block, originalIndex } of blockItems) {
+      const text = getTokenEstimateText(block);
+      if (text === null) continue;
+      const tokens = estimateUpdatedTokens(tokenEstimateCacheRef.current.get(originalIndex), text);
+      nextCache.set(originalIndex, { text, tokens });
+      total += tokens;
+    }
+    tokenEstimateCacheRef.current = nextCache;
+    return total;
+  }, [blockItems, isStreaming]);
+  // The 300ms tick reads the freshest estimate without re-creating the interval.
+  const estimatedTokensRef = useRef(estimatedTokens);
+  estimatedTokensRef.current = estimatedTokens;
 
   // Streaming-based timing for thinking blocks
   const blockStartTimesRef = useRef<Map<number, number>>(new Map());
@@ -630,7 +710,6 @@ function AssistantMessageView({
     }
     const tick = () => {
       const items = blockItemsRef.current;
-      const bs = items.map(({ block }) => block);
       const now = Date.now();
 
       // Record start time for each block the first time we see it
@@ -655,16 +734,11 @@ function AssistantMessageView({
         return changed ? next : prev;
       });
 
-      let chars = 0;
-      for (const b of bs) {
-        if (b.type === "text") chars += (b as TextContent).text?.length ?? 0;
-        else if (b.type === "thinking") chars += (b as ThinkingContent).thinking?.length ?? 0;
-        else if (b.type === "toolCall") chars += JSON.stringify((b as ToolCallContent).input ?? {}).length;
-      }
-      if (chars === 0) return;
+      const tokens = estimatedTokensRef.current;
+      if (tokens === 0) return;
       if (streamStartRef.current === null) streamStartRef.current = now;
       const elapsed = (now - streamStartRef.current) / 1000;
-      if (elapsed > 0.5) setTps(chars / 4 / elapsed);
+      if (elapsed > 0.5) setTps(tokens / elapsed);
     };
     const id = setInterval(tick, 300);
     return () => clearInterval(id);
@@ -690,13 +764,7 @@ function AssistantMessageView({
       {isStreaming && (
       <div className="chat-assistant-meta">
         {(() => {
-          let chars = 0;
-          for (const b of blocks) {
-            if (b.type === "text") chars += (b as TextContent).text?.length ?? 0;
-            else if (b.type === "thinking") chars += (b as ThinkingContent).thinking?.length ?? 0;
-            else if (b.type === "toolCall") chars += JSON.stringify((b as ToolCallContent).input ?? {}).length;
-          }
-          const est = Math.round(chars / 4);
+          const est = Math.round(estimatedTokens);
           return (
             <>
 
