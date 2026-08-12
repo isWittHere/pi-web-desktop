@@ -606,12 +606,8 @@ function AddSkillPanel({
 
 export function SkillsConfig({
   cwd,
-  embedded = false,
-  onCloseAction,
 }: {
   cwd: string;
-  embedded?: boolean;
-  onCloseAction?: () => void;
 }) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
@@ -793,28 +789,7 @@ export function SkillsConfig({
   const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
 
   return (
-    <div
-      style={embedded
-        ? { display: "flex", flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }
-        : { position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (!embedded && e.target === e.currentTarget) onCloseAction?.(); }}
-    >
-      <div
-        style={embedded
-          ? { display: "flex", flex: 1, minWidth: 0, minHeight: 0, flexDirection: "column", overflow: "hidden" }
-          : { width: isMobile ? "calc(100vw / var(--app-ui-scale, 1) - 16px)" : 860, maxWidth: "calc(100vw / var(--app-ui-scale, 1) - 16px)", height: isMobile ? "calc(100dvh / var(--app-ui-scale, 1) - 16px)" : "calc(78vh / var(--app-ui-scale, 1))", maxHeight: "calc(100dvh / var(--app-ui-scale, 1) - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }
-        }
-      >
-        {!embedded && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("desktop.skills")}</span>
-              <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortenPath(cwd)}</code>
-            </div>
-            <button onClick={onCloseAction} title={t("desktop.close")} aria-label={t("desktop.close")} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
-          </div>
-        )}
-
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {!projectResourcesLoaded && (
           <div
             role="status"
@@ -1193,13 +1168,7 @@ export function SkillsConfig({
               </span>
             )}
           </div>
-          {!embedded && (
-            <SettingsButton onClick={onCloseAction}>
-              {t("desktop.close")}
-            </SettingsButton>
-          )}
         </div>
       </div>
-    </div>
   );
 }

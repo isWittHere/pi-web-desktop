@@ -428,7 +428,6 @@ export const zhCNLocale = {
     "desktop.modelsAddModel": "+ 添加模型",
     "desktop.modelsAddProvider": "+ 添加提供商",
     "desktop.modelsSelectProviderOrModel": "选择提供商或模型",
-    "desktop.modelsClose": "关闭模型设置",
     "desktop.modelsSave": "保存",
     "desktop.searchModels": "搜索模型…",
     "desktop.noModelsMatch": "没有匹配的模型",

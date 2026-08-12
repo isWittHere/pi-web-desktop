@@ -183,7 +183,6 @@ export function SettingsSelect({
   value,
   onChange,
   options,
-  required,
   emptyLabel,
   style,
 }: {
@@ -191,8 +190,7 @@ export function SettingsSelect({
   onChange: (v: string) => void;
   /** Plain string options, or { value, label } pairs when the label differs from the value. */
   options: readonly (string | { value: string; label: string })[];
-  required?: boolean;
-  /** Label for the empty "inherit / none" option. */
+  /** Label for the empty "inherit / none" option. Only rendered when provided. */
   emptyLabel?: string;
   style?: CSSProperties;
 }) {
@@ -202,7 +200,7 @@ export function SettingsSelect({
       onChange={(e) => onChange(e.target.value)}
       style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)", cursor: "pointer", ...style }}
     >
-      {!required && <option value="">{emptyLabel ?? ""}</option>}
+      {emptyLabel !== undefined && <option value="">{emptyLabel}</option>}
       {options.map((o) => {
         const opt = typeof o === "string" ? { value: o, label: o } : o;
         return <option key={opt.value} value={opt.value}>{opt.label}</option>;
@@ -211,7 +209,7 @@ export function SettingsSelect({
   );
 }
 
-type ButtonVariant = "default" | "primary" | "danger" | "text";
+type ButtonVariant = "default" | "primary" | "danger";
 type ButtonSize = "md" | "sm";
 
 const buttonBase: CSSProperties = {
@@ -237,8 +235,6 @@ function buttonVariantStyle(variant: ButtonVariant): CSSProperties {
         border: "1px solid color-mix(in srgb, var(--status-danger) 30%, transparent)",
         color: "var(--status-danger)",
       };
-    case "text":
-      return { background: "transparent", border: "none", color: "var(--accent)", padding: 0 };
     default:
       return { background: "none", border: "1px solid var(--border)", color: "var(--text-muted)" };
   }
@@ -288,7 +284,7 @@ export function SettingsButton({
   );
 }
 
-type BadgeTone = "default" | "project" | "warning" | "danger" | "success" | "muted";
+type BadgeTone = "default" | "project" | "warning" | "muted";
 
 export function SettingsBadge({ tone = "default", children }: { tone?: BadgeTone; children: ReactNode }) {
   const styles: Record<BadgeTone, CSSProperties> = {
@@ -303,14 +299,6 @@ export function SettingsBadge({ tone = "default", children }: { tone?: BadgeTone
     warning: {
       background: "color-mix(in srgb, var(--status-warning) 12%, transparent)",
       color: "var(--status-warning)",
-    },
-    danger: {
-      background: "color-mix(in srgb, var(--status-danger) 12%, transparent)",
-      color: "var(--status-danger)",
-    },
-    success: {
-      background: "color-mix(in srgb, var(--status-success) 12%, transparent)",
-      color: "var(--status-success)",
     },
     muted: {
       background: "color-mix(in srgb, var(--text-dim) 8%, transparent)",

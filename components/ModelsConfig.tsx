@@ -306,7 +306,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
       </SettingsField>
 
       <SettingsField label={t("desktop.modelsApi")}>
-        <SettingsSelect value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
+        <SettingsSelect value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} />
       </SettingsField>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1565,13 +1565,9 @@ function AddProviderPicker({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ModelsConfig({
-  embedded = false,
-  onCloseAction,
   onSavedAction,
   cwd,
 }: {
-  embedded?: boolean;
-  onCloseAction?: () => void;
   onSavedAction?: () => void;
   cwd?: string | null;
 }) {
@@ -1823,26 +1819,7 @@ export function ModelsConfig({
 
   return (
     <>
-    <div
-      style={embedded
-        ? { display: "flex", flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }
-        : { position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (!embedded && e.target === e.currentTarget) onCloseAction?.(); }}
-    >
-      <div style={embedded
-        ? { flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }
-        : { width: isMobile ? "calc(100vw / var(--app-ui-scale, 1) - 16px)" : 860, maxWidth: "calc(100vw / var(--app-ui-scale, 1) - 16px)", height: isMobile ? "calc(100dvh / var(--app-ui-scale, 1) - 16px)" : "calc(78vh / var(--app-ui-scale, 1))", maxHeight: "calc(100dvh / var(--app-ui-scale, 1) - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
-
-        {!embedded && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("desktop.models")}</span>
-              <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>~/.pi/agent/models.json</code>
-            </div>
-            <button onClick={onCloseAction} aria-label={t("desktop.modelsClose")} title={t("desktop.modelsClose")} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
-          </div>
-        )}
-
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Body */}
         <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
 
@@ -1988,11 +1965,6 @@ export function ModelsConfig({
             </span>
           )}
           {saveError && <span style={{ fontSize: 12, color: "var(--status-danger)", flex: 1 }}>{saveError}</span>}
-          {!embedded && (
-            <button onClick={onCloseAction} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
-              {t("desktop.cancel")}
-            </button>
-          )}
           <button onClick={handleSave} disabled={saving || savedOk} style={{
             position: "relative",
             padding: "6px 16px",
@@ -2015,7 +1987,6 @@ export function ModelsConfig({
           </button>
         </div>
       </div>
-    </div>
     {pickerOpen && (
       <AddProviderPicker
         oauthProviders={oauthProviders}

@@ -193,16 +193,16 @@ export function SettingsModal({
             <ChatConfig cwd={cwd} />
           </div>
           <div style={{ display: activeTab === "models" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>
-            <ModelsConfig embedded cwd={cwd} onSavedAction={onModelsSavedAction} />
+            <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />
           </div>
           {cwd && (
             <div style={{ display: activeTab === "skills" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>
-              <SkillsConfig cwd={cwd} embedded />
+              <SkillsConfig cwd={cwd} />
             </div>
           )}
           {cwd && (
             <div style={{ display: activeTab === "plugins" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>
-              <PluginsConfig cwd={cwd} sessionId={sessionId} embedded onReloadedAction={onSessionReloadedAction} />
+              <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />
             </div>
           )}
         </div>
