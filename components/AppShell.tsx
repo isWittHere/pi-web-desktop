@@ -8,6 +8,7 @@ import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
+import { openFileTab, saveFileViewerState } from "./file-tab-state";
 import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
@@ -48,6 +49,7 @@ import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { ProjectTrustStatus } from "@/lib/api-types";
+import type { FileViewerState } from "@/lib/file-viewer-state";
 
 type SessionCopyField = "file" | "id";
 
@@ -225,6 +227,15 @@ export function AppShell() {
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+
+  const handleFileViewerStateChange = useCallback((
+    tabId: string,
+    viewerRevision: number,
+    viewerState: FileViewerState,
+  ) => {
+    setFileTabs((prev) => saveFileViewerState(prev, tabId, viewerRevision, viewerState));
+  }, []);
+
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(getDefaultRightPanelWidth(1366));
   const getResponsiveRightPanelWidth = useCallback(
@@ -742,12 +753,13 @@ export function AppShell() {
     const sourceSessionId = typeof sourceOrOptions === "string" || sourceOrOptions === null ? sourceOrOptions : undefined;
     const openOptions = typeof sourceOrOptions === "object" && sourceOrOptions !== null ? sourceOrOptions : options;
     const tabId = `file:${filePath}`;
-    setFileTabs((prev) => {
-      const existing = prev.find((t) => t.id === tabId);
-      if (!existing) return [...prev, { id: tabId, label: fileName, filePath, sourceSessionId, initialDisplayMode: openOptions?.initialDisplayMode }];
-      if ((!sourceSessionId || existing.sourceSessionId === sourceSessionId) && (!openOptions?.initialDisplayMode || existing.initialDisplayMode === openOptions.initialDisplayMode)) return prev;
-      return prev.map((t) => t.id === tabId ? { ...t, sourceSessionId: sourceSessionId ?? t.sourceSessionId, initialDisplayMode: openOptions?.initialDisplayMode ?? t.initialDisplayMode } : t);
-    });
+    setFileTabs((prev) => openFileTab(prev, {
+      fileName,
+      filePath,
+      modeHint: openOptions?.initialDisplayMode,
+      sourceSessionId,
+      tabId,
+    }));
     setActiveFileTabId(tabId);
     setRightPanelOpen(true);
     // On mobile the file panel is full-screen; close the drawer so it shows.
@@ -1089,10 +1101,17 @@ export function AppShell() {
         <div style={{ flex: 1, overflow: "hidden" }}>
           {activeFileTab?.filePath ? (
             <FileViewer
+              key={`${activeFileTab.id}:${activeFileTab.viewerRevision ?? 0}`}
               filePath={activeFileTab.filePath}
               cwd={activeCwd ?? undefined}
               sourceSessionId={activeFileTab.sourceSessionId}
               initialDisplayMode={activeFileTab.initialDisplayMode}
+              initialState={activeFileTab.viewerState}
+              onStateChange={(viewerState) => handleFileViewerStateChange(
+                activeFileTab.id,
+                activeFileTab.viewerRevision ?? 0,
+                viewerState,
+              )}
               onOpenFile={(filePath) => handleOpenFile(
                 filePath,
                 getFileName(filePath),

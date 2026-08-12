@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { getFileIcon } from "./FileIcons";
+import type { FileViewerState } from "@/lib/file-viewer-state";
 
 export interface Tab {
   id: string;
@@ -11,6 +12,11 @@ export interface Tab {
   filePath: string;
   sourceSessionId?: string | null;
   initialDisplayMode?: "diff";
+  /** Last viewer state, restored when the tab becomes active again. */
+  viewerState?: FileViewerState;
+  /** Bumped whenever the tab is re-opened with a fresh mode/source, so a stale
+   *  save cannot overwrite newer state. */
+  viewerRevision?: number;
 }
 
 interface Props {

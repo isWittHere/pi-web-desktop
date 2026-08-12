@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useContext, useMemo, type MouseEvent } from "react";
+import { useEffect, useState, useRef, useCallback, useContext, useMemo, useLayoutEffect, type MouseEvent } from "react";
 import { DownloadSimple } from "@phosphor-icons/react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import ReactMarkdown from "react-markdown";
@@ -20,6 +20,10 @@ import { prismTheme } from "@/lib/prism-theme";
 import { CodeBlock, MarkdownCodeContext, MermaidBlock } from "@/components/MarkdownBody";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
+import {
+  resolveInitialFileDisplayMode,
+  type FileViewerState,
+} from "@/lib/file-viewer-state";
 
 interface Props {
   filePath: string;
@@ -27,6 +31,10 @@ interface Props {
   sourceSessionId?: string | null;
   onOpenFile?: (filePath: string) => void;
   initialDisplayMode?: "diff";
+  /** Viewer state to restore when the file is re-opened (tab switch). */
+  initialState?: FileViewerState;
+  /** Called when the viewer unmounts so the tab can snapshot scroll/mode. */
+  onStateChange?: (state: FileViewerState) => void;
 }
 
 interface FileData {
@@ -748,7 +756,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
   );
 }
 
-export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDisplayMode }: Props) {
+export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDisplayMode, initialState, onStateChange }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
@@ -758,21 +766,38 @@ export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initial
   if (isDocumentPreviewPath(filePath)) {
     return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} initialDisplayMode={initialDisplayMode} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} initialDisplayMode={initialDisplayMode} initialState={initialState} onStateChange={onStateChange} />;
 }
 
-function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDisplayMode }: Props) {
+function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDisplayMode, initialState, onStateChange }: Props) {
   const { t } = useI18n();
+  // Restore per-tab viewer state: display mode first, then wrap + scroll.
+  // The markdown/html default-preview auto-switch only applies on a fresh open
+  // (no initialState) — re-opening a tab must restore what the user left.
+  const requestedInitialDisplayMode = resolveInitialFileDisplayMode(initialState, initialDisplayMode);
+  const initialWrapLines = initialState?.wrapLines ?? false;
+  const initialScrollTop = initialState?.scrollTop ?? 0;
+  const initialScrollLeft = initialState?.scrollLeft ?? 0;
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
   const [gitDiff, setGitDiff] = useState<GitFileDiffResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState(false);
-  const [viewMode, setViewMode] = useState<"source" | "diff">("source");
-  const [wrapLines, setWrapLines] = useState(false);
+  const [previewMode, setPreviewMode] = useState(requestedInitialDisplayMode === "preview");
+  const [viewMode, setViewMode] = useState<"source" | "diff">(requestedInitialDisplayMode === "diff" ? "diff" : "source");
+  const [wrapLines, setWrapLines] = useState(initialWrapLines);
   const [changeCount, setChangeCount] = useState(0);
   const esRef = useRef<EventSource | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const scrollRestorePendingRef = useRef(true);
+  const viewerStateRef = useRef<FileViewerState>({
+    displayMode: requestedInitialDisplayMode,
+    wrapLines: initialWrapLines,
+    scrollTop: initialScrollTop,
+    scrollLeft: initialScrollLeft,
+  });
+  const onStateChangeRef = useRef(onStateChange);
+  onStateChangeRef.current = onStateChange;
 
   const fetchGitDiff = useCallback(async (targetPath: string) => {
     if (!cwd) {
@@ -821,10 +846,18 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
     setData(null);
     setPrevContent(null);
     setGitDiff(null);
-    setPreviewMode(false);
-    setViewMode("source");
-    setWrapLines(false);
+    setPreviewMode(requestedInitialDisplayMode === "preview");
+    setViewMode(requestedInitialDisplayMode === "diff" ? "diff" : "source");
+    setWrapLines(initialWrapLines);
     setChangeCount(0);
+    // Scroll is applied once the content container renders below.
+    scrollRestorePendingRef.current = true;
+    viewerStateRef.current = {
+      displayMode: requestedInitialDisplayMode,
+      wrapLines: initialWrapLines,
+      scrollTop: initialScrollTop,
+      scrollLeft: initialScrollLeft,
+    };
 
     if (esRef.current) {
       esRef.current.close();
@@ -832,7 +865,11 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
     }
 
     fetchContent(filePath).then((d) => {
-      if (d?.language === "markdown" && initialDisplayMode !== "diff") setPreviewMode(true);
+      // The markdown/html default-preview auto-switch only applies on a fresh
+      // open; a restored tab keeps its saved display mode.
+      if (initialState === undefined && d?.language === "markdown" && initialDisplayMode !== "diff") {
+        setPreviewMode(true);
+      }
     }).finally(() => setLoading(false));
     void fetchGitDiff(filePath);
 
@@ -848,8 +885,11 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
     return () => {
       es.close();
       esRef.current = null;
+      // Snapshot the current viewer state into the tab before unmounting so a
+      // later tab switch restores scroll/mode/wrap instead of losing them.
+      onStateChangeRef.current?.({ ...viewerStateRef.current });
     };
-  }, [filePath, fetchContent, fetchGitDiff, initialDisplayMode, sourceSessionId]);
+  }, [filePath, fetchContent, fetchGitDiff, initialDisplayMode, sourceSessionId, requestedInitialDisplayMode, initialWrapLines, initialScrollTop, initialScrollLeft, initialState]);
 
   const normalizedMarkdown = useMemo(
     () => normalizeDisplayMath(data?.content ?? ""),
@@ -858,8 +898,38 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
   const hasGitDiff = gitDiff?.supported === true && typeof gitDiff.patch === "string";
 
   useEffect(() => {
-    if (initialDisplayMode === "diff" && hasGitDiff) setViewMode("diff");
-  }, [hasGitDiff, initialDisplayMode]);
+    // Auto-switch to the diff view only on a fresh open. A tab restored from
+    // its saved viewer state must keep the mode the user left (they may have
+    // switched back to source while the diff still exists).
+    if (initialState === undefined && initialDisplayMode === "diff" && hasGitDiff) setViewMode("diff");
+  }, [hasGitDiff, initialDisplayMode, initialState]);
+
+  // Mirror the rendered viewer state into the ref so the unmount snapshot
+  // carries the current display mode / wrap setting even if the user changed
+  // them after the last explicit save.
+  useEffect(() => {
+    viewerStateRef.current.displayMode = viewMode === "diff"
+      ? "diff"
+      : previewMode ? "preview" : "source";
+    viewerStateRef.current.wrapLines = wrapLines;
+  }, [viewMode, previewMode, wrapLines]);
+
+  // Restore the saved scroll position once the content container is mounted.
+  const handleContentScroll = useCallback(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    viewerStateRef.current.scrollTop = el.scrollTop;
+    viewerStateRef.current.scrollLeft = el.scrollLeft;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!scrollRestorePendingRef.current || !data) return;
+    const el = contentRef.current;
+    if (!el) return;
+    el.scrollTop = viewerStateRef.current.scrollTop;
+    el.scrollLeft = viewerStateRef.current.scrollLeft;
+    scrollRestorePendingRef.current = false;
+  }, [data]);
 
   const isDeletedGitDiff = hasGitDiff && gitDiff?.status === "deleted";
 
@@ -1026,7 +1096,11 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, initialDis
       </div>
 
       {/* Content area */}
-      <div style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
+      <div
+        ref={contentRef}
+        onScroll={handleContentScroll}
+        style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}
+      >
         {viewMode === "diff" && hasDiff ? (
           hasGitDiff
             ? <GitDiffView patch={gitDiff.patch!} />
