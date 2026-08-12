@@ -10,6 +10,8 @@ import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
+import { rememberThinkingLevel } from "./thinking-level-memory";
+import { modelKey } from "./thinking-levels";
 import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
 import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem } from "./types";
@@ -427,7 +429,12 @@ export class AgentSessionWrapper {
         await this.inner.setModel(model);
         invalidateModelsCache();
         invalidateSessionListCache();
-        return { id: model.id, provider: model.provider };
+        // 返回 clamp 后的实际推理强度（模型切换时 SDK 可能重算等级）。
+        return {
+          id: model.id,
+          provider: model.provider,
+          level: this.inner.agent.state?.thinkingLevel,
+        };
       }
 
       case "fork": {
@@ -479,7 +486,14 @@ export class AgentSessionWrapper {
           this.inner.agent.state.thinkingLevel = "xhigh";
         }
         invalidateSessionListCache();
-        return null;
+        // per-model 记忆：记录实际生效（clamp 后）的等级，并刷新 /api/models 响应。
+        const actualLevel = this.inner.agent.state?.thinkingLevel;
+        const levelModel = this.inner.model;
+        if (actualLevel && levelModel) {
+          rememberThinkingLevel(modelKey(levelModel.provider, levelModel.id), actualLevel);
+          invalidateModelsCache();
+        }
+        return { level: actualLevel ?? level };
       }
 
       case "compact": {
@@ -1192,6 +1206,17 @@ export async function startRpcSession(
       },
     );
     if (persistedPreferences.modelDefaultChanged) invalidateModelsCache();
+    if (persistedPreferences.thinkingLevelDefaultChanged) invalidateModelsCache();
+
+    // 新会话显式指定推理强度时记录 per-model 记忆（SDK clamp 后的实际生效值）。
+    // 已有会话（打开历史会话）不写记忆——仅浏览不算“使用”。
+    if (!sessionFile && thinkingLevel && inner.model) {
+      const actualLevel = inner.agent.state?.thinkingLevel;
+      if (actualLevel) {
+        rememberThinkingLevel(modelKey(inner.model.provider, inner.model.id), actualLevel);
+        invalidateModelsCache();
+      }
+    }
 
     // If specific tool names were requested (non-empty), set the active tools to the
     // requested builtin coding tools PLUS all extension/package tools, so installed

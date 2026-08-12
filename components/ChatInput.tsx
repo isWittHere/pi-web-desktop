@@ -16,6 +16,8 @@ import { tokenizeMentions } from "@/lib/mention-tokens";
 import { useFileIndex, useSkillNames } from "@/hooks/useProjectContext";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { cssPx, getUiScale } from "@/lib/ui-scale";
+import type { ThinkingLevelOption } from "@/lib/thinking-levels";
+import { filterThinkingLevelOptions } from "@/lib/thinking-levels";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableHeight } from "@/hooks/useResizableHeight";
@@ -82,8 +84,8 @@ interface Props {
   compactResult?: CompactResultInfo | null;
   toolPreset?: "none" | "default" | "full";
   onToolPresetChange?: (preset: "none" | "default" | "full") => void;
-  thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-  onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") => void;
+  thinkingLevel?: ThinkingLevelOption;
+  onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
@@ -146,9 +148,7 @@ function compareModelOptions(a: ModelOption, b: ModelOption): number {
     || MODEL_OPTION_COLLATOR.compare(a.modelId, b.modelId);
 }
 
-const THINKING_LEVELS = ["max", "xhigh", "high", "medium", "low", "minimal", "auto", "off"] as const;
-
-function ThinkingLevelIcon({ level, size = 14 }: { level: (typeof THINKING_LEVELS)[number]; size?: number }) {
+function ThinkingLevelIcon({ level, size = 14 }: { level: ThinkingLevelOption; size?: number }) {
   if (level === "off") {
     return <LightbulbIcon size={size} weight="regular" color="var(--text-dim)" />;
   }
@@ -451,17 +451,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const width = Math.min(el.offsetWidth, stepPillMaxWidth - STEP_PILL_PAD_X * 2) + (STEP_PILL_PAD_X + STEP_PILL_BORDER) * 2;
     setStepLabelWidth((prev) => (Math.abs(prev - width) > 1 ? width : prev));
   }, [visibleStepLabel, stepRoll, stepPillMaxWidth]);
-  // Thinking levels are model-facing identifiers, so keep their labels in English.
-  const thinkingLevelLabels: Record<typeof THINKING_LEVELS[number], string> = {
-    auto: "auto",
-    off: "off",
-    minimal: "minimal",
-    low: "low",
-    medium: "medium",
-    high: "high",
-    xhigh: "xhigh",
-    max: "max",
-  };
+  // Thinking levels are model-facing identifiers shown as-is (English).
   const toolPresetLabels: Record<typeof TOOL_PRESETS[number], string> = {
     off: t("desktop.toolOff"),
     default: t("desktop.toolDefault"),
@@ -1652,8 +1642,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     : null;
   const thinkingDisplayLabel = (() => {
     const lvl = thinkingLevel ?? "auto";
-    if (lvl === "auto" || !thinkingLevelMap) return thinkingLevelLabels[lvl];
-    return thinkingLevelMap[lvl] ?? thinkingLevelLabels[lvl];
+    if (lvl === "auto" || !thinkingLevelMap) return lvl;
+    return thinkingLevelMap[lvl] ?? lvl;
   })();
   const toolPresetKey = Object.entries(TOOL_PRESET_MAP).find(([, value]) => value === (toolPreset ?? "default"))?.[0] as typeof TOOL_PRESETS[number] | undefined;
   const toolPresetLabel = toolPresetLabels[toolPresetKey ?? "default"];
@@ -2637,14 +2627,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}>
                     {isStreaming && <NextTurnBanner />}
                     <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
-                    {THINKING_LEVELS.filter((lvl) => {
-                      if (!availableThinkingLevels) return true;
-                      if (lvl === "auto") return true;
-                      return availableThinkingLevels.includes(lvl);
-                    }).map((lvl) => {
+                    {filterThinkingLevelOptions(availableThinkingLevels).map((lvl) => {
                       const isActive = (thinkingLevel ?? "auto") === lvl;
                       const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
-                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : thinkingLevelLabels[lvl];
+                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
                       const showOriginal = mappedVal != null && mappedVal !== lvl;
                       return (
                         <button

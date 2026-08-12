@@ -179,7 +179,7 @@ export function SettingsModal({
             <ChatConfig cwd={cwd} />
           </div>
           <div style={{ display: activeTab === "models" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>
-            <ModelsConfig embedded onSavedAction={onModelsSavedAction} />
+            <ModelsConfig embedded cwd={cwd} onSavedAction={onModelsSavedAction} />
           </div>
           {cwd && (
             <div style={{ display: activeTab === "skills" ? "flex" : "none", flex: 1, minWidth: 0, minHeight: 0 }}>

@@ -23,12 +23,13 @@ export async function persistExplicitStartupPreferences(
   settingsManager: SettingsManager,
   explicit: ExplicitStartupPreferences,
   effective: EffectiveStartupPreferences,
-): Promise<{ modelDefaultChanged: boolean }> {
+): Promise<{ modelDefaultChanged: boolean; thinkingLevelDefaultChanged: boolean }> {
   if (!explicit.model && !explicit.thinkingLevel) {
-    return { modelDefaultChanged: false };
+    return { modelDefaultChanged: false, thinkingLevelDefaultChanged: false };
   }
 
   let modelDefaultChanged = false;
+  let thinkingLevelDefaultChanged = false;
 
   if (
     explicit.model
@@ -48,8 +49,9 @@ export async function persistExplicitStartupPreferences(
     && (effective.supportsThinking || effective.thinkingLevel !== "off")
   ) {
     settingsManager.setDefaultThinkingLevel(effective.thinkingLevel);
+    thinkingLevelDefaultChanged = true;
   }
 
   await settingsManager.flush();
-  return { modelDefaultChanged };
+  return { modelDefaultChanged, thinkingLevelDefaultChanged };
 }
