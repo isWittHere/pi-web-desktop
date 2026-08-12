@@ -171,7 +171,7 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
             onChange={setTitleModelAndPersist}
             options={modelOptions.map((opt) => ({ value: `${opt.provider}:${opt.modelId}`, label: opt.label }))}
             emptyLabel={t("desktop.titleModelNone")}
-            style={{ maxWidth: 260 }}
+            style={{ width: "auto", maxWidth: 260 }}
           />
         </div>
       </SettingsSection>
@@ -197,6 +197,7 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
             value={notificationDuration}
             onChange={(v) => setNotificationDurationAndPersist(v as NotificationDuration)}
             options={NOTIFICATION_DURATION_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
+            style={{ width: "auto" }}
           />
         </div>
       </SettingsSection>
