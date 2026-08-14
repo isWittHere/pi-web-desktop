@@ -6,11 +6,23 @@ import {
   WALLPAPER_URL_KEY,
   WALLPAPER_ENABLED_KEY,
   WALLPAPER_SCRIM_KEY,
+  WALLPAPER_INPUT_MODE_KEY,
+  WALLPAPER_MESSAGE_MODE_KEY,
+  WALLPAPER_PANEL_MODE_KEY,
+  WALLPAPER_BLUR_KEY,
+  WALLPAPER_BLUR_LEVEL_KEY,
+  WALLPAPER_BLUR_INPUT_KEY,
+  WALLPAPER_BLUR_MESSAGE_KEY,
+  WALLPAPER_BLUR_PANEL_KEY,
+  WALLPAPER_TRANSLUCENCY_KEY,
   WALLPAPER_CHANGED_EVENT,
   clampWallpaperScrim,
   fileToWallpaperDataUrl,
   readStoredWallpaperUrl,
 } from "@/lib/wallpaper";
+
+/** Per-area effect mode: none (solid) | trans (translucent) | blur. */
+export type WallpaperEffectMode = "none" | "trans" | "blur";
 
 function readEnabled(): boolean {
   try {
@@ -31,19 +43,71 @@ function readScrim(): number {
   return WALLPAPER_SCRIM_DEFAULT;
 }
 
+/** Read a per-area mode; absent key falls back to the area's default. */
+function readMode(key: string, def: WallpaperEffectMode): WallpaperEffectMode {
+  try {
+    const v = localStorage.getItem(key);
+    if (v === "none" || v === "trans" || v === "blur") return v;
+  } catch {}
+  return def;
+}
+
+/**
+ * One-time migration from the legacy effect model (master blur flag +
+ * per-area blur flags + translucency flag) to the three per-area modes.
+ * Runs before the hook's initial state reads so migrated values land
+ * immediately.
+ */
+function migrateEffectModes() {
+  try {
+    const hasLegacy =
+      localStorage.getItem(WALLPAPER_BLUR_KEY) !== null ||
+      localStorage.getItem(WALLPAPER_TRANSLUCENCY_KEY) !== null ||
+      [WALLPAPER_BLUR_INPUT_KEY, WALLPAPER_BLUR_MESSAGE_KEY, WALLPAPER_BLUR_PANEL_KEY]
+        .some((k) => localStorage.getItem(k) !== null);
+    if (!hasLegacy) return;
+    const master = localStorage.getItem(WALLPAPER_BLUR_KEY);
+    const solid = localStorage.getItem(WALLPAPER_TRANSLUCENCY_KEY) === "0";
+    const modeOf = (areaKey: string): WallpaperEffectMode => {
+      // A legacy "level" picker may also be present; it was migrated to
+      // the per-area flags earlier, so read those flags first.
+      const b = localStorage.getItem(areaKey);
+      if (b === "1" && master !== "0") return "blur";
+      return solid ? "none" : "trans";
+    };
+    localStorage.setItem(WALLPAPER_INPUT_MODE_KEY, modeOf(WALLPAPER_BLUR_INPUT_KEY));
+    localStorage.setItem(WALLPAPER_MESSAGE_MODE_KEY, modeOf(WALLPAPER_BLUR_MESSAGE_KEY));
+    localStorage.setItem(WALLPAPER_PANEL_MODE_KEY, modeOf(WALLPAPER_BLUR_PANEL_KEY));
+    [WALLPAPER_BLUR_KEY, WALLPAPER_BLUR_LEVEL_KEY, WALLPAPER_BLUR_INPUT_KEY,
+     WALLPAPER_BLUR_MESSAGE_KEY, WALLPAPER_BLUR_PANEL_KEY, WALLPAPER_TRANSLUCENCY_KEY]
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
+migrateEffectModes();
+
 /**
  * Mirror the app/layout.tsx inline bootstrap onto <html>. The wallpaper
- * image itself lives in an <img src> (see ChatWindow) — a data URL large
- * enough for a PNG photo would be silently dropped from a CSS property.
+ * image itself lives in an <img src> (see WallpaperLayer) — a data URL
+ * large enough for a PNG photo would be silently dropped from a CSS
+ * property.
  */
-function writeDom(enabled: boolean, scrim: number) {
+function writeDom(enabled: boolean, scrim: number, input: WallpaperEffectMode, message: WallpaperEffectMode, panel: WallpaperEffectMode) {
   const el = document.documentElement;
   if (enabled) el.dataset.wallpaper = "on";
   else delete el.dataset.wallpaper;
   el.style.setProperty("--wallpaper-scrim", `${scrim}%`);
+  if (enabled) {
+    el.dataset.wallpaperInput = input;
+    el.dataset.wallpaperMessage = message;
+    el.dataset.wallpaperPanel = panel;
+  } else {
+    delete el.dataset.wallpaperInput;
+    delete el.dataset.wallpaperMessage;
+    delete el.dataset.wallpaperPanel;
+  }
 }
 
-/** Notify ChatWindow's <img> layer that the persisted URL changed. */
+/** Notify the WallpaperLayer that the persisted URL changed. */
 function broadcastWallpaperChanged() {
   window.dispatchEvent(new Event(WALLPAPER_CHANGED_EVENT));
 }
@@ -52,12 +116,15 @@ function broadcastWallpaperChanged() {
  * Wallpaper state for the settings panel. The layout.tsx inline script
  * applies the persisted wallpaper before first paint; this hook keeps the
  * DOM in sync for runtime changes, fades new images in once decoded, and
- * broadcasts changes so ChatWindow can refresh its <img src>.
+ * broadcasts changes so the WallpaperLayer can refresh its <img src>.
  */
 export function useWallpaper() {
   const [enabled, setEnabledState] = useState(readEnabled);
   const [url, setUrlState] = useState(readStoredWallpaperUrl);
   const [scrim, setScrimState] = useState(readScrim);
+  const [inputMode, setInputModeState] = useState(() => readMode(WALLPAPER_INPUT_MODE_KEY, "blur"));
+  const [messageMode, setMessageModeState] = useState(() => readMode(WALLPAPER_MESSAGE_MODE_KEY, "none"));
+  const [panelMode, setPanelModeState] = useState(() => readMode(WALLPAPER_PANEL_MODE_KEY, "none"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,8 +137,8 @@ export function useWallpaper() {
 
   // Keep <html> attrs/vars in sync with state.
   useEffect(() => {
-    writeDom(enabled, scrim);
-  }, [enabled, scrim]);
+    writeDom(enabled, scrim, inputMode, messageMode, panelMode);
+  }, [enabled, scrim, inputMode, messageMode, panelMode]);
 
   // Fade the image in once decoded. Runs on mount (the inline script no
   // longer pre-marks ready) and whenever the URL or enabled state changes.
@@ -140,5 +207,19 @@ export function useWallpaper() {
     try { localStorage.setItem(WALLPAPER_SCRIM_KEY, String(clamped)); } catch {}
   }, []);
 
-  return { enabled, url, scrim, busy, error, choose, remove, setEnabled, setScrim };
+  /** Set an area's effect mode: none (solid) / trans / blur. */
+  const setInputMode = useCallback((v: WallpaperEffectMode) => {
+    setInputModeState(v);
+    try { localStorage.setItem(WALLPAPER_INPUT_MODE_KEY, v); } catch {}
+  }, []);
+  const setMessageMode = useCallback((v: WallpaperEffectMode) => {
+    setMessageModeState(v);
+    try { localStorage.setItem(WALLPAPER_MESSAGE_MODE_KEY, v); } catch {}
+  }, []);
+  const setPanelMode = useCallback((v: WallpaperEffectMode) => {
+    setPanelModeState(v);
+    try { localStorage.setItem(WALLPAPER_PANEL_MODE_KEY, v); } catch {}
+  }, []);
+
+  return { enabled, url, scrim, inputMode, messageMode, panelMode, busy, error, choose, remove, setEnabled, setScrim, setInputMode, setMessageMode, setPanelMode };
 }

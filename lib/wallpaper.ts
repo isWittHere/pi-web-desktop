@@ -1,18 +1,20 @@
 /**
- * Wallpaper feature — a user-set background image behind the chat message
- * area, dimmed by a scrim of the message-area background color.
+ * Wallpaper feature — a user-set background image behind the whole
+ * workspace, dimmed by a scrim of the app background color.
  *
- * The chat column renders a `.chat-wallpaper` layer whose <img> child
- * carries the image (see app/wallpaper.css + ChatWindow). <html> state
- * driven by useWallpaper:
+ * The full-window `.chat-wallpaper` layer (components/WallpaperLayer.tsx)
+ * carries the image in an <img> child. <html> state driven by
+ * useWallpaper:
  *
  *   data-wallpaper        "on" while enabled
  *   data-wallpaper-ready  "1" once the image has decoded (fade-in)
- *   --wallpaper-scrim     scrim opacity percentage string, e.g. "75%"
+ *   --wallpaper-scrim     scrim opacity percentage string, e.g. "70%"
+ *   data-wallpaper-input / -message / -panel
+ *                         per-area effect mode: none | trans | blur
  *
  * The scrim paints the theme's `--bg` over the image at the user-chosen
- * opacity, so message text keeps its contrast in both light and dark modes;
- * no theme variables are rewritten.
+ * opacity, so text keeps its contrast in both light and dark modes; no
+ * theme variables are rewritten.
  *
  * The image itself is a data URL persisted in localStorage and rendered
  * into an <img src> — never into a CSS property: Chromium silently drops
@@ -22,7 +24,7 @@
 /** Scrim opacity range (%). Higher = more theme background, less wallpaper. */
 export const WALLPAPER_SCRIM_MIN = 30;
 export const WALLPAPER_SCRIM_MAX = 95;
-export const WALLPAPER_SCRIM_DEFAULT = 75;
+export const WALLPAPER_SCRIM_DEFAULT = 70;
 
 /** Downscale cap for the longest image edge (px) before storing. */
 export const WALLPAPER_MAX_DIMENSION = 2560;
@@ -44,6 +46,17 @@ export const WALLPAPER_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as
 export const WALLPAPER_URL_KEY = "pi-wallpaper";
 export const WALLPAPER_ENABLED_KEY = "pi-wallpaper-enabled";
 export const WALLPAPER_SCRIM_KEY = "pi-wallpaper-scrim";
+/** Per-area effect mode keys: "none" | "trans" | "blur". */
+export const WALLPAPER_INPUT_MODE_KEY = "pi-wallpaper-input";
+export const WALLPAPER_MESSAGE_MODE_KEY = "pi-wallpaper-message";
+export const WALLPAPER_PANEL_MODE_KEY = "pi-wallpaper-panel";
+/* Legacy keys, migrated once to the mode keys above. */
+export const WALLPAPER_BLUR_KEY = "pi-wallpaper-blur";
+export const WALLPAPER_BLUR_LEVEL_KEY = "pi-wallpaper-blur-level";
+export const WALLPAPER_BLUR_INPUT_KEY = "pi-wallpaper-blur-input";
+export const WALLPAPER_BLUR_MESSAGE_KEY = "pi-wallpaper-blur-message";
+export const WALLPAPER_BLUR_PANEL_KEY = "pi-wallpaper-blur-panel";
+export const WALLPAPER_TRANSLUCENCY_KEY = "pi-wallpaper-translucency";
 export const WALLPAPER_CHANGED_EVENT = "pi-wallpaper-changed";
 
 /**

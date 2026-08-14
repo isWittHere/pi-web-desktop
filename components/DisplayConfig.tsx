@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link, Check, CircleHalf } from "@phosphor-icons/react";
+import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link, Check, CircleHalf, Sparkle } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import { useWallpaper } from "@/hooks/useWallpaper";
@@ -137,7 +137,7 @@ export function DisplayConfig() {
   }, [setMode]);
 
   // ── Wallpaper ──
-  const { enabled: wallpaperEnabled, url: wallpaperUrl, scrim: wallpaperScrim, busy: wallpaperBusy, error: wallpaperError, choose: chooseWallpaper, remove: removeWallpaper, setEnabled: setWallpaperEnabled, setScrim: setWallpaperScrim } = useWallpaper();
+  const { enabled: wallpaperEnabled, url: wallpaperUrl, scrim: wallpaperScrim, inputMode: wallpaperInputMode, messageMode: wallpaperMessageMode, panelMode: wallpaperPanelMode, busy: wallpaperBusy, error: wallpaperError, choose: chooseWallpaper, remove: removeWallpaper, setEnabled: setWallpaperEnabled, setScrim: setWallpaperScrim, setInputMode: setWallpaperInputMode, setMessageMode: setWallpaperMessageMode, setPanelMode: setWallpaperPanelMode } = useWallpaper();
   const wallpaperFileRef = useRef<HTMLInputElement>(null);
 
   const pickWallpaper = useCallback(() => {
@@ -307,7 +307,6 @@ export function DisplayConfig() {
           label={t("desktop.wallpaperEnable")}
           disabled={!wallpaperUrl}
         />
-
         {wallpaperError && (
           <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--status-danger)", lineHeight: 1.5 }}>
             {t("desktop.wallpaperError")}: {wallpaperError}
@@ -384,6 +383,42 @@ export function DisplayConfig() {
           </>
         ) : null}
 
+        {/* Effects: each area picks none / translucency / blur. Hidden
+            entirely while the wallpaper is off — there is nothing to
+            frost or to show through. */}
+        {wallpaperEnabled && (
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+          <SectionLabel icon={<Sparkle size={14} weight="fill" />} label={t("desktop.wallpaperEffects")} />
+          {([
+            ["input", t("desktop.wallpaperBlurInput"), wallpaperInputMode, setWallpaperInputMode],
+            ["message", t("desktop.wallpaperBlurMessage"), wallpaperMessageMode, setWallpaperMessageMode],
+            ["panel", t("desktop.wallpaperBlurPanel"), wallpaperPanelMode, setWallpaperPanelMode],
+          ] as const).map(([area, label, mode, setter]) => (
+            <div key={area} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+              <span style={{ width: 84, flexShrink: 0, fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
+              <div style={{ ...tagGroupStyle, flex: 1 }}>
+                {([
+                  ["none", t("desktop.wallpaperModeNone")],
+                  ["trans", t("desktop.wallpaperModeTrans")],
+                  ["blur", t("desktop.wallpaperModeBlur")],
+                ] as const).map(([m, mLabel]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={mode === m}
+                    onClick={() => setter(m)}
+                    style={tagStyle(mode === m, hoveredTag === `wmode:${area}:${m}`)}
+                    onMouseEnter={() => setHoveredTag(`wmode:${area}:${m}`)}
+                    onMouseLeave={() => setHoveredTag(null)}
+                  >
+                    {mLabel}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        )}
         {/* Hidden file input, shared by both pick entries. */}
         <input
           ref={wallpaperFileRef}

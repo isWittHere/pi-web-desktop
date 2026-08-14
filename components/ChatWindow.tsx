@@ -1,7 +1,6 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { readStoredWallpaperUrl, WALLPAPER_CHANGED_EVENT } from "@/lib/wallpaper";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import { modelProfileKey } from "@/lib/thinking-levels";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
@@ -547,12 +546,8 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Wallpaper layer + scrim — see app/wallpaper.css. First child so
-          everything positioned after it (z-0/z-10/z-40/z-50) paints above.
-          The image renders as an <img src>: CSS properties silently drop
-          values above ~1MB, so large PNG wallpapers must not go through a
-          CSS variable. */}
-      <WallpaperLayer />
+      {/* Wallpaper lives at the workspace root (AppShell) — see
+          components/WallpaperLayer.tsx and app/wallpaper.css. */}
       {isDragOver && (
         <div
           className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center"
@@ -1510,40 +1505,3 @@ function ExtensionCustomPanel({
   );
 }
 
-/**
- * The wallpaper <img> + scrim layer. Subscribes to the wallpaper-changed
- * broadcast (emitted by useWallpaper) and re-reads the persisted data URL,
- * so the image swaps live without remounting the chat window. The URL is
- * only read on the client (useEffect) — SSR and hydration stay in sync.
- *
- * This layer also owns the fade-in gate: the img sets data-wallpaper-ready
- * once decoded, so the wallpaper appears at startup without the settings
- * panel ever being opened (useWallpaper only handles change-time fades).
- */
-function WallpaperLayer() {
-  const [url, setUrl] = useState<string>("");
-
-  useEffect(() => {
-    const sync = () => setUrl(readStoredWallpaperUrl());
-    sync();
-    window.addEventListener(WALLPAPER_CHANGED_EVENT, sync);
-    return () => window.removeEventListener(WALLPAPER_CHANGED_EVENT, sync);
-  }, []);
-
-  return (
-    <div className="chat-wallpaper" aria-hidden="true">
-      {/* next/image is not usable here: the wallpaper is a local data URL
-          that must not be routed through the image optimizer. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {url && (
-        <img
-          src={url}
-          alt=""
-          draggable={false}
-          onLoad={() => { document.documentElement.dataset.wallpaperReady = "1"; }}
-          onError={() => { document.documentElement.dataset.wallpaperReady = "1"; }}
-        />
-      )}
-    </div>
-  );
-}

@@ -5,6 +5,7 @@ import { ArrowLeft } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
+import { WallpaperLayer } from "./WallpaperLayer";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
@@ -977,6 +978,7 @@ export function AppShell() {
       )}
       <div
         style={{
+          "--sidebar-width": `${sidebarPanel.width}px`,
           "--right-panel-width": `${rightPanel.width}px`,
           flex: 1,
           display: "flex",
@@ -985,6 +987,11 @@ export function AppShell() {
           position: "relative",
         } as React.CSSProperties}
       >
+      {/* Full-window wallpaper behind sidebar, chat and right panel — see
+          components/WallpaperLayer.tsx and app/wallpaper.css. First child
+          of the workspace row so every later sibling paints above it, and
+          a sibling of .chat-column for the welcome-page scrim :has(). */}
+      <WallpaperLayer />
       {/* Mobile overlay backdrop */}
       <div
         className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
@@ -1023,7 +1030,7 @@ export function AppShell() {
       )}
 
       {/* Center: chat */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      <div className="chat-column" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Chat content */}
         <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
           {showChat ? (
