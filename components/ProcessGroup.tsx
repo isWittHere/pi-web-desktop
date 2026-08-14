@@ -649,7 +649,7 @@ function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId, isStreaming }: {
     <div className="space-y-2 pr-2">
       {blocks.map((block) =>
         block.type === "text" ? (
-          <MarkdownBody key={block.id} cwd={cwd} onOpenFile={onOpenFile} className="!text-text-dim" isStreaming={isStreaming}>
+          <MarkdownBody key={block.id} cwd={cwd} onOpenFile={onOpenFile} className="!text-text-muted" isStreaming={isStreaming}>
             {block.text}
           </MarkdownBody>
         ) : (
@@ -662,7 +662,7 @@ function ProcessNarrative({ blocks, cwd, onOpenFile, sessionId, isStreaming }: {
             contentOnly
             cwd={cwd}
             onOpenFile={onOpenFile}
-            className="!text-text-dim"
+            className="!text-text-muted"
             isStreaming={isStreaming}
           />
         ),

@@ -134,7 +134,10 @@ html.dark {
   --border: #5a5a5a;
   --text: #e8e8e8;
   --text-muted: #888888;
-  --text-dim: #555555;
+  /* Slightly brighter than the old #555555 so dim labels (step titles,
+     secondary meta) stay readable on dark surfaces; still a clear step
+     below --text-muted. */
+  --text-dim: #6e6e6e;
   --accent: #64c1b6;
   --accent-hover: #96e1d8;
   --user-bg: #1e2a2b;
@@ -439,7 +442,7 @@ pre, code {
   padding: 8px 11px;
   border-left: 2px solid var(--accent-blue);
   background: var(--bg-secondary);
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.65;
