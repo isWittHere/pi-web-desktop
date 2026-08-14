@@ -2184,19 +2184,46 @@ function TimeGroupHeader({
   onToggle: () => void;
 }) {
   const { t } = useI18n();
+  const [stuck, setStuck] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Detect the sticky state via a 1px sentinel right above the header in
+  // the same scroll container: it goes out of view exactly when the header
+  // sticks to the container top. While stuck the header paints its panel
+  // background (masking rows scrolling beneath); in normal flow it stays
+  // transparent and matches the list rows — same behavior in wallpaper
+  // mode, where the panel's frosted glass shows through either way.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const scroll = sentinel.closest(
+      '[style*="overflow-y"], .overflow-y-auto, [class*="overflow-y-auto"]'
+    );
+    if (!scroll) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setStuck(!entry.isIntersecting),
+      { root: scroll, threshold: 0 }
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onToggle}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onToggle();
-        }
-      }}
-      aria-expanded={!collapsed}
-      title={collapsed ? t("desktop.expandGroup") : t("desktop.collapseGroup")}
+    <>
+      <div ref={sentinelRef} aria-hidden="true" style={{ height: 1 }} />
+      <div
+        className="sidebar-time-group-header"
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
+        aria-expanded={!collapsed}
+        title={collapsed ? t("desktop.expandGroup") : t("desktop.collapseGroup")}
       style={{
         position: "sticky",
         top: 0,
@@ -2205,7 +2232,6 @@ function TimeGroupHeader({
         alignItems: "center",
         gap: 6,
         padding: "5px 8px 3px",
-        background: "var(--bg-panel)",
         cursor: "pointer",
         userSelect: "none",
         fontSize: 10,
@@ -2213,12 +2239,15 @@ function TimeGroupHeader({
         color: "var(--text-dim)",
         textTransform: "uppercase",
         letterSpacing: "0.07em",
+        background: stuck ? "var(--bg-panel)" : "transparent",
+        transition: "background 0.15s",
       }}
     >
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {t(timeBucketKey(bucket), { count })}
       </span>
     </div>
+    </>
   );
 }
 

@@ -29,6 +29,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
           <button
             key={file.filePath}
             type="button"
+            className="turn-written-file-chip"
             title={file.filePath}
             aria-label={t("desktop.openWrittenFile", { name })}
             onClick={() => onOpenFile?.(file.filePath, { initialDisplayMode: "diff" })}
