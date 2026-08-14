@@ -1515,6 +1515,10 @@ function ExtensionCustomPanel({
  * broadcast (emitted by useWallpaper) and re-reads the persisted data URL,
  * so the image swaps live without remounting the chat window. The URL is
  * only read on the client (useEffect) — SSR and hydration stay in sync.
+ *
+ * This layer also owns the fade-in gate: the img sets data-wallpaper-ready
+ * once decoded, so the wallpaper appears at startup without the settings
+ * panel ever being opened (useWallpaper only handles change-time fades).
  */
 function WallpaperLayer() {
   const [url, setUrl] = useState<string>("");
@@ -1531,7 +1535,15 @@ function WallpaperLayer() {
       {/* next/image is not usable here: the wallpaper is a local data URL
           that must not be routed through the image optimizer. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {url && <img src={url} alt="" draggable={false} />}
+      {url && (
+        <img
+          src={url}
+          alt=""
+          draggable={false}
+          onLoad={() => { document.documentElement.dataset.wallpaperReady = "1"; }}
+          onError={() => { document.documentElement.dataset.wallpaperReady = "1"; }}
+        />
+      )}
     </div>
   );
 }

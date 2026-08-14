@@ -58,7 +58,6 @@ export const enLocale = {
     "desktop.wallpaperRemove": "Remove",
     "desktop.wallpaperUploading": "Applying…",
     "desktop.wallpaperError": "Failed to apply wallpaper",
-    "desktop.noWallpaper": "No wallpaper selected",
     "desktop.textSize": "Text Size",
     "desktop.textSizeDescription": "Adjust the size of text and interface elements.",
     "desktop.loadingThemes": "Loading themes…",

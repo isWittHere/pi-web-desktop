@@ -61,9 +61,12 @@ export function useWallpaper() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // URL we already ran a fade-in for. Reset whenever the wallpaper is
-  // disabled/cleared so re-enabling triggers a fresh fade-in.
-  const lastUrlRef = useRef<string | null>(null);
+  // URL we already ran a fade-in for. Seeded with the stored URL so the
+  // mount pass skips re-fading when WallpaperLayer already marked the
+  // image ready (opening settings must not blink the wallpaper out).
+  // Reset whenever the wallpaper is disabled/cleared so re-enabling
+  // triggers a fresh fade-in.
+  const lastUrlRef = useRef<string | null>(readStoredWallpaperUrl());
 
   // Keep <html> attrs/vars in sync with state.
   useEffect(() => {

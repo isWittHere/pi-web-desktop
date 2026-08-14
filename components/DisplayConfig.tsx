@@ -155,8 +155,6 @@ export function DisplayConfig() {
     removeWallpaper();
   }, [removeWallpaper]);
 
-  const wallpaperActive = wallpaperEnabled && !!wallpaperUrl;
-
   const openThemeFolder = useCallback(() => {
     window.piDesktop?.openThemeFolder();
   }, []);
@@ -302,62 +300,13 @@ export function DisplayConfig() {
 
       {/* ── Wallpaper ── */}
       <SettingsSection title={t("desktop.wallpaper")} description={t("desktop.wallpaperDescription")}>
-        {/* Live preview: the image under the current scrim opacity */}
-        <div
-          style={{
-            position: "relative",
-            height: 64,
-            borderRadius: 7,
-            border: "1px solid var(--border)",
-            overflow: "hidden",
-            backgroundColor: wallpaperUrl ? undefined : "var(--bg-secondary)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {wallpaperUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- local data URL, not optimizer-routable
-            <img
-              src={wallpaperUrl}
-              alt=""
-              draggable={false}
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
-            />
-          )}
-          {wallpaperUrl && (
-            <div
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                inset: 0,
-                // Scrim overlay — same color-mix the real layer uses.
-                background: `color-mix(in srgb, var(--bg) ${wallpaperActive ? wallpaperScrim : 100}%, transparent)`,
-              }}
-            />
-          )}
-          {!wallpaperUrl && (
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t("desktop.noWallpaper")}</span>
-          )}
-        </div>
-
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <SettingsButton size="sm" onClick={pickWallpaper} disabled={wallpaperBusy}>
-            {wallpaperBusy ? t("desktop.wallpaperUploading") : t("desktop.wallpaperChoose")}
-          </SettingsButton>
-          {wallpaperUrl && (
-            <SettingsButton size="sm" onClick={handleWallpaperRemove}>
-              {t("desktop.wallpaperRemove")}
-            </SettingsButton>
-          )}
-          <input
-            ref={wallpaperFileRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            style={{ display: "none" }}
-            onChange={handleWallpaperFile}
-          />
-        </div>
+        {/* Master switch first; everything else hides while it is off. */}
+        <SettingToggle
+          checked={wallpaperEnabled}
+          onChange={setWallpaperEnabled}
+          label={t("desktop.wallpaperEnable")}
+          disabled={!wallpaperUrl}
+        />
 
         {wallpaperError && (
           <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--status-danger)", lineHeight: 1.5 }}>
@@ -365,37 +314,84 @@ export function DisplayConfig() {
           </p>
         )}
 
-        <div style={{ marginTop: 12 }}>
-          <SettingToggle
-            checked={wallpaperEnabled}
-            onChange={setWallpaperEnabled}
-            label={t("desktop.wallpaperEnable")}
-            disabled={!wallpaperUrl}
-          />
-        </div>
+        {!wallpaperUrl ? (
+          /* No wallpaper yet: the toggle stays disabled, so the pick entry
+             stays visible as the only other control. */
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <SettingsButton size="sm" onClick={pickWallpaper} disabled={wallpaperBusy}>
+              {wallpaperBusy ? t("desktop.wallpaperUploading") : t("desktop.wallpaperChoose")}
+            </SettingsButton>
+          </div>
+        ) : wallpaperEnabled ? (
+          <>
+            {/* Live preview: the image under the current scrim opacity */}
+            <div
+              style={{
+                position: "relative",
+                height: 64,
+                borderRadius: 7,
+                border: "1px solid var(--border)",
+                overflow: "hidden",
+                backgroundColor: "var(--bg-secondary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- local data URL, not optimizer-routable */}
+              <img
+                src={wallpaperUrl}
+                alt=""
+                draggable={false}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+              />
+              <div
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  // Scrim overlay — same color-mix the real layer uses.
+                  background: `color-mix(in srgb, var(--bg) ${wallpaperScrim}%, transparent)`,
+                }}
+              />
+            </div>
 
-        <div
-          style={{
-            marginTop: 16,
-            opacity: wallpaperActive ? 1 : 0.5,
-            pointerEvents: wallpaperActive ? "auto" : "none",
-          }}
-        >
-          <SectionLabel
-            icon={<CircleHalf size={14} weight="fill" />}
-            label={`${t("desktop.wallpaperOpacity")} (${wallpaperScrim}%)`}
-          />
-          <input
-            type="range"
-            min={30}
-            max={95}
-            step={5}
-            value={wallpaperScrim}
-            onChange={(e) => setWallpaperScrim(parseInt(e.target.value, 10))}
-            style={{ width: "100%", accentColor: "var(--accent)", cursor: "pointer", marginTop: 4 }}
-            aria-label={t("desktop.wallpaperOpacity")}
-          />
-        </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <SettingsButton size="sm" onClick={pickWallpaper} disabled={wallpaperBusy}>
+                {wallpaperBusy ? t("desktop.wallpaperUploading") : t("desktop.wallpaperChoose")}
+              </SettingsButton>
+              <SettingsButton size="sm" onClick={handleWallpaperRemove}>
+                {t("desktop.wallpaperRemove")}
+              </SettingsButton>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <SectionLabel
+                icon={<CircleHalf size={14} weight="fill" />}
+                label={`${t("desktop.wallpaperOpacity")} (${wallpaperScrim}%)`}
+              />
+              <input
+                type="range"
+                min={30}
+                max={95}
+                step={5}
+                value={wallpaperScrim}
+                onChange={(e) => setWallpaperScrim(parseInt(e.target.value, 10))}
+                style={{ width: "100%", accentColor: "var(--accent)", cursor: "pointer", marginTop: 4 }}
+                aria-label={t("desktop.wallpaperOpacity")}
+              />
+            </div>
+          </>
+        ) : null}
+
+        {/* Hidden file input, shared by both pick entries. */}
+        <input
+          ref={wallpaperFileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          style={{ display: "none" }}
+          onChange={handleWallpaperFile}
+        />
       </SettingsSection>
 
       {/* ── Text Size ── */}

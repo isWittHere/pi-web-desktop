@@ -58,7 +58,6 @@ export const zhCNLocale = {
     "desktop.wallpaperRemove": "移除",
     "desktop.wallpaperUploading": "应用中…",
     "desktop.wallpaperError": "壁纸应用失败",
-    "desktop.noWallpaper": "未选择壁纸",
     "desktop.textSize": "字体大小",
     "desktop.textSizeDescription": "调整界面文字与元素的显示大小。",
     "desktop.loadingThemes": "加载主题中…",
