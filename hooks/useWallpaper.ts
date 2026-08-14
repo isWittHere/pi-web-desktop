@@ -140,15 +140,14 @@ export function useWallpaper() {
     writeDom(enabled, scrim, inputMode, messageMode, panelMode);
   }, [enabled, scrim, inputMode, messageMode, panelMode]);
 
-  // Fade the image in once decoded. Runs on mount (the inline script no
-  // longer pre-marks ready) and whenever the URL or enabled state changes.
+  // Fade a user image in once decoded. Runs on mount and whenever the
+  // URL or enabled state changes. Without a user image (or while the
+  // wallpaper is off) the ready flag is left alone: the theme
+  // wallpaper's <img> (WallpaperLayer) always renders and owns the
+  // gate, and a hidden layer's ready value is irrelevant.
   useEffect(() => {
+    if (!enabled || !url) return;
     const el = document.documentElement;
-    if (!enabled || !url) {
-      lastUrlRef.current = null;
-      el.dataset.wallpaperReady = "0";
-      return;
-    }
     if (lastUrlRef.current === url && el.dataset.wallpaperReady === "1") return;
     lastUrlRef.current = url;
     el.dataset.wallpaperReady = "0";
@@ -184,12 +183,11 @@ export function useWallpaper() {
     }
   }, []);
 
-  /** Clear the wallpaper entirely. */
+  /** Reset to the theme wallpaper: drop the user image, keep enabled
+      so the built-in Monet painting for the active theme shows again. */
   const remove = useCallback(() => {
     setUrlState("");
-    setEnabledState(false);
     try { localStorage.removeItem(WALLPAPER_URL_KEY); } catch {}
-    try { localStorage.setItem(WALLPAPER_ENABLED_KEY, "0"); } catch {}
     broadcastWallpaperChanged();
   }, []);
 

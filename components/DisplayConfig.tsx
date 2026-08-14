@@ -5,6 +5,7 @@ import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link, Check, CircleHalf
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import { useWallpaper } from "@/hooks/useWallpaper";
+import { resolveWallpaperUrl } from "@/lib/wallpaper";
 import { SettingsSection, SettingsButton } from "@/components/settings-ui";
 import { SettingToggle } from "@/components/SettingToggle";
 import type { ThemeSetInfo } from "@/lib/theme";
@@ -300,12 +301,13 @@ export function DisplayConfig() {
 
       {/* ── Wallpaper ── */}
       <SettingsSection title={t("desktop.wallpaper")} description={t("desktop.wallpaperDescription")}>
-        {/* Master switch first; everything else hides while it is off. */}
+        {/* Master switch first; everything else hides while it is off.
+            Always enabled — a user image or the theme painting provides
+            the wallpaper either way. */}
         <SettingToggle
           checked={wallpaperEnabled}
           onChange={setWallpaperEnabled}
           label={t("desktop.wallpaperEnable")}
-          disabled={!wallpaperUrl}
         />
         {wallpaperError && (
           <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--status-danger)", lineHeight: 1.5 }}>
@@ -313,21 +315,27 @@ export function DisplayConfig() {
           </p>
         )}
 
-        {!wallpaperUrl ? (
-          /* No wallpaper yet: the toggle stays disabled, so the pick entry
-             stays visible as the only other control. */
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <SettingsButton size="sm" onClick={pickWallpaper} disabled={wallpaperBusy}>
-              {wallpaperBusy ? t("desktop.wallpaperUploading") : t("desktop.wallpaperChoose")}
+        {/* Pick entry; "Reset to default" only applies to a user image. */}
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <SettingsButton size="sm" onClick={pickWallpaper} disabled={wallpaperBusy}>
+            {wallpaperBusy ? t("desktop.wallpaperUploading") : t("desktop.wallpaperChoose")}
+          </SettingsButton>
+          {wallpaperUrl && (
+            <SettingsButton size="sm" onClick={handleWallpaperRemove}>
+              {t("desktop.wallpaperResetDefault")}
             </SettingsButton>
-          </div>
-        ) : wallpaperEnabled ? (
+          )}
+        </div>
+
+        {wallpaperEnabled && (
           <>
-            {/* Live preview: the image under the current scrim opacity */}
+            {/* Live preview: the user image or the theme painting under
+                the current scrim opacity. */}
             <div
               style={{
                 position: "relative",
                 height: 64,
+                marginTop: 10,
                 borderRadius: 7,
                 border: "1px solid var(--border)",
                 overflow: "hidden",
@@ -337,9 +345,9 @@ export function DisplayConfig() {
                 justifyContent: "center",
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element -- local data URL, not optimizer-routable */}
+              {/* eslint-disable-next-line @next/next/no-img-element -- local data URL / static asset, not optimizer-routable */}
               <img
-                src={wallpaperUrl}
+                src={resolveWallpaperUrl(wallpaperUrl, themeName)}
                 alt=""
                 draggable={false}
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
@@ -353,15 +361,6 @@ export function DisplayConfig() {
                   background: `color-mix(in srgb, var(--bg) ${wallpaperScrim}%, transparent)`,
                 }}
               />
-            </div>
-
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <SettingsButton size="sm" onClick={pickWallpaper} disabled={wallpaperBusy}>
-                {wallpaperBusy ? t("desktop.wallpaperUploading") : t("desktop.wallpaperChoose")}
-              </SettingsButton>
-              <SettingsButton size="sm" onClick={handleWallpaperRemove}>
-                {t("desktop.wallpaperRemove")}
-              </SettingsButton>
             </div>
 
             <div style={{ marginTop: 16 }}>
@@ -381,7 +380,7 @@ export function DisplayConfig() {
               />
             </div>
           </>
-        ) : null}
+        )}
 
         {/* Effects: each area picks none / translucency / blur. Hidden
             entirely while the wallpaper is off — there is nothing to

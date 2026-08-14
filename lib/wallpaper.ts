@@ -73,6 +73,31 @@ export function readStoredWallpaperUrl(): string {
   }
 }
 
+/**
+ * Built-in Monet paintings served from /public, keyed by pi theme base
+ * name. The user's own data URL (if any) always takes precedence; without
+ * one the active theme decides which painting shows, and unknown themes
+ * fall back to the default painting.
+ */
+const THEME_WALLPAPER_MAP: Record<string, string> = {
+  "": "default",
+  gruvbox: "gruvbox",
+  "miku-aqua": "aqua",
+  "orbital-rose": "rose",
+  "scarlet-tether": "tether",
+  solarized: "solarized",
+};
+
+/** Static path of the Monet painting for a theme base name. */
+export function themeWallpaperPath(themeName: string): string {
+  return `/monet-artworks/${THEME_WALLPAPER_MAP[themeName] ?? "default"}.jpg`;
+}
+
+/** User data URL when set, otherwise the theme's Monet painting. */
+export function resolveWallpaperUrl(userUrl: string, themeName: string): string {
+  return userUrl || themeWallpaperPath(themeName);
+}
+
 export function isSupportedWallpaperMime(type: string): boolean {
   return (WALLPAPER_MIME_TYPES as readonly string[]).includes(type);
 }

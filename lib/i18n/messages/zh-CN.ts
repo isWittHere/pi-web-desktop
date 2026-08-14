@@ -62,7 +62,7 @@ export const zhCNLocale = {
     "desktop.wallpaperBlurPanel": "侧栏与右面板",
     "desktop.wallpaperOpacity": "遮罩不透明度",
     "desktop.wallpaperChoose": "选择图片…",
-    "desktop.wallpaperRemove": "移除",
+    "desktop.wallpaperResetDefault": "重置为默认",
     "desktop.wallpaperUploading": "应用中…",
     "desktop.wallpaperError": "壁纸应用失败",
     "desktop.textSize": "字体大小",

@@ -62,7 +62,7 @@ export const enLocale = {
     "desktop.wallpaperBlurPanel": "Sidebar & right panel",
     "desktop.wallpaperOpacity": "Scrim opacity",
     "desktop.wallpaperChoose": "Choose image…",
-    "desktop.wallpaperRemove": "Remove",
+    "desktop.wallpaperResetDefault": "Reset to default",
     "desktop.wallpaperUploading": "Applying…",
     "desktop.wallpaperError": "Failed to apply wallpaper",
     "desktop.textSize": "Text Size",
