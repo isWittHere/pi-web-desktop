@@ -1662,7 +1662,11 @@ span.linenumber {
     bottom: 0;
     left: 4px;
     width: 1px;
-    background: transparent;
+    /* The splitter line is the panel divider in both wallpaper modes: the
+       sidebar/right-panel border was removed (it overlapped this line into
+       a 2px rule), so the line renders in the theme border color by
+       default and the accent on hover/focus as drag feedback. */
+    background: var(--border);
     content: "";
     transition: background 0.12s ease;
   }

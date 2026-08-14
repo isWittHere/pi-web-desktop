@@ -1007,7 +1007,6 @@ export function AppShell() {
         style={{
           "--sidebar-width": `${sidebarPanel.width}px`,
           background: "var(--bg-panel)",
-          borderRight: "1px solid var(--border)",
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
@@ -1089,7 +1088,6 @@ export function AppShell() {
         style={{
           display: "flex",
           flexDirection: "column",
-          borderLeft: "1px solid var(--border)",
           background: "var(--bg)",
         }}
       >

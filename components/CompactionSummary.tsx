@@ -87,8 +87,8 @@ export function CompactionSummary({ content }: CompactionSummaryProps) {
               </div>
             )}
           </div>
-          {showTopShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
-          {showBottomShadow && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
+          {showTopShadow && <div aria-hidden="true" className="chat-fade chat-fade-top pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-bg to-transparent" />}
+          {showBottomShadow && <div aria-hidden="true" className="chat-fade chat-fade-bottom pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-bg to-transparent" />}
         </div>
       )}
     </div>
