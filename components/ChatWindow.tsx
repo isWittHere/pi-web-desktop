@@ -1,6 +1,7 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { readStoredWallpaperUrl, WALLPAPER_CHANGED_EVENT } from "@/lib/wallpaper";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import { modelProfileKey } from "@/lib/thinking-levels";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
@@ -546,6 +547,12 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Wallpaper layer + scrim — see app/wallpaper.css. First child so
+          everything positioned after it (z-0/z-10/z-40/z-50) paints above.
+          The image renders as an <img src>: CSS properties silently drop
+          values above ~1MB, so large PNG wallpapers must not go through a
+          CSS variable. */}
+      <WallpaperLayer />
       {isDragOver && (
         <div
           className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center"
@@ -559,7 +566,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
       )}
 
       {openPositioning && messages.length > 0 && (
-        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-[var(--bg)] text-text-muted">
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center text-text-muted" style={{ background: "color-mix(in srgb, var(--bg) 90%, transparent)" }}>
           {t("desktop.loadingSession")}
         </div>
       )}
@@ -579,7 +586,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
       )}
 
       {isEmptyNew ? (
-        <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto">
+        <div className="chat-welcome relative z-0 flex flex-1 flex-col items-center justify-center overflow-y-auto">
           <div className="w-full max-w-[820px]">
             {/* Pi Logo */}
             <div
@@ -1003,13 +1010,13 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
           {showChatTopFade && (
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-[var(--bg)] to-transparent"
+              className="chat-fade chat-fade-top pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-[var(--bg)] to-transparent"
             />
           )}
           {showChatBottomFade && (
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-[var(--bg)] to-transparent"
+              className="chat-fade chat-fade-bottom pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-[var(--bg)] to-transparent"
             />
           )}
         </div>
@@ -1499,6 +1506,32 @@ function ExtensionCustomPanel({
           ))}
         </pre>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The wallpaper <img> + scrim layer. Subscribes to the wallpaper-changed
+ * broadcast (emitted by useWallpaper) and re-reads the persisted data URL,
+ * so the image swaps live without remounting the chat window. The URL is
+ * only read on the client (useEffect) — SSR and hydration stay in sync.
+ */
+function WallpaperLayer() {
+  const [url, setUrl] = useState<string>("");
+
+  useEffect(() => {
+    const sync = () => setUrl(readStoredWallpaperUrl());
+    sync();
+    window.addEventListener(WALLPAPER_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(WALLPAPER_CHANGED_EVENT, sync);
+  }, []);
+
+  return (
+    <div className="chat-wallpaper" aria-hidden="true">
+      {/* next/image is not usable here: the wallpaper is a local data URL
+          that must not be routed through the image optimizer. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {url && <img src={url} alt="" draggable={false} />}
     </div>
   );
 }

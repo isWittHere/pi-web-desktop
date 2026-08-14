@@ -1,0 +1,74 @@
+/* ── Wallpaper: user-set background image behind the chat message area ──
+   One fixed layer covers the whole chat column (empty state, messages, and
+   the transparent gaps around the input bar / session info bar). Only the
+   input shell itself (.chat-input-shell) stays solid. The ::after scrim
+   paints the message-area background color over the image at the
+   user-chosen opacity, keeping text contrast theme-safe.
+
+   The image renders as an <img src> child (never a CSS background-image):
+   Chromium silently drops CSS property values above ~1MB, and a PNG photo
+   data URL easily exceeds that. DOM attributes have no such limit.
+
+   Driven by <html> state: data-wallpaper (on/off), data-wallpaper-ready
+   (fade-in after decode) and --wallpaper-scrim (percentage). */
+.chat-wallpaper {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+html[data-wallpaper-ready="1"] .chat-wallpaper {
+  opacity: 1;
+}
+
+.chat-wallpaper img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Scrim: message-area background color over the image at user opacity. */
+.chat-wallpaper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) var(--wallpaper-scrim, 75%), transparent);
+}
+
+/* The new-session welcome page floats directly on the wallpaper — drop the
+   scrim 25 points below the user setting so the image shows through more.
+   The offset is derived on ::after itself: redefining --wallpaper-scrim on
+   .chat-wallpaper from a var() of the same name is a self-reference and
+   becomes invalid at computed-value time. */
+html[data-wallpaper="on"] .chat-wallpaper:has(~ .chat-welcome)::after {
+  background: color-mix(in srgb, var(--bg) max(0%, calc(var(--wallpaper-scrim) - 25%)), transparent);
+}
+
+html:not([data-wallpaper="on"]) .chat-wallpaper {
+  display: none;
+}
+
+/* Wallpaper mode hides the scroll edge fades — on a background image any
+   edge transition would read as a color band. */
+html[data-wallpaper="on"] .chat-fade-top,
+html[data-wallpaper="on"] .chat-fade-bottom {
+  display: none;
+}
+
+/* Tablet floating right panel casts an edge shadow — also gone with the
+   wallpaper, same as the scroll fades. */
+html[data-wallpaper="on"] .right-panel-container.right-panel-open {
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-wallpaper {
+    transition: none;
+  }
+}
