@@ -88,6 +88,31 @@ export function updateTabCwd(
   };
 }
 
+/**
+ * Move a tab to the position of another tab (browser-style reorder).
+ * `position` picks the slot relative to the target tab. The active tab stays
+ * active — reordering never changes the visible workspace. Unknown keys or a
+ * move onto the tab itself are no-ops.
+ */
+export function reorderTab(
+  state: WorkspaceTabsState,
+  fromKey: string,
+  targetKey: string,
+  position: "before" | "after",
+): WorkspaceTabsState {
+  if (fromKey === targetKey) return state;
+  const fromIdx = state.tabs.findIndex((t) => t.key === fromKey);
+  const targetIdx = state.tabs.findIndex((t) => t.key === targetKey);
+  if (fromIdx === -1 || targetIdx === -1) return state;
+  const tabs = [...state.tabs];
+  const [moved] = tabs.splice(fromIdx, 1);
+  // Removal may have shifted the target index one slot left.
+  let insertAt = position === "after" ? targetIdx + 1 : targetIdx;
+  if (fromIdx < targetIdx) insertAt -= 1;
+  tabs.splice(Math.min(insertAt, tabs.length), 0, moved);
+  return { tabs, activeKey: state.activeKey };
+}
+
 /** Classic → tabs migration: the current workspace becomes the only tab. */
 export function resetToSingle(cwd: string, key: string): WorkspaceTabsState {
   return { tabs: [{ key, cwd }], activeKey: key };

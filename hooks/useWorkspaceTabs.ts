@@ -6,6 +6,7 @@ import {
   closeTab as closeTabOp,
   EMPTY_WORKSPACE_TABS,
   openWorkspace as openWorkspaceOp,
+  reorderTab as reorderTabOp,
   resetToSingle as resetToSingleOp,
   updateTabCwd as updateTabCwdOp,
   type WorkspaceTabsState,
@@ -33,6 +34,9 @@ export function useWorkspaceTabs() {
   const updateCwd = useCallback((key: string, cwd: string) => {
     setState((s) => updateTabCwdOp(s, key, cwd));
   }, []);
+  const reorder = useCallback((fromKey: string, targetKey: string, position: "before" | "after") => {
+    setState((s) => reorderTabOp(s, fromKey, targetKey, position));
+  }, []);
   const resetToSingle = useCallback((cwd: string, key: string) => {
     setState(resetToSingleOp(cwd, key));
   }, []);
@@ -40,5 +44,5 @@ export function useWorkspaceTabs() {
     setState(EMPTY_WORKSPACE_TABS);
   }, []);
 
-  return { state, open, close, activate, updateCwd, resetToSingle, clear };
+  return { state, open, close, activate, updateCwd, reorder, resetToSingle, clear };
 }

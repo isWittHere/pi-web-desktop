@@ -24,6 +24,8 @@ interface WorkspaceTabBarProps {
   projects: string[];
   onSelectTab: (key: string) => void;
   onCloseTab: (key: string) => void;
+  /** Browser-style drag reorder: move `fromKey` before/after `targetKey`. */
+  onReorderTab: (fromKey: string, targetKey: string, position: "before" | "after") => void;
   /** A project was picked from the "+" menu — open it as a tab. */
   onSelectProject: (project: string) => void;
 }
@@ -39,12 +41,19 @@ export function WorkspaceTabBar({
   projects,
   onSelectTab,
   onCloseTab,
+  onReorderTab,
   onSelectProject,
 }: WorkspaceTabBarProps) {
   const { t } = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
   const [homeDir, setHomeDir] = useState("");
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
+  // HTML5 drag & drop state: the tab being dragged and the drop indicator
+  // (insertion line) relative to the hovered tab. The mousedown that starts
+  // the drag happens on the no-drag tab strip, so the Electron window drag
+  // region never intercepts the session.
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ key: string; position: "before" | "after" } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,6 +80,56 @@ export function WorkspaceTabBar({
   // the empty title bar. The overlay dispatches the click normally and
   // forwards it to buttons underneath (see TitleBarDismissOverlay).
 
+  // ── Drag & drop reorder ──────────────────────────────────────────────────
+  const handleDragStart = (e: React.DragEvent, tab: WorkspaceTab) => {
+    if (tabs.length < 2) return;
+    e.dataTransfer.effectAllowed = "move";
+    // Firefox refuses to start a drag without data being set.
+    e.dataTransfer.setData("text/plain", tab.key);
+    setDragKey(tab.key);
+    setDropTarget(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, tab: WorkspaceTab) => {
+    if (!dragKey) return;
+    e.preventDefault(); // required to allow the drop
+    e.stopPropagation(); // the strip fallback must not override the tab hit
+    e.dataTransfer.dropEffect = "move";
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position = e.clientX < rect.left + rect.width / 2 ? "before" : "after";
+    // Keep the same reference so unchanged hovers do not re-render.
+    setDropTarget((prev) =>
+      prev && prev.key === tab.key && prev.position === position
+        ? prev
+        : { key: tab.key, position },
+    );
+  };
+
+  // Cursor over strip whitespace (right of the last tab, or scrolled-out
+  // area): default to the slot after the last tab.
+  const handleStripDragOver = (e: React.DragEvent) => {
+    if (!dragKey || tabs.length === 0) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const last = tabs[tabs.length - 1];
+    setDropTarget((prev) =>
+      prev && prev.key === last.key && prev.position === "after" ? prev : { key: last.key, position: "after" },
+    );
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!dragKey || !dropTarget) return;
+    onReorderTab(dragKey, dropTarget.key, dropTarget.position);
+    setDragKey(null);
+    setDropTarget(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragKey(null);
+    setDropTarget(null);
+  };
+
   return (
     <div
       ref={rootRef}
@@ -85,6 +144,8 @@ export function WorkspaceTabBar({
     >
       {/* Tab strip */}
       <div
+        onDragOver={handleStripDragOver}
+        onDrop={handleDrop}
         style={{
           display: "flex",
           alignItems: "stretch",
@@ -99,9 +160,17 @@ export function WorkspaceTabBar({
         {tabs.map((tab) => {
           const isActive = tab.key === activeKey;
           const running = activity.get(tab.key)?.running ?? 0;
+          const isDragging = dragKey === tab.key;
+          const isDropBefore = dropTarget?.key === tab.key && dropTarget.position === "before";
+          const isDropAfter = dropTarget?.key === tab.key && dropTarget.position === "after";
           return (
             <div
               key={tab.key}
+              draggable={tabs.length > 1}
+              onDragStart={(e) => handleDragStart(e, tab)}
+              onDragOver={(e) => handleDragOver(e, tab)}
+              onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
+              onDragEnd={handleDragEnd}
               onClick={() => onSelectTab(tab.key)}
               title={tab.cwd}
               style={{
@@ -110,7 +179,8 @@ export function WorkspaceTabBar({
                 gap: 6,
                 height: "100%",
                 padding: "0 4px 0 10px",
-                borderRight: "1px solid var(--border)",
+                borderLeft: isDropBefore ? "2px solid var(--accent)" : "none",
+                borderRight: isDropAfter ? "2px solid var(--accent)" : "1px solid var(--border)",
                 background: isActive ? "var(--bg-selected)" : "transparent",
                 color: isActive ? "var(--text)" : "var(--text-muted)",
                 cursor: "pointer",
@@ -120,6 +190,7 @@ export function WorkspaceTabBar({
                 minWidth: 60,
                 flexShrink: 0,
                 userSelect: "none",
+                opacity: isDragging ? 0.45 : 1,
                 transition: "background 0.1s, color 0.1s",
               }}
               onMouseEnter={(e) => {

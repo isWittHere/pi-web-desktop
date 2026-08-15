@@ -1054,6 +1054,7 @@ export function AppShell() {
           projects={workspaceActivity.projects}
           onSelectTab={handleSelectTab}
           onCloseTab={handleCloseTab}
+          onReorderTab={tabsApi.reorder}
           onSelectProject={handleOpenProject}
         />,
         titleWorkspaceControlsHost,
