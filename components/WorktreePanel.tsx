@@ -41,6 +41,7 @@ function WorktreeRow({
   showRemove,
   busy,
   confirming,
+  homeDir,
   onSelect,
   onRemove,
   onConfirmChange,
@@ -50,12 +51,13 @@ function WorktreeRow({
   showRemove: boolean;
   busy: boolean;
   confirming: boolean;
+  homeDir: string;
   onSelect: () => void;
   onRemove: (force: boolean) => void;
   onConfirmChange: (confirming: boolean) => void;
 }) {
   const { t } = useI18n();
-  const label = wt.branch ?? displayCwd(wt.path, "");
+  const label = wt.branch ?? displayCwd(wt.path, homeDir);
 
   if (confirming) {
     return (
@@ -251,6 +253,7 @@ export function WorktreePanel({
                 showRemove={!wt.isMain}
                 busy={busy}
                 confirming={confirmRemove === wt.path}
+                homeDir={homeDir}
                 onSelect={() => onSelect(wt.path)}
                 onRemove={(force) => onRemove(wt.path, force)}
                 onConfirmChange={(confirming) => onConfirmRemoveChange(confirming ? wt.path : null)}

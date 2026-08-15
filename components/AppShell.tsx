@@ -346,9 +346,25 @@ export function AppShell() {
     prevViewModeRef.current = viewMode;
     if (viewMode === "tabs") {
       const cwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
-      if (cwd) tabsApi.resetToSingle(cwd, selectedSession?.projectRoot ?? cwd);
+      // Seed only when the tab list is empty — a manual switch never
+      // clobbers tabs the user already opened.
+      if (cwd && tabsStateRef.current.tabs.length === 0) {
+        tabsApi.resetToSingle(cwd, selectedSession?.projectRoot ?? cwd);
+      }
     } else {
       tabsApi.clear();
+    }
+  }, [viewMode, activeCwd, selectedSession, newSessionCwd, tabsApi]);
+
+  // Tabs mode startup: the very first workspace activation (startup
+  // auto-select or a session click) seeds the initial tab when the mode was
+  // already "tabs" before the shell had a cwd. Safe to re-run — it only
+  // seeds when the tab list is empty.
+  useEffect(() => {
+    if (viewMode !== "tabs") return;
+    const cwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
+    if (cwd && tabsStateRef.current.tabs.length === 0) {
+      tabsApi.resetToSingle(cwd, selectedSession?.projectRoot ?? cwd);
     }
   }, [viewMode, activeCwd, selectedSession, newSessionCwd, tabsApi]);
 

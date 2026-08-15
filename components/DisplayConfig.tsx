@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link, Check, CircleHalf, Sparkle } from "@phosphor-icons/react";
+import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link, Check, CircleHalf, Sparkle, Rows, SquaresFour } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
+import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { resolveWallpaperUrl } from "@/lib/wallpaper";
 import { SettingsSection, SettingsButton } from "@/components/settings-ui";
@@ -110,6 +111,7 @@ function BorderIcon({ depth }: { depth: number }) {
 export function DisplayConfig() {
   const { mode, resolvedMode, themeName, setMode, setTheme, borderDepth, setBorderDepth, fontScale, setFontScale } = useTheme();
   const { locale: language, setLocale: setLanguage, t } = useI18n();
+  const { viewMode, setViewMode } = useViewMode();
   const [themeSets, setThemeSets] = useState<ThemeSetInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
@@ -443,6 +445,31 @@ export function DisplayConfig() {
                 onMouseLeave={() => setHoveredTag(null)}
               >
                 {Math.round(s * 100)}%
+              </button>
+            );
+          })}
+        </div>
+      </SettingsSection>
+
+      {/* ── View Mode ── */}
+      <SettingsSection title={t("desktop.viewMode")} description={t("desktop.viewModeDescription")}>
+        <div style={tagGroupStyle}>
+          {([
+            { value: "classic" as ViewMode, icon: <Rows size={15} weight={viewMode === "classic" ? "fill" : "regular"} /> },
+            { value: "tabs" as ViewMode, icon: <SquaresFour size={15} weight={viewMode === "tabs" ? "fill" : "regular"} /> },
+          ]).map((opt) => {
+            const active = viewMode === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setViewMode(opt.value)}
+                style={tagStyle(active, hoveredTag === `viewmode:${opt.value}`)}
+                onMouseEnter={() => setHoveredTag(`viewmode:${opt.value}`)}
+                onMouseLeave={() => setHoveredTag(null)}
+              >
+                {opt.icon}
+                {t(opt.value === "classic" ? "desktop.viewModeClassic" : "desktop.viewModeTabs")}
               </button>
             );
           })}

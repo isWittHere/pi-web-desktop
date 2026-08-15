@@ -1099,20 +1099,39 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Report workspace activity (projects + running/unread counts) so the
   // shell's title-bar tab bar can render dots and the picker list without
-  // duplicating the session list. Compared structurally so the shell is not
-  // re-rendered on every sidebar render.
+  // duplicating the session list. Built from the raw session lists (not the
+  // render-scope allRows/recentProjects, whose identities change every
+  // render) and compared structurally so the shell only re-renders when the
+  // data actually changed.
   const activitySnapshotRef = useRef<{ projects: string[]; activity: Map<string, { running: number; unread: number }> } | null>(null);
   useEffect(() => {
     if (!onWorkspaceActivityChange) return;
+    const latestByRoot = new Map<string, string>();
+    const activity = new Map<string, { running: number; unread: number }>();
+    const visit = (s: SessionInfo) => {
+      const root = s.projectRoot ?? s.cwd;
+      if (!root) return;
+      const prev = latestByRoot.get(root);
+      if (!prev || s.modified > prev) latestByRoot.set(root, s.modified);
+      let entry = activity.get(root);
+      if (!entry) { entry = { running: 0, unread: 0 }; activity.set(root, entry); }
+      if (runningSessionIds.has(s.id)) entry.running++;
+      if (unreadSessionIds.has(s.id)) entry.unread++;
+    };
+    for (const s of allSessions) visit(s);
+    for (const d of draftSessions ?? []) visit({ ...draftToSessionInfo(d), projectRoot: projectRootFor(d.cwd) ?? d.cwd });
+    const projects = [...latestByRoot.entries()]
+      .sort((a, b) => b[1].localeCompare(a[1]))
+      .map(([root]) => root);
     const prev = activitySnapshotRef.current;
     const same = prev
-      && prev.projects.length === recentProjects.length
-      && prev.projects.every((p, i) => p === recentProjects[i])
-      && sameActivity(prev.activity, projectActivity);
+      && prev.projects.length === projects.length
+      && prev.projects.every((p, i) => p === projects[i])
+      && sameActivity(prev.activity, activity);
     if (same) return;
-    activitySnapshotRef.current = { projects: recentProjects, activity: projectActivity };
+    activitySnapshotRef.current = { projects, activity };
     onWorkspaceActivityChange(activitySnapshotRef.current);
-  }, [onWorkspaceActivityChange, recentProjects, projectActivity]);
+  }, [onWorkspaceActivityChange, allSessions, draftSessions, runningSessionIds, unreadSessionIds, projectRootFor]);
   const compactWorktreeLabel = currentWt
     ? (currentWt.branch ?? pathBaseName(currentWt.path))
     : inactiveWorktreeSelector?.label;
