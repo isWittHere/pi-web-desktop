@@ -927,6 +927,9 @@ export function AppShell() {
   const sessionTitle = selectedSession
     ? selectedSession.name || getSessionDisplayFirstMessage(selectedSession.firstMessage).slice(0, 50) || selectedSession.id.slice(0, 12)
     : null;
+  // Tabs mode with 4+ tabs: the title-bar title moves to the info bar's
+  // center slot so the tab strip keeps the space it needs.
+  const titleMovedToInfoBar = viewMode === "tabs" && tabsState.tabs.length >= 4;
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
@@ -1078,7 +1081,8 @@ export function AppShell() {
         rightPanelOpen={rightPanelOpen}
         onToggleFilePanel={() => setRightPanelOpen((v) => !v)}
         onOpenSettings={() => openSettings("models")}
-        sessionTitle={sessionTitle}
+        sessionTitle={titleMovedToInfoBar ? null : sessionTitle}
+        expandWorkspaceHost={titleMovedToInfoBar}
         titleGenerating={titleGeneratingId === selectedSession?.id}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
         showWorkspaceAddButton={viewMode === "tabs"}
@@ -1209,6 +1213,7 @@ export function AppShell() {
               onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
               onViewFullHistory={handleViewFullHistory}
               systemPrompt={systemPrompt}
+              sessionTitle={titleMovedToInfoBar ? sessionTitle : null}
               soundEnabled={soundEnabled}
               onSoundToggle={onSoundToggle}
               playDoneSound={playDoneSound}
