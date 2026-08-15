@@ -171,7 +171,7 @@ export function WorktreePanel({
     : "";
 
   return (
-    <div style={{ borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+    <div style={{ borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
       {/* Panel header: the current worktree's label doubles as the title */}
       <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
         <button
