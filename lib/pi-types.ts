@@ -1,5 +1,6 @@
 import type {
   AgentSessionEvent,
+  BashOperations,
   SessionManager,
   SettingsManager,
   SlashCommandInfo,
@@ -149,7 +150,10 @@ export interface AgentSessionLike {
     source?: "interactive" | "rpc";
   }): Promise<void>;
   abort(): Promise<void>;
-  executeBash(command: string, onChunk?: (chunk: string) => void, options?: { excludeFromContext?: boolean }): Promise<{
+  executeBash(command: string, onChunk?: (chunk: string) => void, options?: {
+    excludeFromContext?: boolean;
+    operations?: BashOperations;
+  }): Promise<{
     output: string;
     exitCode?: number;
     cancelled?: boolean;
