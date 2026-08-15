@@ -155,6 +155,7 @@ export const zhCNLocale = {
     "desktop.scrollToLoadEarlierMessages": "向上滚动以加载更早的消息（隐藏了 {count} 条）",
     "desktop.runningTool": "正在运行工具...",
     "desktop.runningTools": "正在运行 {tools}...",
+    "desktop.runningToolProgress": "正在运行 {name}：",
     "desktop.waitingForModel": "正在等待模型...",
     "desktop.runningCommand": "正在运行命令...",
     "desktop.thinking": "思考中...",

@@ -73,6 +73,10 @@ interface Props {
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
   if (phase?.kind === "running_tools") {
+    const latest = phase.tools[phase.tools.length - 1];
+    if (latest?.progress) {
+      return `${t("desktop.runningToolProgress", { name: latest.name })} ${latest.progress}`;
+    }
     const names = phase.tools.map((tool) => tool.name);
     if (names.length === 0) return t("desktop.runningTool");
     const tools = names.length <= 3

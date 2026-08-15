@@ -155,6 +155,7 @@ export const enLocale = {
     "desktop.scrollToLoadEarlierMessages": "Scroll up to load earlier messages ({count} hidden)",
     "desktop.runningTool": "Running tool...",
     "desktop.runningTools": "Running {tools}...",
+    "desktop.runningToolProgress": "Running {name}:",
     "desktop.waitingForModel": "Waiting for model...",
     "desktop.runningCommand": "Running command...",
     "desktop.thinking": "Thinking...",

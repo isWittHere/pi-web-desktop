@@ -118,3 +118,16 @@ test("coalesces streaming message snapshots and drops stale queued updates", () 
   assert.match(agentEndSource, /resetStreamUpdates\(\)/);
   assert.match(updatesSource, /resetStreamUpdates\(\);\s*dispatch\(\{ type: "reset"/s);
 });
+
+test("shows the latest streamed tool execution progress in the running phase", async () => {
+  const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
+  const updateSource = source.slice(
+    source.indexOf('case "tool_execution_update"'),
+    source.indexOf('case "tool_execution_end"'),
+  );
+
+  assert.match(updateSource, /getToolExecutionProgress\(event\.partialResult\)/);
+  assert.match(updateSource, /tools: \[\.\.\.tools\.filter\([\s\S]*?, updated\]/);
+  assert.match(chatWindowSource, /if \(latest\?\.progress\)/);
+  assert.match(chatWindowSource, /desktop\.runningToolProgress[\s\S]*latest\.progress/);
+});

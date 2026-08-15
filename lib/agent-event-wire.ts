@@ -6,7 +6,6 @@ export interface AgentEventLike {
 const OMITTED_EVENT_TYPES = new Set([
   "turn_start",
   "turn_end",
-  "tool_execution_update",
 ]);
 
 /**
@@ -22,6 +21,17 @@ export function toClientAgentEvent(
   event: AgentEventLike,
 ): AgentEventLike | null {
   if (OMITTED_EVENT_TYPES.has(event.type)) return null;
+
+  if (event.type === "tool_execution_update") {
+    // Forward only the progress payload; the repeated tool arguments are not
+    // needed client-side and would bloat every progress chunk.
+    return {
+      type: "tool_execution_update",
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      partialResult: event.partialResult,
+    };
+  }
 
   if (event.type === "message_update") {
     const { assistantMessageEvent: _delta, ...snapshotEvent } = event;
