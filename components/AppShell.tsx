@@ -38,7 +38,7 @@ import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
 import { clearDraft, getDraft } from "@/lib/draft-store";
-import { cssPx } from "@/lib/ui-scale";
+import { cssPx, cssViewportSize } from "@/lib/ui-scale";
 import {
   createDraftSession,
   loadDraftSessions,
@@ -923,9 +923,32 @@ export function AppShell() {
   const sessionTitle = selectedSession
     ? selectedSession.name || getSessionDisplayFirstMessage(selectedSession.firstMessage).slice(0, 50) || selectedSession.id.slice(0, 12)
     : null;
-  // Tabs mode with 4+ tabs: the title-bar title moves to the info bar's
-  // center slot so the tab strip keeps the space it needs.
-  const titleMovedToInfoBar = viewMode === "tabs" && tabsState.tabs.length >= 4;
+  // Title-bar room is dynamic in tabs mode: once the tabs' total width
+  // exceeds the non-expanded host cap (min(52vw, 560px)), the session title
+  // moves to the info bar and the host expands. A hysteresis band (100px)
+  // keeps the title in the info bar until there is clearly room again, so
+  // expansion never oscillates.
+  const [titleInInfoBar, setTitleInInfoBar] = useState(false);
+  const titleInInfoBarRef = useRef(false);
+  const handleTabTotalWidthChange = useCallback((tabTotalWidth: number) => {
+    if (viewModeRef.current !== "tabs") return;
+    const baseWidth = Math.min(cssViewportSize().width * 0.52, 560);
+    const current = titleInInfoBarRef.current;
+    let next = current;
+    if (!current && tabTotalWidth > baseWidth) next = true;
+    else if (current && tabTotalWidth <= baseWidth - 100) next = false;
+    if (next !== current) {
+      titleInInfoBarRef.current = next;
+      setTitleInInfoBar(next);
+    }
+  }, []);
+  useEffect(() => {
+    if (viewMode !== "tabs") {
+      titleInInfoBarRef.current = false;
+      setTitleInInfoBar(false);
+    }
+  }, [viewMode]);
+  const titleMovedToInfoBar = titleInInfoBar;
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
@@ -1095,6 +1118,7 @@ export function AppShell() {
           onSelectTab={handleSelectTab}
           onCloseTab={handleCloseTab}
           onReorderTab={tabsApi.reorder}
+          onTabTotalWidthChange={handleTabTotalWidthChange}
         />,
         titleWorkspaceControlsHost,
         "workspace-tabs",
