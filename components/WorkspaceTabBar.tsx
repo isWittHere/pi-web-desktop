@@ -36,25 +36,28 @@ function pathBaseName(path: string): string {
 const NO_DRAG_REGION = { WebkitAppRegion: "no-drag" } as unknown as React.CSSProperties;
 const DRAG_REGION = { WebkitAppRegion: "drag" } as unknown as React.CSSProperties;
 
-/** Spinning arc — a task is currently running in this workspace. */
+/** Spinning arc — a task is currently running in this workspace. CSS
+ *  rotation (not SMIL animateTransform): under the app's CSS zoom scaling
+ *  the SMIL rotate center drifts off the arc's center, while a CSS
+ *  transform with transform-origin 50% 50% rotates around the box center. */
 function RunningArcIndicator() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
-      <path
-        d="M21 12a9 9 0 1 1-3.8-7.4"
-        stroke="currentColor"
-        strokeWidth="2.8"
-        strokeLinecap="round"
-      />
-      <animateTransform
-        attributeName="transform"
-        type="rotate"
-        from="0 12 12"
-        to="360 12 12"
-        dur="0.9s"
-        repeatCount="indefinite"
-      />
-    </svg>
+    <span
+      style={{
+        display: "inline-flex",
+        animation: "spin 0.9s linear infinite",
+        transformOrigin: "50% 50%",
+      }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
+        <path
+          d="M21 12a9 9 0 1 1-3.8-7.4"
+          stroke="currentColor"
+          strokeWidth="2.8"
+          strokeLinecap="round"
+        />
+      </svg>
+    </span>
   );
 }
 
