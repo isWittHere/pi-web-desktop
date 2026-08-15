@@ -347,7 +347,8 @@ export function AppShell() {
   useEffect(() => {
     if (viewMode !== "tabs") return;
     const saved = loadWorkspaceTabs();
-    if (saved && saved.tabs.length > 0) pendingRestoreRef.current = saved;
+    // loadWorkspaceTabs already returns null for an empty/invalid list.
+    if (saved) pendingRestoreRef.current = saved;
   }, [viewMode]);
   // Save the tab list on every change — tabs mode only, so classic mode
   // never overwrites the stored list (its clear() would wipe it).

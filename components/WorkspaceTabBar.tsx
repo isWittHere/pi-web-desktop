@@ -157,6 +157,9 @@ export function WorkspaceTabBar({
   // dragged or the strip overflows, the region must stay interactive instead
   // (drag-over targets / wheel scrolling), so the drag region is disabled
   // then. Tabs and buttons stay no-drag so they never start a window move.
+  // The strip is the component root: it fills the host directly (the old
+  // wrapper div held the "+" button and its absolutely-positioned dropdown,
+  // which now live in AppTitleBar).
   const stripDragRegion = !dragKey && !stripOverflow;
   const stripStyle: React.CSSProperties = {
     display: "flex",
@@ -172,22 +175,11 @@ export function WorkspaceTabBar({
 
   return (
     <div
-      style={{
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        height: "100%",
-        minWidth: 0,
-        flex: 1,
-      }}
+      ref={stripRef}
+      onDragOver={handleStripDragOver}
+      onDrop={handleDrop}
+      style={stripStyle}
     >
-      {/* Tab strip */}
-      <div
-        ref={stripRef}
-        onDragOver={handleStripDragOver}
-        onDrop={handleDrop}
-        style={stripStyle}
-      >
         {tabs.map((tab) => {
           const isActive = tab.key === activeKey;
           const running = activity.get(tab.key)?.running ?? 0;
@@ -295,7 +287,6 @@ export function WorkspaceTabBar({
             </div>
           );
         })}
-      </div>
     </div>
   );
 }
