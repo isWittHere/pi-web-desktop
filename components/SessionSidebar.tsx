@@ -1324,6 +1324,25 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         location,
       ))}
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {/* Worktree panel — tabs view mode replaces the title-bar/sidebar
+          switchers with a dedicated sidebar panel (requirement 6). It sits
+          above the whole session section (header + list) and renders
+          nothing when the repo has no extra worktrees. */}
+      {viewMode === "tabs" && (selectedCwdProp || selectedCwd) && (
+        <WorktreePanel
+          worktreeState={worktreeState}
+          selectedCwd={selectedCwd}
+          homeDir={homeDir}
+          onSelect={handlePanelSelectWorktree}
+          onCreate={handleCreateWorktree}
+          onRemove={handleRemoveWorktree}
+          busy={wtBusy}
+          error={wtError}
+          confirmRemove={wtConfirmRemove}
+          onConfirmRemoveChange={setWtConfirmRemove}
+        />
+      )}
+
       {/* Header */}
       <div style={{ flexShrink: 0 }}>
         {searchOpen ? (
@@ -1902,25 +1921,6 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           </button>
         )}
       </div>
-
-      {/* Worktree panel — tabs view mode replaces the title-bar/sidebar
-          switchers with a dedicated sidebar panel (requirement 6). It sits
-          above the session list and renders nothing when the repo has no
-          extra worktrees. */}
-      {viewMode === "tabs" && (selectedCwdProp || selectedCwd) && (
-        <WorktreePanel
-          worktreeState={worktreeState}
-          selectedCwd={selectedCwd}
-          homeDir={homeDir}
-          onSelect={handlePanelSelectWorktree}
-          onCreate={handleCreateWorktree}
-          onRemove={handleRemoveWorktree}
-          busy={wtBusy}
-          error={wtError}
-          confirmRemove={wtConfirmRemove}
-          onConfirmRemoveChange={setWtConfirmRemove}
-        />
-      )}
 
       {/* Session list — when both panels open, uses intelligent max-height;
            when explorer is collapsed, expands to fill remaining space. */}
