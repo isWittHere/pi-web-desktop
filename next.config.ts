@@ -26,6 +26,19 @@ const nextConfig: NextConfig = {
     "@earendil-works/pi-tui",
     "undici",
   ],
+  // next 16.3's webpack no longer maps `node:`-prefixed builtins to externals
+  // (undici's mock modules require('node:console')), which broke webpack dev.
+  // Keep node: scheme imports external on the server; turbopack handles them natively.
+  webpack(config, { isServer }) {
+    if (isServer) {
+      config.externals = [...(Array.isArray(config.externals) ? config.externals : []),
+        ({ request }: { request?: string }, callback: (err?: Error | null, result?: string) => void) => {
+          if (request && request.startsWith("node:")) return callback(null, `commonjs ${request}`);
+          callback();
+        }];
+    }
+    return config;
+  },
   async headers() {
     return [
       {
