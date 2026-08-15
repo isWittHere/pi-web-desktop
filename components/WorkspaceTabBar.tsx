@@ -124,7 +124,7 @@ export function WorkspaceTabBar({
   const stripDragRegion = !dragKey && !stripOverflow;
   const stripStyle: React.CSSProperties = {
     display: "flex",
-    alignItems: "stretch",
+    alignItems: "center",
     height: "100%",
     minWidth: 0,
     flex: 1,
