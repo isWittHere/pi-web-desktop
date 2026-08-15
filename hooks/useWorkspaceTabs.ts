@@ -21,8 +21,8 @@ import {
 export function useWorkspaceTabs() {
   const [state, setState] = useState<WorkspaceTabsState>(EMPTY_WORKSPACE_TABS);
 
-  const open = useCallback((key: string, cwd: string, branch?: string | null) => {
-    setState((s) => openWorkspaceOp(s, key, cwd, branch));
+  const open = useCallback((key: string, cwd: string) => {
+    setState((s) => openWorkspaceOp(s, key, cwd));
   }, []);
   const close = useCallback((key: string) => {
     setState((s) => closeTabOp(s, key));
@@ -30,11 +30,11 @@ export function useWorkspaceTabs() {
   const activate = useCallback((key: string) => {
     setState((s) => activateTabOp(s, key));
   }, []);
-  const updateCwd = useCallback((key: string, cwd: string, branch?: string | null) => {
-    setState((s) => updateTabCwdOp(s, key, cwd, branch));
+  const updateCwd = useCallback((key: string, cwd: string) => {
+    setState((s) => updateTabCwdOp(s, key, cwd));
   }, []);
-  const resetToSingle = useCallback((cwd: string, key: string, branch?: string | null) => {
-    setState(resetToSingleOp(cwd, key, branch));
+  const resetToSingle = useCallback((cwd: string, key: string) => {
+    setState(resetToSingleOp(cwd, key));
   }, []);
   const clear = useCallback(() => {
     setState(EMPTY_WORKSPACE_TABS);

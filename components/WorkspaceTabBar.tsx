@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { WorkspacePickerMenu } from "./WorkspacePickerMenu";
+import { TitleBarDismissOverlay } from "./TitleBarDismissOverlay";
 import type { WorkspaceTab } from "@/lib/workspace-tabs";
 
 /**
@@ -67,19 +68,11 @@ export function WorkspaceTabBar({
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
 
-  // While the "+" menu is open, disable the Electron title-bar drag region:
-  // Chromium does not deliver mousedown on -webkit-app-region: drag areas, so
-  // outside-click dismissal would never fire for clicks on the empty title
-  // bar. Restore the drag region when the menu closes.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const bar = document.querySelector<HTMLElement>(".app-title-bar");
-    if (!bar) return;
-    const style = bar.style as CSSStyleDeclaration & { webkitAppRegion?: string };
-    const prev = style.webkitAppRegion;
-    style.webkitAppRegion = "no-drag";
-    return () => { style.webkitAppRegion = prev; };
-  }, [menuOpen]);
+  // While the "+" menu is open, cover the Electron title bar with a
+  // non-drag overlay: Chromium swallows mousedown on -webkit-app-region:
+  // drag areas, so outside-click dismissal would never fire for clicks on
+  // the empty title bar. The overlay dispatches the click normally and
+  // forwards it to buttons underneath (see TitleBarDismissOverlay).
 
   return (
     <div
@@ -153,20 +146,6 @@ export function WorkspaceTabBar({
               >
                 {pathBaseName(tab.key)}
               </span>
-              {tab.branch && tab.branch !== "main" && (
-                <span
-                  style={{
-                    flexShrink: 0,
-                    fontSize: 10,
-                    color: isActive ? "var(--text-dim)" : "var(--text-dim)",
-                    maxWidth: 72,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {tab.branch}
-                </span>
-              )}
               {running > 0 && (
                 <span
                   title={t("desktop.agentRunning")}
@@ -230,6 +209,9 @@ export function WorkspaceTabBar({
         <Plus size={14} aria-hidden="true" />
       </button>
 
+      {menuOpen && (
+        <TitleBarDismissOverlay />
+      )}
       {menuOpen && (
         <div
           style={{

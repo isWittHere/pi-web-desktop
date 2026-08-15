@@ -19,6 +19,7 @@ import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { QuickChangesPanel } from "./QuickChangesPanel";
 import { WorkspacePickerMenu } from "./WorkspacePickerMenu";
+import { TitleBarDismissOverlay } from "./TitleBarDismissOverlay";
 import { WorktreePanel } from "./WorktreePanel";
 import type { ViewMode } from "@/hooks/useViewMode";
 
@@ -818,9 +819,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Create a worktree. The panel passes its own branch input; the classic
   // title-bar/sidebar menus pass nothing and use the wtNewBranch state.
-  const handleCreateWorktree = useCallback(async (branchInput?: string) => {
+  // Resolves true on success so the panel keeps its input open on failure.
+  const handleCreateWorktree = useCallback(async (branchInput?: string): Promise<boolean> => {
     const branch = (branchInput ?? wtNewBranch).trim();
-    if (!branch || wtBusy || !worktreeState) return;
+    if (!branch || wtBusy || !worktreeState) return false;
     setWtBusy(true);
     setWtError(null);
     try {
@@ -832,7 +834,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       const data = await res.json().catch(() => ({})) as { path?: string; error?: string };
       if (!res.ok || data.error || !data.path) {
         setWtError(data.error ?? `HTTP ${res.status}`);
-        return;
+        return false;
       }
       setWtNewOpen(false);
       setWtNewBranch("");
@@ -848,8 +850,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       } : prev);
       setSelectedCwd(data.path);
       setWtRefreshKey((k) => k + 1);
+      return true;
     } catch (e) {
       setWtError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setWtBusy(false);
     }
@@ -913,23 +917,15 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // While any dropdown is open, disable the Electron title-bar drag region:
-  // Chromium does not deliver mousedown on -webkit-app-region: drag areas, so
-  // outside-click dismissal would never fire for clicks on the empty title
-  // bar. Restore the drag region when every dropdown closes.
-  useEffect(() => {
-    const anyOpen = Boolean(
-      workspaceProjectDropdownOpen || workspaceWorktreeDropdownOpen
-      || dropdownOpen || wtDropdownOpen || wtNewOpen
-    );
-    if (!anyOpen) return;
-    const bar = document.querySelector<HTMLElement>(".app-title-bar");
-    if (!bar) return;
-    const style = bar.style as CSSStyleDeclaration & { webkitAppRegion?: string };
-    const prev = style.webkitAppRegion;
-    style.webkitAppRegion = "no-drag";
-    return () => { style.webkitAppRegion = prev; };
-  }, [workspaceProjectDropdownOpen, workspaceWorktreeDropdownOpen, dropdownOpen, wtDropdownOpen, wtNewOpen]);
+  // While any dropdown is open, cover the Electron title bar with a
+  // non-drag overlay: Chromium swallows mousedown on -webkit-app-region:
+  // drag areas, so outside-click dismissal would never fire for clicks on
+  // the empty title bar. The overlay dispatches the click normally and
+  // forwards it to buttons underneath (see TitleBarDismissOverlay).
+  const anyTitleBarDropdownOpen = Boolean(
+    workspaceProjectDropdownOpen || workspaceWorktreeDropdownOpen
+    || dropdownOpen || wtDropdownOpen || wtNewOpen
+  );
 
   // Clicking a session moves the effective cwd to that session's worktree.
   // Done on the click path (not via the selectedCwd prop sync) so it also
@@ -1319,6 +1315,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   return (
     <>
+      {anyTitleBarDropdownOpen && <TitleBarDismissOverlay />}
       {(Object.entries(workspaceControlsHosts ?? {}) as Array<["title" | "welcome", HTMLElement | null | undefined]>).map(([location, host]) => host && createPortal(
         <div ref={(node) => { workspaceDropdownRefs.current[location] = node; }}>
           {workspaceControls(location)}

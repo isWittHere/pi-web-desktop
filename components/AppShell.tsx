@@ -338,30 +338,18 @@ export function AppShell() {
     setCwdRequest((prev) => ({ cwd, token: (prev?.token ?? 0) + 1 }));
   }, []);
 
-  // Classic → tabs: the current workspace becomes the only tab. Tabs →
-  // classic: collapse the tab list (view only — sessions keep running).
+  // View-mode transitions. Tabs → classic: collapse the tab list (view only
+  // — sessions keep running). Classic → tabs (or tabs-mode startup before
+  // the shell had a cwd): seed the first tab from the current workspace,
+  // never clobbering tabs the user already opened.
   const prevViewModeRef = useRef(viewMode);
   useEffect(() => {
-    if (prevViewModeRef.current === viewMode) return;
+    const prev = prevViewModeRef.current;
     prevViewModeRef.current = viewMode;
-    if (viewMode === "tabs") {
-      const cwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
-      // Seed only when the tab list is empty — a manual switch never
-      // clobbers tabs the user already opened.
-      if (cwd && tabsStateRef.current.tabs.length === 0) {
-        tabsApi.resetToSingle(cwd, selectedSession?.projectRoot ?? cwd);
-      }
-    } else {
-      tabsApi.clear();
+    if (viewMode === "classic") {
+      if (prev !== viewMode) tabsApi.clear();
+      return;
     }
-  }, [viewMode, activeCwd, selectedSession, newSessionCwd, tabsApi]);
-
-  // Tabs mode startup: the very first workspace activation (startup
-  // auto-select or a session click) seeds the initial tab when the mode was
-  // already "tabs" before the shell had a cwd. Safe to re-run — it only
-  // seeds when the tab list is empty.
-  useEffect(() => {
-    if (viewMode !== "tabs") return;
     const cwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
     if (cwd && tabsStateRef.current.tabs.length === 0) {
       tabsApi.resetToSingle(cwd, selectedSession?.projectRoot ?? cwd);

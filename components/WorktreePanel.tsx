@@ -21,7 +21,9 @@ interface WorktreePanelProps {
   guide: { label: string; title: string } | null;
   homeDir: string;
   onSelect: (path: string) => void;
-  onCreate: (branch: string) => Promise<void>;
+  /** Resolves true when the worktree was created (panel keeps its input
+   *  open on failure so the error stays visible). */
+  onCreate: (branch: string) => Promise<boolean>;
   onRemove: (path: string, force: boolean) => Promise<void>;
   busy: boolean;
   error: string | null;
@@ -299,9 +301,11 @@ export function WorktreePanel({
                         e.preventDefault();
                         const branch = newBranch.trim();
                         if (!branch || busy) return;
-                        void onCreate(branch).then(() => {
-                          setNewOpen(false);
-                          setNewBranch("");
+                        void onCreate(branch).then((ok) => {
+                          if (ok) {
+                            setNewOpen(false);
+                            setNewBranch("");
+                          }
                         });
                       }
                       if (e.key === "Escape") {
@@ -328,9 +332,11 @@ export function WorktreePanel({
                       onClick={() => {
                         const branch = newBranch.trim();
                         if (!branch || busy) return;
-                        void onCreate(branch).then(() => {
-                          setNewOpen(false);
-                          setNewBranch("");
+                        void onCreate(branch).then((ok) => {
+                          if (ok) {
+                            setNewOpen(false);
+                            setNewBranch("");
+                          }
                         });
                       }}
                       disabled={busy || !newBranch.trim()}
