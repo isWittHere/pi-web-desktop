@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CaretRight, Check, GitBranch, Plus, Trash } from "@phosphor-icons/react";
+import { CaretRight, Check, Plus, Trash } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import type { WorktreeEntry, WorktreeState } from "./SessionSidebar";
 
@@ -11,14 +11,16 @@ import type { WorktreeEntry, WorktreeState } from "./SessionSidebar";
  * worktree list (create / remove / dirty-force-confirm) and the guidance
  * row for non-git directories. Data logic stays in SessionSidebar (it owns
  * the worktree polling); this panel is a pure view over it.
+ *
+ * The panel only exists when the repo actually has extra worktrees (more
+ * than the main checkout); otherwise it renders nothing. Its header shows
+ * the current worktree's label directly, and it starts collapsed so the
+ * session list stays the primary surface.
  */
 
 interface WorktreePanelProps {
   worktreeState: WorktreeState | null;
   selectedCwd: string | null;
-  loading: boolean;
-  /** Non-git / non-top-level guidance row (replaces the list). */
-  guide: { label: string; title: string } | null;
   homeDir: string;
   onSelect: (path: string) => void;
   /** Resolves true when the worktree was created (panel keeps its input
@@ -142,8 +144,6 @@ function WorktreeRow({
 export function WorktreePanel({
   worktreeState,
   selectedCwd,
-  loading,
-  guide,
   homeDir,
   onSelect,
   onCreate,
@@ -154,24 +154,29 @@ export function WorktreePanel({
   onConfirmRemoveChange,
 }: WorktreePanelProps) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [newBranch, setNewBranch] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
 
-  const currentWt = worktreeState?.worktrees.find((w) => w.path === selectedCwd)
-    ?? worktreeState?.worktrees.find((w) => w.isMain)
+  // Only repos with extra worktrees show the panel; a lone main checkout or
+  // a non-git directory have nothing to switch between.
+  if (!worktreeState || worktreeState.worktrees.length <= 1) return null;
+
+  const currentWt = worktreeState.worktrees.find((w) => w.path === selectedCwd)
+    ?? worktreeState.worktrees.find((w) => w.isMain)
     ?? null;
   const currentLabel = currentWt
     ? (currentWt.branch ?? displayCwd(currentWt.path, homeDir))
-    : null;
+    : "";
 
   return (
     <div style={{ borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-      {/* Panel header */}
+      {/* Panel header: the current worktree's label doubles as the title */}
       <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
         <button
           onClick={() => setOpen((v) => !v)}
+          title={currentWt?.path}
           style={{
             display: "flex",
             alignItems: "center",
@@ -186,65 +191,30 @@ export function WorktreePanel({
             fontSize: 11,
             fontWeight: 600,
             letterSpacing: "0.05em",
-            textTransform: "uppercase",
             textAlign: "left",
           }}
         >
           <CaretRight size={9} weight="regular" style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
-          {t("desktop.worktreePanel")}
-          {currentLabel && (
-            <span
-              title={currentWt?.path}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontSize: 10,
-                fontWeight: 400,
-                letterSpacing: 0,
-                textTransform: "none",
-                color: "var(--text-dim)",
-                fontFamily: "var(--font-mono)",
-              }}
-            >
-              <GitBranch size={11} weight="regular" style={{ verticalAlign: -2, marginRight: 4, color: currentWt && !currentWt.isMain ? "var(--accent)" : "var(--text-dim)" }} aria-hidden="true" />
-              {currentLabel}
-            </span>
-          )}
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontFamily: "var(--font-mono)",
+              letterSpacing: 0,
+              fontWeight: 500,
+            }}
+          >
+            {currentLabel}
+          </span>
         </button>
       </div>
 
       {open && (
         <div style={{ padding: "0 6px 8px", display: "flex", flexDirection: "column", gap: 2, minHeight: 0 }}>
-          {loading && !worktreeState && (
-            <div style={{ padding: "6px 8px", fontSize: 11, color: "var(--text-dim)" }}>
-              {t("desktop.worktreesLoading")}
-            </div>
-          )}
-          {!loading && guide && (
-            <div
-              title={guide.title}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "5px 8px",
-                borderRadius: 5,
-                background: "var(--bg-hover)",
-                color: "var(--text-dim)",
-                fontSize: 11,
-                lineHeight: 1.35,
-                opacity: 0.82,
-                userSelect: "none",
-              }}
-            >
-              <GitBranch size={11} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{guide.label}</span>
-            </div>
-          )}
-          {worktreeState && worktreeState.worktrees.map((wt) => {
+          {worktreeState.worktrees.map((wt) => {
             const isCurrent = wt.path === selectedCwd
               || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
             return (
@@ -264,8 +234,7 @@ export function WorktreePanel({
           })}
 
           {/* Create worktree */}
-          {worktreeState && (
-            <div style={{ marginTop: 2 }}>
+          <div style={{ marginTop: 2 }}>
               {!newOpen ? (
                 <button
                   onClick={() => { setNewOpen(true); setNewBranch(""); setTimeout(() => newInputRef.current?.focus(), 0); }}
@@ -378,8 +347,7 @@ export function WorktreePanel({
                   )}
                 </div>
               )}
-            </div>
-          )}
+          </div>
         </div>
       )}
     </div>
