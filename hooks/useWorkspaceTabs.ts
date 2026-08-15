@@ -15,9 +15,8 @@ import {
 /**
  * Workspace tab state for the tabs view mode. The operations are pure
  * functions in lib/workspace-tabs.ts (unit-tested); this hook only hosts
- * the React state. Not persisted: after a restart the app returns to the
- * single-tab classic behavior (last active workspace), matching the
- * pre-tabs behavior.
+ * the React state. Persistence is driven by the shell (AppShell saves in
+ * tabs mode only), so classic mode never overwrites the stored list.
  */
 export function useWorkspaceTabs() {
   const [state, setState] = useState<WorkspaceTabsState>(EMPTY_WORKSPACE_TABS);
@@ -40,9 +39,12 @@ export function useWorkspaceTabs() {
   const resetToSingle = useCallback((cwd: string, key: string) => {
     setState(resetToSingleOp(cwd, key));
   }, []);
+  const restore = useCallback((saved: WorkspaceTabsState) => {
+    setState(saved);
+  }, []);
   const clear = useCallback(() => {
     setState(EMPTY_WORKSPACE_TABS);
   }, []);
 
-  return { state, open, close, activate, updateCwd, reorder, resetToSingle, clear };
+  return { state, open, close, activate, updateCwd, reorder, resetToSingle, restore, clear };
 }

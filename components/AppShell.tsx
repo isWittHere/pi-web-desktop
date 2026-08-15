@@ -23,7 +23,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useWorkspaceTabs } from "@/hooks/useWorkspaceTabs";
-import { closeTab as closeWorkspaceTab } from "@/lib/workspace-tabs";
+import { closeTab as closeWorkspaceTab, loadWorkspaceTabs, saveWorkspaceTabs, type WorkspaceTabsState } from "@/lib/workspace-tabs";
 import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
@@ -338,6 +338,24 @@ export function AppShell() {
     setCwdRequest((prev) => ({ cwd, token: (prev?.token ?? 0) + 1 }));
   }, []);
 
+  // Persisted tabs (tabs view mode): restore the last session's tab list on
+  // startup and apply it over the startup auto-select (the sidebar does not
+  // know about persisted tabs). Pending restore is consumed by the first
+  // cwd change; a manual interaction before auto-select still restores the
+  // tab list but keeps the user's chosen workspace.
+  const pendingRestoreRef = useRef<WorkspaceTabsState | null>(null);
+  useEffect(() => {
+    if (viewMode !== "tabs") return;
+    const saved = loadWorkspaceTabs();
+    if (saved && saved.tabs.length > 0) pendingRestoreRef.current = saved;
+  }, [viewMode]);
+  // Save the tab list on every change — tabs mode only, so classic mode
+  // never overwrites the stored list (its clear() would wipe it).
+  useEffect(() => {
+    if (viewMode !== "tabs") return;
+    saveWorkspaceTabs(tabsState);
+  }, [viewMode, tabsState]);
+
   // View-mode transitions. Tabs → classic: collapse the tab list (view only
   // — sessions keep running). Classic → tabs (or tabs-mode startup before
   // the shell had a cwd): seed the first tab from the current workspace,
@@ -493,6 +511,22 @@ export function AppShell() {
   }, [draftSessions, router, openWelcomeDraft, waitForContent, contentDone]);
 
   const handleCwdChange = useCallback((cwd: string | null, projectRoot?: string | null, isAutoSelect = false) => {
+    // Restore the persisted tab list over the startup auto-select: the
+    // sidebar picks its last workspace, but tabs mode should land on the
+    // last active tab instead. A manual switch before auto-select still
+    // restores the tab list and keeps the user's chosen workspace.
+    if (pendingRestoreRef.current) {
+      const saved = pendingRestoreRef.current;
+      pendingRestoreRef.current = null;
+      tabsApi.restore(saved);
+      if (isAutoSelect) {
+        const active = saved.tabs.find((t) => t.key === saved.activeKey) ?? saved.tabs[0];
+        if (active) {
+          requestWorkspaceSwitch(active.cwd);
+          return;
+        }
+      }
+    }
     setActiveCwd(cwd);
     // Keep the active workspace tab's cwd in sync — worktree switches inside
     // one project do not create new tabs (tabs are per project root).
@@ -538,7 +572,7 @@ export function AppShell() {
     // Restore the workspace we switched to: its last session or draft, or a
     // fresh welcome draft so the composer matches the "+" flow.
     restoreWorkspaceContext(cwd, newProject);
-  }, [selectedSession, cleanupEmptyActiveDraft, restoreWorkspaceContext, tabsApi]);
+  }, [selectedSession, cleanupEmptyActiveDraft, restoreWorkspaceContext, tabsApi, requestWorkspaceSwitch]);
 
   // Update browser tab title when workspace changes
   useEffect(() => {
@@ -889,6 +923,9 @@ export function AppShell() {
   const sessionTitle = selectedSession
     ? selectedSession.name || getSessionDisplayFirstMessage(selectedSession.firstMessage).slice(0, 50) || selectedSession.id.slice(0, 12)
     : null;
+  // Tabs mode with 4+ tabs: the title-bar title moves to the info bar's
+  // center slot so the tab strip keeps the space it needs.
+  const titleMovedToInfoBar = viewMode === "tabs" && tabsState.tabs.length >= 4;
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
@@ -1041,7 +1078,7 @@ export function AppShell() {
         rightPanelOpen={rightPanelOpen}
         onToggleFilePanel={() => setRightPanelOpen((v) => !v)}
         onOpenSettings={() => openSettings("models")}
-        sessionTitle={sessionTitle}
+        sessionTitle={titleMovedToInfoBar ? null : sessionTitle}
         titleGenerating={titleGeneratingId === selectedSession?.id}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
       />
@@ -1170,6 +1207,7 @@ export function AppShell() {
               onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
               onViewFullHistory={handleViewFullHistory}
               systemPrompt={systemPrompt}
+              sessionTitle={titleMovedToInfoBar ? sessionTitle : null}
               soundEnabled={soundEnabled}
               onSoundToggle={onSoundToggle}
               playDoneSound={playDoneSound}

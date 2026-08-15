@@ -44,6 +44,10 @@ export interface SessionInfoBarProps {
   onBranchLeafChange?: (leafId: string | null) => void;
   /** Show text label alongside the sound icon (e.g. "提示音：开启") */
   showSoundLabel?: boolean;
+  /** Session title rendered in the center slot (between the branch buttons
+   *  and the compact button) — used when the tabs view mode hides the
+   *  title-bar title to free tab space. */
+  sessionTitle?: string | null;
 }
 
 function formatTokenCount(n: number): string {
@@ -84,6 +88,7 @@ export function SessionInfoBar({
   branchActiveLeafId,
   onBranchLeafChange,
   showSoundLabel,
+  sessionTitle,
 }: SessionInfoBarProps) {
   const { t: translate } = useI18n();
   const [activePanel, setActivePanel] = useState<"system" | "session" | "branches" | null>(null);
@@ -329,8 +334,15 @@ export function SessionInfoBar({
         </div>
       )}
 
-      {/* Spacer */}
-      <div className="session-info-bar-spacer" />
+      {/* Spacer — the session title (tabs mode with many tabs) renders
+          centered here, between the branch buttons and the compact button. */}
+      <div className="session-info-bar-spacer">
+        {sessionTitle && (
+          <span className="session-info-bar-title" title={sessionTitle}>
+            {sessionTitle}
+          </span>
+        )}
+      </div>
 
       {/* Compact button */}
       {onCompact && (

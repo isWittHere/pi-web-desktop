@@ -66,6 +66,9 @@ interface Props {
   /** Completion-notification state — same shape as the sound toggle. */
   notificationsEnabled?: boolean;
   onNotificationsToggle?: () => void;
+  /** Session title for the info bar's center slot (tabs mode with 4+ tabs
+   *  hides the title-bar title to free tab space). */
+  sessionTitle?: string | null;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -137,7 +140,7 @@ function withAssistantBlocks(
 
 
 
-export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, notificationsEnabled, onNotificationsToggle, onContentReady }: Props) {
+export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, notificationsEnabled, onNotificationsToggle, sessionTitle, onContentReady }: Props) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
 
@@ -683,6 +686,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                 branchTree={branchTree}
                 branchActiveLeafId={branchActiveLeafId}
                 onBranchLeafChange={handleLeafChange}
+                sessionTitle={sessionTitle}
               />
             </div>
           </div>
@@ -1056,6 +1060,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
               branchTree={branchTree}
               branchActiveLeafId={branchActiveLeafId}
               onBranchLeafChange={handleLeafChange}
+              sessionTitle={sessionTitle}
             />
           </div>
         </div>

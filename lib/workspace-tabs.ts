@@ -117,3 +117,48 @@ export function reorderTab(
 export function resetToSingle(cwd: string, key: string): WorkspaceTabsState {
   return { tabs: [{ key, cwd }], activeKey: key };
 }
+
+// ── Persistence ────────────────────────────────────────────────────────────
+// The tab list survives restarts in tabs view mode (the last active tab is
+// restored as the startup workspace). Classic mode never writes it, and an
+// empty tab list is not persisted — the next tabs-mode start falls back to
+// the single-tab seed from the current workspace.
+
+const STORAGE_KEY = "pi-web:workspace-tabs";
+
+/** Persist the tab list (best-effort; empty lists clear the key). */
+export function saveWorkspaceTabs(state: WorkspaceTabsState): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (state.tabs.length === 0) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // storage unavailable — tabs stay for this session only
+  }
+}
+
+/** Load a previously persisted tab list, or null when none/empty/corrupt. */
+export function loadWorkspaceTabs(): WorkspaceTabsState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { tabs?: unknown; activeKey?: unknown };
+    if (!Array.isArray(parsed.tabs)) return null;
+    const tabs = parsed.tabs.filter((t): t is WorkspaceTab =>
+      !!t
+      && typeof (t as WorkspaceTab).key === "string"
+      && typeof (t as WorkspaceTab).cwd === "string",
+    );
+    if (tabs.length === 0) return null;
+    const activeKey = typeof parsed.activeKey === "string" && tabs.some((t) => t.key === parsed.activeKey)
+      ? parsed.activeKey
+      : tabs[0].key;
+    return { tabs, activeKey };
+  } catch {
+    return null;
+  }
+}
