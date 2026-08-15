@@ -792,6 +792,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         // Session not found — notify parent so it can show the placeholder
         onInitialRestoreDone?.();
       }
+      // Startup-only auto-selection. Once any cwd has been notified to the
+      // parent (lastNotifiedCwdRef non-null), a later null — e.g. closing
+      // the last workspace tab — must stay null so the parent shows the
+      // welcome placeholder instead of snapping back to the remembered
+      // workspace.
+      if (lastNotifiedCwdRef.current !== null) return;
       // Include drafts so a project that only has drafts is still selected.
       const projects = getRecentProjects(rows);
       // Real sessions alone decide the fallback ordering: a pure-draft project
