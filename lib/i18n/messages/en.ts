@@ -373,6 +373,7 @@ export const enLocale = {
     "desktop.modelsImageInput": "Image input",
     "desktop.modelsDeepSeekCompat": "DeepSeek thinking compat",
     "desktop.modelsSupportsDeveloperRole": "Use 'developer' role for the system prompt (disable if server rejects it)",
+    "desktop.modelsSupportsAdditionalTools": "Attach tools to each message via additional_tools (OpenAI Responses only)",
     "desktop.modelsHeaders": "Headers",
     "desktop.modelsHeadersHelp": "Added to every request from this provider (e.g. User-Agent). Useful for gateways with bot detection.",
     "desktop.modelsHeadersModelHelp": "Added to this model's requests; overrides the provider headers for this model.",

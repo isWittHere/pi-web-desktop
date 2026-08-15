@@ -918,6 +918,13 @@ function ModelDetail({
         <Check label={t("desktop.modelsReasoningThinking")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
         <Check label={t("desktop.modelsImageInput")} checked={model.input?.includes("image") ?? false}
           onChange={(v) => set("input", v ? ["text", "image"] : undefined)} />
+        {(model.api ?? provider.api ?? "openai-completions") === "openai-responses" && (
+          <Check
+            label={t("desktop.modelsSupportsAdditionalTools")}
+            checked={effectiveCompat(provider, model)["supportsAdditionalTools"] === true}
+            onChange={(v) => onChange(setCompatBool(model, "supportsAdditionalTools", v))}
+          />
+        )}
       </div>
 
       {model.reasoning && (

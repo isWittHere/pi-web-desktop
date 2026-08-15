@@ -373,6 +373,7 @@ export const zhCNLocale = {
     "desktop.modelsImageInput": "图片输入",
     "desktop.modelsDeepSeekCompat": "DeepSeek 思考兼容模式",
     "desktop.modelsSupportsDeveloperRole": "系统提示使用 developer 角色（服务器拒绝时关闭）",
+    "desktop.modelsSupportsAdditionalTools": "通过 additional_tools 将工具附加到每条消息（仅 OpenAI Responses）",
     "desktop.modelsHeaders": "自定义请求头",
     "desktop.modelsHeadersHelp": "附加到该供应商的每个请求（如 User-Agent）。适用于带机器人检测的网关。",
     "desktop.modelsHeadersModelHelp": "附加到该模型的请求；覆盖该模型的供应商级请求头。",
