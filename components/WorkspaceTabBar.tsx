@@ -36,6 +36,39 @@ function pathBaseName(path: string): string {
 const NO_DRAG_REGION = { WebkitAppRegion: "no-drag" } as unknown as React.CSSProperties;
 const DRAG_REGION = { WebkitAppRegion: "drag" } as unknown as React.CSSProperties;
 
+/** Spinning arc — a task is currently running in this workspace. */
+function RunningArcIndicator() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
+      <path
+        d="M21 12a9 9 0 1 1-3.8-7.4"
+        stroke="currentColor"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+      />
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 12 12"
+        to="360 12 12"
+        dur="0.9s"
+        repeatCount="indefinite"
+      />
+    </svg>
+  );
+}
+
+/** Breathing dot — finished tasks are unread in this workspace. */
+function UnreadDotIndicator() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
+      <circle cx="7" cy="7" r="3" fill="currentColor">
+        <animate attributeName="opacity" values="1;0.25;1" dur="1.6s" repeatCount="indefinite" />
+      </circle>
+    </svg>
+  );
+}
+
 export function WorkspaceTabBar({
   tabs,
   activeKey,
@@ -155,6 +188,7 @@ export function WorkspaceTabBar({
         {tabs.map((tab) => {
           const isActive = tab.key === activeKey;
           const running = activity.get(tab.key)?.running ?? 0;
+          const unread = activity.get(tab.key)?.unread ?? 0;
           const isDragging = dragKey === tab.key;
           const isDropBefore = dropTarget?.key === tab.key && dropTarget.position === "before";
           const isDropAfter = dropTarget?.key === tab.key && dropTarget.position === "after";
@@ -218,19 +252,25 @@ export function WorkspaceTabBar({
               >
                 {pathBaseName(tab.key)}
               </span>
-              {running > 0 && (
+              {/* Status: spinning arc while a task runs (priority), breathing
+                  dot when finished tasks are unread. */}
+              {running > 0 ? (
                 <span
                   title={t("desktop.agentRunning")}
-                  style={{
-                    flexShrink: 0,
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    background: "var(--accent)",
-                  }}
+                  style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", color: "var(--accent)" }}
                   aria-hidden="true"
-                />
-              )}
+                >
+                  <RunningArcIndicator />
+                </span>
+              ) : unread > 0 ? (
+                <span
+                  title={t("desktop.newActivity")}
+                  style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", color: "var(--accent)" }}
+                  aria-hidden="true"
+                >
+                  <UnreadDotIndicator />
+                </span>
+              ) : null}
               <button
                 onClick={(e) => { e.stopPropagation(); onCloseTab(tab.key); }}
                 onMouseEnter={() => setHoveredClose(tab.key)}
