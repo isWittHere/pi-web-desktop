@@ -52,7 +52,6 @@ export function WorkspaceTabBar({
   // region never intercepts the session.
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ key: string; position: "before" | "after" } | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   // True when the tab strip overflows its container (many tabs): the strip
   // then stays a normal scrollable region instead of the window drag area.
@@ -137,7 +136,6 @@ export function WorkspaceTabBar({
 
   return (
     <div
-      ref={rootRef}
       style={{
         position: "relative",
         display: "flex",

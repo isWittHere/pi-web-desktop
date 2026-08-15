@@ -29,7 +29,6 @@ interface AppTitleBarProps {
   isDark: boolean;
   toggleTheme: (origin?: { x: number; y: number }) => void;
   isMobile: boolean;
-  showChat: boolean;
   systemPrompt: string | null;
   activeTopPanel: "system" | "session" | null;
 
@@ -43,8 +42,8 @@ interface AppTitleBarProps {
   onOpenSettings: () => void;
   sessionTitle: string | null;
   /** True when the title-bar title is hidden (tabs mode with 4+ tabs): the
-   *  workspace host expands to reclaim the title's space, and the drag
-   *  region shrinks to a fixed strip so the window stays draggable. */
+   *  workspace host reclaims the title's space AND the drag handle's — the
+   *  tab strip's empty area takes over as the window drag region. */
   expandWorkspaceHost?: boolean;
   /** True while the selected session's title is being regenerated. */
   titleGenerating?: boolean;
@@ -115,7 +114,6 @@ export function AppTitleBar({
   isDark,
   toggleTheme,
   isMobile,
-  showChat,
   systemPrompt,
   activeTopPanel,
 
@@ -295,10 +293,6 @@ export function AppTitleBar({
             overflow: "visible",
           }}
         />
-
-        {showChat && (
-          <div style={{ display: "flex", alignItems: "stretch", height: "100%" }} />
-        )}
 
         {/* Flexible title spacer; in Electron this is the primary drag area.
             With an expanded workspace host the spacer is removed entirely —

@@ -1067,7 +1067,6 @@ export function AppShell() {
         isDark={isDark}
         toggleTheme={toggleTheme}
         isMobile={isMobile}
-        showChat={showChat}
         systemPrompt={systemPrompt}
         activeTopPanel={activeTopPanel}
         topPanelPos={topPanelPos}
