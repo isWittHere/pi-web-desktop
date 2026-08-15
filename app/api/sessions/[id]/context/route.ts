@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { getRpcSession } from "@/lib/rpc-manager";
 import { resolveSessionPath, buildSessionContext } from "@/lib/session-reader";
 
 export async function GET(
@@ -13,12 +14,16 @@ export async function GET(
   const deferToolResultImages = url.searchParams.has("deferMedia");
 
   try {
-    const filePath = await resolveSessionPath(id);
-    if (!filePath) {
+    const rpc = getRpcSession(id);
+    const liveRpc = rpc?.isAlive() ? rpc : undefined;
+    const filePath = liveRpc ? null : await resolveSessionPath(id);
+    if (!liveRpc && !filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const sm = SessionManager.open(filePath);
+    // A transient session (prompt accepted but JSONL not flushed yet) is only
+    // readable through the live wrapper's in-memory SessionManager.
+    const sm = liveRpc?.inner.sessionManager ?? SessionManager.open(filePath!);
     const context = buildSessionContext(sm.getEntries() as never, leafId, {
       deferThinking,
       deferToolResultImages,

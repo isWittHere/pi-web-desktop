@@ -46,7 +46,42 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   });
 }
 
-export async function listAllSessions(): Promise<SessionInfo[]> {
+/**
+ * Attach project-root and worktree info to sessions that came from the RPC
+ * registry (their cwds were not part of the disk scan's project map).
+ */
+export async function attachSessionProjectInfo(sessions: SessionInfo[]): Promise<SessionInfo[]> {
+  const uniqueCwds = [...new Set(sessions.map((s) => s.cwd).filter(Boolean))];
+  const projectByCwd = new Map<string, ProjectInfo>();
+  await Promise.all(uniqueCwds.map(async (cwd) => {
+    projectByCwd.set(cwd, await resolveProject(cwd));
+  }));
+  return sessions.map((session) => {
+    const project = session.cwd ? projectByCwd.get(session.cwd) : undefined;
+    return {
+      ...session,
+      projectRoot: project?.projectRoot ?? session.cwd,
+      ...(project?.isWorktree && project.branch ? { worktreeBranch: project.branch } : {}),
+    };
+  });
+}
+
+/**
+ * Combine persisted disk sessions with supplemental live ones. A disk scan is
+ * authoritative once the JSONL exists, so a transient registry snapshot is
+ * replaced without briefly rendering two rows.
+ */
+export function mergeSessionLists(
+  persistedSessions: SessionInfo[],
+  supplementalSessions: SessionInfo[],
+): SessionInfo[] {
+  const byId = new Map(supplementalSessions.map((session) => [session.id, session]));
+  for (const session of persistedSessions) byId.set(session.id, session);
+  return [...byId.values()].sort((a, b) => b.modified.localeCompare(a.modified));
+}
+
+export async function listAllSessions(options: { force?: boolean } = {}): Promise<SessionInfo[]> {
+  if (options.force) invalidateSessionListCache();
   const generation = globalThis.__piSessionListGeneration ?? 0;
 
   // Return cached result if still fresh (avoids re-scanning session files
@@ -62,11 +97,13 @@ export async function listAllSessions(): Promise<SessionInfo[]> {
   }
 
   const loadPromise = loadAllSessions().then((data) => {
-    // An invalidation may happen while the scan is in flight. Do not let that
-    // older result repopulate the cache after a session mutation.
-    if ((globalThis.__piSessionListGeneration ?? 0) === generation) {
-      globalThis.__piSessionListCache = { data, ts: Date.now() };
+    // If a mutation invalidated this scan, make this caller join (or start) a
+    // scan for the current generation. Returning the stale result here made a
+    // refresh race indistinguishable from a successful refresh.
+    if ((globalThis.__piSessionListGeneration ?? 0) !== generation) {
+      return listAllSessions();
     }
+    globalThis.__piSessionListCache = { data, ts: Date.now() };
     return data;
   });
   const trackedPromise = loadPromise.finally(() => {

@@ -313,6 +313,9 @@ export interface SessionInfo {
    *  Always set by the server; optional because the client builds transient
    *  SessionInfo objects before the first refresh. Fall back to cwd. */
   projectRoot?: string;
+  /** True while the runtime session exists only in memory and its JSONL file
+   *  has not been created yet. Disk-backed actions must wait until this clears. */
+  transient?: boolean;
   /** Branch name when cwd is a linked git worktree (not the main checkout) */
   worktreeBranch?: string;
 }

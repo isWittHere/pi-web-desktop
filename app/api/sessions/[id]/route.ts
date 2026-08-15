@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import {
@@ -159,12 +159,16 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const filePath = await resolveSessionPath(id);
-    if (!filePath) {
+    const rpc = getRpcSession(id);
+    const liveRpc = rpc?.isAlive() ? rpc : undefined;
+    const resolvedPath = liveRpc ? null : await resolveSessionPath(id);
+    if (!liveRpc && !resolvedPath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
     const searchParams = new URL(req.url).searchParams;
+    const sm = liveRpc?.inner.sessionManager ?? SessionManager.open(resolvedPath!);
+    const filePath = liveRpc?.sessionFile || sm.getSessionFile() || resolvedPath || "";
     // Meta-only probe: proves whether the session file has changed since a
     // cached snapshot was taken (mtime), without parsing the session file.
     // Used by the client session cache to skip the full reload when fresh.
@@ -177,7 +181,6 @@ export async function GET(
       }
     }
 
-    const sm = SessionManager.open(filePath);
     const entries = sm.getEntries();
     const leafId = sm.getLeafId();
     const tree = projectTreeForResponse(sm.getTree());
@@ -208,6 +211,7 @@ export async function GET(
           })()
         : "(no messages)",
       parentSessionId,
+      transient: !filePath || !existsSync(filePath),
     } : null;
 
     return NextResponse.json({
