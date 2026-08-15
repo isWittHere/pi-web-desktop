@@ -173,11 +173,18 @@ export function WorkspaceTabBar({
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                height: "100%",
+                height: 30,
+                margin: "3px 2px",
                 padding: "0 4px 0 10px",
+                borderRadius: 6,
                 ...NO_DRAG_REGION,
-                borderLeft: isDropBefore ? "2px solid var(--accent)" : "none",
-                borderRight: isDropAfter ? "2px solid var(--accent)" : "1px solid var(--border)",
+                // Insertion line (drag reorder): inset box-shadow so it does
+                // not change the tab's box size.
+                boxShadow: isDropBefore
+                  ? "inset 2px 0 0 var(--accent)"
+                  : isDropAfter
+                    ? "inset -2px 0 0 var(--accent)"
+                    : "none",
                 background: isActive ? "var(--bg-selected)" : "transparent",
                 color: isActive ? "var(--text)" : "var(--text-muted)",
                 cursor: "pointer",
