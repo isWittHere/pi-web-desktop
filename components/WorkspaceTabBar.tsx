@@ -280,35 +280,37 @@ export function WorkspaceTabBar({
             </div>
           );
         })}
-      </div>
 
-      {/* "+" — open the workspace picker */}
-      <button
-        onClick={() => setMenuOpen((v) => !v)}
-        title={t("desktop.newWorkspaceTab")}
-        aria-label={t("desktop.newWorkspaceTab")}
-        aria-expanded={menuOpen}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: 30, height: "100%", padding: 0, flexShrink: 0,
-          ...NO_DRAG_REGION,
-          background: menuOpen ? "var(--bg-selected)" : "none",
-          border: "none",
-          color: menuOpen ? "var(--text)" : "var(--text-muted)",
-          cursor: "pointer",
-          transition: "background 0.12s, color 0.12s",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "var(--bg-hover)";
-          e.currentTarget.style.color = "var(--text)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = menuOpen ? "var(--bg-selected)" : "none";
-          e.currentTarget.style.color = menuOpen ? "var(--text)" : "var(--text-muted)";
-        }}
-      >
-        <Plus size={14} aria-hidden="true" />
-      </button>
+        {/* "+" — open the workspace picker. Rendered inside the strip so it
+            always sits right after the last tab (scrolling with the tabs),
+            never pinned to the strip's right edge. */}
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          title={t("desktop.newWorkspaceTab")}
+          aria-label={t("desktop.newWorkspaceTab")}
+          aria-expanded={menuOpen}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 30, height: "100%", padding: 0, flexShrink: 0,
+            ...NO_DRAG_REGION,
+            background: menuOpen ? "var(--bg-selected)" : "none",
+            border: "none",
+            color: menuOpen ? "var(--text)" : "var(--text-muted)",
+            cursor: "pointer",
+            transition: "background 0.12s, color 0.12s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--bg-hover)";
+            e.currentTarget.style.color = "var(--text)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = menuOpen ? "var(--bg-selected)" : "none";
+            e.currentTarget.style.color = menuOpen ? "var(--text)" : "var(--text-muted)";
+          }}
+        >
+          <Plus size={14} aria-hidden="true" />
+        </button>
+      </div>
 
       {menuOpen && (
         <TitleBarDismissOverlay />
