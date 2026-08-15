@@ -1,7 +1,12 @@
 import { stat } from "fs/promises";
 import { resolve } from "path";
 import { createAgentSessionServices, getAgentDir, type SettingsManager } from "@earendil-works/pi-coding-agent";
-import { loadModelsWithCache, type ModelsData } from "@/lib/models-cache";
+import {
+  loadModelsWithCache,
+  withModelRuntimeError,
+  withSafeModelLoadFailure,
+  type ModelsData,
+} from "@/lib/models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "@/lib/model-scope";
 import { projectTrustReloadOptions } from "@/lib/project-trust";
 import { buildThinkingProfile } from "@/lib/thinking-profile";
@@ -40,6 +45,7 @@ async function loadModels(cwd: string): Promise<ModelsData> {
     services.modelRuntime,
     settings.getEnabledModels(),
   );
+  const modelError = services.modelRuntime.getError();
   const modelList = scope.visible.map((model) => ({
     id: model.id,
     name: model.name,
@@ -62,19 +68,22 @@ async function loadModels(cwd: string): Promise<ModelsData> {
       : {}),
   });
 
-  return {
-    models: Object.fromEntries(nameMap),
-    modelList,
-    defaultModel: initial.model
-      ? { provider: initial.model.provider, modelId: initial.model.id }
-      : null,
-    defaultThinkingLevel: settings.getDefaultThinkingLevel() ?? undefined,
-    thinkingLevelPins: scope.thinkingLevelPins,
-    thinkingProfiles,
-    thinkingLevelMemory: getThinkingLevelMemory(),
-    imageInput,
-    ...(scope.warnings.length > 0 ? { modelScopeWarnings: scope.warnings } : {}),
-  };
+  return withModelRuntimeError(
+    {
+      models: Object.fromEntries(nameMap),
+      modelList,
+      defaultModel: initial.model
+        ? { provider: initial.model.provider, modelId: initial.model.id }
+        : null,
+      defaultThinkingLevel: settings.getDefaultThinkingLevel() ?? undefined,
+      thinkingLevelPins: scope.thinkingLevelPins,
+      thinkingProfiles,
+      thinkingLevelMemory: getThinkingLevelMemory(),
+      imageInput,
+      ...(scope.warnings.length > 0 ? { modelScopeWarnings: scope.warnings } : {}),
+    },
+    modelError,
+  );
 }
 
 const EMPTY_MODELS: ModelsData = {
@@ -102,6 +111,6 @@ export async function GET(req: Request) {
   try {
     return Response.json(await loadModelsWithCache(cwd, () => loadModels(cwd)));
   } catch {
-    return Response.json(EMPTY_MODELS);
+    return Response.json(withSafeModelLoadFailure(EMPTY_MODELS));
   }
 }
