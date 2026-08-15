@@ -23,7 +23,9 @@ import { useI18n } from "@/hooks/useI18n";
 interface WorkspacePickerMenuProps {
   /** All projects sorted by recent activity (unfiltered). */
   projects: string[];
-  selectedProject: string | null;
+  /** Currently selected project (classic selector highlight). Omit in tabs
+   *  view mode — the picker opens workspaces, it does not single-select. */
+  selectedProject?: string | null;
   /** Per-workspace running/unread counts for the list-item indicators. */
   activity: Map<string, { running: number; unread: number }>;
   homeDir: string;

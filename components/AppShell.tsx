@@ -1052,7 +1052,6 @@ export function AppShell() {
           activeKey={tabsState.activeKey}
           activity={workspaceActivity.activity}
           projects={workspaceActivity.projects}
-          selectedProject={tabsState.activeKey}
           onSelectTab={handleSelectTab}
           onCloseTab={handleCloseTab}
           onSelectProject={handleOpenProject}

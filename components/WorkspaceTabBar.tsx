@@ -22,8 +22,6 @@ interface WorkspaceTabBarProps {
   activity: Map<string, { running: number; unread: number }>;
   /** All projects sorted by recent activity (unfiltered). */
   projects: string[];
-  /** The currently active workspace key (highlight in the picker). */
-  selectedProject: string | null;
   onSelectTab: (key: string) => void;
   onCloseTab: (key: string) => void;
   /** A project was picked from the "+" menu — open it as a tab. */
@@ -39,7 +37,6 @@ export function WorkspaceTabBar({
   activeKey,
   activity,
   projects,
-  selectedProject,
   onSelectTab,
   onCloseTab,
   onSelectProject,
@@ -175,7 +172,7 @@ export function WorkspaceTabBar({
                   transition: "background 0.1s, color 0.1s",
                 }}
               >
-                <X size={10} aria-hidden="true" />
+                <X size={14} aria-hidden="true" />
               </button>
             </div>
           );
@@ -232,7 +229,6 @@ export function WorkspaceTabBar({
         >
           <WorkspacePickerMenu
             projects={projects}
-            selectedProject={selectedProject}
             activity={activity}
             homeDir={homeDir}
             onSelectProject={onSelectProject}
