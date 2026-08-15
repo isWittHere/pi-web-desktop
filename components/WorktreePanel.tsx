@@ -12,10 +12,16 @@ import type { WorktreeEntry, WorktreeState } from "./SessionSidebar";
  * row for non-git directories. Data logic stays in SessionSidebar (it owns
  * the worktree polling); this panel is a pure view over it.
  *
- * The panel only exists when the repo actually has extra worktrees (more
- * than the main checkout); otherwise it renders nothing. Its header shows
- * the current worktree's label directly, and it starts collapsed so the
- * session list stays the primary surface.
+ * The panel exists for any git top-level: the current branch, the full
+ * worktree list (create / remove / dirty-force-confirm) and the guidance
+ * row for non-git directories. Data logic stays in SessionSidebar (it owns
+ * the worktree polling); this panel is a pure view over it.
+ *
+ * A repo with only the main checkout still shows the panel (current branch
+ * + the "new worktree" entry) — the tabs view mode hides every other
+ * worktree entry point, so without it the first worktree could never be
+ * created. It starts collapsed so the session list stays the primary
+ * surface.
  */
 
 interface WorktreePanelProps {
@@ -159,9 +165,11 @@ export function WorktreePanel({
   const [newBranch, setNewBranch] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
 
-  // Only repos with extra worktrees show the panel; a lone main checkout or
-  // a non-git directory have nothing to switch between.
-  if (!worktreeState || worktreeState.worktrees.length <= 1) return null;
+  // Show the panel for any git top-level — a repo with only the main
+  // checkout still gets the current branch + the "new worktree" entry
+  // (tabs mode hides all other worktree entry points). Non-git directories
+  // and repo subdirectories stay hidden.
+  if (!worktreeState || !worktreeState.isGit || !worktreeState.isTopLevel) return null;
 
   const currentWt = worktreeState.worktrees.find((w) => w.path === selectedCwd)
     ?? worktreeState.worktrees.find((w) => w.isMain)
