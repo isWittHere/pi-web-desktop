@@ -51,6 +51,9 @@ interface AppTitleBarProps {
   /** Tabs view mode: show the workspace "+" button pinned right after the
    *  sidebar toggle (fixed, never pushed out by the tab strip). */
   showWorkspaceAddButton?: boolean;
+  /** Tabs view mode: show the Pi logo at the leftmost position of the
+   *  title bar (hidden in classic view). */
+  showPiLogo?: boolean;
   /** Projects + per-workspace activity for the "+" picker menu (reported by
    *  the sidebar, same snapshot the tab bar consumes). */
   pickerProjects?: string[];
@@ -107,6 +110,27 @@ function ThemeToggleButton({
   );
 }
 
+/** Inline Pi logo (public/pi-original.svg). The source uses fill="currentColor",
+ *  so rendering it inline lets it inherit the theme's regular text color
+ *  (--text, mapped from the theme JSON's text token) and adapt to dark/light
+ *  modes automatically. */
+function PiLogo({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      fill="currentColor"
+      fillRule="evenodd"
+      height={size}
+      viewBox="0 0 24 24"
+      width={size}
+      style={{ flex: "none", lineHeight: 1 }}
+      aria-hidden="true"
+    >
+      <path clipRule="evenodd" d="M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5z" />
+      <path d="M17.5 12H23v11h-5.5V12z" />
+    </svg>
+  );
+}
+
 export function AppTitleBar({
   topBarRef,
   sidebarOpen,
@@ -130,6 +154,7 @@ export function AppTitleBar({
   titleGenerating = false,
   onWorkspaceControlsHostChange,
   showWorkspaceAddButton = false,
+  showPiLogo = false,
   pickerProjects = [],
   pickerActivity,
   onSelectProject,
@@ -192,6 +217,22 @@ export function AppTitleBar({
         {/* macOS traffic-light buttons live in the native title bar area; reserve
             space on the left so they don't overlap the sidebar toggle. */}
         {isMac && <div aria-hidden="true" style={{ width: 72, flexShrink: 0 }} />}
+
+        {/* Pi logo — leftmost element (after the macOS traffic-light
+            reservation). Tabs view only; decorative and part of the drag
+            region; uses the theme's regular text color (--text). */}
+        {showPiLogo && (
+          <div
+            aria-hidden="true"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 36, height: 36, flexShrink: 0,
+              color: "var(--text)",
+            }}
+          >
+            <PiLogo size={14} />
+          </div>
+        )}
 
         {/* Sidebar toggle — no selected highlight: open/closed state is
             shown by the panel itself, not by lighting up the button. */}
