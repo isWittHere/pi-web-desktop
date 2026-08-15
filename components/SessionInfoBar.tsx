@@ -179,6 +179,12 @@ export function SessionInfoBar({
       tooltipParts.push(`${translate("desktop.sessionInfoCacheRead")}: ${t.cacheRead.toLocaleString()}`);
     if (t.cacheWrite > 0)
       tooltipParts.push(`${translate("desktop.sessionInfoCacheWrite")}: ${t.cacheWrite.toLocaleString()}`);
+    // Cache hit rate = cache reads / (input + cache writes + cache reads) — the
+    // denominator covers all input-class tokens.
+    if (t.cacheRead + t.cacheWrite > 0 && t.cacheRead + t.cacheWrite + t.input > 0) {
+      const hitRate = t.cacheRead / (t.cacheRead + t.cacheWrite + t.input) * 100;
+      tooltipParts.push(`${translate("desktop.sessionInfoCacheHitRate")}: ${hitRate.toFixed(1)}%`);
+    }
     if (c > 0) tooltipParts.push(`${translate("desktop.sessionInfoCost")}: $${c.toFixed(4)}`);
   }
   if (contextUsage?.contextWindow && contextUsage.percent !== null) {

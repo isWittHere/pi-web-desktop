@@ -141,6 +141,7 @@ export const zhCNLocale = {
     "desktop.sessionInfoOutput": "输出",
     "desktop.sessionInfoCacheRead": "缓存读取",
     "desktop.sessionInfoCacheWrite": "缓存写入",
+    "desktop.sessionInfoCacheHitRate": "平均缓存命中率",
     "desktop.sessionInfoCost": "费用",
     "desktop.sessionInfoContext": "上下文",
     "desktop.sessionInfoActiveTime": "活跃时长",

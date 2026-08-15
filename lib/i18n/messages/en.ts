@@ -141,6 +141,7 @@ export const enLocale = {
     "desktop.sessionInfoOutput": "Output",
     "desktop.sessionInfoCacheRead": "Cache Read",
     "desktop.sessionInfoCacheWrite": "Cache Write",
+    "desktop.sessionInfoCacheHitRate": "Avg cache hit rate",
     "desktop.sessionInfoCost": "Cost",
     "desktop.sessionInfoContext": "Context",
     "desktop.sessionInfoActiveTime": "Active Time",
