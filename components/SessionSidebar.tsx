@@ -603,6 +603,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // the remembered workspace) is not mistaken for user activity.
   const lastNotifiedCwdRef = useRef<string | null>(null);
   const autoSelectRef = useRef(false);
+  // Startup auto-selection runs exactly once per mount. A dedicated ref is
+  // required: lastNotifiedCwdRef is reset to null by the notify effect when
+  // the cwd is cleared (e.g. closing the last workspace tab), so it cannot
+  // double as the "already auto-selected" flag — the auto-select effect
+  // would see null and re-pick the remembered workspace.
+  const startupAutoSelectDoneRef = useRef(false);
   useEffect(() => {
     if (lastNotifiedCwdRef.current === selectedCwd) return;
     lastNotifiedCwdRef.current = selectedCwd;
@@ -792,12 +798,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         // Session not found — notify parent so it can show the placeholder
         onInitialRestoreDone?.();
       }
-      // Startup-only auto-selection. Once any cwd has been notified to the
-      // parent (lastNotifiedCwdRef non-null), a later null — e.g. closing
-      // the last workspace tab — must stay null so the parent shows the
-      // welcome placeholder instead of snapping back to the remembered
+      // Startup-only auto-selection: runs exactly once. A later null — e.g.
+      // closing the last workspace tab — must stay null so the parent shows
+      // the welcome placeholder instead of snapping back to the remembered
       // workspace.
-      if (lastNotifiedCwdRef.current !== null) return;
+      if (startupAutoSelectDoneRef.current) return;
+      startupAutoSelectDoneRef.current = true;
       // Include drafts so a project that only has drafts is still selected.
       const projects = getRecentProjects(rows);
       // Real sessions alone decide the fallback ordering: a pure-draft project
