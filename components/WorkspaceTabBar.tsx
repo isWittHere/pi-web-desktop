@@ -34,6 +34,13 @@ function pathBaseName(path: string): string {
   return path.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
+// Electron frameless window: elements inside a drag region need explicit
+// no-drag to stay interactive, and the strip's empty area can act as the
+// drag region. React's CSSProperties type does not include the vendor
+// region property, so the values are cast through it once here.
+const NO_DRAG_REGION = { WebkitAppRegion: "no-drag" } as unknown as React.CSSProperties;
+const DRAG_REGION = { WebkitAppRegion: "drag" } as unknown as React.CSSProperties;
+
 export function WorkspaceTabBar({
   tabs,
   activeKey,
@@ -55,6 +62,19 @@ export function WorkspaceTabBar({
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ key: string; position: "before" | "after" } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  // True when the tab strip overflows its container (many tabs): the strip
+  // then stays a normal scrollable region instead of the window drag area.
+  const [stripOverflow, setStripOverflow] = useState(false);
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const check = () => setStripOverflow(strip.scrollWidth > strip.clientWidth + 2);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(strip);
+    return () => ro.disconnect();
+  }, [tabs.length]);
 
   useEffect(() => {
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
@@ -130,6 +150,24 @@ export function WorkspaceTabBar({
     setDropTarget(null);
   };
 
+  // The strip's empty area is the Electron window drag region (the fixed
+  // drag handle is removed in expanded title-bar mode). While a tab is being
+  // dragged or the strip overflows, the region must stay interactive instead
+  // (drag-over targets / wheel scrolling), so the drag region is disabled
+  // then. Tabs and buttons stay no-drag so they never start a window move.
+  const stripDragRegion = !dragKey && !stripOverflow;
+  const stripStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "stretch",
+    height: "100%",
+    minWidth: 0,
+    flex: 1,
+    overflowX: "auto",
+    overflowY: "hidden",
+    scrollbarWidth: "none",
+    ...(stripDragRegion ? DRAG_REGION : {}),
+  };
+
   return (
     <div
       ref={rootRef}
@@ -144,18 +182,10 @@ export function WorkspaceTabBar({
     >
       {/* Tab strip */}
       <div
+        ref={stripRef}
         onDragOver={handleStripDragOver}
         onDrop={handleDrop}
-        style={{
-          display: "flex",
-          alignItems: "stretch",
-          height: "100%",
-          minWidth: 0,
-          flex: 1,
-          overflowX: "auto",
-          overflowY: "hidden",
-          scrollbarWidth: "none",
-        }}
+        style={stripStyle}
       >
         {tabs.map((tab) => {
           const isActive = tab.key === activeKey;
@@ -172,6 +202,7 @@ export function WorkspaceTabBar({
               onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
               onDragEnd={handleDragEnd}
               onClick={() => onSelectTab(tab.key)}
+              onDoubleClick={(e) => e.stopPropagation()}
               title={tab.cwd}
               style={{
                 display: "flex",
@@ -179,6 +210,7 @@ export function WorkspaceTabBar({
                 gap: 6,
                 height: "100%",
                 padding: "0 4px 0 10px",
+                ...NO_DRAG_REGION,
                 borderLeft: isDropBefore ? "2px solid var(--accent)" : "none",
                 borderRight: isDropAfter ? "2px solid var(--accent)" : "1px solid var(--border)",
                 background: isActive ? "var(--bg-selected)" : "transparent",
@@ -259,6 +291,7 @@ export function WorkspaceTabBar({
         style={{
           display: "flex", alignItems: "center", justifyContent: "center",
           width: 30, height: "100%", padding: 0, flexShrink: 0,
+          ...NO_DRAG_REGION,
           background: menuOpen ? "var(--bg-selected)" : "none",
           border: "none",
           color: menuOpen ? "var(--text)" : "var(--text-muted)",

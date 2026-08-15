@@ -173,12 +173,13 @@ export function AppTitleBar({
           className="app-no-drag"
           ref={onWorkspaceControlsHostChange}
           style={{
-            // Expanded (title hidden): the host grows to reclaim the title's
-            // space so the tab strip can use it; capped so the fixed drag
-            // strip and window controls keep their room.
+            // Expanded (title hidden): the host reclaims the title's space
+            // AND the drag handle's — the tab strip's empty area becomes
+            // the drag region itself (browser-style), so no fixed handle
+            // reservation is needed.
             flex: expandWorkspaceHost ? "1 1 0" : "0 1 auto",
             minWidth: 0,
-            maxWidth: expandWorkspaceHost ? "calc(100% - 120px)" : "min(calc(52vw / var(--app-ui-scale, 1)), 560px)",
+            maxWidth: expandWorkspaceHost ? "none" : "min(calc(52vw / var(--app-ui-scale, 1)), 560px)",
             height: "100%",
             display: "flex",
             alignItems: "center",
@@ -192,13 +193,14 @@ export function AppTitleBar({
         )}
 
         {/* Flexible title spacer; in Electron this is the primary drag area.
-            With an expanded workspace host the strip shrinks to a narrow
-            drag handle so the window stays draggable. */}
+            With an expanded workspace host the spacer is removed entirely —
+            the tab strip's empty area takes over as the drag region, so the
+            tabs get every remaining pixel. */}
         <div
           className="app-title-drag"
           style={{
-            flex: expandWorkspaceHost ? "0 0 40px" : 1,
-            display: "flex",
+            flex: expandWorkspaceHost ? "0 0 0" : 1,
+            display: expandWorkspaceHost ? "none" : "flex",
             alignItems: "center",
             justifyContent: "center",
             height: "100%",
