@@ -178,7 +178,7 @@ export function AppTitleBar({
             // strip and window controls keep their room.
             flex: expandWorkspaceHost ? "1 1 0" : "0 1 auto",
             minWidth: 0,
-            maxWidth: expandWorkspaceHost ? "calc(100% - 170px)" : "min(calc(52vw / var(--app-ui-scale, 1)), 560px)",
+            maxWidth: expandWorkspaceHost ? "calc(100% - 120px)" : "min(calc(52vw / var(--app-ui-scale, 1)), 560px)",
             height: "100%",
             display: "flex",
             alignItems: "center",
@@ -192,12 +192,12 @@ export function AppTitleBar({
         )}
 
         {/* Flexible title spacer; in Electron this is the primary drag area.
-            With an expanded workspace host the strip shrinks to a fixed
-            width that keeps the window draggable. */}
+            With an expanded workspace host the strip shrinks to a narrow
+            drag handle so the window stays draggable. */}
         <div
           className="app-title-drag"
           style={{
-            flex: expandWorkspaceHost ? "0 0 140px" : 1,
+            flex: expandWorkspaceHost ? "0 0 40px" : 1,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
