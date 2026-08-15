@@ -334,15 +334,18 @@ export function SessionInfoBar({
         </div>
       )}
 
-      {/* Spacer — the session title (tabs mode with many tabs) renders
-          centered here, between the branch buttons and the compact button. */}
-      <div className="session-info-bar-spacer">
-        {sessionTitle && (
-          <span className="session-info-bar-title" title={sessionTitle}>
-            {sessionTitle}
-          </span>
-        )}
-      </div>
+      {/* Centered session title (tabs mode with 4+ tabs): a real flex item
+          in the button row, flanked by two symmetric spacers so it stays
+          centered between the branch buttons and the compact button. When
+          no title is shown the left spacer alone fills the row (the
+          pre-title layout). */}
+      <div className="session-info-bar-spacer" />
+      {sessionTitle && (
+        <span className="session-info-bar-title" title={sessionTitle}>
+          {sessionTitle}
+        </span>
+      )}
+      {sessionTitle && <div className="session-info-bar-spacer" />}
 
       {/* Compact button */}
       {onCompact && (

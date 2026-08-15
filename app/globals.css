@@ -1248,22 +1248,20 @@ span.linenumber {
   min-width: 0;
 }
 
-/* Centered session title (tabs mode with 4+ tabs): the title-bar title is
-   hidden to free tab space, and the title lives here instead. Absolutely
-   positioned against the bar so the asymmetric button groups on either
-   side (branches left, compact/stats right) cannot shift it off-center. */
+/* Session title in the button row (tabs mode with 4+ tabs): the title-bar
+   title is hidden to free tab space, and the title lives here instead. A
+   plain flex item flanked by two symmetric spacers — vertical alignment
+   comes from the bar's align-items: center, so it sits on the same row as
+   the branch/compact buttons. */
 .session-info-bar-title {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  max-width: 60%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
   font-weight: 500;
   color: var(--text-muted);
+  max-width: 40%;
+  padding: 0 4px;
   pointer-events: none;
 }
 
