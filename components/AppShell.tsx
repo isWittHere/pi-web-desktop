@@ -407,7 +407,11 @@ export function AppShell() {
     if (nextActive) {
       requestWorkspaceSwitch(nextActive.cwd);
     } else {
-      // Last tab closed — clear the view back to the welcome state.
+      // Last tab closed — clear the view back to the welcome state. The
+      // cwd must be cleared in the SAME batch as the other states: the
+      // tabs seed effect keys off activeCwd, and the async cwdRequest
+      // clearing would arrive one render later and resurrect the tab.
+      setActiveCwd(null);
       setActiveDraftId(null);
       setSelectedSession(null);
       setNewSessionCwd(null);
@@ -1086,6 +1090,7 @@ export function AppShell() {
         titleGenerating={titleGeneratingId === selectedSession?.id}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
         showWorkspaceAddButton={viewMode === "tabs"}
+        showPiLogo={viewMode === "tabs"}
         pickerProjects={workspaceActivity.projects}
         pickerActivity={workspaceActivity.activity}
         onSelectProject={handleOpenProject}
