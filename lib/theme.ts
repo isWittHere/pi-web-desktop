@@ -140,6 +140,10 @@ function resolveColors(
   for (const [key, value] of Object.entries(colors)) {
     resolved[key] = resolveColor(value, vars);
   }
+  // Match pi 0.84.2's withThemeColorFallbacks so parsed themes carry the
+  // same search-match semantics as the TUI even when the tokens are absent.
+  resolved.searchMatchBg = resolved.searchMatchBg || resolved.selectedBg || "";
+  resolved.searchMatchText = resolved.searchMatchText || resolved.text || "";
   return resolved;
 }
 
@@ -331,7 +335,7 @@ function mapToCssVars(
 
 // ─── Theme loading ──────────────────────────────────────────────────────────
 
-/** All required pi CLI color tokens (51 tokens). */
+/** All required pi CLI color tokens (53 tokens, incl. 0.84.2 search match). */
 const ALL_COLOR_TOKENS = [
   "accent", "border", "borderAccent", "borderMuted",
   "success", "error", "warning", "muted", "dim", "text", "thinkingText",
@@ -346,6 +350,8 @@ const ALL_COLOR_TOKENS = [
   "thinkingOff", "thinkingMinimal", "thinkingLow", "thinkingMedium",
   "thinkingHigh", "thinkingXhigh", "thinkingMax",
   "bashMode",
+  // pi 0.84.2 fullscreen transcript search highlight tokens.
+  "searchMatchBg", "searchMatchText",
 ];
 
 /**
