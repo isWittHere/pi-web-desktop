@@ -1246,22 +1246,24 @@ span.linenumber {
 .session-info-bar-spacer {
   flex: 1 1 auto;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 8px;
 }
 
 /* Centered session title (tabs mode with 4+ tabs): the title-bar title is
-   hidden to free tab space, and the title lives here instead. */
+   hidden to free tab space, and the title lives here instead. Absolutely
+   positioned against the bar so the asymmetric button groups on either
+   side (branches left, compact/stats right) cannot shift it off-center. */
 .session-info-bar-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 60%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
   font-weight: 500;
   color: var(--text-muted);
-  max-width: 100%;
+  pointer-events: none;
 }
 
 .session-info-bar-button {

@@ -39,6 +39,10 @@ interface AppTitleBarProps {
   onToggleFilePanel: () => void;
   onOpenSettings: () => void;
   sessionTitle: string | null;
+  /** True when the title-bar title is hidden (tabs mode with 4+ tabs): the
+   *  workspace host expands to reclaim the title's space, and the drag
+   *  region shrinks to a fixed strip so the window stays draggable. */
+  expandWorkspaceHost?: boolean;
   /** True while the selected session's title is being regenerated. */
   titleGenerating?: boolean;
   onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
@@ -112,6 +116,7 @@ export function AppTitleBar({
   onToggleFilePanel,
   onOpenSettings,
   sessionTitle,
+  expandWorkspaceHost = false,
   titleGenerating = false,
   onWorkspaceControlsHostChange,
 }: AppTitleBarProps) {
@@ -168,9 +173,12 @@ export function AppTitleBar({
           className="app-no-drag"
           ref={onWorkspaceControlsHostChange}
           style={{
-            flex: "0 1 auto",
+            // Expanded (title hidden): the host grows to reclaim the title's
+            // space so the tab strip can use it; capped so the fixed drag
+            // strip and window controls keep their room.
+            flex: expandWorkspaceHost ? "1 1 0" : "0 1 auto",
             minWidth: 0,
-            maxWidth: "min(calc(52vw / var(--app-ui-scale, 1)), 560px)",
+            maxWidth: expandWorkspaceHost ? "calc(100% - 170px)" : "min(calc(52vw / var(--app-ui-scale, 1)), 560px)",
             height: "100%",
             display: "flex",
             alignItems: "center",
@@ -183,11 +191,13 @@ export function AppTitleBar({
           <div style={{ display: "flex", alignItems: "stretch", height: "100%" }} />
         )}
 
-        {/* Flexible title spacer; in Electron this is the primary drag area. */}
+        {/* Flexible title spacer; in Electron this is the primary drag area.
+            With an expanded workspace host the strip shrinks to a fixed
+            width that keeps the window draggable. */}
         <div
           className="app-title-drag"
           style={{
-            flex: 1,
+            flex: expandWorkspaceHost ? "0 0 140px" : 1,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

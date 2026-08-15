@@ -1079,6 +1079,7 @@ export function AppShell() {
         onToggleFilePanel={() => setRightPanelOpen((v) => !v)}
         onOpenSettings={() => openSettings("models")}
         sessionTitle={titleMovedToInfoBar ? null : sessionTitle}
+        expandWorkspaceHost={titleMovedToInfoBar}
         titleGenerating={titleGeneratingId === selectedSession?.id}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
       />
