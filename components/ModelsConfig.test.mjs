@@ -12,6 +12,17 @@ const {
 
 const source = await readFile(new URL("./ModelsConfig.tsx", import.meta.url), "utf8");
 
+test("ignores malformed auth provider responses", () => {
+  assert.match(
+    source,
+    /if \(Array\.isArray\(d\.providers\)\) setOauthProviders\(d\.providers\)/,
+  );
+  assert.match(
+    source,
+    /if \(Array\.isArray\(d\.providers\)\) setApiKeyProviders\(d\.providers\)/,
+  );
+});
+
 test("model cost drafts default blank prices to zero unless all are blank", () => {
   const complete = {
     input: "1.25",
