@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -8,6 +8,7 @@ import {
   List,
   Minus,
   Moon,
+  Plus,
   SidebarSimple,
   Square,
   Sun,
@@ -15,6 +16,8 @@ import {
 } from "@phosphor-icons/react";
 import { useElectronWindow } from "@/hooks/useElectronWindow";
 import { useI18n } from "@/hooks/useI18n";
+import { WorkspacePickerMenu } from "./WorkspacePickerMenu";
+import { TitleBarDismissOverlay } from "./TitleBarDismissOverlay";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
 type SessionCopyField = "file" | "id";
@@ -46,6 +49,15 @@ interface AppTitleBarProps {
   /** True while the selected session's title is being regenerated. */
   titleGenerating?: boolean;
   onWorkspaceControlsHostChange?: (node: HTMLDivElement | null) => void;
+  /** Tabs view mode: show the workspace "+" button pinned right after the
+   *  sidebar toggle (fixed, never pushed out by the tab strip). */
+  showWorkspaceAddButton?: boolean;
+  /** Projects + per-workspace activity for the "+" picker menu (reported by
+   *  the sidebar, same snapshot the tab bar consumes). */
+  pickerProjects?: string[];
+  pickerActivity?: Map<string, { running: number; unread: number }>;
+  /** A project was picked from the "+" menu — open it as a workspace tab. */
+  onSelectProject?: (project: string) => void;
 }
 
 /** Renders a placeholder icon until mounted, then the correct theme icon.
@@ -119,9 +131,41 @@ export function AppTitleBar({
   expandWorkspaceHost = false,
   titleGenerating = false,
   onWorkspaceControlsHostChange,
+  showWorkspaceAddButton = false,
+  pickerProjects = [],
+  pickerActivity,
+  onSelectProject,
 }: AppTitleBarProps) {
   const { isElectron, isMac, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
   const { t: translate } = useI18n();
+  // Workspace "+" picker button state (pinned left, next to the sidebar
+  // toggle in tabs view mode).
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [homeDir, setHomeDir] = useState("");
+  const addButtonRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
+      if (d.home) setHomeDir(d.home);
+    }).catch(() => {});
+  }, []);
+
+  // Close the "+" menu on outside click (the picker owns its own transient
+  // search/custom-path state and resets when unmounted).
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (addButtonRef.current?.contains(e.target as Node)) return;
+      setAddMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [addMenuOpen]);
+
+  const handleAddProject = (project: string) => {
+    setAddMenuOpen(false);
+    onSelectProject?.(project);
+  };
 
   return (
     <>
@@ -168,6 +212,69 @@ export function AppTitleBar({
         >
           {sidebarOpen ? <SidebarSimple size={16} aria-hidden="true" /> : <List size={16} aria-hidden="true" />}
         </button>
+
+        {/* Workspace "+" picker — pinned next to the sidebar toggle (tabs
+            view mode), so it is never pushed out of view by the tab strip.
+            The dropdown anchors below the button. */}
+        {showWorkspaceAddButton && (
+          <div
+            ref={addButtonRef}
+            style={{ position: "relative", flexShrink: 0 }}
+          >
+            <button
+              className="app-no-drag"
+              onClick={() => setAddMenuOpen((v) => !v)}
+              title={translate("desktop.newWorkspaceTab")}
+              aria-label={translate("desktop.newWorkspaceTab")}
+              aria-expanded={addMenuOpen}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 36, height: 36, padding: 0,
+                background: addMenuOpen ? "var(--bg-selected)" : "none", border: "none",
+                color: addMenuOpen ? "var(--text)" : "var(--text-muted)",
+                cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--bg-hover)";
+                e.currentTarget.style.color = "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = addMenuOpen ? "var(--bg-selected)" : "none";
+                e.currentTarget.style.color = addMenuOpen ? "var(--text)" : "var(--text-muted)";
+              }}
+            >
+              <Plus size={15} aria-hidden="true" />
+            </button>
+            {addMenuOpen && <TitleBarDismissOverlay />}
+            {addMenuOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 4px)",
+                  left: 0,
+                  width: 320,
+                  zIndex: 1000,
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 8,
+                  boxShadow: "0 6px 20px rgba(0,0,0,0.16)",
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)",
+                }}
+              >
+                <WorkspacePickerMenu
+                  projects={pickerProjects}
+                  activity={pickerActivity ?? new Map()}
+                  homeDir={homeDir}
+                  onSelectProject={handleAddProject}
+                  onRequestClose={() => setAddMenuOpen(false)}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         <div
           className="app-no-drag"

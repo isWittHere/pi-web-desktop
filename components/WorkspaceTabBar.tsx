@@ -1,33 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, X } from "@phosphor-icons/react";
+import { X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
-import { WorkspacePickerMenu } from "./WorkspacePickerMenu";
-import { TitleBarDismissOverlay } from "./TitleBarDismissOverlay";
 import type { WorkspaceTab } from "@/lib/workspace-tabs";
 
 /**
- * Browser-style workspace tab bar for the tabs view mode, rendered into the
- * title-bar workspace host. One tab per opened workspace (project root when
- * known, else cwd); the trailing "+" opens the shared workspace picker menu.
- * Closing a tab never touches sessions or tasks — it only removes the
- * bookmark (the workspace stays reachable through the picker).
+ * Browser-style workspace tab strip for the tabs view mode, rendered into
+ * the title-bar workspace host. One tab per opened workspace (project root
+ * when known, else cwd); the "+" picker button lives in the title bar at
+ * the far left (see AppTitleBar). Closing a tab never touches sessions or
+ * tasks — it only removes the bookmark (the workspace stays reachable
+ * through the picker).
  */
 
 interface WorkspaceTabBarProps {
   tabs: WorkspaceTab[];
   activeKey: string | null;
-  /** Per-workspace running/unread counts (tab dot + picker indicators). */
+  /** Per-workspace running counts (tab dot). */
   activity: Map<string, { running: number; unread: number }>;
-  /** All projects sorted by recent activity (unfiltered). */
-  projects: string[];
   onSelectTab: (key: string) => void;
   onCloseTab: (key: string) => void;
   /** Browser-style drag reorder: move `fromKey` before/after `targetKey`. */
   onReorderTab: (fromKey: string, targetKey: string, position: "before" | "after") => void;
-  /** A project was picked from the "+" menu — open it as a tab. */
-  onSelectProject: (project: string) => void;
 }
 
 function pathBaseName(path: string): string {
@@ -45,15 +40,11 @@ export function WorkspaceTabBar({
   tabs,
   activeKey,
   activity,
-  projects,
   onSelectTab,
   onCloseTab,
   onReorderTab,
-  onSelectProject,
 }: WorkspaceTabBarProps) {
   const { t } = useI18n();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [homeDir, setHomeDir] = useState("");
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
   // HTML5 drag & drop state: the tab being dragged and the drop indicator
   // (insertion line) relative to the hovered tab. The mousedown that starts
@@ -75,30 +66,6 @@ export function WorkspaceTabBar({
     ro.observe(strip);
     return () => ro.disconnect();
   }, [tabs.length]);
-
-  useEffect(() => {
-    fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
-      if (d.home) setHomeDir(d.home);
-    }).catch(() => {});
-  }, []);
-
-  // Close the "+" menu on outside click (the picker owns its own transient
-  // search/custom-path state and resets when unmounted).
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (rootRef.current?.contains(e.target as Node)) return;
-      setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpen]);
-
-  // While the "+" menu is open, cover the Electron title bar with a
-  // non-drag overlay: Chromium swallows mousedown on -webkit-app-region:
-  // drag areas, so outside-click dismissal would never fire for clicks on
-  // the empty title bar. The overlay dispatches the click normally and
-  // forwards it to buttons underneath (see TitleBarDismissOverlay).
 
   // ── Drag & drop reorder ──────────────────────────────────────────────────
   const handleDragStart = (e: React.DragEvent, tab: WorkspaceTab) => {
@@ -281,67 +248,6 @@ export function WorkspaceTabBar({
           );
         })}
       </div>
-
-      {/* "+" — open the workspace picker. Fixed outside the scrolling strip
-          (a sibling), so it always stays visible at the right end of the
-          tab area no matter how many tabs overflow the strip. */}
-      <button
-        onClick={() => setMenuOpen((v) => !v)}
-        title={t("desktop.newWorkspaceTab")}
-        aria-label={t("desktop.newWorkspaceTab")}
-        aria-expanded={menuOpen}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: 30, height: "100%", padding: 0, flexShrink: 0,
-          ...NO_DRAG_REGION,
-          background: menuOpen ? "var(--bg-selected)" : "none",
-          border: "none",
-          color: menuOpen ? "var(--text)" : "var(--text-muted)",
-          cursor: "pointer",
-          transition: "background 0.12s, color 0.12s",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "var(--bg-hover)";
-          e.currentTarget.style.color = "var(--text)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = menuOpen ? "var(--bg-selected)" : "none";
-          e.currentTarget.style.color = menuOpen ? "var(--text)" : "var(--text-muted)";
-        }}
-      >
-        <Plus size={14} aria-hidden="true" />
-      </button>
-
-      {menuOpen && (
-        <TitleBarDismissOverlay />
-      )}
-      {menuOpen && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            width: 320,
-            zIndex: 1000,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 6px 20px rgba(0,0,0,0.16)",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)",
-          }}
-        >
-          <WorkspacePickerMenu
-            projects={projects}
-            activity={activity}
-            homeDir={homeDir}
-            onSelectProject={onSelectProject}
-            onRequestClose={() => setMenuOpen(false)}
-          />
-        </div>
-      )}
     </div>
   );
 }

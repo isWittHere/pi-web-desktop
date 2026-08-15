@@ -1082,6 +1082,10 @@ export function AppShell() {
         expandWorkspaceHost={titleMovedToInfoBar}
         titleGenerating={titleGeneratingId === selectedSession?.id}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
+        showWorkspaceAddButton={viewMode === "tabs"}
+        pickerProjects={workspaceActivity.projects}
+        pickerActivity={workspaceActivity.activity}
+        onSelectProject={handleOpenProject}
       />
       {/* Tabs view mode: browser-style workspace tabs in the title-bar host */}
       {viewMode === "tabs" && titleWorkspaceControlsHost && createPortal(
@@ -1089,11 +1093,9 @@ export function AppShell() {
           tabs={tabsState.tabs}
           activeKey={tabsState.activeKey}
           activity={workspaceActivity.activity}
-          projects={workspaceActivity.projects}
           onSelectTab={handleSelectTab}
           onCloseTab={handleCloseTab}
           onReorderTab={tabsApi.reorder}
-          onSelectProject={handleOpenProject}
         />,
         titleWorkspaceControlsHost,
         "workspace-tabs",
