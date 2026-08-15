@@ -62,6 +62,18 @@ interface Props {
   onAtMentions?: (relativePaths: string[]) => void;
   /** Reports the current set of running session ids (from the poll). */
   onRunningSessionIdsChange?: (ids: Set<string>) => void;
+  /** Tabs view mode: the shell asks the sidebar to move the effective cwd
+   *  (null clears it — last tab closed). The token makes repeated requests
+   *  with the same cwd apply again (e.g. re-activating a tab). */
+  requestedCwd?: { cwd: string | null; token: number } | null;
+  /** How a picked project is opened. When provided, every workspace picker
+   *  menu (title bar / welcome / sidebar) calls this instead of switching
+   *  the cwd directly, so the shell can open a workspace tab instead. */
+  onOpenProject?: (project: string) => void;
+  /** Reports the workspace project list + per-project running/unread counts
+   *  (tabs view mode: the title-bar tab bar needs both for dots and for the
+   *  picker list). Only fires when the data actually changed. */
+  onWorkspaceActivityChange?: (snapshot: { projects: string[]; activity: Map<string, { running: number; unread: number }> }) => void;
   workspaceControlsHosts?: {
     title?: HTMLElement | null;
     welcome?: HTMLElement | null;
@@ -302,7 +314,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor }: Props) {
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -603,6 +615,14 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       setSelectedCwd(selectedCwdProp);
     }
   }, [selectedCwdProp]);
+
+  // Tabs view mode: apply a cwd switch requested by the shell (tab
+  // activation / project pick / last-tab-closed). Null clears the cwd. The
+  // token makes a repeated request for the same cwd apply again.
+  useEffect(() => {
+    if (!requestedCwd) return;
+    setSelectedCwd(requestedCwd.cwd);
+  }, [requestedCwd]);
 
   // Load worktrees for the current effective cwd
   const [wtRefreshKey, setWtRefreshKey] = useState(0);
@@ -1054,12 +1074,31 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     ? pathBaseName(selectedProject ?? selectedCwd)
     : (initialSessionId && !restoredRef.current ? "" : `${t("desktop.selectProject")}…`);
   // Chosen from the shared WorkspacePickerMenu (title/welcome/sidebar):
-  // switch the effective cwd and close every project dropdown.
+  // switch the effective cwd and close every project dropdown. The shell
+  // decides how a picked project opens (tabs mode: as a tab).
   const handleSelectProjectFromMenu = useCallback((project: string) => {
-    setSelectedCwd(project);
     setDropdownOpen(false);
     setWorkspaceProjectDropdownOpen(null);
-  }, []);
+    if (onOpenProject) onOpenProject(project);
+    else setSelectedCwd(project);
+  }, [onOpenProject]);
+
+  // Report workspace activity (projects + running/unread counts) so the
+  // shell's title-bar tab bar can render dots and the picker list without
+  // duplicating the session list. Compared structurally so the shell is not
+  // re-rendered on every sidebar render.
+  const activitySnapshotRef = useRef<{ projects: string[]; activity: Map<string, { running: number; unread: number }> } | null>(null);
+  useEffect(() => {
+    if (!onWorkspaceActivityChange) return;
+    const prev = activitySnapshotRef.current;
+    const same = prev
+      && prev.projects.length === recentProjects.length
+      && prev.projects.every((p, i) => p === recentProjects[i])
+      && sameActivity(prev.activity, projectActivity);
+    if (same) return;
+    activitySnapshotRef.current = { projects: recentProjects, activity: projectActivity };
+    onWorkspaceActivityChange(activitySnapshotRef.current);
+  }, [onWorkspaceActivityChange, recentProjects, projectActivity]);
   const compactWorktreeLabel = currentWt
     ? (currentWt.branch ?? pathBaseName(currentWt.path))
     : inactiveWorktreeSelector?.label;
@@ -1976,6 +2015,19 @@ function countSessionRows(nodes: SessionTreeNode[]): number {
     count += 1 + countSessionRows(node.children);
   }
   return count;
+}
+
+/** Structural equality for the workspace activity maps reported upward. */
+function sameActivity(
+  a: Map<string, { running: number; unread: number }>,
+  b: Map<string, { running: number; unread: number }>,
+): boolean {
+  if (a.size !== b.size) return false;
+  for (const [key, value] of a) {
+    const other = b.get(key);
+    if (!other || other.running !== value.running || other.unread !== value.unread) return false;
+  }
+  return true;
 }
 
 /**

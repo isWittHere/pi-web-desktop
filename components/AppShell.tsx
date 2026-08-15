@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -9,6 +10,7 @@ import { WallpaperLayer } from "./WallpaperLayer";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
+import { WorkspaceTabBar } from "./WorkspaceTabBar";
 import { openFileTab, saveFileViewerState } from "./file-tab-state";
 import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
@@ -19,6 +21,9 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
+import { useViewMode } from "@/hooks/useViewMode";
+import { useWorkspaceTabs } from "@/hooks/useWorkspaceTabs";
+import { closeTab as closeWorkspaceTab } from "@/lib/workspace-tabs";
 import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
@@ -310,6 +315,86 @@ export function AppShell() {
 
   const [initialSessionId] = useState<string | null>(() => searchParams.get("session"));
   const [activeCwd, setActiveCwd] = useState<string | null>(null);
+
+  // ── Tabs view mode ──────────────────────────────────────────────────────
+  const { viewMode } = useViewMode();
+  const viewModeRef = useRef(viewMode);
+  useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
+  const tabsApi = useWorkspaceTabs();
+  const tabsState = tabsApi.state;
+  const tabsStateRef = useRef(tabsState);
+  useEffect(() => { tabsStateRef.current = tabsState; }, [tabsState]);
+  // Workspace project list + per-project running/unread counts, reported by
+  // the sidebar (it owns the session list) for the title-bar tab bar.
+  const [workspaceActivity, setWorkspaceActivity] = useState<{
+    projects: string[];
+    activity: Map<string, { running: number; unread: number }>;
+  }>({ projects: [], activity: new Map() });
+  // Cwd switch requests for the sidebar's effective cwd (tab activation,
+  // project pick, last-tab-closed). The token lets a repeated request for
+  // the same cwd apply again.
+  const [cwdRequest, setCwdRequest] = useState<{ cwd: string | null; token: number } | null>(null);
+  const requestWorkspaceSwitch = useCallback((cwd: string | null) => {
+    setCwdRequest((prev) => ({ cwd, token: (prev?.token ?? 0) + 1 }));
+  }, []);
+
+  // Classic → tabs: the current workspace becomes the only tab. Tabs →
+  // classic: collapse the tab list (view only — sessions keep running).
+  const prevViewModeRef = useRef(viewMode);
+  useEffect(() => {
+    if (prevViewModeRef.current === viewMode) return;
+    prevViewModeRef.current = viewMode;
+    if (viewMode === "tabs") {
+      const cwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
+      if (cwd) tabsApi.resetToSingle(cwd, selectedSession?.projectRoot ?? cwd);
+    } else {
+      tabsApi.clear();
+    }
+  }, [viewMode, activeCwd, selectedSession, newSessionCwd, tabsApi]);
+
+  // Pick a project from a workspace picker menu (classic: switch cwd; tabs:
+  // open as a tab, deduped) — then move the effective cwd.
+  const handleOpenProject = useCallback((project: string) => {
+    if (viewModeRef.current === "tabs") {
+      tabsApi.open(project, project);
+    }
+    requestWorkspaceSwitch(project);
+  }, [tabsApi, requestWorkspaceSwitch]);
+
+  // Activate a workspace tab: switching the effective cwd re-runs the same
+  // single-workspace state machine as the classic view (last-open restore,
+  // session remount). Never touches the running agent session.
+  const handleSelectTab = useCallback((key: string) => {
+    const tab = tabsStateRef.current.tabs.find((t) => t.key === key);
+    if (!tab || key === tabsStateRef.current.activeKey) return;
+    tabsApi.activate(key);
+    requestWorkspaceSwitch(tab.cwd);
+  }, [tabsApi, requestWorkspaceSwitch]);
+
+  // Close a workspace tab — UX only: sessions/tasks keep running server-side.
+  // Closing the active tab moves to the right neighbour (or left when it was
+  // the last); closing the final tab returns to the welcome empty state.
+  const handleCloseTab = useCallback((key: string) => {
+    const state = tabsStateRef.current;
+    const wasActive = state.activeKey === key;
+    // Compute the next state synchronously to know where activation lands.
+    const next = closeWorkspaceTab(state, key);
+    tabsApi.close(key);
+    if (!wasActive) return;
+    const nextActive = next.tabs.find((t) => t.key === next.activeKey) ?? null;
+    if (nextActive) {
+      requestWorkspaceSwitch(nextActive.cwd);
+    } else {
+      // Last tab closed — clear the view back to the welcome state.
+      setActiveDraftId(null);
+      setSelectedSession(null);
+      setNewSessionCwd(null);
+      setSystemPrompt(null);
+      setActiveTopPanel(null);
+      setSessionKey((k) => k + 1);
+      requestWorkspaceSwitch(null);
+    }
+  }, [tabsApi, requestWorkspaceSwitch]);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !searchParams.get("session"));
   // Suppresses sessionKey bump in handleCwdChange during the initial URL restore
@@ -405,6 +490,12 @@ export function AppShell() {
 
   const handleCwdChange = useCallback((cwd: string | null, projectRoot?: string | null, isAutoSelect = false) => {
     setActiveCwd(cwd);
+    // Keep the active workspace tab's cwd in sync — worktree switches inside
+    // one project do not create new tabs (tabs are per project root).
+    if (cwd && viewModeRef.current === "tabs") {
+      const activeKey = tabsStateRef.current.activeKey;
+      if (activeKey) tabsApi.updateCwd(activeKey, cwd);
+    }
     // Skip if cwd is null (initial mount) or during the initial URL restore.
     if (!cwd) return;
     if (suppressCwdBumpRef.current) {
@@ -443,7 +534,7 @@ export function AppShell() {
     // Restore the workspace we switched to: its last session or draft, or a
     // fresh welcome draft so the composer matches the "+" flow.
     restoreWorkspaceContext(cwd, newProject);
-  }, [selectedSession, cleanupEmptyActiveDraft, restoreWorkspaceContext]);
+  }, [selectedSession, cleanupEmptyActiveDraft, restoreWorkspaceContext, tabsApi]);
 
   // Update browser tab title when workspace changes
   useEffect(() => {
@@ -891,8 +982,13 @@ export function AppShell() {
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
+        requestedCwd={cwdRequest}
+        onOpenProject={handleOpenProject}
+        onWorkspaceActivityChange={setWorkspaceActivity}
         workspaceControlsHosts={{
-          title: titleWorkspaceControlsHost,
+          // Tabs mode: the title-bar host belongs to the workspace tab bar
+          // (AppShell portals it); the classic selector stays sidebar-driven.
+          title: viewMode === "classic" ? titleWorkspaceControlsHost : null,
           welcome: welcomeWorkspaceControlsHost,
         }}
         // The title-bar workspace selector must be reachable on the first-run
@@ -944,6 +1040,21 @@ export function AppShell() {
         titleGenerating={titleGeneratingId === selectedSession?.id}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
       />
+      {/* Tabs view mode: browser-style workspace tabs in the title-bar host */}
+      {viewMode === "tabs" && titleWorkspaceControlsHost && createPortal(
+        <WorkspaceTabBar
+          tabs={tabsState.tabs}
+          activeKey={tabsState.activeKey}
+          activity={workspaceActivity.activity}
+          projects={workspaceActivity.projects}
+          selectedProject={tabsState.activeKey}
+          onSelectTab={handleSelectTab}
+          onCloseTab={handleCloseTab}
+          onSelectProject={handleOpenProject}
+        />,
+        titleWorkspaceControlsHost,
+        "workspace-tabs",
+      )}
       {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
         <button
           type="button"
