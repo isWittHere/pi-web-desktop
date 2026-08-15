@@ -521,7 +521,11 @@ export function AppShell() {
       tabsApi.restore(saved);
       if (isAutoSelect) {
         const active = saved.tabs.find((t) => t.key === saved.activeKey) ?? saved.tabs[0];
-        if (active) {
+        // When the persisted active tab differs from the auto-selected
+        // workspace, switch to it (re-enters this handler non-auto-select).
+        // When they coincide, fall through to the normal flow — the cwd is
+        // already the right one and restoreWorkspaceContext must still run.
+        if (active && active.cwd !== cwd) {
           requestWorkspaceSwitch(active.cwd);
           return;
         }
@@ -924,15 +928,16 @@ export function AppShell() {
     ? selectedSession.name || getSessionDisplayFirstMessage(selectedSession.firstMessage).slice(0, 50) || selectedSession.id.slice(0, 12)
     : null;
   // Title-bar room is dynamic in tabs mode: once the tabs' total width
-  // exceeds the non-expanded host cap (min(52vw, 560px)), the session title
-  // moves to the info bar and the host expands. A hysteresis band (100px)
-  // keeps the title in the info bar until there is clearly room again, so
-  // expansion never oscillates.
+  // exceeds the base host budget, the session title moves to the info bar
+  // and the host expands. The budget (min(40vw, 400px)) deliberately leaves
+  // headroom for the title's own minimum width, so 4-5 average tabs already
+  // trigger the move. A hysteresis band (100px) keeps the title in the info
+  // bar until there is clearly room again, so expansion never oscillates.
   const [titleInInfoBar, setTitleInInfoBar] = useState(false);
   const titleInInfoBarRef = useRef(false);
   const handleTabTotalWidthChange = useCallback((tabTotalWidth: number) => {
     if (viewModeRef.current !== "tabs") return;
-    const baseWidth = Math.min(cssViewportSize().width * 0.52, 560);
+    const baseWidth = Math.min(cssViewportSize().width * 0.4, 400);
     const current = titleInInfoBarRef.current;
     let next = current;
     if (!current && tabTotalWidth > baseWidth) next = true;
