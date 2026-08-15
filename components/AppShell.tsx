@@ -38,7 +38,7 @@ import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
 import { clearDraft, getDraft } from "@/lib/draft-store";
-import { cssPx, cssViewportSize } from "@/lib/ui-scale";
+import { cssPx } from "@/lib/ui-scale";
 import {
   createDraftSession,
   loadDraftSessions,
@@ -927,33 +927,6 @@ export function AppShell() {
   const sessionTitle = selectedSession
     ? selectedSession.name || getSessionDisplayFirstMessage(selectedSession.firstMessage).slice(0, 50) || selectedSession.id.slice(0, 12)
     : null;
-  // Title-bar room is dynamic in tabs mode: once the tabs' total width
-  // exceeds the base host budget, the session title moves to the info bar
-  // and the host expands. The budget (min(40vw, 400px)) deliberately leaves
-  // headroom for the title's own minimum width, so 4-5 average tabs already
-  // trigger the move. A hysteresis band (100px) keeps the title in the info
-  // bar until there is clearly room again, so expansion never oscillates.
-  const [titleInInfoBar, setTitleInInfoBar] = useState(false);
-  const titleInInfoBarRef = useRef(false);
-  const handleTabTotalWidthChange = useCallback((tabTotalWidth: number) => {
-    if (viewModeRef.current !== "tabs") return;
-    const baseWidth = Math.min(cssViewportSize().width * 0.4, 400);
-    const current = titleInInfoBarRef.current;
-    let next = current;
-    if (!current && tabTotalWidth > baseWidth) next = true;
-    else if (current && tabTotalWidth <= baseWidth - 100) next = false;
-    if (next !== current) {
-      titleInInfoBarRef.current = next;
-      setTitleInInfoBar(next);
-    }
-  }, []);
-  useEffect(() => {
-    if (viewMode !== "tabs") {
-      titleInInfoBarRef.current = false;
-      setTitleInInfoBar(false);
-    }
-  }, [viewMode]);
-  const titleMovedToInfoBar = titleInInfoBar;
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
@@ -1105,8 +1078,7 @@ export function AppShell() {
         rightPanelOpen={rightPanelOpen}
         onToggleFilePanel={() => setRightPanelOpen((v) => !v)}
         onOpenSettings={() => openSettings("models")}
-        sessionTitle={titleMovedToInfoBar ? null : sessionTitle}
-        expandWorkspaceHost={titleMovedToInfoBar}
+        sessionTitle={sessionTitle}
         titleGenerating={titleGeneratingId === selectedSession?.id}
         onWorkspaceControlsHostChange={setTitleWorkspaceControlsHost}
         showWorkspaceAddButton={viewMode === "tabs"}
@@ -1123,7 +1095,6 @@ export function AppShell() {
           onSelectTab={handleSelectTab}
           onCloseTab={handleCloseTab}
           onReorderTab={tabsApi.reorder}
-          onTabTotalWidthChange={handleTabTotalWidthChange}
         />,
         titleWorkspaceControlsHost,
         "workspace-tabs",
@@ -1238,7 +1209,6 @@ export function AppShell() {
               onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
               onViewFullHistory={handleViewFullHistory}
               systemPrompt={systemPrompt}
-              sessionTitle={titleMovedToInfoBar ? sessionTitle : null}
               soundEnabled={soundEnabled}
               onSoundToggle={onSoundToggle}
               playDoneSound={playDoneSound}

@@ -23,10 +23,6 @@ interface WorkspaceTabBarProps {
   onCloseTab: (key: string) => void;
   /** Browser-style drag reorder: move `fromKey` before/after `targetKey`. */
   onReorderTab: (fromKey: string, targetKey: string, position: "before" | "after") => void;
-  /** Reports the strip's total tab content width (scrollWidth) whenever it
-   *  changes — the shell uses it to decide whether the title bar still has
-   *  room for the session title. */
-  onTabTotalWidthChange?: (width: number) => void;
 }
 
 function pathBaseName(path: string): string {
@@ -47,7 +43,6 @@ export function WorkspaceTabBar({
   onSelectTab,
   onCloseTab,
   onReorderTab,
-  onTabTotalWidthChange,
 }: WorkspaceTabBarProps) {
   const { t } = useI18n();
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
@@ -64,15 +59,12 @@ export function WorkspaceTabBar({
   useEffect(() => {
     const strip = stripRef.current;
     if (!strip) return;
-    const check = () => {
-      setStripOverflow(strip.scrollWidth > strip.clientWidth + 2);
-      onTabTotalWidthChange?.(strip.scrollWidth);
-    };
+    const check = () => setStripOverflow(strip.scrollWidth > strip.clientWidth + 2);
     check();
     const ro = new ResizeObserver(check);
     ro.observe(strip);
     return () => ro.disconnect();
-  }, [tabs.length, onTabTotalWidthChange]);
+  }, [tabs.length]);
 
   // ── Drag & drop reorder ──────────────────────────────────────────────────
   const handleDragStart = (e: React.DragEvent, tab: WorkspaceTab) => {
