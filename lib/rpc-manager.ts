@@ -74,12 +74,38 @@ export interface RpcSessionStartOptions {
 
 const CODING_TOOL_NAMES = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
+// pi's Theme constructor eagerly ANSI-compiles every token at construction
+// time and expands optional fallbacks (e.g. searchMatchText ?? text). Pass an
+// empty string for every token so fallback expansion never yields undefined,
+// which would crash fgAnsi/bgAnsi (0.84.2 added searchMatch* fallbacks).
+const PLAIN_TEXT_FG_TOKENS = [
+  "accent", "border", "borderAccent", "borderMuted",
+  "success", "error", "warning", "muted", "dim", "text", "thinkingText",
+  "searchMatchText", "userMessageText", "customMessageText", "customMessageLabel",
+  "toolTitle", "toolOutput",
+  "mdHeading", "mdLink", "mdLinkUrl", "mdCode", "mdCodeBlock",
+  "mdCodeBlockBorder", "mdQuote", "mdQuoteBorder", "mdHr", "mdListBullet",
+  "toolDiffAdded", "toolDiffRemoved", "toolDiffContext",
+  "syntaxComment", "syntaxKeyword", "syntaxFunction", "syntaxVariable",
+  "syntaxString", "syntaxNumber", "syntaxType", "syntaxOperator", "syntaxPunctuation",
+  "thinkingOff", "thinkingMinimal", "thinkingLow", "thinkingMedium",
+  "thinkingHigh", "thinkingXhigh", "thinkingMax", "bashMode",
+];
+const PLAIN_TEXT_BG_TOKENS = [
+  "selectedBg", "scrollbarThumb", "searchMatchBg",
+  "userMessageBg", "customMessageBg", "toolPendingBg", "toolSuccessBg", "toolErrorBg",
+];
+
+function emptyThemeColors(tokens: readonly string[]): Record<string, string> {
+  return Object.fromEntries(tokens.map((token) => [token, ""]));
+}
+
 // Extensions require a complete Theme, while the web UI applies its own styling.
 class PlainTextTheme extends Theme {
   constructor() {
     super(
-      { thinkingXhigh: "" } as ConstructorParameters<typeof Theme>[0],
-      { selectedBg: "" } as ConstructorParameters<typeof Theme>[1],
+      emptyThemeColors(PLAIN_TEXT_FG_TOKENS) as ConstructorParameters<typeof Theme>[0],
+      emptyThemeColors(PLAIN_TEXT_BG_TOKENS) as ConstructorParameters<typeof Theme>[1],
       "truecolor",
     );
   }
