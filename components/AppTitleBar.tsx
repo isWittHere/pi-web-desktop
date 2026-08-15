@@ -195,7 +195,8 @@ export function AppTitleBar({
             space on the left so they don't overlap the sidebar toggle. */}
         {isMac && <div aria-hidden="true" style={{ width: 72, flexShrink: 0 }} />}
 
-        {/* Sidebar toggle */}
+        {/* Sidebar toggle — no selected highlight: open/closed state is
+            shown by the panel itself, not by lighting up the button. */}
         <button
           className="app-no-drag"
           onClick={onSidebarToggle}
@@ -204,11 +205,11 @@ export function AppTitleBar({
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
-            background: sidebarOpen ? "var(--bg-selected)" : "none", border: "none",
-            color: sidebarOpen ? "var(--text)" : "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
+            background: "none", border: "none",
+            color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = sidebarOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = sidebarOpen ? "var(--text)" : "var(--text-muted)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
         >
           {sidebarOpen ? <SidebarSimple size={16} aria-hidden="true" /> : <List size={16} aria-hidden="true" />}
         </button>
@@ -335,7 +336,7 @@ export function AppTitleBar({
 
 
 
-        {/* File panel toggle */}
+        {/* File panel toggle — no selected highlight (see sidebar toggle) */}
         <button
           className="app-no-drag"
           onClick={onToggleFilePanel}
@@ -344,12 +345,12 @@ export function AppTitleBar({
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
-            background: rightPanelOpen ? "var(--bg-selected)" : "none", border: "none",
-            color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
+            background: "none", border: "none",
+            color: "var(--text-muted)",
             cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = rightPanelOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
         >
           <SidebarSimple size={16} aria-hidden="true" style={{ transform: "scaleX(-1)" }} />
         </button>
