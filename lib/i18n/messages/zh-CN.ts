@@ -279,6 +279,7 @@ export const zhCNLocale = {
     "desktop.gitRepoRootOnlyDescription": "工作树仅在 Git 仓库根目录可用。",
     "desktop.checkingWorktrees": "正在检查此目录的工作树。",
     "desktop.worktreesLoading": "工作树…",
+    "desktop.worktreePanel": "工作树面板",
     "desktop.createWorktree": "为分支创建工作树检出",
     "desktop.newWorktree": "新建工作树…",
     "desktop.branchName": "分支名称",

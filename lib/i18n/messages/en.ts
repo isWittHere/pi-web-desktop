@@ -279,6 +279,7 @@ export const enLocale = {
     "desktop.gitRepoRootOnlyDescription": "Worktrees are available in Git repository roots.",
     "desktop.checkingWorktrees": "Checking worktrees for this directory.",
     "desktop.worktreesLoading": "Worktrees...",
+    "desktop.worktreePanel": "Worktrees",
     "desktop.createWorktree": "Create a worktree checkout for a branch",
     "desktop.newWorktree": "New worktree…",
     "desktop.branchName": "branch name",

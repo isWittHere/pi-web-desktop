@@ -985,6 +985,7 @@ export function AppShell() {
         requestedCwd={cwdRequest}
         onOpenProject={handleOpenProject}
         onWorkspaceActivityChange={setWorkspaceActivity}
+        viewMode={viewMode}
         workspaceControlsHosts={{
           // Tabs mode: the title-bar host belongs to the workspace tab bar
           // (AppShell portals it); the classic selector stays sidebar-driven.

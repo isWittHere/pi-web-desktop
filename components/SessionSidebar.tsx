@@ -19,6 +19,8 @@ import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { QuickChangesPanel } from "./QuickChangesPanel";
 import { WorkspacePickerMenu } from "./WorkspacePickerMenu";
+import { WorktreePanel } from "./WorktreePanel";
+import type { ViewMode } from "@/hooks/useViewMode";
 
 interface Props {
   selectedSessionId: string | null;
@@ -74,6 +76,10 @@ interface Props {
    *  (tabs view mode: the title-bar tab bar needs both for dots and for the
    *  picker list). Only fires when the data actually changed. */
   onWorkspaceActivityChange?: (snapshot: { projects: string[]; activity: Map<string, { running: number; unread: number }> }) => void;
+  /** View mode: tabs mode hides the sidebar CWD picker / inline worktree
+   *  switcher (replaced by the WorktreePanel) and the title-bar worktree
+   *  button. Classic mode keeps every existing entry point. */
+  viewMode?: ViewMode;
   workspaceControlsHosts?: {
     title?: HTMLElement | null;
     welcome?: HTMLElement | null;
@@ -86,13 +92,13 @@ interface Props {
   onBackgroundTaskDone?: (session: SessionInfo) => void;
 }
 
-interface WorktreeEntry {
+export interface WorktreeEntry {
   path: string;
   branch: string | null;
   isMain: boolean;
 }
 
-interface WorktreeState {
+export interface WorktreeState {
   /** The cwd this data was fetched for — guards against stale responses */
   forCwd: string;
   projectRoot: string;
@@ -314,7 +320,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor, viewMode = "classic" }: Props) {
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -810,8 +816,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     }
   }, [draftSessions, allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone, onNoContentToWaitFor]);
 
-  const handleCreateWorktree = useCallback(async () => {
-    const branch = wtNewBranch.trim();
+  // Create a worktree. The panel passes its own branch input; the classic
+  // title-bar/sidebar menus pass nothing and use the wtNewBranch state.
+  const handleCreateWorktree = useCallback(async (branchInput?: string) => {
+    const branch = (branchInput ?? wtNewBranch).trim();
     if (!branch || wtBusy || !worktreeState) return;
     setWtBusy(true);
     setWtError(null);
@@ -876,6 +884,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       setWtBusy(false);
     }
   }, [worktreeState, wtBusy, selectedCwd]);
+
+  // Worktree panel (tabs mode): switching a worktree moves the effective cwd.
+  const handlePanelSelectWorktree = useCallback((path: string) => {
+    setSelectedCwd(path);
+    setWtError(null);
+  }, []);
 
   // Close dropdowns on outside click — the project and worktree menus of the
   // sidebar and of both workspace-control portals all share one rule.
@@ -1174,7 +1188,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           </AnimatedDropdown>
         </div>
 
-        {(showWorktreeSwitcher || inactiveWorktreeSelector) && (
+        {(viewMode === "classic" && (showWorktreeSwitcher || inactiveWorktreeSelector)) && (
           <div style={{ position: "relative", minWidth: 0 }}>
             <button
               className="app-no-drag app-titlebar-context-control"
@@ -1476,7 +1490,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         )}
 
         {/* CWD picker */}
-        {!hasWorkspaceControlsHosts && <div ref={dropdownRef} style={{ position: "relative" }}>
+        {viewMode === "classic" && !hasWorkspaceControlsHosts && <div ref={dropdownRef} style={{ position: "relative" }}>
           <button
             onClick={() => setDropdownOpen((v) => !v)}
             title={selectedProject ?? selectedCwd ?? ""}
@@ -1558,7 +1572,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             switching between worktrees of one project keeps the row mounted
             instead of flickering while data refetches: all worktrees of a
             project share the same list anyway. */}
-        {!hasWorkspaceControlsHosts && showWorktreeSwitcher && (() => {
+        {viewMode === "classic" && !hasWorkspaceControlsHosts && showWorktreeSwitcher && (() => {
           if (!worktreeState) return null;
           const currentWt = worktreeState.worktrees.find((w) => w.path === selectedCwd)
             ?? worktreeState.worktrees.find((w) => w.isMain);
@@ -1822,7 +1836,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             </div>
           );
         })()}
-        {!hasWorkspaceControlsHosts && inactiveWorktreeSelector && (
+        {viewMode === "classic" && !hasWorkspaceControlsHosts && inactiveWorktreeSelector && (
           <button
             type="button"
             aria-disabled="true"
@@ -1886,6 +1900,25 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             </div>
           ))}
         </div>
+      )}
+
+      {/* Worktree panel — tabs view mode replaces the title-bar/sidebar
+          switchers with a dedicated sidebar panel (requirement 6). */}
+      {viewMode === "tabs" && (selectedCwdProp || selectedCwd) && (
+        <WorktreePanel
+          worktreeState={worktreeState}
+          selectedCwd={selectedCwd}
+          loading={worktreeLoading}
+          guide={worktreeGuide}
+          homeDir={homeDir}
+          onSelect={handlePanelSelectWorktree}
+          onCreate={handleCreateWorktree}
+          onRemove={handleRemoveWorktree}
+          busy={wtBusy}
+          error={wtError}
+          confirmRemove={wtConfirmRemove}
+          onConfirmRemoveChange={setWtConfirmRemove}
+        />
       )}
 
       {/* File Explorer section */}

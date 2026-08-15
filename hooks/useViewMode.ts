@@ -45,8 +45,8 @@ function notify() {
   for (const listener of listeners) listener();
 }
 
-export function useViewMode() {
-  const viewMode = useSyncExternalStore(subscribe, getMode, () => "classic");
+export function useViewMode(): { viewMode: ViewMode; setViewMode: (mode: ViewMode) => void } {
+  const viewMode = useSyncExternalStore(subscribe, getMode, () => "classic" as ViewMode);
 
   const setViewMode = useCallback((mode: ViewMode) => {
     cachedMode = mode;
