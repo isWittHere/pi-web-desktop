@@ -913,6 +913,24 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // While any dropdown is open, disable the Electron title-bar drag region:
+  // Chromium does not deliver mousedown on -webkit-app-region: drag areas, so
+  // outside-click dismissal would never fire for clicks on the empty title
+  // bar. Restore the drag region when every dropdown closes.
+  useEffect(() => {
+    const anyOpen = Boolean(
+      workspaceProjectDropdownOpen || workspaceWorktreeDropdownOpen
+      || dropdownOpen || wtDropdownOpen || wtNewOpen
+    );
+    if (!anyOpen) return;
+    const bar = document.querySelector<HTMLElement>(".app-title-bar");
+    if (!bar) return;
+    const style = bar.style as CSSStyleDeclaration & { webkitAppRegion?: string };
+    const prev = style.webkitAppRegion;
+    style.webkitAppRegion = "no-drag";
+    return () => { style.webkitAppRegion = prev; };
+  }, [workspaceProjectDropdownOpen, workspaceWorktreeDropdownOpen, dropdownOpen, wtDropdownOpen, wtNewOpen]);
+
   // Clicking a session moves the effective cwd to that session's worktree.
   // Done on the click path (not via the selectedCwd prop sync) so it also
   // works when the prop value won't change — e.g. re-clicking the already

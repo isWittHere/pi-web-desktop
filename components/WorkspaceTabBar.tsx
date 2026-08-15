@@ -67,6 +67,20 @@ export function WorkspaceTabBar({
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
 
+  // While the "+" menu is open, disable the Electron title-bar drag region:
+  // Chromium does not deliver mousedown on -webkit-app-region: drag areas, so
+  // outside-click dismissal would never fire for clicks on the empty title
+  // bar. Restore the drag region when the menu closes.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const bar = document.querySelector<HTMLElement>(".app-title-bar");
+    if (!bar) return;
+    const style = bar.style as CSSStyleDeclaration & { webkitAppRegion?: string };
+    const prev = style.webkitAppRegion;
+    style.webkitAppRegion = "no-drag";
+    return () => { style.webkitAppRegion = prev; };
+  }, [menuOpen]);
+
   return (
     <div
       ref={rootRef}
