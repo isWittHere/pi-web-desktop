@@ -65,10 +65,13 @@ export function normalizeFileUri(uri: string): string | null {
   }
 }
 
-/** Forward-slash + trailing-slash normalization; empty input becomes null. */
+/** Forward-slash + trailing-slash normalization; empty input becomes null.
+ *  Windows drive letters are uppercased ("e:/Dev" → "E:/Dev") so detected
+ *  projects match pi's own session paths, which use the canonical spelling. */
 export function normalizePath(p: string): string | null {
   const cleaned = p.trim().replace(/\\/g, "/").replace(/\/+$/, "");
-  return cleaned.length > 0 ? cleaned : null;
+  if (cleaned.length === 0) return null;
+  return cleaned.replace(/^([a-z]):\//, (_m, d: string) => d.toUpperCase() + ":/");
 }
 
 /**

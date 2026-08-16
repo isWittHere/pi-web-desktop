@@ -49,6 +49,7 @@ import {
 } from "@/lib/draft-sessions";
 import { clearLastOpen, clearLastWorkspace, clearWelcomeState, getLastOpen, setLastOpen, setLastWorkspace, setWelcomeState, workspaceKeyOf } from "@/lib/workspace-memory";
 import { getSessionList, type SessionListData } from "@/lib/session-list";
+import { samePath } from "@/lib/path-match";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { getTitleAutoEnabled, getTitleModel } from "@/lib/title-settings";
 import type { SessionInfo } from "@/lib/types";
@@ -394,12 +395,32 @@ export function AppShell() {
   }, [viewMode, activeCwd, selectedSession, newSessionCwd, tabsApi]);
 
   // Pick a project from a workspace picker menu (classic: switch cwd; tabs:
-  // open as a tab, deduped) — then move the effective cwd.
+  // open as a tab, deduped) — then move the effective cwd. The picked path is
+  // validated first (registering the allow-root and normalizing the path),
+  // mirroring the picker's custom-path flow: recommended workspaces detected
+  // from other editors are not in the file allow-list yet.
+  const openProjectTokenRef = useRef(0);
   const handleOpenProject = useCallback((project: string) => {
-    if (viewModeRef.current === "tabs") {
-      tabsApi.open(project, project);
-    }
-    requestWorkspaceSwitch(project);
+    const token = ++openProjectTokenRef.current;
+    void (async () => {
+      let cwd = project;
+      try {
+        const res = await fetch("/api/cwd/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cwd: project }),
+        });
+        const data = await res.json().catch(() => ({})) as { cwd?: string; error?: string };
+        if (res.ok && !data.error && data.cwd) cwd = data.cwd;
+      } catch {
+        // validation unavailable — proceed with the raw pick
+      }
+      if (token !== openProjectTokenRef.current) return; // superseded
+      if (viewModeRef.current === "tabs") {
+        tabsApi.open(cwd, cwd);
+      }
+      requestWorkspaceSwitch(cwd);
+    })();
   }, [tabsApi, requestWorkspaceSwitch]);
 
   // Activate a workspace tab: switching the effective cwd re-runs the same
@@ -520,7 +541,7 @@ export function AppShell() {
     const openLatestSession = (d: SessionListData) => {
       if (token !== workspaceRestoreTokenRef.current) return; // stale switch
       const latest = d.sessions
-        .filter((s) => (s.projectRoot ?? s.cwd) === projectKey)
+        .filter((s) => samePath(s.projectRoot ?? s.cwd, projectKey))
         .sort((a, b) => b.modified.localeCompare(a.modified))[0];
       if (latest) openSession(latest);
       else openWelcomeDraft(cwd, projectKey);
@@ -541,7 +562,7 @@ export function AppShell() {
             openLatestSession(d);
             return;
           }
-          if ((s.projectRoot ?? s.cwd) !== projectKey) {
+          if (!samePath(s.projectRoot ?? s.cwd, projectKey)) {
             // Defensive: the remembered session drifted out of this workspace.
             clearLastOpen(projectKey);
             openLatestSession(d);
@@ -617,7 +638,7 @@ export function AppShell() {
       setLastWorkspace(newProject);
       clearWelcomeState();
     }
-    if (selectedSession && (selectedSession.projectRoot ?? selectedSession.cwd) === newProject) {
+    if (selectedSession && samePath(selectedSession.projectRoot ?? selectedSession.cwd, newProject)) {
       return;
     }
     // Leaving the draft for another project: an empty draft is meaningless.

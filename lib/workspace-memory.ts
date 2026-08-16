@@ -1,3 +1,5 @@
+import { isWindowsPlatform, normalizePathKey } from "./path-match";
+
 /**
  * Per-workspace "last open context" memory.
  *
@@ -60,6 +62,42 @@ export function clearLastWorkspace(): void {
   }
 }
 
+// ── Welcome-state flag ─────────────────────────────────────────────────────
+// Clearing the last workspace alone is not enough: the startup auto-select
+// falls back to the most recently modified project, so a restart would still
+// land in a workspace. The flag arms when every workspace tab is closed and
+// is consumed by the auto-select (stay on the welcome page) until the user
+// picks a workspace again.
+
+const WELCOME_STATE_KEY = "pi-web:welcome-state";
+
+/** Arm the welcome state: the next startup stays on the welcome page. */
+export function setWelcomeState(): void {
+  try {
+    window.localStorage.setItem(WELCOME_STATE_KEY, "1");
+  } catch {
+    // storage unavailable — memory is best-effort
+  }
+}
+
+/** True while the welcome state is armed (every workspace was closed). */
+export function getWelcomeState(): boolean {
+  try {
+    return window.localStorage.getItem(WELCOME_STATE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Disarm the welcome state once the user picks a workspace again. */
+export function clearWelcomeState(): void {
+  try {
+    window.localStorage.removeItem(WELCOME_STATE_KEY);
+  } catch {
+    // storage unavailable — memory is best-effort
+  }
+}
+
 function readMap(): Record<string, LastOpenEntry | undefined> {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) return {};
@@ -74,7 +112,15 @@ function readMap(): Record<string, LastOpenEntry | undefined> {
 /** The remembered context for a workspace, or null when none/stale. */
 export function getLastOpen(workspaceKey: string): LastOpenEntry | null {
   try {
-    const entry = readMap()[workspaceKey];
+    const map = readMap();
+    let entry = map[workspaceKey];
+    if (!entry && isWindowsPlatform()) {
+      // Keys may have been written with a differently-cased drive letter
+      // (lobby entries normalize to uppercase, older records may not).
+      const lower = workspaceKey.toLowerCase();
+      const found = Object.keys(map).find((k) => k.toLowerCase() === lower);
+      if (found) entry = map[found];
+    }
     if (!entry) return null;
     if (entry.kind !== "session" && entry.kind !== "draft") return null;
     if (typeof entry.id !== "string" || entry.id.length === 0) return null;
@@ -87,7 +133,7 @@ export function getLastOpen(workspaceKey: string): LastOpenEntry | null {
 export function setLastOpen(workspaceKey: string, entry: LastOpenEntry): void {
   try {
     const map = readMap();
-    map[workspaceKey] = entry;
+    map[normalizePathKey(workspaceKey)] = entry;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
   } catch {
     // storage unavailable — memory is best-effort
@@ -97,8 +143,17 @@ export function setLastOpen(workspaceKey: string, entry: LastOpenEntry): void {
 export function clearLastOpen(workspaceKey: string): void {
   try {
     const map = readMap();
-    if (!(workspaceKey in map)) return;
-    delete map[workspaceKey];
+    const key = normalizePathKey(workspaceKey);
+    if (!(key in map)) {
+      // Tolerate a differently-cased stored key.
+      if (!isWindowsPlatform()) return;
+      const lower = key.toLowerCase();
+      const found = Object.keys(map).find((k) => k.toLowerCase() === lower);
+      if (!found) return;
+      delete map[found];
+    } else {
+      delete map[key];
+    }
     // Keep the store clean: drop the key entirely when nothing is remembered.
     if (Object.keys(map).length === 0) window.localStorage.removeItem(STORAGE_KEY);
     else window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));

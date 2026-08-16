@@ -7,13 +7,14 @@ import type { SessionInfo, SessionMark, TimeBucket } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { getDraft } from "@/lib/draft-store";
-import { getLastWorkspace } from "@/lib/workspace-memory";
+import { clearWelcomeState, getLastWorkspace, getWelcomeState } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { getTitleModel } from "@/lib/title-settings";
 import { bucketOf, TIME_BUCKET_ORDER, timeBucketKey } from "@/lib/time-groups";
 import { loadCollapsedTimeGroups, saveCollapsedTimeGroups, type CollapsedTimeGroups } from "@/lib/time-group-state";
+import { samePath } from "@/lib/path-match";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
@@ -585,11 +586,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   /** Resolve the project root for a cwd from the freshest data available */
   const projectRootFor = useCallback((cwd: string | null): string | null => {
     if (!cwd) return null;
-    if (worktreeState && worktreeState.forCwd === cwd) return worktreeState.projectRoot;
+    if (worktreeState && samePath(worktreeState.forCwd, cwd)) return worktreeState.projectRoot;
     // Any path in the loaded worktree list belongs to that project — covers
     // worktrees without sessions, so switching to them keeps the row mounted.
-    if (worktreeState?.worktrees.some((w) => w.path === cwd)) return worktreeState.projectRoot;
-    const match = allSessions.find((s) => s.cwd === cwd);
+    if (worktreeState?.worktrees.some((w) => samePath(w.path, cwd))) return worktreeState.projectRoot;
+    const match = allSessions.find((s) => samePath(s.cwd, cwd));
     return match?.projectRoot ?? cwd;
   }, [worktreeState, allSessions]);
 
@@ -807,6 +808,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           autoSelectRef.current = true;
           setSelectedCwd(target.cwd);
           onSelectSession(target, true);
+          // An explicit ?session= restore is a deliberate return to a
+          // workspace — disarm the welcome state armed by closing every tab.
+          clearWelcomeState();
           return;
         }
         // Session not found — notify parent so it can show the placeholder
@@ -818,6 +822,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       // workspace.
       if (startupAutoSelectDoneRef.current) return;
       startupAutoSelectDoneRef.current = true;
+      // The user closed every workspace tab last session: stay on the
+      // welcome page instead of auto-selecting anything (a plain clear of
+      // lastWorkspace would still fall back to the most recently modified
+      // project). A manual workspace pick disarms the flag (AppShell).
+      if (getWelcomeState()) return;
       // Include drafts so a project that only has drafts is still selected.
       const projects = getRecentProjects(rows);
       // Real sessions alone decide the fallback ordering: a pure-draft project
@@ -999,7 +1008,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // (the prop is authoritative; the state trails it by one render).
   const hasSelectedCwd = Boolean(selectedCwdProp || selectedCwd);
   const filteredSessions = selectedProject
-    ? allRows.filter((s) => (s.projectRoot ?? s.cwd) === selectedProject)
+    ? allRows.filter((s) => samePath(s.projectRoot ?? s.cwd, selectedProject))
     : allRows;
   // Narrow by status mark before the text search (null filter = all marks).
   const markFilteredSessions = markFilter
