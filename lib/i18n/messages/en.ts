@@ -239,7 +239,7 @@ export const enLocale = {
     "desktop.highReasoning": "High reasoning",
     "desktop.extraHighReasoning": "Extra-high reasoning",
     "desktop.maxReasoning": "Max reasoning",
-    "desktop.noToolsReadOnly": "No tools, read-only",
+    "desktop.noTools": "No tools — chat only",
     "desktop.fourBuiltInTools": "4 built-in tools",
     "desktop.readOnlyBuiltInTools": "Read-only tools (read, grep, find, ls)",
     "desktop.allBuiltInTools": "All built-in tools",

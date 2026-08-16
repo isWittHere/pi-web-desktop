@@ -2812,7 +2812,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = (toolPreset ?? "default") === preset;
-                      const desc = lvl === "off" ? t("desktop.noToolsReadOnly") : lvl === "read-only" ? t("desktop.readOnlyBuiltInTools") : lvl === "default" ? t("desktop.fourBuiltInTools") : t("desktop.allBuiltInTools");
+                      const desc = lvl === "off" ? t("desktop.noTools") : lvl === "read-only" ? t("desktop.readOnlyBuiltInTools") : lvl === "default" ? t("desktop.fourBuiltInTools") : t("desktop.allBuiltInTools");
                       return (
                         <button
                           key={lvl}
