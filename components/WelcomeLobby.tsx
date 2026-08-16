@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { getSessionList } from "@/lib/session-list";
+import { RunningSessionIndicator, UnreadSessionIndicator } from "@/components/SessionActivityIndicators";
 import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
 
 /**
@@ -34,16 +35,6 @@ function sourceLabel(source: RecentProjectSource): string {
     case "claude": return "Claude";
     case "codex": return "Codex";
     case "opencode": return "OpenCode";
-  }
-}
-
-function sourceColor(source: RecentProjectSource): string {
-  switch (source) {
-    case "vscode": return "#3a8fe0";
-    case "zed": return "#a885e8";
-    case "claude": return "#d97757";
-    case "codex": return "#4bb387";
-    case "opencode": return "#c9c9c9";
   }
 }
 
@@ -196,24 +187,24 @@ export function WelcomeLobby({
       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
-      {opts.source && (
-        <span
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            background: sourceColor(opts.source),
-            flexShrink: 0,
-            opacity: 0.85,
-          }}
-          aria-hidden="true"
-        />
-      )}
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {pathBaseName(path)}
       </span>
-      {opts.running != null && opts.running > 0 && (
-        <span style={{ flexShrink: 0, color: "var(--accent)", fontSize: 10 }} title={t("desktop.agentRunning")} aria-hidden="true">●</span>
+      {((opts.running ?? 0) > 0 || (opts.unread ?? 0) > 0) && (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          {(opts.running ?? 0) > 0 && (
+            <span title={t("desktop.agentRunning")} style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--accent)", fontSize: 10, lineHeight: 1 }}>
+              <RunningSessionIndicator />
+              {(opts.running ?? 0) > 1 && <span>{(opts.running ?? 0)}</span>}
+            </span>
+          )}
+          {(opts.unread ?? 0) > 0 && (
+            <span title={t("desktop.newActivity")} style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--accent)", fontSize: 10, lineHeight: 1 }}>
+              <UnreadSessionIndicator />
+              {(opts.unread ?? 0) > 1 && <span>{(opts.unread ?? 0)}</span>}
+            </span>
+          )}
+        </span>
       )}
       {opts.source && (
         <span style={{ flexShrink: 0, fontSize: 11, color: "var(--text-dim)" }}>
