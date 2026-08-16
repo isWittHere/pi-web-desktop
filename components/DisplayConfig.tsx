@@ -117,6 +117,25 @@ export function DisplayConfig() {
   const [applying, setApplying] = useState<string | null>(null);
   const [hoveredTag, setHoveredTag] = useState<string | null>(null);
 
+  // Recommended-workspaces toggle (welcome lobby section 2). Default on;
+  // stored in localStorage so WelcomeLobby reads the same key.
+  const [recommendedEnabled, setRecommendedEnabled] = useState(true);
+  useEffect(() => {
+    try {
+      setRecommendedEnabled(window.localStorage.getItem("pi-recent-projects-enabled") !== "0");
+    } catch {
+      // storage unavailable — keep default
+    }
+  }, []);
+  const handleRecommendedToggle = useCallback((checked: boolean) => {
+    setRecommendedEnabled(checked);
+    try {
+      window.localStorage.setItem("pi-recent-projects-enabled", checked ? "1" : "0");
+    } catch {
+      // best-effort
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     fetch("/api/themes")
@@ -299,6 +318,15 @@ export function DisplayConfig() {
             {t("desktop.noCustomThemesHint2")}
           </p>
         )}
+      </SettingsSection>
+
+      {/* ── Recommended workspaces ── */}
+      <SettingsSection title={t("desktop.recommendedWorkspaces")} description={t("desktop.recommendedWorkspacesSettingDescription")}>
+        <SettingToggle
+          checked={recommendedEnabled}
+          onChange={handleRecommendedToggle}
+          label={t("desktop.recommendedWorkspacesSetting")}
+        />
       </SettingsSection>
 
       {/* ── Wallpaper ── */}

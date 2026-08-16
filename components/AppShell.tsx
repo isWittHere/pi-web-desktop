@@ -2,9 +2,9 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { WelcomeLobby } from "./WelcomeLobby";
 import { SessionSidebar } from "./SessionSidebar";
 import { WallpaperLayer } from "./WallpaperLayer";
 import { ChatWindow } from "./ChatWindow";
@@ -47,7 +47,7 @@ import {
   saveDraftSessions,
   type DraftSession,
 } from "@/lib/draft-sessions";
-import { clearLastOpen, clearLastWorkspace, getLastOpen, setLastOpen, setLastWorkspace, workspaceKeyOf } from "@/lib/workspace-memory";
+import { clearLastOpen, clearLastWorkspace, clearWelcomeState, getLastOpen, setLastOpen, setLastWorkspace, setWelcomeState, workspaceKeyOf } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { getTitleAutoEnabled, getTitleModel } from "@/lib/title-settings";
@@ -439,8 +439,11 @@ export function AppShell() {
       setSessionKey((k) => k + 1);
       requestWorkspaceSwitch(null);
       // No workspace is open anymore — forget the startup auto-select
-      // anchor so a restart does not jump back to the closed workspace.
+      // anchor so a restart does not jump back to the closed workspace,
+      // and arm the welcome state so the restart stays on the welcome
+      // page until the user picks a workspace again.
       clearLastWorkspace();
+      setWelcomeState();
     }
   }, [tabsApi, requestWorkspaceSwitch]);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
@@ -579,7 +582,12 @@ export function AppShell() {
     // (suppress) — must not reinforce a stale/incorrect memory: otherwise a
     // bad pick (e.g. a quick-workspace draft outranking the real projects)
     // writes itself back and every restart repeats the same wrong workspace.
-    if (!isAutoSelect) setLastWorkspace(newProject);
+    // A user-driven pick also disarms the welcome state (armed when the last
+    // workspace tab was closed).
+    if (!isAutoSelect) {
+      setLastWorkspace(newProject);
+      clearWelcomeState();
+    }
     if (selectedSession && (selectedSession.projectRoot ?? selectedSession.cwd) === newProject) {
       return;
     }
@@ -1256,16 +1264,11 @@ export function AppShell() {
                 {t("desktop.selectSessionFromSidebar")}
               </div>
             ) : (
-              <div style={{ position: "absolute", top: 12, left: 12, display: "flex", alignItems: "flex-start", gap: 8, userSelect: "none", pointerEvents: "none" }}>
-                <ArrowLeft size={44} color="var(--accent)" aria-hidden="true" style={{ opacity: 0.7, flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>{t("desktop.getStarted")}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
-                    <span style={{ color: "var(--text-dim)", marginRight: 6 }}>1.</span>{t("desktop.selectProjectDirectory")}<br />
-                    <span style={{ color: "var(--text-dim)", marginRight: 6 }}>2.</span>{t("desktop.addModelsFromBottom")}
-                  </div>
-                </div>
-              </div>
+              <WelcomeLobby
+                piProjects={workspaceActivity.projects}
+                activity={workspaceActivity.activity}
+                onSelectProject={handleOpenProject}
+              />
             )
           ) : null}
         </div>
