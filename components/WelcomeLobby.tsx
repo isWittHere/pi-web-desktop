@@ -321,11 +321,11 @@ export function WelcomeLobby({
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 7,
-                  padding: "8px 18px",
+                  gap: 6,
+                  padding: "5px 12px",
                   background: "var(--accent)",
                   border: "none",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   color: "#fff",
                   fontSize: 12.5,
                   fontWeight: 600,
@@ -335,7 +335,7 @@ export function WelcomeLobby({
                 onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
               >
-                <FolderOpen size={15} weight="regular" aria-hidden="true" />
+                <FolderOpen size={13} weight="regular" aria-hidden="true" />
                 {t("desktop.selectFolder")}
               </button>
               <button
@@ -344,11 +344,11 @@ export function WelcomeLobby({
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 7,
-                  padding: "8px 12px",
+                  gap: 6,
+                  padding: "5px 10px",
                   background: "transparent",
                   border: "none",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   color: "var(--text-muted)",
                   fontSize: 12.5,
                   cursor: "pointer",
@@ -357,7 +357,7 @@ export function WelcomeLobby({
                 onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
               >
-                <Lightning size={15} weight="regular" aria-hidden="true" />
+                <Lightning size={13} weight="regular" aria-hidden="true" />
                 {t("desktop.quickWorkspace")}
               </button>
             </div>
