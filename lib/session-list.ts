@@ -27,7 +27,9 @@ let inFlight: Promise<SessionListData> | null = null;
 export function getSessionList(force = false): Promise<SessionListData> {
   if (cache && !force) return Promise.resolve(cache);
   if (inFlight) return inFlight;
-  inFlight = fetch("/api/sessions")
+  // force bypasses the server-side session-list cache too, so an explicit
+  // refresh also sees transient (not-yet-flushed) runtime sessions.
+  inFlight = fetch(`/api/sessions${force ? "?force=1" : ""}`)
     .then(async (r) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = (await r.json()) as SessionListData;
