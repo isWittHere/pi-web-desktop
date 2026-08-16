@@ -1265,7 +1265,6 @@ export function AppShell() {
               </div>
             ) : (
               <WelcomeLobby
-                piProjects={workspaceActivity.projects}
                 activity={workspaceActivity.activity}
                 onSelectProject={handleOpenProject}
               />

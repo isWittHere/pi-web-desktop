@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { getSessionList } from "@/lib/session-list";
 import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
 
 /**
@@ -9,8 +10,10 @@ import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
  *
  * Two plain-text lists, placed side by side when space allows and stacked
  * when it does not (flex-wrap):
- * 1. Pi workspaces: pi's own recent projects (reuses the sidebar's project
- *    list, i.e. sessions sorted by last activity).
+ * 1. Pi workspaces: pi's own recent workspaces, each project's last-session
+ *    activity as its timestamp. Derived from the shared /api/sessions cache
+ *    (same dedupe-by-project-root logic as the sidebar) so no extra request
+ *    is made on a cold start.
  * 2. Recommended workspaces: recent projects detected from other editors and
  *    coding agents (VS Code family, Zed, Claude Code, Codex, OpenCode) via
  *    GET /api/recent-projects. Shown honestly — no filtering against pi's own
@@ -42,6 +45,12 @@ function sourceColor(source: RecentProjectSource): string {
     case "codex": return "#4bb387";
     case "opencode": return "#c9c9c9";
   }
+}
+
+/** Pi workspace with its latest session activity time. */
+interface PiWorkspace {
+  path: string;
+  modifiedMs: number;
 }
 
 /** Inline Pi logo (same path as public/pi-original.svg). */
@@ -80,12 +89,9 @@ function formatRelativeTime(ms: number, t: (key: string, params?: { [k: string]:
 }
 
 export function WelcomeLobby({
-  piProjects,
   activity,
   onSelectProject,
 }: {
-  /** Pi's own recent workspaces (sorted by last session activity). */
-  piProjects: string[];
   /** Per-workspace running/unread counts for list-item indicators. */
   activity: Map<string, { running: number; unread: number }>;
   /** Opens the given project through the normal workspace-open chain. */
@@ -94,6 +100,35 @@ export function WelcomeLobby({
   const { t } = useI18n();
   const [recommended, setRecommended] = useState<RecentProject[] | null>(null);
   const [recommendedEnabled, setRecommendedEnabled] = useState(true);
+  const [piWorkspaces, setPiWorkspaces] = useState<PiWorkspace[]>([]);
+
+  // Pi's own recent workspaces with timestamps: dedupe by project root,
+  // latest session activity per root, sorted newest first. Uses the shared
+  // /api/sessions cache (already fetched at startup by the sidebar), so the
+  // lobby adds no extra round-trip.
+  useEffect(() => {
+    let cancelled = false;
+    getSessionList()
+      .then((data) => {
+        if (cancelled) return;
+        const latestByRoot = new Map<string, string>(); // root -> modified
+        for (const s of data.sessions) {
+          const root = s.projectRoot ?? s.cwd;
+          if (!root) continue;
+          const prev = latestByRoot.get(root);
+          if (!prev || s.modified > prev) latestByRoot.set(root, s.modified);
+        }
+        setPiWorkspaces(
+          [...latestByRoot.entries()]
+            .sort((a, b) => b[1].localeCompare(a[1]))
+            .map(([path, modified]) => ({ path, modifiedMs: Date.parse(modified) })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setPiWorkspaces([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // Read the toggle from localStorage after hydration.
   useEffect(() => {
@@ -131,7 +166,7 @@ export function WelcomeLobby({
     });
   }, []);
 
-  const hasPiProjects = piProjects.length > 0;
+  const hasPiProjects = piWorkspaces.length > 0;
   const hasRecommended = recommendedEnabled && (recommended?.length ?? 0) > 0;
   // Nothing to show beyond the brand — keep the page minimal.
   const hasAnySection = hasPiProjects || hasRecommended;
@@ -161,6 +196,19 @@ export function WelcomeLobby({
       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
+      {opts.source && (
+        <span
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            background: sourceColor(opts.source),
+            flexShrink: 0,
+            opacity: 0.85,
+          }}
+          aria-hidden="true"
+        />
+      )}
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {pathBaseName(path)}
       </span>
@@ -168,7 +216,7 @@ export function WelcomeLobby({
         <span style={{ flexShrink: 0, color: "var(--accent)", fontSize: 10 }} title={t("desktop.agentRunning")} aria-hidden="true">●</span>
       )}
       {opts.source && (
-        <span style={{ flexShrink: 0, fontSize: 10, color: sourceColor(opts.source), opacity: 0.9, letterSpacing: "0.04em", fontWeight: 600 }}>
+        <span style={{ flexShrink: 0, fontSize: 11, color: "var(--text-dim)" }}>
           {sourceLabel(opts.source)}
         </span>
       )}
@@ -237,9 +285,9 @@ export function WelcomeLobby({
             <>
               {listHeader(t("desktop.recentProjects"))}
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                {piProjects.slice(0, 10).map((p) => {
-                  const a = activity.get(p);
-                  return listItem(p, { running: a?.running ?? 0, unread: a?.unread ?? 0 });
+                {piWorkspaces.slice(0, 10).map((w) => {
+                  const a = activity.get(w.path);
+                  return listItem(w.path, { running: a?.running ?? 0, unread: a?.unread ?? 0, timeMs: w.modifiedMs });
                 })}
               </div>
             </>,
