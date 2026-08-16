@@ -287,21 +287,18 @@ export function WelcomeLobby({
       }}
     >
       {/* Brand — fixed, never scrolls away. */}
-      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 26 }}>
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <div style={{ color: "var(--accent)" }}>
           <PiLogo size={52} />
-        </div>
-        <div style={{ fontSize: 22, fontWeight: 650, color: "var(--text)", letterSpacing: "-0.01em" }}>
-          {t("desktop.lobbyTitle")}
         </div>
         <div style={{ fontSize: 12.5, color: "var(--text-muted)", maxWidth: 420, textAlign: "center", lineHeight: 1.6 }}>
           {t("desktop.lobbySubtitle")}
         </div>
       </div>
 
-      {/* Workspace actions — always visible, even when both lists are empty.
-          Same hook and behavior as the picker menus' actions. */}
-      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: hasAnySection ? 24 : 0 }}>
+      {/* Workspace actions — its own section, always visible even when both
+          lists are empty. Same hook and behavior as the picker menus' actions. */}
+      <div style={{ flexShrink: 0, width: "min(100%, 940px)", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: hasAnySection ? 24 : 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
             type="button"

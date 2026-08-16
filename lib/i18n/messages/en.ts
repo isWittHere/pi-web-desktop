@@ -150,7 +150,6 @@ export const enLocale = {
     "desktop.copySessionId": "Copy session ID",
     "desktop.sendMessageForSessionInfo": "Send a message or run /session to load session info",
     "desktop.selectSessionFromSidebar": "Select a session from the sidebar",
-    "desktop.lobbyTitle": "Welcome back",
     "desktop.lobbySubtitle": "Open a recent workspace or pick a folder to start a new session",
     "desktop.recommendedWorkspaces": "Recommended Workspaces",
     "desktop.recommendedWorkspacesSetting": "Show recommended workspaces on the welcome lobby",

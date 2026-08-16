@@ -150,7 +150,6 @@ export const zhCNLocale = {
     "desktop.copySessionId": "复制会话 ID",
     "desktop.sendMessageForSessionInfo": "发送消息或运行 /session 以加载会话信息",
     "desktop.selectSessionFromSidebar": "请从侧边栏选择会话",
-    "desktop.lobbyTitle": "欢迎回来",
     "desktop.lobbySubtitle": "打开最近的工作区，或选择文件夹开始新会话",
     "desktop.recommendedWorkspaces": "推荐工作区",
     "desktop.recommendedWorkspacesSetting": "在欢迎大厅显示推荐工作区",
