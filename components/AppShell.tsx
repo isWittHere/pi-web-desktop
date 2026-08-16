@@ -684,6 +684,23 @@ export function AppShell() {
     cleanupEmptyActiveDraft();
     setActiveDraftId(null);
     setNewSessionCwd(null);
+    // Move the effective cwd to the session's workspace when it is not there
+    // yet (e.g. selecting a session row from the welcome lobby, where the
+    // sidebar has no selected cwd): the worktree switcher and the file
+    // explorer are driven by that cwd. handleCwdChange short-circuits on the
+    // same-project check below, so the session stays open and the cwd lands
+    // where the sidebar's own session click would have put it.
+    if (activeCwd === null || !samePath(activeCwd, session.cwd)) {
+      requestWorkspaceSwitch(session.cwd);
+    }
+    // Tabs mode: entering a session directly (lobby rows) must surface its
+    // workspace as a tab, exactly like a project pick would.
+    if (viewModeRef.current === "tabs") {
+      const tabKey = workspaceKeyOf(session);
+      if (!tabsStateRef.current.tabs.some((t) => t.key === tabKey)) {
+        tabsApi.open(tabKey, session.cwd);
+      }
+    }
     // Wait for the session content before hiding the startup splash (only
     // matters while the splash is still up; afterwards it is a no-op).
     waitForContent();
@@ -706,7 +723,7 @@ export function AppShell() {
     if (!isRestore) {
       router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
     }
-  }, [router, isMobile, cleanupEmptyActiveDraft, selectedSession, waitForContent]);
+  }, [router, isMobile, cleanupEmptyActiveDraft, selectedSession, waitForContent, activeCwd, requestWorkspaceSwitch, tabsApi]);
 
   const handleNewSession = useCallback((_sessionId: string, cwd: string, projectRoot?: string | null) => {
     // An empty draft is meaningless: drop the current one (if it never got
