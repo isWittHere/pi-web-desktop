@@ -48,7 +48,7 @@ import {
   type DraftSession,
 } from "@/lib/draft-sessions";
 import { clearLastOpen, clearLastWorkspace, clearWelcomeState, getLastOpen, setLastOpen, setLastWorkspace, setWelcomeState, workspaceKeyOf } from "@/lib/workspace-memory";
-import { getSessionList } from "@/lib/session-list";
+import { getSessionList, type SessionListData } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { getTitleAutoEnabled, getTitleModel } from "@/lib/title-settings";
 import type { SessionInfo } from "@/lib/types";
@@ -474,7 +474,11 @@ export function AppShell() {
   // Restore the workspace's last open context after switching to it. Called
   // from handleCwdChange once the outgoing context has been reset. A draft
   // reopens synchronously; a session is looked up against the live list so a
-  // deleted session falls back to a fresh welcome draft.
+  // deleted session falls back to the workspace's most recent session. When
+  // no context was ever remembered (e.g. entering a workspace with existing
+  // sessions from the lobby), the latest session is auto-selected instead of
+  // a blank draft — only a workspace with no sessions at all gets a fresh
+  // welcome draft.
   const restoreWorkspaceContext = useCallback((cwd: string, projectKey: string) => {
     const token = ++workspaceRestoreTokenRef.current;
     const lastOpen = getLastOpen(projectKey);
@@ -495,6 +499,33 @@ export function AppShell() {
       }
       return;
     }
+
+    // Open the given session: remount the chat with the session present
+    // (useAgentSession loads content in a mount-only effect, so the
+    // null-session welcome mount from the switch would never load it).
+    const openSession = (s: SessionInfo, remember = true) => {
+      if (remember) setLastOpen(projectKey, { kind: "session", id: s.id });
+      waitForContent();
+      setSelectedSession(s);
+      setSessionKey((k) => k + 1);
+      if (new URLSearchParams(window.location.search).get("session") !== s.id) {
+        router.replace(`?session=${encodeURIComponent(s.id)}`, { scroll: false });
+      }
+    };
+
+    // No (valid) remembered session — pick the workspace's most recently
+    // modified session so entering an existing workspace from the lobby
+    // restores real history instead of a blank draft. Falls back to a fresh
+    // welcome draft only when the workspace has no sessions at all.
+    const openLatestSession = (d: SessionListData) => {
+      if (token !== workspaceRestoreTokenRef.current) return; // stale switch
+      const latest = d.sessions
+        .filter((s) => (s.projectRoot ?? s.cwd) === projectKey)
+        .sort((a, b) => b.modified.localeCompare(a.modified))[0];
+      if (latest) openSession(latest);
+      else openWelcomeDraft(cwd, projectKey);
+    };
+
     if (lastOpen?.kind === "session") {
       // Shared cache: SessionSidebar already fetches the same list at startup,
       // so this does not add a second /api/sessions round-trip.
@@ -503,29 +534,20 @@ export function AppShell() {
           if (token !== workspaceRestoreTokenRef.current) return; // stale switch
           const s = d.sessions.find((x) => x.id === lastOpen.id);
           if (!s) {
-            // The list loaded but the remembered session is gone — forget it.
-            // When the list itself failed keep the memory so a later switch
-            // retries the restore.
+            // The list loaded but the remembered session is gone — forget it
+            // and fall back to the workspace's latest session. When the list
+            // itself failed keep the memory so a later switch retries.
             clearLastOpen(projectKey);
-            openWelcomeDraft(cwd, projectKey);
+            openLatestSession(d);
             return;
           }
           if ((s.projectRoot ?? s.cwd) !== projectKey) {
             // Defensive: the remembered session drifted out of this workspace.
             clearLastOpen(projectKey);
-            openWelcomeDraft(cwd, projectKey);
+            openLatestSession(d);
             return;
           }
-          // Selecting the session must remount the chat with the session
-          // present: useAgentSession loads content in a mount-only effect, so
-          // the null-session welcome mount from the switch would never load
-          // the restored session's messages.
-          waitForContent();
-          setSelectedSession(s);
-          setSessionKey((k) => k + 1);
-          if (new URLSearchParams(window.location.search).get("session") !== s.id) {
-            router.replace(`?session=${encodeURIComponent(s.id)}`, { scroll: false });
-          }
+          openSession(s, false);
         })
         .catch(() => {
           // Network hiccup: keep the remembered session for a later retry.
@@ -536,7 +558,14 @@ export function AppShell() {
         });
       return;
     }
-    openWelcomeDraft(cwd, projectKey);
+    // No remembered context (first entry from the lobby, memory cleared,
+    // or the workspace only ever existed in other editors): auto-select its
+    // most recent session when it has one.
+    getSessionList()
+      .then(openLatestSession)
+      .catch(() => {
+        if (token === workspaceRestoreTokenRef.current) openWelcomeDraft(cwd, projectKey);
+      });
   }, [draftSessions, router, openWelcomeDraft, waitForContent, contentDone]);
 
   const handleCwdChange = useCallback((cwd: string | null, projectRoot?: string | null, isAutoSelect = false) => {
