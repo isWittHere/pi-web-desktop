@@ -165,6 +165,11 @@ export function AppTitleBar({
 }: AppTitleBarProps) {
   const { isElectron, isMac, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
   const { t: translate } = useI18n();
+  // Sidebar toggle title: while no workspace exists the toggle stays visible
+  // but disabled, with a hint pointing at the workspace picker.
+  const sidebarToggleTitle = sidebarToggleDisabled
+    ? translate("desktop.noWorkspaceSidebar")
+    : (sidebarOpen ? translate("desktop.hideSidebar") : translate("desktop.showSidebar"));
   // Workspace "+" picker button state (pinned left, next to the sidebar
   // toggle in tabs view mode).
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -247,12 +252,8 @@ export function AppTitleBar({
           onClick={sidebarToggleDisabled ? undefined : onSidebarToggle}
           aria-disabled={sidebarToggleDisabled}
           tabIndex={sidebarToggleDisabled ? -1 : 0}
-          title={sidebarToggleDisabled
-            ? translate("desktop.noWorkspaceSidebar")
-            : (sidebarOpen ? translate("desktop.hideSidebar") : translate("desktop.showSidebar"))}
-          aria-label={sidebarToggleDisabled
-            ? translate("desktop.noWorkspaceSidebar")
-            : (sidebarOpen ? translate("desktop.hideSidebar") : translate("desktop.showSidebar"))}
+          title={sidebarToggleTitle}
+          aria-label={sidebarToggleTitle}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,

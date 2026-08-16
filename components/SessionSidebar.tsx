@@ -995,6 +995,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Sessions of every worktree in the selected project are shown together
   const selectedProject = projectRootFor(selectedCwd);
+  // A workspace is selected when either the prop or the synced state says so
+  // (the prop is authoritative; the state trails it by one render).
+  const hasSelectedCwd = Boolean(selectedCwdProp || selectedCwd);
   const filteredSessions = selectedProject
     ? allRows.filter((s) => (s.projectRoot ?? s.cwd) === selectedProject)
     : allRows;
@@ -1096,7 +1099,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       titleGeneratingId={titleGeneratingId}
       onDeleteDraft={onDeleteDraft}
       onRenameDraft={onRenameDraft}
-      showWorkspaceLabel={selectedCwd === null}
+      showWorkspaceLabel={!hasSelectedCwd}
       depth={0}
     />
   );
@@ -1954,7 +1957,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
            welcome state), expands to fill the remaining sidebar height so the
            all-workspaces list is never clipped by a stale explorer limit. */}
       {sessionsOpen && (
-        <div style={{ flex: explorerOpen && (selectedCwdProp || selectedCwd) ? "0 1 auto" : "1 1 0", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: explorerOpen && (selectedCwdProp || selectedCwd) ? "min(40%, 360px)" : "none" }}>
+        <div style={{ flex: explorerOpen && hasSelectedCwd ? "0 1 auto" : "1 1 0", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: explorerOpen && hasSelectedCwd ? "min(40%, 360px)" : "none" }}>
           {loading && (
             <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
               {t("desktop.loading")}
