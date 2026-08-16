@@ -1,6 +1,6 @@
 {
   "name": "@iswitthere/pi-web-desktop",
-  "version": "0.8.7-f",
+  "version": "0.8.8-f",
   "description": "Electron desktop app for the pi coding agent",
   "homepage": "https://github.com/isWittHere/pi-web-desktop#readme",
   "repository": {
