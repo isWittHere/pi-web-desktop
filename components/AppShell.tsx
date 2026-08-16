@@ -47,7 +47,7 @@ import {
   saveDraftSessions,
   type DraftSession,
 } from "@/lib/draft-sessions";
-import { clearLastOpen, getLastOpen, setLastOpen, setLastWorkspace, workspaceKeyOf } from "@/lib/workspace-memory";
+import { clearLastOpen, clearLastWorkspace, getLastOpen, setLastOpen, setLastWorkspace, workspaceKeyOf } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { getTitleAutoEnabled, getTitleModel } from "@/lib/title-settings";
@@ -160,6 +160,24 @@ export function AppShell() {
   const [projectTrustBusy, setProjectTrustBusy] = useState(false);
   const [projectTrustError, setProjectTrustError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // True while the session list has loaded and contains no sessions and no
+  // drafts anywhere (brand-new user: no pi workspace has ever been selected).
+  // The sidebar is hidden and its toggle disabled until a workspace exists.
+  const [noWorkspaceEver, setNoWorkspaceEver] = useState(false);
+  // True once the sidebar was auto-collapsed because of the no-workspace
+  // state; the next workspace appearing re-opens it (user intent per the
+  // welcome flow), while a plain reload keeps the user's own collapse choice.
+  const noWorkspaceCollapsedRef = useRef(false);
+  const handleNoWorkspaceChange = useCallback((isEmpty: boolean) => {
+    setNoWorkspaceEver(isEmpty);
+    if (isEmpty) {
+      noWorkspaceCollapsedRef.current = true;
+      setSidebarOpen(false);
+    } else if (noWorkspaceCollapsedRef.current) {
+      noWorkspaceCollapsedRef.current = false;
+      setSidebarOpen(true);
+    }
+  }, []);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   // On mobile the sidebar is an overlay drawer; hide it by default so the chat
   // is visible on load. Runs once the breakpoint resolves after hydration.
@@ -420,6 +438,9 @@ export function AppShell() {
       setActiveTopPanel(null);
       setSessionKey((k) => k + 1);
       requestWorkspaceSwitch(null);
+      // No workspace is open anymore — forget the startup auto-select
+      // anchor so a restart does not jump back to the closed workspace.
+      clearLastWorkspace();
     }
   }, [tabsApi, requestWorkspaceSwitch]);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
@@ -1020,6 +1041,7 @@ export function AppShell() {
         // auto-select — the splash has nothing to wait for, so the sidebar
         // signals readiness directly and the first-run welcome screen shows.
         onNoContentToWaitFor={contentDone}
+        onNoWorkspaceChange={handleNoWorkspaceChange}
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}
         onSessionRenamed={handleSessionRenamed}
@@ -1073,6 +1095,7 @@ export function AppShell() {
         topBarRef={topBarRef}
         sidebarOpen={sidebarOpen}
         onSidebarToggle={handleSidebarToggle}
+        sidebarToggleDisabled={noWorkspaceEver}
         isDark={isDark}
         toggleTheme={toggleTheme}
         isMobile={isMobile}

@@ -80,6 +80,7 @@ export const enLocale = {
     "desktop.switchToDark": "Switch to dark mode",
     "desktop.showSidebar": "Show sidebar",
     "desktop.hideSidebar": "Hide sidebar",
+    "desktop.noWorkspaceSidebar": "Select a workspace to enable the sidebar",
     "desktop.resizeSidebar": "Resize sidebar",
     "desktop.resizeFilePanel": "Resize file panel",
     "desktop.trustProject": "Trust project",

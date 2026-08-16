@@ -44,6 +44,10 @@ interface Props {
    *  auto-select and no session content for the startup splash to wait for,
    *  so the parent can fade it to the first-run welcome screen. */
   onNoContentToWaitFor?: () => void;
+  /** Fired whenever the "brand-new user" state changes: no real sessions and
+   *  no drafts anywhere (no pi workspace has ever been selected). The shell
+   *  hides the sidebar and disables its toggle while true. */
+  onNoWorkspaceChange?: (isEmpty: boolean) => void;
   refreshKey?: number;
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
@@ -321,7 +325,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor, viewMode = "classic" }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor, onNoWorkspaceChange, viewMode = "classic" }: Props) {
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -449,6 +453,16 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     // the first load may reuse a list already fetched by the restore path.
     loadSessions(isFirst, !isFirst);
   }, [loadSessions, refreshKey]);
+
+  // Brand-new-user detection: no real sessions and no drafts anywhere (no pi
+  // workspace has ever been selected). Only evaluated once the list has loaded
+  // — the mount-time empty array is "not loaded yet", not "no sessions".
+  const noWorkspaceEver = loading === false
+    && allSessions.length === 0
+    && (draftSessions?.length ?? 0) === 0;
+  useEffect(() => {
+    onNoWorkspaceChange?.(noWorkspaceEver);
+  }, [noWorkspaceEver, onNoWorkspaceChange]);
 
   // Browser storage is unavailable during server rendering. Restore the panel
   // preference after hydration so a collapsed explorer stays collapsed on reload.
@@ -1082,6 +1096,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       titleGeneratingId={titleGeneratingId}
       onDeleteDraft={onDeleteDraft}
       onRenameDraft={onRenameDraft}
+      showWorkspaceLabel={selectedCwd === null}
       depth={0}
     />
   );
@@ -1935,9 +1950,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       </div>
 
       {/* Session list — when both panels open, uses intelligent max-height;
-           when explorer is collapsed, expands to fill remaining space. */}
+           when explorer is collapsed OR not rendered (no workspace selected,
+           welcome state), expands to fill the remaining sidebar height so the
+           all-workspaces list is never clipped by a stale explorer limit. */}
       {sessionsOpen && (
-        <div style={{ flex: explorerOpen ? "0 1 auto" : "1 1 0", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: explorerOpen ? "min(40%, 360px)" : "none" }}>
+        <div style={{ flex: explorerOpen && (selectedCwdProp || selectedCwd) ? "0 1 auto" : "1 1 0", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: explorerOpen && (selectedCwdProp || selectedCwd) ? "min(40%, 360px)" : "none" }}>
           {loading && (
             <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
               {t("desktop.loading")}
@@ -2209,6 +2226,7 @@ function SessionTreeItem({
   titleGeneratingId,
   onDeleteDraft,
   onRenameDraft,
+  showWorkspaceLabel = false,
   depth,
 }: {
   node: SessionTreeNode;
@@ -2225,6 +2243,9 @@ function SessionTreeItem({
   titleGeneratingId?: string | null;
   onDeleteDraft?: (id: string) => void;
   onRenameDraft?: (id: string, name: string) => void;
+  /** Welcome state (no workspace selected): show the session's workspace name
+   *  instead of the message count, ahead of the relative time. */
+  showWorkspaceLabel?: boolean;
   depth: number;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -2265,6 +2286,7 @@ function SessionTreeItem({
           hasChildren={hasChildren}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((v) => !v)}
+          showWorkspaceLabel={showWorkspaceLabel}
         />
       </div>
       {hasChildren && !collapsed && (
@@ -2286,6 +2308,7 @@ function SessionTreeItem({
               titleGeneratingId={titleGeneratingId}
               onDeleteDraft={onDeleteDraft}
               onRenameDraft={onRenameDraft}
+              showWorkspaceLabel={showWorkspaceLabel}
               depth={depth + 1}
             />
           ))}
@@ -2448,6 +2471,7 @@ function SessionItem({
   hasChildren = false,
   collapsed = false,
   onToggleCollapse,
+  showWorkspaceLabel = false,
 }: {
   session: SessionRow;
   isSelected: boolean;
@@ -2470,6 +2494,9 @@ function SessionItem({
   hasChildren?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** Welcome state (no workspace selected): show the session's workspace name
+   *  instead of the message count, ahead of the relative time. */
+  showWorkspaceLabel?: boolean;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
@@ -2922,7 +2949,10 @@ function SessionItem({
                 </div>
               )}
             </div>
-            {/* Metadata row */}
+            {/* Metadata row. In the welcome state (no workspace selected) the
+                all-workspaces list shows the session's workspace name ahead of
+                the relative time instead of the message count — the count means
+                nothing when the rows span every project. */}
             <div style={{ marginTop: 2, display: "flex", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
               {session.pinned && (
                 <span
@@ -2933,10 +2963,24 @@ function SessionItem({
                   <PushPin size={10} weight="fill" aria-hidden="true" />
                 </span>
               )}
-              <span title={session.modified}>{formatRelativeTime(session.modified, t)}</span>
-              {session.isDraft
-                ? <span>{t("desktop.unsent")}</span>
-                : <span>{t("desktop.messagesCount", { count: session.messageCount })}</span>}
+              {showWorkspaceLabel ? (
+                <>
+                  <span
+                    title={session.projectRoot ?? session.cwd}
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flexShrink: 1 }}
+                  >
+                    {pathBaseName(session.projectRoot ?? session.cwd)}
+                  </span>
+                  <span title={session.modified} style={{ flexShrink: 0 }}>{formatRelativeTime(session.modified, t)}</span>
+                </>
+              ) : (
+                <>
+                  <span title={session.modified}>{formatRelativeTime(session.modified, t)}</span>
+                  {session.isDraft
+                    ? <span>{t("desktop.unsent")}</span>
+                    : <span>{t("desktop.messagesCount", { count: session.messageCount })}</span>}
+                </>
+              )}
               {!session.isDraft && session.mark && (
                 <SessionMarkBadge mark={session.mark} />
               )}

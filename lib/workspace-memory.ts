@@ -50,6 +50,16 @@ export function setLastWorkspace(workspaceKey: string): void {
   }
 }
 
+/** Forget the last active workspace (e.g. the user closed every workspace
+ *  tab): the next startup auto-select must not jump back to it. */
+export function clearLastWorkspace(): void {
+  try {
+    window.localStorage.removeItem(LAST_WORKSPACE_KEY);
+  } catch {
+    // storage unavailable — memory is best-effort
+  }
+}
+
 function readMap(): Record<string, LastOpenEntry | undefined> {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) return {};

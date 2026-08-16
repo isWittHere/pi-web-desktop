@@ -80,6 +80,7 @@ export const zhCNLocale = {
     "desktop.switchToDark": "切换至深色模式",
     "desktop.showSidebar": "显示侧边栏",
     "desktop.hideSidebar": "隐藏侧边栏",
+    "desktop.noWorkspaceSidebar": "选择工作区后可启用侧边栏",
     "desktop.resizeSidebar": "调整侧边栏宽度",
     "desktop.resizeFilePanel": "调整文件面板宽度",
     "desktop.trustProject": "信任项目",

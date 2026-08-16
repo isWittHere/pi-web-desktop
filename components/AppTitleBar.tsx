@@ -26,6 +26,9 @@ interface AppTitleBarProps {
   topBarRef: React.RefObject<HTMLDivElement | null>;
   sidebarOpen: boolean;
   onSidebarToggle: () => void;
+  /** True when no pi workspace exists yet (brand-new user): the sidebar is
+   *  hidden and its toggle is shown but disabled with a hint. */
+  sidebarToggleDisabled?: boolean;
   isDark: boolean;
   toggleTheme: (origin?: { x: number; y: number }) => void;
   isMobile: boolean;
@@ -135,6 +138,7 @@ export function AppTitleBar({
   topBarRef,
   sidebarOpen,
   onSidebarToggle,
+  sidebarToggleDisabled = false,
   isDark,
   toggleTheme,
   isMobile,
@@ -235,20 +239,34 @@ export function AppTitleBar({
         )}
 
         {/* Sidebar toggle — no selected highlight: open/closed state is
-            shown by the panel itself, not by lighting up the button. */}
+            shown by the panel itself, not by lighting up the button. While no
+            workspace exists yet the toggle stays visible but disabled, with a
+            hover hint pointing at the workspace picker. */}
         <button
           className="app-no-drag"
-          onClick={onSidebarToggle}
-          title={sidebarOpen ? translate("desktop.hideSidebar") : translate("desktop.showSidebar")}
-          aria-label={sidebarOpen ? translate("desktop.hideSidebar") : translate("desktop.showSidebar")}
+          onClick={sidebarToggleDisabled ? undefined : onSidebarToggle}
+          aria-disabled={sidebarToggleDisabled}
+          tabIndex={sidebarToggleDisabled ? -1 : 0}
+          title={sidebarToggleDisabled
+            ? translate("desktop.noWorkspaceSidebar")
+            : (sidebarOpen ? translate("desktop.hideSidebar") : translate("desktop.showSidebar"))}
+          aria-label={sidebarToggleDisabled
+            ? translate("desktop.noWorkspaceSidebar")
+            : (sidebarOpen ? translate("desktop.hideSidebar") : translate("desktop.showSidebar"))}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
             background: "none", border: "none",
-            color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
+            color: "var(--text-muted)", cursor: sidebarToggleDisabled ? "default" : "pointer", flexShrink: 0, transition: "background 0.12s, color 0.12s",
+            opacity: sidebarToggleDisabled ? 0.5 : 1,
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+          onMouseEnter={(e) => {
+            if (sidebarToggleDisabled) return;
+            e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)";
+          }}
         >
           {sidebarOpen ? <SidebarSimple size={16} aria-hidden="true" /> : <List size={16} aria-hidden="true" />}
         </button>
