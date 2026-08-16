@@ -241,7 +241,7 @@ export const zhCNLocale = {
     "desktop.maxReasoning": "最高推理",
     "desktop.noTools": "不使用工具（仅对话）",
     "desktop.fourBuiltInTools": "4 个内置工具",
-    "desktop.readOnlyBuiltInTools": "只读工具（read、grep、find、ls）",
+    "desktop.readOnlyBuiltInTools": "只读工具",
     "desktop.allBuiltInTools": "所有内置工具",
     "desktop.toolOff": "关闭",
     "desktop.toolReadOnly": "只读",
