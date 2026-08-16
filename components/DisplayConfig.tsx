@@ -9,7 +9,7 @@ import { useWallpaper } from "@/hooks/useWallpaper";
 import { resolveWallpaperUrl } from "@/lib/wallpaper";
 import { SettingsSection, SettingsButton } from "@/components/settings-ui";
 import { SettingToggle } from "@/components/SettingToggle";
-import { RECOMMENDED_ENABLED_KEY } from "@/components/WelcomeLobby";
+import { isRecommendedEnabled, setRecommendedEnabledStorage } from "@/components/WelcomeLobby";
 import type { ThemeSetInfo } from "@/lib/theme";
 
 // ── Tag / chip helpers ───────────────────────────────────────────────────────
@@ -119,22 +119,14 @@ export function DisplayConfig() {
   const [hoveredTag, setHoveredTag] = useState<string | null>(null);
 
   // Recommended-workspaces toggle (welcome lobby section 2). Default on;
-  // stored in localStorage so WelcomeLobby reads the same key.
+  // read/written through the shared helpers so the lobby and settings agree.
   const [recommendedEnabled, setRecommendedEnabled] = useState(true);
   useEffect(() => {
-    try {
-      setRecommendedEnabled(window.localStorage.getItem(RECOMMENDED_ENABLED_KEY) !== "0");
-    } catch {
-      // storage unavailable — keep default
-    }
+    setRecommendedEnabled(isRecommendedEnabled());
   }, []);
   const handleRecommendedToggle = useCallback((checked: boolean) => {
     setRecommendedEnabled(checked);
-    try {
-      window.localStorage.setItem(RECOMMENDED_ENABLED_KEY, checked ? "1" : "0");
-    } catch {
-      // best-effort
-    }
+    setRecommendedEnabledStorage(checked);
   }, []);
 
   useEffect(() => {

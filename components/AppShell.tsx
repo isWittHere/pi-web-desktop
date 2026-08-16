@@ -47,8 +47,9 @@ import {
   saveDraftSessions,
   type DraftSession,
 } from "@/lib/draft-sessions";
-import { clearLastOpen, clearLastWorkspace, clearWelcomeState, getLastOpen, setLastOpen, setLastWorkspace, setWelcomeState, workspaceKeyOf } from "@/lib/workspace-memory";
-import { getSessionList, type SessionListData } from "@/lib/session-list";
+import { clearLastWorkspace, clearWelcomeState, getLastOpen, setLastOpen, setLastWorkspace, setWelcomeState, workspaceKeyOf } from "@/lib/workspace-memory";
+import { resolveRestoreTarget, type RestoreTarget } from "@/lib/workspace-restore";
+import { getSessionList } from "@/lib/session-list";
 import { samePath } from "@/lib/path-match";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { getTitleAutoEnabled, getTitleModel } from "@/lib/title-settings";
@@ -476,13 +477,19 @@ export function AppShell() {
   const workspaceRestoreTokenRef = useRef(0);
 
   // Open the new-session composer backed by a real draft row, matching the
-  // "+" flow. Used when switching to a workspace with no remembered context.
-  const openWelcomeDraft = useCallback((cwd: string, projectKey: string) => {
+  // "+" flow. A draft is (re)created wherever the UI needs a blank composer
+  // for a workspace — welcome entry, "+" button, quick workspace.
+  const createDraft = useCallback((cwd: string, projectKey: string) => {
     const draft = createDraftSession(cwd);
     setDraftSessions((prev) => [draft, ...prev]);
     setActiveDraftId(draft.id);
     setNewSessionCwd(cwd);
     setLastOpen(projectKey, { kind: "draft", id: draft.id });
+    return draft;
+  }, []);
+
+  const openWelcomeDraft = useCallback((cwd: string, projectKey: string) => {
+    createDraft(cwd, projectKey);
     // A welcome draft has no session content to wait for — mark readiness.
     contentDone();
     // A draft is not URL-representable — drop a stale ?session= so a refresh
@@ -490,102 +497,63 @@ export function AppShell() {
     if (new URLSearchParams(window.location.search).has("session")) {
       router.replace("/", { scroll: false });
     }
-  }, [router, contentDone]);
+  }, [router, contentDone, createDraft]);
 
   // Restore the workspace's last open context after switching to it. Called
-  // from handleCwdChange once the outgoing context has been reset. A draft
-  // reopens synchronously; a session is looked up against the live list so a
-  // deleted session falls back to the workspace's most recent session. When
-  // no context was ever remembered (e.g. entering a workspace with existing
-  // sessions from the lobby), the latest session is auto-selected instead of
-  // a blank draft — only a workspace with no sessions at all gets a fresh
-  // welcome draft.
+  // from handleCwdChange once the outgoing context has been reset. The
+  // decision (remembered draft → remembered session → latest session → fresh
+  // welcome draft) is pure logic in lib/workspace-restore.ts; here it is only
+  // applied to the shell state.
   const restoreWorkspaceContext = useCallback((cwd: string, projectKey: string) => {
     const token = ++workspaceRestoreTokenRef.current;
     const lastOpen = getLastOpen(projectKey);
+
+    // Remembered draft: drafts are local state, restore synchronously.
     if (lastOpen?.kind === "draft") {
       const draft = draftSessions.find((d) => d.id === lastOpen.id);
       if (draft) {
         setActiveDraftId(draft.id);
         setNewSessionCwd(draft.cwd);
         setLastOpen(projectKey, { kind: "draft", id: draft.id });
-        // A draft reopens with an empty composer — no session content to wait for.
         contentDone();
         if (new URLSearchParams(window.location.search).has("session")) {
           router.replace("/", { scroll: false });
         }
-      } else {
-        clearLastOpen(projectKey);
-        openWelcomeDraft(cwd, projectKey);
+        return;
       }
-      return;
+      // Stale draft memory — fall through to the async resolve.
     }
 
-    // Open the given session: remount the chat with the session present
-    // (useAgentSession loads content in a mount-only effect, so the
-    // null-session welcome mount from the switch would never load it).
-    const openSession = (s: SessionInfo, remember = true) => {
-      if (remember) setLastOpen(projectKey, { kind: "session", id: s.id });
-      waitForContent();
-      setSelectedSession(s);
-      setSessionKey((k) => k + 1);
-      if (new URLSearchParams(window.location.search).get("session") !== s.id) {
-        router.replace(`?session=${encodeURIComponent(s.id)}`, { scroll: false });
-      }
-    };
-
-    // No (valid) remembered session — pick the workspace's most recently
-    // modified session so entering an existing workspace from the lobby
-    // restores real history instead of a blank draft. Falls back to a fresh
-    // welcome draft only when the workspace has no sessions at all.
-    const openLatestSession = (d: SessionListData) => {
+    const apply = (target: RestoreTarget) => {
       if (token !== workspaceRestoreTokenRef.current) return; // stale switch
-      const latest = d.sessions
-        .filter((s) => samePath(s.projectRoot ?? s.cwd, projectKey))
-        .sort((a, b) => b.modified.localeCompare(a.modified))[0];
-      if (latest) openSession(latest);
-      else openWelcomeDraft(cwd, projectKey);
+      if (target.kind === "session") {
+        const s = target.session;
+        setLastOpen(projectKey, { kind: "session", id: s.id });
+        // Selecting the session must remount the chat with the session
+        // present: useAgentSession loads content in a mount-only effect, so
+        // the null-session welcome mount from the switch would never load
+        // the restored session's messages.
+        waitForContent();
+        setSelectedSession(s);
+        setSessionKey((k) => k + 1);
+        if (new URLSearchParams(window.location.search).get("session") !== s.id) {
+          router.replace(`?session=${encodeURIComponent(s.id)}`, { scroll: false });
+        }
+        return;
+      }
+      if (target.kind === "new-draft") openWelcomeDraft(cwd, projectKey);
     };
 
-    if (lastOpen?.kind === "session") {
-      // Shared cache: SessionSidebar already fetches the same list at startup,
-      // so this does not add a second /api/sessions round-trip.
-      getSessionList()
-        .then((d) => {
-          if (token !== workspaceRestoreTokenRef.current) return; // stale switch
-          const s = d.sessions.find((x) => x.id === lastOpen.id);
-          if (!s) {
-            // The list loaded but the remembered session is gone — forget it
-            // and fall back to the workspace's latest session. When the list
-            // itself failed keep the memory so a later switch retries.
-            clearLastOpen(projectKey);
-            openLatestSession(d);
-            return;
-          }
-          if (!samePath(s.projectRoot ?? s.cwd, projectKey)) {
-            // Defensive: the remembered session drifted out of this workspace.
-            clearLastOpen(projectKey);
-            openLatestSession(d);
-            return;
-          }
-          openSession(s, false);
-        })
-        .catch(() => {
-          // Network hiccup: keep the remembered session for a later retry.
-          if (token === workspaceRestoreTokenRef.current) {
-            openWelcomeDraft(cwd, projectKey);
-            setLastOpen(projectKey, { kind: "session", id: lastOpen.id });
-          }
-        });
-      return;
-    }
-    // No remembered context (first entry from the lobby, memory cleared,
-    // or the workspace only ever existed in other editors): auto-select its
-    // most recent session when it has one.
+    // Session / latest-session / fresh-draft decisions need the session list
+    // (shared cache — the sidebar already fetched it at startup).
     getSessionList()
-      .then(openLatestSession)
+      .then((d) => resolveRestoreTarget({ projectKey, cwd, lastOpen, drafts: draftSessions, sessions: d.sessions }))
+      .then(apply)
       .catch(() => {
-        if (token === workspaceRestoreTokenRef.current) openWelcomeDraft(cwd, projectKey);
+        if (token !== workspaceRestoreTokenRef.current) return;
+        // Network hiccup: keep the remembered session for a later retry.
+        openWelcomeDraft(cwd, projectKey);
+        if (lastOpen?.kind === "session") setLastOpen(projectKey, lastOpen);
       });
   }, [draftSessions, router, openWelcomeDraft, waitForContent, contentDone]);
 
@@ -638,7 +606,7 @@ export function AppShell() {
       setLastWorkspace(newProject);
       clearWelcomeState();
     }
-    if (selectedSession && samePath(selectedSession.projectRoot ?? selectedSession.cwd, newProject)) {
+    if (selectedSession && samePath(workspaceKeyOf(selectedSession), newProject)) {
       return;
     }
     // Leaving the draft for another project: an empty draft is meaningless.
@@ -674,7 +642,7 @@ export function AppShell() {
     // cwd context already matches — otherwise the pending cwd move needs
     // the full re-select flow.
     if (!isRestore && selectedSession) {
-      const sameProject = samePath(selectedSession.projectRoot ?? selectedSession.cwd, session.projectRoot ?? session.cwd);
+      const sameProject = samePath(workspaceKeyOf(selectedSession), workspaceKeyOf(session));
       if (selectedSession.id === session.id && sameProject) {
         if (isMobile) setSidebarOpen(false);
         return;
@@ -731,18 +699,14 @@ export function AppShell() {
     cleanupEmptyActiveDraft();
     // Register a client-side draft so the session shows up in the sidebar
     // list right away — pi has not created anything yet.
-    const draft = createDraftSession(cwd);
-    setDraftSessions((prev) => [draft, ...prev]);
-    setActiveDraftId(draft.id);
+    createDraft(cwd, projectRoot ?? cwd);
     setSelectedSession(null);
-    setNewSessionCwd(cwd);
-    setLastOpen(projectRoot ?? cwd, { kind: "draft", id: draft.id });
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
     setActiveTopPanel(null);
     if (isMobile) setSidebarOpen(false);
     router.replace("/", { scroll: false });
-  }, [router, isMobile, cleanupEmptyActiveDraft]);
+  }, [router, isMobile, cleanupEmptyActiveDraft, createDraft]);
 
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
@@ -843,7 +807,7 @@ export function AppShell() {
 
   // Build the completion popup content for a session that just finished.
   const buildDonePayload = useCallback((session: SessionInfo | null, model: { provider: string; modelId: string } | null, stats: SessionStatsInfo | null, ctx: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
-    const workspace = session ? lastPathSegment(session.projectRoot ?? session.cwd) : undefined;
+    const workspace = session ? lastPathSegment(workspaceKeyOf(session)) : undefined;
     const branch = session?.worktreeBranch;
     const cost = stats?.sessionId === session?.id && stats?.cost ? stats.cost : 0;
     const parts: { workspace?: string; model?: string; usage?: string } = {};

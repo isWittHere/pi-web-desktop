@@ -39,6 +39,24 @@ import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
 
 export const RECOMMENDED_ENABLED_KEY = "pi-recent-projects-enabled";
 
+/** Read the recommended-workspaces toggle (default on when unset/storage unavailable). */
+export function isRecommendedEnabled(): boolean {
+  try {
+    return window.localStorage.getItem(RECOMMENDED_ENABLED_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+/** Persist the recommended-workspaces toggle (best-effort). */
+export function setRecommendedEnabledStorage(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(RECOMMENDED_ENABLED_KEY, enabled ? "1" : "0");
+  } catch {
+    // best-effort
+  }
+}
+
 function sourceLabel(source: RecentProjectSource): string {
   switch (source) {
     case "vscode": return "VS Code";
@@ -132,11 +150,7 @@ export function WelcomeLobby({
 
   // Read the toggle from localStorage after hydration.
   useEffect(() => {
-    try {
-      setRecommendedEnabled(window.localStorage.getItem(RECOMMENDED_ENABLED_KEY) !== "0");
-    } catch {
-      // storage unavailable — keep the default
-    }
+    setRecommendedEnabled(isRecommendedEnabled());
   }, []);
 
   // Fetch recommended projects once, while the toggle is on.
@@ -157,11 +171,7 @@ export function WelcomeLobby({
   const handleToggleRecommended = useCallback(() => {
     setRecommendedEnabled((prev) => {
       const next = !prev;
-      try {
-        window.localStorage.setItem(RECOMMENDED_ENABLED_KEY, next ? "1" : "0");
-      } catch {
-        // best-effort
-      }
+      setRecommendedEnabledStorage(next);
       return next;
     });
   }, []);

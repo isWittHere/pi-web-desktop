@@ -7,7 +7,7 @@ import type { SessionInfo, SessionMark, TimeBucket } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { getDraft } from "@/lib/draft-store";
-import { clearWelcomeState, getLastWorkspace, getWelcomeState } from "@/lib/workspace-memory";
+import { clearWelcomeState, getLastWorkspace, getWelcomeState, workspaceKeyOf } from "@/lib/workspace-memory";
 import { getSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
@@ -995,7 +995,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // (the prop is authoritative; the state trails it by one render).
   const hasSelectedCwd = Boolean(selectedCwdProp || selectedCwd);
   const filteredSessions = selectedProject
-    ? allRows.filter((s) => samePath(s.projectRoot ?? s.cwd, selectedProject))
+    ? allRows.filter((s) => samePath(workspaceKeyOf(s), selectedProject))
     : allRows;
   // Narrow by status mark before the text search (null filter = all marks).
   const markFilteredSessions = markFilter
@@ -2965,10 +2965,10 @@ function SessionItem({
               {showWorkspaceLabel ? (
                 <>
                   <span
-                    title={session.projectRoot ?? session.cwd}
+                    title={workspaceKeyOf(session)}
                     style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flexShrink: 1 }}
                   >
-                    {pathBaseName(session.projectRoot ?? session.cwd)}
+                    {pathBaseName(workspaceKeyOf(session))}
                   </span>
                   <span title={session.modified} style={{ flexShrink: 0 }}>{formatRelativeTime(session.modified, t)}</span>
                 </>
