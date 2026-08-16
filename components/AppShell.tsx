@@ -1267,6 +1267,7 @@ export function AppShell() {
               <WelcomeLobby
                 activity={workspaceActivity.activity}
                 onSelectProject={handleOpenProject}
+                onSelectSession={(s) => handleSelectSession(s)}
               />
             )
           ) : null}

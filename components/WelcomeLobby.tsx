@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { getSessionList } from "@/lib/session-list";
 import { RunningSessionIndicator, UnreadSessionIndicator } from "@/components/SessionActivityIndicators";
+import type { SessionInfo } from "@/lib/types";
 import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
 
 /**
@@ -38,10 +39,13 @@ function sourceLabel(source: RecentProjectSource): string {
   }
 }
 
-/** Pi workspace with its latest session activity time. */
+/** Pi workspace with its latest session activity time, plus the up-to-three
+ *  sessions from the last week shown inline under the top-3 workspaces. */
 interface PiWorkspace {
   path: string;
   modifiedMs: number;
+  /** Latest sessions within the last 7 days, newest first (max 3). */
+  weekSessions: SessionInfo[];
 }
 
 /** Inline Pi logo (same path as public/pi-original.svg). */
@@ -82,11 +86,14 @@ function formatRelativeTime(ms: number, t: (key: string, params?: { [k: string]:
 export function WelcomeLobby({
   activity,
   onSelectProject,
+  onSelectSession,
 }: {
   /** Per-workspace running/unread counts for list-item indicators. */
   activity: Map<string, { running: number; unread: number }>;
   /** Opens the given project through the normal workspace-open chain. */
   onSelectProject: (project: string) => void;
+  /** Opens a specific session (inline session rows under the top workspaces). */
+  onSelectSession?: (session: SessionInfo) => void;
 }) {
   const { t } = useI18n();
   const [recommended, setRecommended] = useState<RecentProject[] | null>(null);
@@ -102,17 +109,27 @@ export function WelcomeLobby({
     getSessionList()
       .then((data) => {
         if (cancelled) return;
+        const weekAgoMs = Date.now() - 7 * 86400000;
+        const sessionsByRoot = new Map<string, SessionInfo[]>();
         const latestByRoot = new Map<string, string>(); // root -> modified
         for (const s of data.sessions) {
           const root = s.projectRoot ?? s.cwd;
           if (!root) continue;
           const prev = latestByRoot.get(root);
           if (!prev || s.modified > prev) latestByRoot.set(root, s.modified);
+          const list = sessionsByRoot.get(root);
+          if (list) list.push(s);
+          else sessionsByRoot.set(root, [s]);
         }
+        const weekSessions = (root: string): SessionInfo[] =>
+          (sessionsByRoot.get(root) ?? [])
+            .filter((s) => Date.parse(s.modified) >= weekAgoMs)
+            .sort((a, b) => b.modified.localeCompare(a.modified))
+            .slice(0, 3);
         setPiWorkspaces(
           [...latestByRoot.entries()]
             .sort((a, b) => b[1].localeCompare(a[1]))
-            .map(([path, modified]) => ({ path, modifiedMs: Date.parse(modified) })),
+            .map(([path, modified]) => ({ path, modifiedMs: Date.parse(modified), weekSessions: weekSessions(path) })),
         );
       })
       .catch(() => {
@@ -166,8 +183,7 @@ export function WelcomeLobby({
     <button
       key={opts.source ? `${opts.source}:${path}` : `pi:${path}`}
       onClick={() => onSelectProject(path)}
-      title={path}
-      style={{
+      title={path}      style={{
         display: "flex",
         alignItems: "center",
         gap: 8,
@@ -216,6 +232,40 @@ export function WelcomeLobby({
           {formatRelativeTime(opts.timeMs, t)}
         </span>
       )}
+    </button>
+  );
+
+  const sessionItem = (s: SessionInfo, workspacePath: string) => (
+    <button
+      key={`s:${s.id}`}
+      onClick={() => (onSelectSession ? onSelectSession(s) : onSelectProject(workspacePath))}
+      title={s.path}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        width: "100%",
+        padding: "3px 8px",
+        background: "transparent",
+        border: "none",
+        borderRadius: 6,
+        color: "var(--text-muted)",
+        cursor: "pointer",
+        textAlign: "left",
+        fontFamily: "var(--font-mono)",
+        fontSize: 11.5,
+        minWidth: 0,
+        transition: "background 0.12s",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+    >
+      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {s.name ?? s.firstMessage}
+      </span>
+      <span style={{ flexShrink: 0, fontSize: 10.5, color: "var(--text-dim)" }}>
+        {formatRelativeTime(Date.parse(s.modified), t)}
+      </span>
     </button>
   );
 
@@ -276,9 +326,20 @@ export function WelcomeLobby({
             <>
               {listHeader(t("desktop.recentProjects"))}
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                {piWorkspaces.slice(0, 10).map((w) => {
+                {piWorkspaces.slice(0, 10).map((w, i) => {
                   const a = activity.get(w.path);
-                  return listItem(w.path, { running: a?.running ?? 0, unread: a?.unread ?? 0, timeMs: w.modifiedMs });
+                  return (
+                    <div key={w.path}>
+                      {listItem(w.path, { running: a?.running ?? 0, unread: a?.unread ?? 0, timeMs: w.modifiedMs })}
+                      {/* The top-3 workspaces expand their latest sessions
+                          (max 3, only those from the last 7 days). */}
+                      {i < 3 && w.weekSessions.length > 0 && (
+                        <div style={{ margin: "1px 0 3px", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 1 }}>
+                          {w.weekSessions.map((s) => sessionItem(s, w.path))}
+                        </div>
+                      )}
+                    </div>
+                  );
                 })}
               </div>
             </>,
