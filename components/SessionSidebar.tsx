@@ -813,7 +813,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       // welcome page instead of auto-selecting anything (a plain clear of
       // lastWorkspace would still fall back to the most recently modified
       // project). A manual workspace pick disarms the flag (AppShell).
-      if (getWelcomeState()) return;
+      // The splash must not wait for session content that will never come
+      // — tell the parent there is nothing to wait for.
+      if (getWelcomeState()) {
+        onNoContentToWaitFor?.();
+        return;
+      }
       // Include drafts so a project that only has drafts is still selected.
       const projects = getRecentProjects(rows);
       // Real sessions alone decide the fallback ordering: a pure-draft project

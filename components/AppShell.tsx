@@ -336,6 +336,19 @@ export function AppShell() {
   const [initialSessionId] = useState<string | null>(() => searchParams.get("session"));
   const [activeCwd, setActiveCwd] = useState<string | null>(null);
 
+  // Welcome-state safety net: whenever the session list has loaded and no
+  // workspace/session is open (new user, welcome state armed, all tabs
+  // closed), no session content will ever arrive to dismiss the splash —
+  // mark readiness so the lobby is not trapped behind the Pi logo overlay.
+  // One tick later so a just-queued startup auto-select (sidebar cwd notify)
+  // applies first and its waitForContent() wins.
+  useEffect(() => {
+    if (!sessionsLoaded) return;
+    if (activeCwd !== null || selectedSession !== null || newSessionCwd !== null) return;
+    const t = setTimeout(() => setContentReady(true), 0);
+    return () => clearTimeout(t);
+  }, [sessionsLoaded, activeCwd, selectedSession, newSessionCwd]);
+
   // ── Tabs view mode ──────────────────────────────────────────────────────
   const { viewMode } = useViewMode();
   const viewModeRef = useRef(viewMode);
