@@ -282,12 +282,6 @@ export function WelcomeLobby({
     </div>
   );
 
-  const listColumn = (children: React.ReactNode) => (
-    <div style={{ flex: "1 1 320px", maxWidth: 440, minWidth: 0 }}>
-      {children}
-    </div>
-  );
-
   return (
     <div
       style={{
@@ -295,13 +289,13 @@ export function WelcomeLobby({
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        overflowY: "auto",
-        padding: "32px 24px",
+        overflow: "hidden",
+        padding: "32px 24px 20px",
         boxSizing: "border-box",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: hasAnySection ? 30 : 0 }}>
+      {/* Brand — fixed, never scrolls away. */}
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: hasAnySection ? 26 : 0 }}>
         <div style={{ color: "var(--accent)" }}>
           <PiLogo size={52} />
         </div>
@@ -313,17 +307,21 @@ export function WelcomeLobby({
         </div>
       </div>
 
+      {/* Sections — side by side when space allows, stacked otherwise;
+          each column scrolls independently of the other and of the brand. */}
       {hasAnySection && (
         <div style={{
-          display: "flex",
-          flexWrap: "wrap",
+          flex: 1,
+          minHeight: 0,
+          width: "min(100%, 940px)",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+          gridAutoRows: "1fr",
           justifyContent: "center",
-          alignItems: "flex-start",
-          gap: "24px 48px",
-          width: "min(100%, 880px)",
+          gap: "20px 44px",
         }}>
-          {hasPiProjects && listColumn(
-            <>
+          {hasPiProjects && (
+            <div style={{ minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               {listHeader(t("desktop.recentProjects"))}
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {piWorkspaces.slice(0, 10).map((w, i) => {
@@ -342,10 +340,10 @@ export function WelcomeLobby({
                   );
                 })}
               </div>
-            </>,
+            </div>
           )}
-          {hasRecommended && listColumn(
-            <>
+          {hasRecommended && (
+            <div style={{ minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               {listHeader(t("desktop.recommendedWorkspaces"))}
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {(recommended ?? []).slice(0, 14).map((r) => listItem(r.path, { source: r.source, timeMs: r.timeMs }))}
@@ -374,7 +372,7 @@ export function WelcomeLobby({
               >
                 {t("desktop.hideRecommendedWorkspaces")}
               </button>
-            </>,
+            </div>
           )}
         </div>
       )}
