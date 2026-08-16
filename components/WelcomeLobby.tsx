@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { FolderOpen, Lightning } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
+import { useWorkspaceActions } from "@/hooks/useWorkspaceActions";
 import { getSessionList } from "@/lib/session-list";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { RunningSessionIndicator, UnreadSessionIndicator } from "@/components/SessionActivityIndicators";
@@ -27,6 +29,12 @@ import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
  * Each list hides entirely when empty. Selecting any item routes through the
  * same workspace-open chain as the picker menus (requestWorkspaceSwitch →
  * cwd validation → allow-list).
+ *
+ * Above the lists sit the two picker actions — "Select folder" (accent
+ * button) and "Quick workspace" (plain text button), powered by the same
+ * useWorkspaceActions hook as the picker menus. Unlike the lists, the action
+ * row is always shown: new users with no projects anywhere still get a way
+ * into a workspace.
  */
 
 export const RECOMMENDED_ENABLED_KEY = "pi-recent-projects-enabled";
@@ -70,6 +78,19 @@ export function WelcomeLobby({
   const [recommended, setRecommended] = useState<RecentProject[] | null>(null);
   const [recommendedEnabled, setRecommendedEnabled] = useState(true);
   const [piWorkspaces, setPiWorkspaces] = useState<PiWorkspace[]>([]);
+  const {
+    openFolderPicker,
+    openQuickWorkspace,
+    commitCustomPath,
+    cancelCustomPath,
+    customPathOpen,
+    customPathValue,
+    setCustomPathValue,
+    customPathError,
+    setCustomPathError,
+    customPathValidating,
+    customPathInputRef,
+  } = useWorkspaceActions(onSelectProject);
 
   // Pi's own recent workspaces with timestamps: dedupe by project root,
   // latest session activity per root, sorted newest first. Uses the shared
@@ -266,7 +287,7 @@ export function WelcomeLobby({
       }}
     >
       {/* Brand — fixed, never scrolls away. */}
-      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: hasAnySection ? 26 : 0 }}>
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 26 }}>
         <div style={{ color: "var(--accent)" }}>
           <PiLogo size={52} />
         </div>
@@ -276,6 +297,94 @@ export function WelcomeLobby({
         <div style={{ fontSize: 12.5, color: "var(--text-muted)", maxWidth: 420, textAlign: "center", lineHeight: 1.6 }}>
           {t("desktop.lobbySubtitle")}
         </div>
+      </div>
+
+      {/* Workspace actions — always visible, even when both lists are empty.
+          Same hook and behavior as the picker menus' actions. */}
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: hasAnySection ? 24 : 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            type="button"
+            onClick={() => void openFolderPicker()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "8px 18px",
+              background: "var(--accent)",
+              border: "none",
+              borderRadius: 8,
+              color: "#fff",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "background 0.12s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
+          >
+            <FolderOpen size={15} weight="regular" aria-hidden="true" />
+            {t("desktop.selectFolder")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void openQuickWorkspace()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "8px 12px",
+              background: "transparent",
+              border: "none",
+              borderRadius: 8,
+              color: "var(--text-muted)",
+              fontSize: 12.5,
+              cursor: "pointer",
+              transition: "color 0.12s, background 0.12s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
+          >
+            <Lightning size={15} weight="regular" aria-hidden="true" />
+            {t("desktop.quickWorkspace")}
+          </button>
+        </div>
+        {/* Browser fallback: an inline path input (same as the picker menu). */}
+        {customPathOpen && (
+          <div style={{ width: "min(100%, 380px)", display: "flex", flexDirection: "column", gap: 6 }}>
+            <input
+              ref={customPathInputRef}
+              value={customPathValue}
+              onChange={(e) => { setCustomPathValue(e.target.value); setCustomPathError(null); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); void commitCustomPath(); }
+                if (e.key === "Escape") cancelCustomPath();
+              }}
+              placeholder={t("desktop.projectPathPlaceholder")}
+              style={{ width: "100%", fontSize: 12, fontFamily: "var(--font-mono)", padding: "7px 10px", border: "1px solid var(--accent)", borderRadius: 6, outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }}
+            />
+            {customPathError && (
+              <div style={{ color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>{customPathError}</div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => void commitCustomPath()}
+                disabled={customPathValidating || !customPathValue.trim()}
+                style={{ flex: 1, padding: "6px 0", background: "var(--accent)", border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, cursor: customPathValidating || !customPathValue.trim() ? "not-allowed" : "pointer", opacity: customPathValidating || !customPathValue.trim() ? 0.65 : 1 }}
+              >
+                {customPathValidating ? t("desktop.checking") : t("desktop.open")}
+              </button>
+              <button
+                type="button"
+                onClick={cancelCustomPath}
+                style={{ flex: 1, padding: "6px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", fontSize: 12, cursor: "pointer" }}
+              >
+                {t("desktop.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sections — side by side when space allows, stacked otherwise;

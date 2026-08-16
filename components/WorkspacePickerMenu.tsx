@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Check,
   FolderOpen,
@@ -8,6 +8,7 @@ import {
   MagnifyingGlass,
 } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
+import { useWorkspaceActions } from "@/hooks/useWorkspaceActions";
 import { RunningSessionIndicator, UnreadSessionIndicator } from "@/components/SessionActivityIndicators";
 
 /**
@@ -62,85 +63,25 @@ export function WorkspacePickerMenu({
 }: WorkspacePickerMenuProps) {
   const { t } = useI18n();
   const [projectFilter, setProjectFilter] = useState("");
-  const [customPathOpen, setCustomPathOpen] = useState(false);
-  const [customPathValue, setCustomPathValue] = useState("");
-  const [customPathError, setCustomPathError] = useState<string | null>(null);
-  const [customPathValidating, setCustomPathValidating] = useState(false);
-  const customPathInputRef = useRef<HTMLInputElement>(null);
+  const {
+    openFolderPicker,
+    openQuickWorkspace,
+    commitCustomPath,
+    cancelCustomPath,
+    customPathOpen,
+    customPathValue,
+    setCustomPathValue,
+    customPathError,
+    setCustomPathError,
+    customPathValidating,
+    customPathInputRef,
+  } = useWorkspaceActions(onSelectProject);
 
   const selectProject = useCallback((project: string) => {
     setProjectFilter("");
-    setCustomPathOpen(false);
-    setCustomPathValue("");
-    setCustomPathError(null);
+    cancelCustomPath();
     onSelectProject(project);
-  }, [onSelectProject]);
-
-  const commitCustomPath = useCallback(async (candidate?: string) => {
-    const path = (candidate ?? customPathValue).trim();
-    if (!path || customPathValidating) return;
-
-    setCustomPathValidating(true);
-    setCustomPathError(null);
-    try {
-      const res = await fetch("/api/cwd/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd: path }),
-      });
-      const data = await res.json().catch(() => ({})) as { cwd?: string; error?: string };
-      if (!res.ok || data.error) {
-        setCustomPathError(data.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      setCustomPathOpen(false);
-      setCustomPathValue("");
-      selectProject(data.cwd ?? path);
-    } catch (e) {
-      setCustomPathError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setCustomPathValidating(false);
-    }
-  }, [customPathValue, customPathValidating, selectProject]);
-
-  const handleCustomPathClick = useCallback(async () => {
-    const desktop = window.piDesktop;
-    if (!desktop) {
-      setCustomPathOpen(true);
-      setCustomPathError(null);
-      setTimeout(() => customPathInputRef.current?.focus(), 0);
-      return;
-    }
-
-    try {
-      setCustomPathError(null);
-      const path = await desktop.selectDirectory();
-      if (path === null) return;
-
-      setCustomPathValue(path);
-      setCustomPathOpen(true);
-      await commitCustomPath(path);
-    } catch (e) {
-      setCustomPathOpen(true);
-      setCustomPathError(e instanceof Error ? e.message : String(e));
-      setTimeout(() => customPathInputRef.current?.focus(), 0);
-    }
-  }, [commitCustomPath]);
-
-  const handleDefaultCwd = useCallback(async () => {
-    try {
-      const res = await fetch("/api/default-cwd", { method: "POST" });
-      const data = await res.json() as { cwd?: string; error?: string };
-      if (data.cwd) {
-        selectProject(data.cwd);
-        setCustomPathOpen(false);
-        setCustomPathValue("");
-        setCustomPathError(null);
-      }
-    } catch {
-      // ignore
-    }
-  }, [selectProject]);
+  }, [cancelCustomPath, onSelectProject]);
 
   const visibleProjects = projectFilter.trim()
     ? projects.filter((p) => p.toLowerCase().includes(projectFilter.trim().toLowerCase()))
@@ -229,22 +170,22 @@ export function WorkspacePickerMenu({
 
   const projectActions = (
     <div style={{ borderTop: "1px solid var(--border)", padding: "4px", flexShrink: 0 }}>
-      <button onClick={(e) => { e.stopPropagation(); void handleDefaultCwd(); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 8px", background: "transparent", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 12 }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}>
+      <button onClick={(e) => { e.stopPropagation(); void openQuickWorkspace(); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 8px", background: "transparent", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 12 }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}>
         <Lightning size={14} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
         <span>{t("desktop.quickWorkspace")}</span>
       </button>
       {!customPathOpen ? (
-        <button onClick={(e) => { e.stopPropagation(); void handleCustomPathClick(); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 8px", background: "transparent", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 12 }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}>
+        <button onClick={(e) => { e.stopPropagation(); void openFolderPicker(); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 8px", background: "transparent", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 12 }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}>
           <FolderOpen size={14} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
           <span>{t("desktop.selectFolder")}</span>
         </button>
       ) : (
         <div style={{ padding: "6px 4px 4px" }}>
-          <input ref={customPathInputRef} value={customPathValue} onChange={(e) => { setCustomPathValue(e.target.value); setCustomPathError(null); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitCustomPath(); } if (e.key === "Escape") { setCustomPathOpen(false); setCustomPathValue(""); setCustomPathError(null); } }} placeholder={t("desktop.projectPathPlaceholder")} style={{ width: "100%", fontSize: 11, fontFamily: "var(--font-mono)", padding: "5px 8px", border: "1px solid var(--accent)", borderRadius: 5, outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }} />
+          <input ref={customPathInputRef} value={customPathValue} onChange={(e) => { setCustomPathValue(e.target.value); setCustomPathError(null); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitCustomPath(); } if (e.key === "Escape") { cancelCustomPath(); } }} placeholder={t("desktop.projectPathPlaceholder")} style={{ width: "100%", fontSize: 11, fontFamily: "var(--font-mono)", padding: "5px 8px", border: "1px solid var(--accent)", borderRadius: 5, outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }} />
           {customPathError && <div style={{ marginTop: 5, color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>{customPathError}</div>}
           <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
             <button onClick={() => void commitCustomPath()} disabled={customPathValidating || !customPathValue.trim()} style={{ flex: 1, padding: "4px 0", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: customPathValidating || !customPathValue.trim() ? "not-allowed" : "pointer", opacity: customPathValidating || !customPathValue.trim() ? 0.65 : 1 }}>{customPathValidating ? t("desktop.checking") : t("desktop.open")}</button>
-            <button onClick={() => { setCustomPathOpen(false); setCustomPathValue(""); setCustomPathError(null); }} style={{ flex: 1, padding: "4px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer" }}>{t("desktop.cancel")}</button>
+            <button onClick={cancelCustomPath} style={{ flex: 1, padding: "4px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer" }}>{t("desktop.cancel")}</button>
           </div>
         </div>
       )}
