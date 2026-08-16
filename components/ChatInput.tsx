@@ -5,6 +5,7 @@ import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, Slas
 import type { SkillsResponse } from "@/lib/api-types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
 import { continueMarkdownList } from "@/lib/markdown-list";
+import type { ToolPreset } from "@/lib/tool-presets";
 import { isBase64ImageWithinLimits } from "@/lib/image-attachments";
 import type { TextContent, UserMessage } from "@/lib/types";
 import {
@@ -82,8 +83,8 @@ interface Props {
   modelScopeWarnings?: string[];
   onModelChange?: (provider: string, modelId: string) => void;
   compactResult?: CompactResultInfo | null;
-  toolPreset?: "none" | "default" | "full";
-  onToolPresetChange?: (preset: "none" | "default" | "full") => void;
+  toolPreset?: ToolPreset;
+  onToolPresetChange?: (preset: ToolPreset) => void;
   thinkingLevel?: ThinkingLevelOption;
   onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
   availableThinkingLevels?: string[] | null;
@@ -114,8 +115,14 @@ export interface ChatInputHandle {
   addFileMentions: (files: File[]) => void;
 }
 
-const TOOL_PRESETS = ["off", "default", "full"] as const;
-const TOOL_PRESET_MAP: Record<"off" | "default" | "full", "none" | "default" | "full"> = { off: "none", default: "default", full: "full" };
+const TOOL_PRESETS = ["off", "read-only", "default", "full"] as const;
+type ToolPresetLabel = typeof TOOL_PRESETS[number];
+const TOOL_PRESET_MAP: Record<ToolPresetLabel, ToolPreset> = {
+  off: "none",
+  "read-only": "read-only",
+  default: "default",
+  full: "full",
+};
 const COMPOSITION_END_ENTER_GRACE_MS = 100;
 // Step pill lyric-roll: one viewport line per label, old text slides up while
 // the new one slides in from below. Keep STEP_LINE_H in sync with the pill height.
@@ -454,6 +461,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // Thinking levels are model-facing identifiers shown as-is (English).
   const toolPresetLabels: Record<typeof TOOL_PRESETS[number], string> = {
     off: t("desktop.toolOff"),
+    "read-only": t("desktop.toolReadOnly"),
     default: t("desktop.toolDefault"),
     full: t("desktop.toolFull"),
   };
@@ -2804,7 +2812,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = (toolPreset ?? "default") === preset;
-                      const desc = lvl === "off" ? t("desktop.noToolsReadOnly") : lvl === "default" ? t("desktop.fourBuiltInTools") : t("desktop.allBuiltInTools");
+                      const desc = lvl === "off" ? t("desktop.noToolsReadOnly") : lvl === "read-only" ? t("desktop.readOnlyBuiltInTools") : lvl === "default" ? t("desktop.fourBuiltInTools") : t("desktop.allBuiltInTools");
                       return (
                         <button
                           key={lvl}

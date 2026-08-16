@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useMemo, useReducer } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, useReducer } from "react";
 import type {
   AgentMessage,
   ExtensionStatusItem,
@@ -12,7 +12,8 @@ import type {
 import { normalizeToolCalls } from "@/lib/normalize";
 import { cssPx } from "@/lib/ui-scale";
 import { sendAgentCommand } from "@/lib/agent-client";
-import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
+import { getToolNamesForPreset, type ToolEntry, type ToolPreset } from "@/lib/tool-presets";
+import { getPreferredToolPreset, setPreferredToolPreset } from "@/lib/tool-preset-preference";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { createStreamUpdateScheduler, type StreamUpdateScheduler } from "@/lib/stream-update-scheduler";
 import { AgentEventConnection, AgentEventConnectionError } from "@/lib/agent-event-connection";
@@ -160,7 +161,7 @@ export interface UseAgentSessionOptions {
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
   onSystemPromptChange?: (prompt: string | null) => void;
   onSessionStatsPanelOpen?: () => void;
-  setToolPreset?: (preset: "none" | "default" | "full") => void;
+  setToolPreset?: (preset: ToolPreset) => void;
 }
 
 export type { ThinkingLevelOption } from "@/lib/thinking-levels";
@@ -356,7 +357,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelScopeWarnings, setModelScopeWarnings] = useState<string[]>([]);
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
   const [newSessionDefaultModel, setNewSessionDefaultModel] = useState<SelectedModel | null>(null);
-  const [toolPreset, setToolPreset] = useState<"none" | "default" | "full">("default");
+  const [toolPreset, setToolPreset] = useState<ToolPreset>("default");
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
@@ -1781,9 +1782,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [addNotice, t]);
 
-  const handleToolPresetChange = useCallback(async (preset: "none" | "default" | "full") => {
+  // New-session composers start from the preset the user last picked; existing
+  // sessions never trust that preference and use their live get_tools state.
+  useLayoutEffect(() => {
+    if (!isNew || sessionIdRef.current) return;
+    setToolPresetState(getPreferredToolPreset());
+  }, [isNew, setToolPresetState]);
+
+  const handleToolPresetChange = useCallback(async (preset: ToolPreset) => {
     const toolNames = getToolNamesForPreset(preset);
     setToolPresetState(preset);
+    setPreferredToolPreset(preset);
     const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
     if (!sid) return;
     try {
