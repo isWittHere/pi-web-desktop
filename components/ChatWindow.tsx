@@ -245,12 +245,12 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
 
   // --- Open-positioning: never show a scroll from the top ---
   // On open, the message list is rendered hidden (visibility: hidden, layout
-  // preserved) behind the "loading session" overlay and positioned by a
-  // layout effect before the browser paints. Layout-affecting post-mount
-  // effects (reserve spacer, running state) commit while still hidden and
-  // each commit re-positions. Once the layout has had a few frames to settle,
-  // the overlay lifts and the session appears already at its final position
-  // — no scroll motion, no flash.
+  // preserved) and positioned by a layout effect before the browser paints —
+  // the wallpaper layer behind it stays visible, so no loading overlay is
+  // needed. Layout-affecting post-mount effects (reserve spacer, running
+  // state) commit while still hidden and each commit re-positions. Once the
+  // layout has had a few frames to settle, the list becomes visible already
+  // at its final position — no scroll motion, no flash.
   const [openPositioning, setOpenPositioning] = useState(true);
 
   useLayoutEffect(() => {
@@ -280,7 +280,11 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     if (!openPositioning) return;
     if (loading) return;
     if (messages.length === 0) {
-      setOpenPositioning(false);
+      // New sessions have nothing to position — the welcome screen renders
+      // directly. Existing sessions may still be about to apply a cached
+      // snapshot (the loading gate is skipped for cache hits), so keep
+      // them hidden until the load settles.
+      if (isNew) setOpenPositioning(false);
       return;
     }
     // Give post-mount layout effects (reserve spacer, running state) a few
@@ -297,7 +301,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
       cancelled = true;
       cancelAnimationFrame(raf);
     };
-  }, [loading, messages.length, openPositioning, agentRunning]);
+  }, [loading, messages.length, openPositioning, agentRunning, isNew]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -564,12 +568,6 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
             <ImagesIcon size={56} weight="regular" color="var(--accent)" aria-hidden="true" />
             <span style={{ fontSize: 13, color: "var(--accent)" }}>{t("desktop.dropToAdd")}</span>
           </div>
-        </div>
-      )}
-
-      {openPositioning && messages.length > 0 && (
-        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center text-text-muted" style={{ background: "color-mix(in srgb, var(--bg) 90%, transparent)" }}>
-          {t("desktop.loadingSession")}
         </div>
       )}
 
