@@ -37,7 +37,7 @@ import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
  * cwd validation → allow-list).
  */
 
-export const RECOMMENDED_ENABLED_KEY = "pi-recent-projects-enabled";
+const RECOMMENDED_ENABLED_KEY = "pi-recent-projects-enabled";
 
 /** Read the recommended-workspaces toggle (default on when unset/storage unavailable). */
 export function isRecommendedEnabled(): boolean {
