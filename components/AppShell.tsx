@@ -604,7 +604,7 @@ export function AppShell() {
         // workspace, switch to it (re-enters this handler non-auto-select).
         // When they coincide, fall through to the normal flow — the cwd is
         // already the right one and restoreWorkspaceContext must still run.
-        if (active && active.cwd !== cwd) {
+        if (active && !samePath(active.cwd, cwd)) {
           requestWorkspaceSwitch(active.cwd);
           return;
         }
@@ -674,7 +674,7 @@ export function AppShell() {
     // cwd context already matches — otherwise the pending cwd move needs
     // the full re-select flow.
     if (!isRestore && selectedSession) {
-      const sameProject = (selectedSession.projectRoot ?? selectedSession.cwd) === (session.projectRoot ?? session.cwd);
+      const sameProject = samePath(selectedSession.projectRoot ?? selectedSession.cwd, session.projectRoot ?? session.cwd);
       if (selectedSession.id === session.id && sameProject) {
         if (isMobile) setSidebarOpen(false);
         return;

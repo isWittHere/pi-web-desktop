@@ -1196,7 +1196,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     // Activity in any *other* workspace (running or unread) lights a dot on
     // the collapsed caret so it is visible without opening the list.
     const hasOtherWorkspaceActivity = recentProjects.some((p) => {
-      if (p === selectedProject) return false;
+      if (samePath(p, selectedProject)) return false;
       const a = projectActivity.get(p);
       return (a?.running ?? 0) > 0 || (a?.unread ?? 0) > 0;
     });
@@ -1308,7 +1308,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             <AnimatedDropdown open={showWorktreeSwitcher && isWorktreeDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)" }}>
               <div style={{ maxHeight: "min(calc(32vh / var(--app-ui-scale, 1)), 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
                 {worktreeState?.worktrees.map((wt) => {
-                  const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
+                  const isCurrent = samePath(wt.path, selectedCwd) || (wt.isMain && !worktreeState.worktrees.some((w) => samePath(w.path, selectedCwd)));
                   return (
                     <button key={wt.path} onClick={() => { setSelectedCwd(wt.path); setWtDropdownOpen(false); setWorkspaceWorktreeDropdownOpen(null); setWtError(null); }} title={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "3px 8px", background: isCurrent ? "var(--bg-selected)" : "transparent", border: "none", borderRadius: 5, color: isCurrent ? "var(--accent)" : "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "var(--font-mono)", minWidth: 0 }} onMouseEnter={(e) => { if (!isCurrent) e.currentTarget.style.background = "var(--bg-hover)"; }} onMouseLeave={(e) => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}>
                       {isCurrent ? <Check size={12} color="var(--accent)" weight="bold" style={{ flexShrink: 0 }} aria-hidden="true" /> : <span style={{ width: 12, flexShrink: 0 }} />}
@@ -1724,7 +1724,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               >
                   <div style={{ maxHeight: "min(calc(32vh / var(--app-ui-scale, 1)), 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
                     {worktreeState.worktrees.map((wt) => {
-                      const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
+                      const isCurrent = samePath(wt.path, selectedCwd) || (wt.isMain && !worktreeState.worktrees.some((w) => samePath(w.path, selectedCwd)));
                       if (wtConfirmRemove === wt.path) {
                         return (
                           <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "rgba(239,68,68,0.06)" }}>

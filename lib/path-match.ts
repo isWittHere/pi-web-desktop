@@ -2,10 +2,12 @@
  * Platform-aware path identity helpers.
  *
  * Windows paths are case-insensitive, and external sources (VS Code, Zed,
- * OpenCode, Claude Code, Codex …) often spell paths differently ("e:/Dev"
- * vs "E:/Dev"). Every place that compares project/cwd paths for workspace
- * identity must fold case on Windows so entries from the lobby and the
- * session list resolve to the same workspace.
+ * OpenCode, Claude Code, Codex …) spell paths differently on every axis:
+ * drive-letter case ("e:/Dev" vs "E:/Dev") AND separator style ("E:\Dev"
+ * vs "E:/Dev" — pi's own session records use backslashes). Every place that
+ * compares project/cwd paths for workspace identity must fold case and
+ * separators on Windows so entries from the lobby and the session list
+ * resolve to the same workspace.
  */
 
 /** True on Windows (works in both browser and server code). */
@@ -16,17 +18,22 @@ export function isWindowsPlatform(): boolean {
   return process.platform === "win32";
 }
 
-/** Case-insensitive path equality on Windows; exact equality elsewhere. */
-export function samePath(a: string, b: string): boolean {
+/** Windows-only: unify separator style and case for comparison. */
+function windowsKey(p: string): string {
+  return p.replace(/\\/g, "/").toLowerCase();
+}
+
+/** Case- and separator-insensitive path equality on Windows; exact elsewhere. */
+export function samePath(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return a === b;
-  if (isWindowsPlatform()) return a.toLowerCase() === b.toLowerCase();
+  if (isWindowsPlatform()) return windowsKey(a) === windowsKey(b);
   return a === b;
 }
 
 /** Normalize a path for use as a stable map key: Windows drive letters are
- *  uppercased so all sources ("e:/Dev", "E:/Dev") share one key. POSIX paths
- *  are returned unchanged. */
+ *  uppercased and separators unified ("e:\Dev", "e:/Dev", "E:/Dev" all share
+ *  one key). POSIX paths are returned unchanged. */
 export function normalizePathKey(p: string): string {
   if (!isWindowsPlatform()) return p;
-  return p.replace(/^([a-z]):/, (_m, d: string) => d.toUpperCase() + ":");
+  return p.replace(/\\/g, "/").replace(/^([a-z]):/, (_m, d: string) => d.toUpperCase() + ":");
 }
