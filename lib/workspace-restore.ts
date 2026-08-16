@@ -20,32 +20,36 @@ export type RestoreTarget =
   | { kind: "session"; session: SessionInfo }
   | { kind: "new-draft"; cwd: string };
 
-export interface RestoreInput {
+/**
+ * Draft branch only: drafts are local state (no session list needed), so
+ * callers resolve them synchronously. Returns null when there is no usable
+ * remembered draft (none stored, or the id is stale/deleted).
+ */
+export function resolveDraftTarget(
+  lastOpen: LastOpenEntry | null,
+  drafts: Array<{ id: string; cwd: string }>,
+): { kind: "draft"; draft: { id: string; cwd: string } } | null {
+  if (lastOpen?.kind !== "draft") return null;
+  const draft = drafts.find((d) => d.id === lastOpen.id);
+  return draft ? { kind: "draft", draft } : null;
+}
+
+/**
+ * Resolve the target for a workspace with the full session list available,
+ * excluding the remembered-draft branch (handled synchronously by callers via
+ * resolveDraftTarget): remembered session → workspace's most recent session →
+ * fresh welcome draft.
+ */
+export function resolveRestoreTarget(ctx: {
   /** Workspace identity (project root when known, else cwd). */
   projectKey: string;
   /** The effective cwd being restored into. */
   cwd: string;
   /** The remembered context, or null when never stored / storage unavailable. */
   lastOpen: LastOpenEntry | null;
-  drafts: Array<{ id: string; cwd: string }>;
   sessions: SessionInfo[];
-}
-
-/**
- * Resolve the target for a workspace with the full session list available.
- * Callers should handle the remembered-draft branch synchronously (drafts are
- * local state, no session list needed); the session/latest/new-draft branches
- * need the session list and go through this function.
- */
-export function resolveRestoreTarget(ctx: RestoreInput): RestoreTarget {
-  const { projectKey, cwd, lastOpen, drafts, sessions } = ctx;
-
-  // Remembered draft: reopen it verbatim. A stale id (draft deleted) falls
-  // through to the session branches.
-  if (lastOpen?.kind === "draft") {
-    const draft = drafts.find((d) => d.id === lastOpen.id);
-    if (draft) return { kind: "draft", draft };
-  }
+}): RestoreTarget {
+  const { projectKey, cwd, lastOpen, sessions } = ctx;
 
   // Remembered session: reopen it when it still exists and still belongs to
   // this workspace. A stale/deleted/drifted session falls through to latest.

@@ -48,7 +48,7 @@ import {
   type DraftSession,
 } from "@/lib/draft-sessions";
 import { clearLastWorkspace, clearWelcomeState, getLastOpen, setLastOpen, setLastWorkspace, setWelcomeState, workspaceKeyOf } from "@/lib/workspace-memory";
-import { resolveRestoreTarget, type RestoreTarget } from "@/lib/workspace-restore";
+import { resolveDraftTarget, resolveRestoreTarget, type RestoreTarget } from "@/lib/workspace-restore";
 import { getSessionList } from "@/lib/session-list";
 import { samePath } from "@/lib/path-match";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
@@ -143,7 +143,6 @@ export function AppShell() {
   const handleSessionsLoaded = useCallback(() => setSessionsLoaded(true), []);
   const waitForContent = useCallback(() => setContentReady(false), []);
   const contentDone = useCallback(() => setContentReady(true), []);
-  const handleContentReady = useCallback(() => setContentReady(true), []);
   useEffect(() => {
     if (sessionsLoaded && contentReady === true) {
       // Keep the CSS splash visible for at least ~800ms total even when the
@@ -528,19 +527,17 @@ export function AppShell() {
     const lastOpen = getLastOpen(projectKey);
 
     // Remembered draft: drafts are local state, restore synchronously.
-    if (lastOpen?.kind === "draft") {
-      const draft = draftSessions.find((d) => d.id === lastOpen.id);
-      if (draft) {
-        setActiveDraftId(draft.id);
-        setNewSessionCwd(draft.cwd);
-        setLastOpen(projectKey, { kind: "draft", id: draft.id });
-        contentDone();
-        if (new URLSearchParams(window.location.search).has("session")) {
-          router.replace("/", { scroll: false });
-        }
-        return;
+    const draftTarget = resolveDraftTarget(lastOpen, draftSessions);
+    if (draftTarget) {
+      const { id, cwd: draftCwd } = draftTarget.draft;
+      setActiveDraftId(id);
+      setNewSessionCwd(draftCwd);
+      setLastOpen(projectKey, { kind: "draft", id });
+      contentDone();
+      if (new URLSearchParams(window.location.search).has("session")) {
+        router.replace("/", { scroll: false });
       }
-      // Stale draft memory — fall through to the async resolve.
+      return;
     }
 
     const apply = (target: RestoreTarget) => {
@@ -566,7 +563,7 @@ export function AppShell() {
     // Session / latest-session / fresh-draft decisions need the session list
     // (shared cache — the sidebar already fetched it at startup).
     getSessionList()
-      .then((d) => resolveRestoreTarget({ projectKey, cwd, lastOpen, drafts: draftSessions, sessions: d.sessions }))
+      .then((d) => resolveRestoreTarget({ projectKey, cwd, lastOpen, sessions: d.sessions }))
       .then(apply)
       .catch(() => {
         if (token !== workspaceRestoreTokenRef.current) return;
@@ -1295,7 +1292,7 @@ export function AppShell() {
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
-              onContentReady={handleContentReady}
+              onContentReady={contentDone}
               onOpenFile={handleOpenLinkedFile}
               onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
               onViewFullHistory={handleViewFullHistory}
