@@ -466,8 +466,14 @@ export function AppShell() {
       // page until the user picks a workspace again.
       clearLastWorkspace();
       setWelcomeState();
+      // Drop a stale ?session= from the URL: the session-restore path
+      // (which runs before the welcome-state check on startup) would
+      // otherwise yank the next launch back into the closed workspace.
+      if (new URLSearchParams(window.location.search).has("session")) {
+        router.replace("/", { scroll: false });
+      }
     }
-  }, [tabsApi, requestWorkspaceSwitch]);
+  }, [tabsApi, requestWorkspaceSwitch, router]);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !searchParams.get("session"));
   // Suppresses sessionKey bump in handleCwdChange during the initial URL restore
