@@ -151,6 +151,7 @@ export const zhCNLocale = {
     "desktop.sendMessageForSessionInfo": "发送消息或运行 /session 以加载会话信息",
     "desktop.selectSessionFromSidebar": "请从侧边栏选择会话",
     "desktop.lobbySubtitle": "打开最近的工作区，或选择文件夹开始新会话",
+    "desktop.newWorkspace": "新工作区",
     "desktop.recommendedWorkspaces": "推荐工作区",
     "desktop.recommendedWorkspacesSetting": "在欢迎大厅显示推荐工作区",
     "desktop.recommendedWorkspacesSettingDescription": "检测其他编辑器和编码代理（VS Code、Zed、Claude Code、Codex、OpenCode）的最近工作区。只读——绝不会写入它们的任何数据。",

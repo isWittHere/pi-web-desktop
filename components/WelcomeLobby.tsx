@@ -14,13 +14,19 @@ import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
 /**
  * Welcome lobby — the home page shown while no workspace is open.
  *
- * Two plain-text lists, placed side by side when space allows and stacked
- * when it does not (flex-wrap):
- * 1. Pi workspaces: pi's own recent workspaces, each project's last-session
+ * Three layout-equal sections in one grid: the left column stacks
+ * "New workspace" (the picker actions) above "Recent workspaces";
+ * "Recommended workspaces" takes the right column. Each column scrolls
+ * independently.
+ * 1. New workspace: the same two actions as the picker menus — select a
+ *    folder (native picker on desktop, inline path input in the browser)
+ *    and create/quick-open a scratch workspace. Always visible, even when
+ *    both lists are empty (fresh installs).
+ * 2. Pi workspaces: pi's own recent workspaces, each project's last-session
  *    activity as its timestamp. Derived from the shared /api/sessions cache
  *    (same dedupe-by-project-root logic as the sidebar) so no extra request
  *    is made on a cold start.
- * 2. Recommended workspaces: recent projects detected from other editors and
+ * 3. Recommended workspaces: recent projects detected from other editors and
  *    coding agents (VS Code family, Zed, Claude Code, Codex, OpenCode) via
  *    GET /api/recent-projects. Shown honestly — no filtering against pi's own
  *    workspaces, no "already added" markers. Toggleable in settings
@@ -29,12 +35,6 @@ import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
  * Each list hides entirely when empty. Selecting any item routes through the
  * same workspace-open chain as the picker menus (requestWorkspaceSwitch →
  * cwd validation → allow-list).
- *
- * Above the lists sit the two picker actions — "Select folder" (accent
- * button) and "Quick workspace" (plain text button), powered by the same
- * useWorkspaceActions hook as the picker menus. Unlike the lists, the action
- * row is always shown: new users with no projects anywhere still get a way
- * into a workspace.
  */
 
 export const RECOMMENDED_ENABLED_KEY = "pi-recent-projects-enabled";
@@ -168,8 +168,6 @@ export function WelcomeLobby({
 
   const hasPiProjects = piWorkspaces.length > 0;
   const hasRecommended = recommendedEnabled && (recommended?.length ?? 0) > 0;
-  // Nothing to show beyond the brand — keep the page minimal.
-  const hasAnySection = hasPiProjects || hasRecommended;
 
   const listItem = (path: string, opts: { source?: RecentProjectSource; timeMs?: number | null; running?: number; unread?: number }) => (
     <button
@@ -296,109 +294,113 @@ export function WelcomeLobby({
         </div>
       </div>
 
-      {/* Workspace actions — its own section, always visible even when both
-          lists are empty. Same hook and behavior as the picker menus' actions. */}
-      <div style={{ flexShrink: 0, width: "min(100%, 940px)", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: hasAnySection ? 24 : 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button
-            type="button"
-            onClick={() => void openFolderPicker()}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-              padding: "8px 18px",
-              background: "var(--accent)",
-              border: "none",
-              borderRadius: 8,
-              color: "#fff",
-              fontSize: 12.5,
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "background 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
-          >
-            <FolderOpen size={15} weight="regular" aria-hidden="true" />
-            {t("desktop.selectFolder")}
-          </button>
-          <button
-            type="button"
-            onClick={() => void openQuickWorkspace()}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-              padding: "8px 12px",
-              background: "transparent",
-              border: "none",
-              borderRadius: 8,
-              color: "var(--text-muted)",
-              fontSize: 12.5,
-              cursor: "pointer",
-              transition: "color 0.12s, background 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
-          >
-            <Lightning size={15} weight="regular" aria-hidden="true" />
-            {t("desktop.quickWorkspace")}
-          </button>
-        </div>
-        {/* Browser fallback: an inline path input (same as the picker menu). */}
-        {customPathOpen && (
-          <div style={{ width: "min(100%, 380px)", display: "flex", flexDirection: "column", gap: 6 }}>
-            <input
-              ref={customPathInputRef}
-              value={customPathValue}
-              onChange={(e) => { setCustomPathValue(e.target.value); setCustomPathError(null); }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); void commitCustomPath(); }
-                if (e.key === "Escape") cancelCustomPath();
-              }}
-              placeholder={t("desktop.projectPathPlaceholder")}
-              style={{ width: "100%", fontSize: 12, fontFamily: "var(--font-mono)", padding: "7px 10px", border: "1px solid var(--accent)", borderRadius: 6, outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }}
-            />
-            {customPathError && (
-              <div style={{ color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>{customPathError}</div>
-            )}
-            <div style={{ display: "flex", gap: 8 }}>
+      {/* Sections — every section is a layout-equal grid cell. The left
+          column stacks "New workspace" above "Recent workspaces"; the
+          recommended list takes the right column. Each column scrolls
+          independently of the other and of the brand. */}
+      <div style={{
+        flex: 1,
+        minHeight: 0,
+        width: "min(100%, 940px)",
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+        gridAutoRows: "1fr",
+        justifyContent: "center",
+        gap: "20px 44px",
+      }}>
+        {/* Left column: new workspace (always) + recent workspaces. */}
+        <div style={{ minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 18 }}>
+          {/* New workspace — its own section, always visible even when both
+              lists are empty. Same hook and behavior as the picker menus' actions. */}
+          <div style={{ flexShrink: 0 }}>
+            {listHeader(t("desktop.newWorkspace"))}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px" }}>
               <button
                 type="button"
-                onClick={() => void commitCustomPath()}
-                disabled={customPathValidating || !customPathValue.trim()}
-                style={{ flex: 1, padding: "6px 0", background: "var(--accent)", border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, cursor: customPathValidating || !customPathValue.trim() ? "not-allowed" : "pointer", opacity: customPathValidating || !customPathValue.trim() ? 0.65 : 1 }}
+                onClick={() => void openFolderPicker()}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 7,
+                  padding: "8px 18px",
+                  background: "var(--accent)",
+                  border: "none",
+                  borderRadius: 8,
+                  color: "#fff",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.12s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
               >
-                {customPathValidating ? t("desktop.checking") : t("desktop.open")}
+                <FolderOpen size={15} weight="regular" aria-hidden="true" />
+                {t("desktop.selectFolder")}
               </button>
               <button
                 type="button"
-                onClick={cancelCustomPath}
-                style={{ flex: 1, padding: "6px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", fontSize: 12, cursor: "pointer" }}
+                onClick={() => void openQuickWorkspace()}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 7,
+                  padding: "8px 12px",
+                  background: "transparent",
+                  border: "none",
+                  borderRadius: 8,
+                  color: "var(--text-muted)",
+                  fontSize: 12.5,
+                  cursor: "pointer",
+                  transition: "color 0.12s, background 0.12s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
               >
-                {t("desktop.cancel")}
+                <Lightning size={15} weight="regular" aria-hidden="true" />
+                {t("desktop.quickWorkspace")}
               </button>
             </div>
+            {/* Browser fallback: an inline path input (same as the picker menu). */}
+            {customPathOpen && (
+              <div style={{ padding: "10px 8px 0", display: "flex", flexDirection: "column", gap: 6 }}>
+                <input
+                  ref={customPathInputRef}
+                  value={customPathValue}
+                  onChange={(e) => { setCustomPathValue(e.target.value); setCustomPathError(null); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); void commitCustomPath(); }
+                    if (e.key === "Escape") cancelCustomPath();
+                  }}
+                  placeholder={t("desktop.projectPathPlaceholder")}
+                  style={{ width: "100%", maxWidth: 380, fontSize: 12, fontFamily: "var(--font-mono)", padding: "7px 10px", border: "1px solid var(--accent)", borderRadius: 6, outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }}
+                />
+                {customPathError && (
+                  <div style={{ color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>{customPathError}</div>
+                )}
+                <div style={{ display: "flex", gap: 8, maxWidth: 380 }}>
+                  <button
+                    type="button"
+                    onClick={() => void commitCustomPath()}
+                    disabled={customPathValidating || !customPathValue.trim()}
+                    style={{ flex: 1, padding: "6px 0", background: "var(--accent)", border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, cursor: customPathValidating || !customPathValue.trim() ? "not-allowed" : "pointer", opacity: customPathValidating || !customPathValue.trim() ? 0.65 : 1 }}
+                  >
+                    {customPathValidating ? t("desktop.checking") : t("desktop.open")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelCustomPath}
+                    style={{ flex: 1, padding: "6px 0", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", fontSize: 12, cursor: "pointer" }}
+                  >
+                    {t("desktop.cancel")}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Sections — side by side when space allows, stacked otherwise;
-          each column scrolls independently of the other and of the brand. */}
-      {hasAnySection && (
-        <div style={{
-          flex: 1,
-          minHeight: 0,
-          width: "min(100%, 940px)",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
-          gridAutoRows: "1fr",
-          justifyContent: "center",
-          gap: "20px 44px",
-        }}>
           {hasPiProjects && (
-            <div style={{ minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
+            <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               {listHeader(t("desktop.recentProjects"))}
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {piWorkspaces.slice(0, 10).map((w, i) => {
@@ -419,8 +421,10 @@ export function WelcomeLobby({
               </div>
             </div>
           )}
-          {hasRecommended && (
-            <div style={{ minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
+        </div>
+
+        {hasRecommended && (
+          <div style={{ minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               {listHeader(t("desktop.recommendedWorkspaces"))}
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {(recommended ?? []).slice(0, 14).map((r) => listItem(r.path, { source: r.source, timeMs: r.timeMs }))}
@@ -452,7 +456,6 @@ export function WelcomeLobby({
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }

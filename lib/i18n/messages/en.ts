@@ -151,6 +151,7 @@ export const enLocale = {
     "desktop.sendMessageForSessionInfo": "Send a message or run /session to load session info",
     "desktop.selectSessionFromSidebar": "Select a session from the sidebar",
     "desktop.lobbySubtitle": "Open a recent workspace or pick a folder to start a new session",
+    "desktop.newWorkspace": "New workspace",
     "desktop.recommendedWorkspaces": "Recommended Workspaces",
     "desktop.recommendedWorkspacesSetting": "Show recommended workspaces on the welcome lobby",
     "desktop.recommendedWorkspacesSettingDescription": "Detect recent workspaces from other editors and coding agents (VS Code, Zed, Claude Code, Codex, OpenCode). Read-only — nothing is ever written to their data.",
