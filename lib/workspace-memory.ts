@@ -1,9 +1,4 @@
-import { isWindowsPlatform, normalizePathKey } from "./path-match";
-
-/** Windows-only case+separator folded key, used for tolerant lookups. */
-function foldedKey(p: string): string {
-  return p.replace(/\\/g, "/").toLowerCase();
-}
+import { foldWindowsKey, isWindowsPlatform, normalizePathKey } from "./path-match";
 
 /**
  * Per-workspace "last open context" memory.
@@ -123,8 +118,8 @@ export function getLastOpen(workspaceKey: string): LastOpenEntry | null {
       // Keys may have been written with a differently-cased drive letter or
       // separator style (lobby entries normalize to forward slashes, pi
       // session records use backslashes, older records may vary).
-      const folded = foldedKey(workspaceKey);
-      const found = Object.keys(map).find((k) => foldedKey(k) === folded);
+      const folded = foldWindowsKey(workspaceKey);
+      const found = Object.keys(map).find((k) => foldWindowsKey(k) === folded);
       if (found) entry = map[found];
     }
     if (!entry) return null;
@@ -153,8 +148,8 @@ export function clearLastOpen(workspaceKey: string): void {
     if (!(key in map)) {
       // Tolerate a differently-cased/styled stored key.
       if (!isWindowsPlatform()) return;
-      const folded = foldedKey(key);
-      const found = Object.keys(map).find((k) => foldedKey(k) === folded);
+      const folded = foldWindowsKey(key);
+      const found = Object.keys(map).find((k) => foldWindowsKey(k) === folded);
       if (!found) return;
       delete map[found];
     } else {

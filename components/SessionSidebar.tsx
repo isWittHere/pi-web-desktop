@@ -15,6 +15,7 @@ import { getTitleModel } from "@/lib/title-settings";
 import { bucketOf, TIME_BUCKET_ORDER, timeBucketKey } from "@/lib/time-groups";
 import { loadCollapsedTimeGroups, saveCollapsedTimeGroups, type CollapsedTimeGroups } from "@/lib/time-group-state";
 import { samePath } from "@/lib/path-match";
+import { formatRelativeTime } from "@/lib/format-relative-time";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
@@ -152,20 +153,6 @@ function saveUnreadSessionIds(ids: Set<string>): void {
   } catch {
     // ignore storage quota / privacy-mode errors
   }
-}
-
-function formatRelativeTime(dateStr: string, t: (key: string, params?: Record<string, string | number>) => string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (mins < 1) return t("desktop.justNow");
-  if (mins < 60) return t("desktop.minutesAgo", { count: mins });
-  if (hours < 24) return t("desktop.hoursAgo", { count: hours });
-  if (days < 7) return t("desktop.daysAgo", { count: days });
-  return date.toLocaleDateString();
 }
 
 /**

@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { getSessionList } from "@/lib/session-list";
+import { formatRelativeTime } from "@/lib/format-relative-time";
 import { RunningSessionIndicator, UnreadSessionIndicator } from "@/components/SessionActivityIndicators";
+import { PiLogo } from "@/components/PiLogo";
 import type { SessionInfo } from "@/lib/types";
 import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
 
@@ -27,7 +29,7 @@ import type { RecentProject, RecentProjectSource } from "@/lib/recent-projects";
  * cwd validation → allow-list).
  */
 
-const RECOMMENDED_ENABLED_KEY = "pi-recent-projects-enabled";
+export const RECOMMENDED_ENABLED_KEY = "pi-recent-projects-enabled";
 
 function sourceLabel(source: RecentProjectSource): string {
   switch (source) {
@@ -48,39 +50,8 @@ interface PiWorkspace {
   weekSessions: SessionInfo[];
 }
 
-/** Inline Pi logo (same path as public/pi-original.svg). */
-function PiLogo({ size = 56 }: { size?: number }) {
-  return (
-    <svg
-      fill="currentColor"
-      fillRule="evenodd"
-      height={size}
-      viewBox="0 0 24 24"
-      width={size}
-      style={{ flex: "none", lineHeight: 1 }}
-      aria-hidden="true"
-    >
-      <path clipRule="evenodd" d="M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5z" />
-      <path d="M17.5 12H23v11h-5.5V12z" />
-    </svg>
-  );
-}
-
 function pathBaseName(p: string): string {
   return p.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).pop() ?? p;
-}
-
-function formatRelativeTime(ms: number, t: (key: string, params?: { [k: string]: string | number }) => string): string {
-  let diff = Date.now() - ms;
-  if (diff < 0) diff = 0;
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (mins < 1) return t("desktop.justNow");
-  if (mins < 60) return t("desktop.minutesAgo", { count: mins });
-  if (hours < 24) return t("desktop.hoursAgo", { count: hours });
-  if (days < 7) return t("desktop.daysAgo", { count: days });
-  return new Date(ms).toLocaleDateString();
 }
 
 export function WelcomeLobby({

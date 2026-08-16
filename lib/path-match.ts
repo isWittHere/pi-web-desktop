@@ -19,14 +19,14 @@ export function isWindowsPlatform(): boolean {
 }
 
 /** Windows-only: unify separator style and case for comparison. */
-function windowsKey(p: string): string {
+export function foldWindowsKey(p: string): string {
   return p.replace(/\\/g, "/").toLowerCase();
 }
 
 /** Case- and separator-insensitive path equality on Windows; exact elsewhere. */
 export function samePath(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return a === b;
-  if (isWindowsPlatform()) return windowsKey(a) === windowsKey(b);
+  if (isWindowsPlatform()) return foldWindowsKey(a) === foldWindowsKey(b);
   return a === b;
 }
 
