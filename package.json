@@ -81,13 +81,13 @@
     "@types/react-dom": "^19",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
-    "eslint": "^9.39.5",
+    "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "jiti": "^2.7.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.2.2",
     "to-ico": "^1.1.5",
-    "typescript": "^5.9.3"
+    "typescript": "^5"
   },
   "build": {
     "appId": "com.iswitthere.pi-web-desktop",
