@@ -113,14 +113,28 @@ function readMap(): Record<string, LastOpenEntry | undefined> {
 export function getLastOpen(workspaceKey: string): LastOpenEntry | null {
   try {
     const map = readMap();
-    let entry = map[workspaceKey];
+    // Stored keys are normalized (forward slashes, uppercase drive letter),
+    // while callers pass raw forms (pi session records use backslashes,
+    // lobby entries come from external detectors) — look up the canonical
+    // key first, then fall back to a folding scan.
+    let entry = map[workspaceKey] ?? map[normalizePathKey(workspaceKey)];
     if (!entry && isWindowsPlatform()) {
       // Keys may have been written with a differently-cased drive letter or
       // separator style (lobby entries normalize to forward slashes, pi
-      // session records use backslashes, older records may vary).
+      // session records use backslashes, older records may vary). Multiple
+      // folded-equivalent keys can exist in legacy stores (each spelling
+      // written under its own key) — resolve to the MOST RECENTLY written
+      // one (last insertion), never the first: the first is a stale duplicate
+      // whose value stops being updated once writes move to another spelling,
+      // which would pin the remembered session forever.
       const folded = foldWindowsKey(workspaceKey);
-      const found = Object.keys(map).find((k) => foldWindowsKey(k) === folded);
-      if (found) entry = map[found];
+      const keys = Object.keys(map);
+      for (let i = keys.length - 1; i >= 0; i--) {
+        if (foldWindowsKey(keys[i]) === folded) {
+          entry = map[keys[i]];
+          break;
+        }
+      }
     }
     if (!entry) return null;
     if (entry.kind !== "session" && entry.kind !== "draft") return null;
@@ -134,7 +148,18 @@ export function getLastOpen(workspaceKey: string): LastOpenEntry | null {
 export function setLastOpen(workspaceKey: string, entry: LastOpenEntry): void {
   try {
     const map = readMap();
-    map[normalizePathKey(workspaceKey)] = entry;
+    const key = normalizePathKey(workspaceKey);
+    // Collapse folded-equivalent duplicates (older records may have been
+    // written under another spelling — lobby forward slashes, pi-native
+    // backslashes, external case variants) so one workspace keeps exactly
+    // one slot and reads can never resolve to a stale copy.
+    if (isWindowsPlatform()) {
+      const folded = foldWindowsKey(key);
+      for (const k of Object.keys(map)) {
+        if (k !== key && foldWindowsKey(k) === folded) delete map[k];
+      }
+    }
+    map[key] = entry;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
   } catch {
     // storage unavailable — memory is best-effort

@@ -435,7 +435,7 @@ export function AppShell() {
       if (viewModeRef.current === "tabs") {
         tabsApi.open(cwd, cwd);
       }
-      requestWorkspaceSwitch(cwd);
+      requestWorkspaceSwitch(cwd, cwd);
     })();
   }, [tabsApi, requestWorkspaceSwitch]);
 
@@ -446,7 +446,7 @@ export function AppShell() {
     const tab = tabsStateRef.current.tabs.find((t) => t.key === key);
     if (!tab || key === tabsStateRef.current.activeKey) return;
     tabsApi.activate(key);
-    requestWorkspaceSwitch(tab.cwd);
+    requestWorkspaceSwitch(tab.cwd, tab.key);
   }, [tabsApi, requestWorkspaceSwitch]);
 
   // Close a workspace tab — UX only: sessions/tasks keep running server-side.
@@ -461,7 +461,7 @@ export function AppShell() {
     if (!wasActive) return;
     const nextActive = next.tabs.find((t) => t.key === next.activeKey) ?? null;
     if (nextActive) {
-      requestWorkspaceSwitch(nextActive.cwd);
+      requestWorkspaceSwitch(nextActive.cwd, nextActive.key);
     } else {
       // Last tab closed — clear the view back to the welcome state. The
       // cwd must be cleared in the SAME batch as the other states: the
@@ -678,7 +678,7 @@ export function AppShell() {
     // same-project check below, so the session stays open and the cwd lands
     // where the sidebar's own session click would have put it.
     if (activeCwd === null || !samePath(activeCwd, session.cwd)) {
-      requestWorkspaceSwitch(session.cwd);
+      requestWorkspaceSwitch(session.cwd, workspaceKeyOf(session));
     }
     // Tabs mode: entering a session directly (lobby rows) must surface its
     // workspace as a tab, exactly like a project pick would.
