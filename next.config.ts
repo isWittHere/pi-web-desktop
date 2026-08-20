@@ -15,6 +15,11 @@ try {
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: configDir,
+  // Turbopack is the default bundler in Next 16. A custom `webpack` config
+  // without a `turbopack` config makes `next build` error out, so declare an
+  // empty turbopack config to re-enable the default (Turbopack) build path.
+  // The `webpack` function below remains for `npm run build:webpack`.
+  turbopack: {},
   // The Electron window and dev tooling talk to the server on loopback;
   // Next's dev origin check must allow it (upstream 1e20164). Kept loopback-
   // only to preserve the desktop server's network boundary.
