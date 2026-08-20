@@ -73,8 +73,10 @@ interface Props {
   onRunningSessionIdsChange?: (ids: Set<string>) => void;
   /** Tabs view mode: the shell asks the sidebar to move the effective cwd
    *  (null clears it — last tab closed). The token makes repeated requests
-   *  with the same cwd apply again (e.g. re-activating a tab). */
-  requestedCwd?: { cwd: string | null; token: number } | null;
+   *  with the same cwd apply again (e.g. re-activating a tab). projectKey
+   *  carries the authoritative workspace identity (the tab's project root)
+   *  so restoring a worktree tab does not lose the workspace memory key. */
+  requestedCwd?: { cwd: string | null; projectKey?: string | null; token: number } | null;
   /** How a picked project is opened. When provided, every workspace picker
    *  menu (title bar / welcome / sidebar) calls this instead of switching
    *  the cwd directly, so the shell can open a workspace tab instead. */
@@ -611,12 +613,21 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // double as the "already auto-selected" flag — the auto-select effect
   // would see null and re-pick the remembered workspace.
   const startupAutoSelectDoneRef = useRef(false);
+  // Authoritative project key from the latest workspace-switch request, bound
+  // to its cwd. A switching request also drives selectedCwd, so the notify
+  // effect below can tell "this cwd came from a tab/session pick (use the
+  // trusted project key)" apart from a sidebar-internal selection (re-resolve
+  // via projectRootFor as before).
+  const requestedCwdInfoRef = useRef<{ cwd: string | null; projectKey: string | null } | null>(null);
   useEffect(() => {
     if (lastNotifiedCwdRef.current === selectedCwd) return;
     lastNotifiedCwdRef.current = selectedCwd;
     const isAutoSelect = autoSelectRef.current;
     autoSelectRef.current = false;
-    onCwdChange?.(selectedCwd, projectRootFor(selectedCwd), isAutoSelect);
+    const req = requestedCwdInfoRef.current;
+    const projectKey =
+      req && selectedCwd !== null && req.cwd === selectedCwd ? req.projectKey : null;
+    onCwdChange?.(selectedCwd, projectKey ?? projectRootFor(selectedCwd), isAutoSelect);
   }, [selectedCwd, onCwdChange, projectRootFor]);
 
   // Sync the worktree switcher to the selected session's cwd. Sessions of all
@@ -633,9 +644,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Apply a cwd switch requested by the shell (tab activation, project pick,
   // lobby entry, last-tab-closed). Null clears the cwd. The token makes a
-  // repeated request for the same cwd apply again.
+  // repeated request for the same cwd apply again. Record the request's
+  // authoritative project key before the cwd lands, so this same batch's
+  // notify effect can pick it up.
   useEffect(() => {
     if (!requestedCwd) return;
+    requestedCwdInfoRef.current = { cwd: requestedCwd.cwd, projectKey: requestedCwd.projectKey ?? null };
     setSelectedCwd(requestedCwd.cwd);
   }, [requestedCwd]);
 

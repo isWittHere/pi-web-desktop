@@ -364,10 +364,13 @@ export function AppShell() {
   }>({ projects: [], activity: new Map() });
   // Cwd switch requests for the sidebar's effective cwd (tab activation,
   // project pick, last-tab-closed). The token lets a repeated request for
-  // the same cwd apply again.
-  const [cwdRequest, setCwdRequest] = useState<{ cwd: string | null; token: number } | null>(null);
-  const requestWorkspaceSwitch = useCallback((cwd: string | null) => {
-    setCwdRequest((prev) => ({ cwd, token: (prev?.token ?? 0) + 1 }));
+  // the same cwd apply again. projectKey carries the authoritative
+  // workspace identity (tab.key / workspaceKeyOf(session)) so the restore
+  // anchor never depends on the sidebar re-resolving a worktree path back to
+  // its root.
+  const [cwdRequest, setCwdRequest] = useState<{ cwd: string | null; projectKey?: string | null; token: number } | null>(null);
+  const requestWorkspaceSwitch = useCallback((cwd: string | null, projectKey?: string | null) => {
+    setCwdRequest((prev) => ({ cwd, projectKey, token: (prev?.token ?? 0) + 1 }));
   }, []);
 
   // Persisted tabs (tabs view mode): restore the last session's tab list on
@@ -589,7 +592,7 @@ export function AppShell() {
         // When they coincide, fall through to the normal flow — the cwd is
         // already the right one and restoreWorkspaceContext must still run.
         if (active && !samePath(active.cwd, cwd)) {
-          requestWorkspaceSwitch(active.cwd);
+          requestWorkspaceSwitch(active.cwd, active.key);
           return;
         }
       }
