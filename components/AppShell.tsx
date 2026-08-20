@@ -363,11 +363,12 @@ export function AppShell() {
     activity: Map<string, { running: number; unread: number }>;
   }>({ projects: [], activity: new Map() });
   // Cwd switch requests for the sidebar's effective cwd (tab activation,
-  // project pick, last-tab-closed). The token lets a repeated request for
-  // the same cwd apply again. projectKey carries the authoritative
-  // workspace identity (tab.key / workspaceKeyOf(session)) so the restore
-  // anchor never depends on the sidebar re-resolving a worktree path back to
-  // its root.
+  // project pick, last-tab-closed). The token guarantees a fresh object
+  // reference so the requestedCwd effect re-runs even when the cwd is
+  // unchanged (request semantics survive identical values). projectKey
+  // carries the authoritative workspace identity (tab.key /
+  // workspaceKeyOf(session)) so the restore anchor never depends on the
+  // sidebar re-resolving a worktree path back to its root.
   const [cwdRequest, setCwdRequest] = useState<{ cwd: string | null; projectKey?: string | null; token: number } | null>(null);
   const requestWorkspaceSwitch = useCallback((cwd: string | null, projectKey?: string | null) => {
     setCwdRequest((prev) => ({ cwd, projectKey, token: (prev?.token ?? 0) + 1 }));

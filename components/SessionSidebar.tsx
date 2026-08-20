@@ -618,17 +618,19 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // effect below can tell "this cwd came from a tab/session pick (use the
   // trusted project key)" apart from a sidebar-internal selection (re-resolve
   // via projectRootFor as before).
-  const requestedCwdInfoRef = useRef<{ cwd: string | null; projectKey: string | null } | null>(null);
   useEffect(() => {
     if (lastNotifiedCwdRef.current === selectedCwd) return;
     lastNotifiedCwdRef.current = selectedCwd;
     const isAutoSelect = autoSelectRef.current;
     autoSelectRef.current = false;
-    const req = requestedCwdInfoRef.current;
+    // The switch request is the newest prop in this commit, while selectedCwd
+    // just landed from it — only trust its key when they actually match.
     const projectKey =
-      req && selectedCwd !== null && req.cwd === selectedCwd ? req.projectKey : null;
+      requestedCwd && selectedCwd !== null && requestedCwd.cwd === selectedCwd
+        ? requestedCwd.projectKey ?? null
+        : null;
     onCwdChange?.(selectedCwd, projectKey ?? projectRootFor(selectedCwd), isAutoSelect);
-  }, [selectedCwd, onCwdChange, projectRootFor]);
+  }, [selectedCwd, onCwdChange, projectRootFor, requestedCwd]);
 
   // Sync the worktree switcher to the selected session's cwd. Sessions of all
   // worktrees in a project share one list, so clicking a session from another
@@ -643,13 +645,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   }, [selectedCwdProp]);
 
   // Apply a cwd switch requested by the shell (tab activation, project pick,
-  // lobby entry, last-tab-closed). Null clears the cwd. The token makes a
-  // repeated request for the same cwd apply again. Record the request's
-  // authoritative project key before the cwd lands, so this same batch's
-  // notify effect can pick it up.
+  // lobby entry, last-tab-closed). Null clears the cwd. The request's token
+  // keeps the prop object fresh so this effect re-runs even for an unchanged
+  // cwd (setSelectedCwd itself is idempotent).
   useEffect(() => {
     if (!requestedCwd) return;
-    requestedCwdInfoRef.current = { cwd: requestedCwd.cwd, projectKey: requestedCwd.projectKey ?? null };
     setSelectedCwd(requestedCwd.cwd);
   }, [requestedCwd]);
 
