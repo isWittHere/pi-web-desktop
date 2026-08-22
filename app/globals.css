@@ -646,6 +646,17 @@ pre, code {
   overflow-wrap: break-word;
   text-align: left;
 }
+/* Trailing ghost-text hint in the chat input: the description of the slash
+   command currently typed, appended to the highlight layer right after the
+   caret's last glyph (see slashGhost in ChatInput.tsx). Plain inline span —
+   never inline-block, whose atomic box breaks baseline alignment and line
+   wrapping; a pure inline span inherits the layer's font metrics and pre-wrap
+   behavior, so it sits exactly on the command's baseline, and any overflow is
+   clipped by the viewport. Color matches the composer placeholder exactly. */
+.chat-input-ghost {
+  color: var(--text-dim);
+  margin-left: 4px;
+}
 /* Keep the selection tint over the (transparent) textarea legible against
    the highlight layer beneath it. */
 .chat-input-textarea::selection {
