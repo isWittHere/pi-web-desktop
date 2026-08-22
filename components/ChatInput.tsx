@@ -1154,10 +1154,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? trimmedBefore.slice(1).toLowerCase()
     : null;
 
+  // Shared command pool for the slash menu and the ghost-text hint: builtins
+  // are hidden while streaming (they cannot be invoked then), SDK commands
+  // always apply.
+  const slashCommandPool = [...(isStreaming ? [] : builtinSlashCommands), ...(slashCommands ?? [])];
+
   const matchedSlashCommands = (() => {
     if (slashQuery === null) return [];
-    const commands = [...(isStreaming ? [] : builtinSlashCommands), ...(slashCommands ?? [])];
-    return [...commands]
+    return [...slashCommandPool]
       .filter((command) => {
         const name = command.name.toLowerCase();
         const description = command.description?.toLowerCase() ?? "";
@@ -1175,6 +1179,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     matchedSlashCommands,
     skillDormancy,
   );
+
+  // Ghost-text preview: while the caret-based slash slot holds an exact
+  // command name and the caret sits at the end of the input, the matched
+  // command's description is appended to the highlight layer as a faded
+  // trailing hint. Rendered purely in the highlight layer, so the textarea
+  // value never contains it — drafts and sent messages are unaffected.
+  // Exact name match only (no prefix fallback): a partial command shows
+  // nothing until it completes. Trailing whitespace after the command is
+  // tolerated — the hint stays visible while the user spaces out before
+  // typing arguments, and hides the moment a non-space character appears
+  // after the name. The menu stays open alongside it; both are derived
+  // from the same command pool.
+  const slashGhost = (() => {
+    const caret = slashCaretPos ?? value.length;
+    if (caret !== value.length) return null;
+    if (!trimmedBefore.startsWith("/") || trimmedBefore.length <= 1) return null;
+    const body = trimmedBefore.slice(1);
+    const spaceIdx = body.search(/\s/);
+    const namePart = spaceIdx === -1 ? body : body.slice(0, spaceIdx);
+    if (spaceIdx !== -1 && !/^\s+$/.test(body.slice(spaceIdx))) return null;
+    const exact = slashCommandPool.find((command) => command.name.toLowerCase() === namePart.toLowerCase());
+    const description = exact?.description?.trim();
+    return description ? description : null;
+  })();
 
   useEffect(() => {
     if (!slashMenuOpen || !cwd) return;
@@ -2610,6 +2638,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 ) : (
                   <span key={i} className={`mention-token mention-token-${segment.token.kind}`}>{segment.text}</span>
                 )
+              )}
+              {slashGhost && (
+                <span aria-hidden="true" className="chat-input-ghost">{slashGhost}</span>
               )}
             </div>
           </div>
