@@ -85,10 +85,18 @@ html[data-wallpaper="on"][data-wallpaper-panel="none"] { --wp-blur-panel: 0px; }
 html[data-wallpaper="on"]:is([data-wallpaper-input="trans"], [data-wallpaper-input="blur"]) .chat-input-shell {
   background: transparent;
 }
+/* The pseudo's containing block is the shell's padding box (inset: 0
+   would land it 1px inside the 1px border), so its inherited 8px
+   corner radius would be centered 1px further out than the border's
+   inner curve — leaving an unfilled wedge at each corner where the raw
+   wallpaper shows through unfrosted. inset: -1px expands the surface
+   to the border-box, putting its curve exactly on the border's outer
+   curve; the opaque border stroke hides the outer 1px, so the visible
+   translucent/blur edge lands precisely on the border's inner curve. */
 html[data-wallpaper="on"] .chat-input-shell::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -1px;
   border-radius: inherit;
   z-index: -1;
 }
