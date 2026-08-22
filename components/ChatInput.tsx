@@ -22,8 +22,10 @@ import { filterThinkingLevelOptions } from "@/lib/thinking-levels";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableHeight } from "@/hooks/useResizableHeight";
+import { scrollRemaining, nextInputCompactState, COMPACT_RESTORE_TRIGGER, type InputCompactScrollDirection } from "@/lib/input-compact";
 import { useI18n } from "@/hooks/useI18n";
 import { ArrowBendUpLeftIcon } from "@phosphor-icons/react/ArrowBendUpLeft";
+import { ArrowDownIcon } from "@phosphor-icons/react/ArrowDown";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowElbowUpLeftIcon } from "@phosphor-icons/react/ArrowElbowUpLeft";
 import { ArrowsInIcon } from "@phosphor-icons/react/ArrowsIn";
@@ -148,6 +150,18 @@ const MIN_MANUAL_HEIGHT_MOBILE = 80;
 const MANUAL_MAX_HEIGHT_CAP = 480;
 const MANUAL_MAX_HEIGHT_FRACTION = 0.55;
 const INPUT_HEIGHT_STORAGE_KEY = "pi-chat-input-height";
+// Reading-mode collapse: after the user scrolls away from the bottom of the
+// conversation, the composer shrinks to a single text row with the toolbar
+// hidden, and expands again on return to the bottom or on focus. The intent
+// window mirrors USER_SCROLL_INTENT_MS in useAgentSession so real user
+// scrolling (wheel / touch / keyboard / scrollbar drag) stays distinguishable
+// from programmatic scroll positioning.
+const COMPACT_INTENT_MS = 1200;
+const COMPACT_SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Space", "Spacebar"]);
+// Scroll-to-bottom affordance (floating row): appears only after the user has
+// been continuously away from the bottom for this long, so it never flashes
+// on brief scrolls.
+const SCROLL_TO_BOTTOM_DELAY_MS = 8000;
 
 function compareModelOptions(a: ModelOption, b: ModelOption): number {
   return MODEL_OPTION_COLLATOR.compare(a.name || a.modelId, b.name || b.modelId)
@@ -532,6 +546,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [markdownListContinue, setMarkdownListContinue] = useState(() => {
     try { return localStorage.getItem("pi-markdown-list-continue") !== "off"; } catch { return true; }
   });
+  // Reading-mode collapse (Settings → Chat toggle). Stored as "on"/"off";
+  // absent means enabled.
+  const [compactInputEnabled, setCompactInputEnabled] = useState(() => {
+    try { return localStorage.getItem("pi-compact-input") !== "off"; } catch { return true; }
+  });
+  const compactInputEnabledRef = useRef(compactInputEnabled);
+  compactInputEnabledRef.current = compactInputEnabled;
   const [atQuery, setAtQuery] = useState<AtQueryMatch | null>(null);
   const [atMenuOpen, setAtMenuOpen] = useState(false);
   const [atActiveIndex, setAtActiveIndex] = useState(0);
@@ -543,6 +564,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // extend past the window's top edge. null until first measured.
   const [popupMaxHeight, setPopupMaxHeight] = useState<number | null>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
+  // Focus mirrored to a ref so the scroll handler (attached once, not on
+  // every focus change) can refuse to collapse while the user types.
+  const inputFocusedRef = useRef(false);
+  // Timestamp until which a recent user scroll gesture counts as "user
+  // intent" — programmatic scrolls never set this.
+  const compactIntentUntilRef = useRef(0);
+  // Previous scrollTop of the messages container, used to derive the user's
+  // scroll direction from the scrollTop delta. The browser's clamp after a
+  // collapse shows up as a negative delta ("up") — exactly what keeps the
+  // state machine from re-expanding on its own height change.
+  const lastScrollTopRef = useRef(0);
+  // Scroll-to-bottom affordance: current at-bottom position and the pending
+  // timer that reveals the floating button after SCROLL_TO_BOTTOM_DELAY_MS of
+  // continuous absence from the bottom.
+  const atBottomRef = useRef(true);
+  const scrollToBottomTimerRef = useRef<number | null>(null);
   const [fileIndex, setFileIndex] = useState<{ cwd: string; entries: FileIndexEntry[]; truncated: boolean } | null>(null);
   const [fileIndexLoading, setFileIndexLoading] = useState(false);
   const [atServerResult, setAtServerResult] = useState<{ cwd: string; query: string; matches: FileIndexEntry[] } | null>(null);
@@ -554,6 +591,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // conditional visibility of the floating maximize/restore button above the
   // input box — it only appears while the user is typing-focused.
   const [inputFocused, setInputFocused] = useState(false);
+  // Reading-mode collapse (desktop only): true while the user is scrolled
+  // away from the bottom of the conversation and the composer is reduced to
+  // a single text row. Reset on mount — every session switch (remount)
+  // starts expanded.
+  const [compact, setCompact] = useState(false);
+  // Floating "scroll to bottom" button: visible only after the user has been
+  // continuously away from the bottom for SCROLL_TO_BOTTOM_DELAY_MS.
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightLayerRef = useRef<HTMLDivElement>(null);
@@ -1051,6 +1096,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
   }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      try { setCompactInputEnabled(localStorage.getItem("pi-compact-input") !== "off"); } catch { /* ignore */ }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
+
+  // Disabling the feature mid-read restores the composer immediately and
+  // keeps it expanded until the setting is turned back on.
+  useEffect(() => {
+    if (!compactInputEnabled) setCompact(false);
+  }, [compactInputEnabled]);
 
   useEffect(() => {
     return () => {
@@ -1702,6 +1761,127 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (modelDropdownOpen) modelSearchRef.current?.focus();
   }, [modelDropdownOpen]);
 
+  // ── Reading-mode collapse (desktop only) ────────────────────────────────
+  // A wheel / touch / keyboard / pointer gesture on or over the messages
+  // container marks the next scroll events as user-intended, so programmatic
+  // positioning (open-anchoring a running session, lazy-load prepends,
+  // completion auto-scroll) can never collapse the input on its own.
+  const markCompactScrollIntent = useCallback(() => {
+    compactIntentUntilRef.current = Date.now() + COMPACT_INTENT_MS;
+  }, []);
+
+  // Recompute the compact state from the current scroll position. The
+  // direction is derived from the scrollTop delta (see lastScrollTopRef);
+  // ResizeObserver and initial evaluations pass "none". Edge-triggered on
+  // the bottom boundary: entering the bottom expands only while scrolling
+  // down, leaving it collapses only on a real upward user scroll — and never
+  // while the textarea holds focus (requirement: focus always restores).
+  // Also feeds the floating scroll-to-bottom button: it appears once the
+  // user has been continuously away from the bottom for 8s, and hides the
+  // moment they return (the timer is cancelled on any dip back to bottom).
+  const updateCompactFromScroll = useCallback((direction: InputCompactScrollDirection = "none") => {
+    const container = messagesScrollRef?.current ?? null;
+    if (!container || isMobile) return;
+    const remaining = scrollRemaining(container);
+    const atBottom = remaining <= COMPACT_RESTORE_TRIGGER;
+    if (atBottom !== atBottomRef.current) {
+      atBottomRef.current = atBottom;
+      if (atBottom) {
+        if (scrollToBottomTimerRef.current !== null) {
+          clearTimeout(scrollToBottomTimerRef.current);
+          scrollToBottomTimerRef.current = null;
+        }
+        setShowScrollToBottom(false);
+      } else {
+        scrollToBottomTimerRef.current = window.setTimeout(() => {
+          scrollToBottomTimerRef.current = null;
+          setShowScrollToBottom(true);
+        }, SCROLL_TO_BOTTOM_DELAY_MS);
+      }
+    }
+    // Feature toggle (Settings → Chat): collapse only while enabled. The
+    // scroll-to-bottom button tracking above stays active either way.
+    if (inputFocusedRef.current || !compactInputEnabledRef.current) return;
+    setCompact((prev) => nextInputCompactState(prev, {
+      kind: "scroll",
+      remaining,
+      direction,
+      userIntent: Date.now() < compactIntentUntilRef.current,
+    }));
+  }, [isMobile, messagesScrollRef]);
+
+  // Smooth-scroll the conversation back to the bottom. The scroll events
+  // that follow land the viewport at the bottom, which hides the button and
+  // (being a downward scroll) restores the collapsed composer.
+  const scrollToBottom = useCallback(() => {
+    const container = messagesScrollRef?.current ?? null;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+  }, [messagesScrollRef]);
+
+  // Scroll listener: compute the direction from the movement since the last
+  // event, then feed the state machine. The browser clamps scrollTop when the
+  // collapse grows the container, producing a negative delta here — which is
+  // what suppresses the immediate re-expand.
+  const handleContainerScroll = useCallback(() => {
+    const container = messagesScrollRef?.current ?? null;
+    if (!container) return;
+    const delta = container.scrollTop - lastScrollTopRef.current;
+    lastScrollTopRef.current = container.scrollTop;
+    updateCompactFromScroll(delta > 0 ? "down" : delta < 0 ? "up" : "none");
+  }, [messagesScrollRef, updateCompactFromScroll]);
+
+  useEffect(() => {
+    const container = messagesScrollRef?.current ?? null;
+    if (!container || isMobile) return;
+    lastScrollTopRef.current = container.scrollTop;
+    container.addEventListener("scroll", handleContainerScroll, { passive: true });
+    container.addEventListener("wheel", markCompactScrollIntent, { passive: true });
+    container.addEventListener("touchstart", markCompactScrollIntent, { passive: true });
+    container.addEventListener("pointerdown", markCompactScrollIntent, { passive: true });
+    // Keyboard scrolling (focus outside a text field, e.g. on the messages)
+    // is a user intent too.
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (!COMPACT_SCROLL_KEYS.has(e.key)) return;
+      if (e.target instanceof Element && e.target.closest("input, textarea, [contenteditable='true']")) return;
+      markCompactScrollIntent();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    // The container's height changes with the composer itself (collapse
+    // enlarges the reading area, restore shrinks it) — re-evaluate the
+    // bottom position so the state never goes stale. Direction "none" keeps
+    // a collapse-induced evaluation from re-expanding the input.
+    const observer = new ResizeObserver(() => updateCompactFromScroll("none"));
+    observer.observe(container);
+    // Initial evaluation: a session already positioned away from the bottom
+    // (running session open-anchoring) carries no user intent, so the input
+    // stays expanded until the user actually scrolls.
+    updateCompactFromScroll("none");
+    return () => {
+      container.removeEventListener("scroll", handleContainerScroll);
+      container.removeEventListener("wheel", markCompactScrollIntent);
+      container.removeEventListener("touchstart", markCompactScrollIntent);
+      container.removeEventListener("pointerdown", markCompactScrollIntent);
+      window.removeEventListener("keydown", onKeyDown);
+      observer.disconnect();
+    };
+  }, [isMobile, handleContainerScroll, markCompactScrollIntent, messagesScrollRef, updateCompactFromScroll]);
+
+  // While compact, the CSS height clamp hides the textarea's real size; on
+  // expand re-apply the content-driven height so a changed draft shows again
+  // (no-op in manual height mode, where the shell owns the size).
+  useEffect(() => {
+    if (!compact) applyAutoHeight();
+  }, [compact, applyAutoHeight]);
+
+  // Cancel the pending scroll-to-bottom timer on unmount.
+  useEffect(() => () => {
+    if (scrollToBottomTimerRef.current !== null) {
+      clearTimeout(scrollToBottomTimerRef.current);
+      scrollToBottomTimerRef.current = null;
+    }
+  }, []);
+
 
 
   return (
@@ -2114,7 +2294,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           })()}
           <div
             ref={inputShellRef}
-            className={`chat-input-shell${isStreaming && (onSteer || onFollowUp) ? " is-streaming" : ""}${manualMode ? " is-manual-height" : ""}`}
+            className={`chat-input-shell${isStreaming && (onSteer || onFollowUp) ? " is-streaming" : ""}${manualMode ? " is-manual-height" : ""}${compact ? " is-compact" : ""}`}
             onClick={(e) => {
               const target = e.target as HTMLElement;
               if (!target.closest("button, input, select, [role=button], [role=separator]")) textareaRef.current?.focus();
@@ -2138,6 +2318,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {/* Floating controls above the composer's top-right corner: the
               steer/follow-up group only appears while the agent runs; the
               maximize group appears only while the input box is focused.
+              They stay visible in reading-mode collapse so the agent's live
+              step pill keeps reporting while the user reads.
               Styled inline because Turbopack does not hot-reload globals.css
               in the Electron dev setup — inline tweaks ride the JS HMR instead. */}
           <div
@@ -2153,6 +2335,46 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               gap: 6,
             }}
           >
+            {showScrollToBottom && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "stretch",
+                  overflow: "hidden",
+                  border: "1px solid color-mix(in srgb, var(--border) 62%, transparent)",
+                  borderRadius: 7,
+                  background: "var(--bg-panel)",
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.07)",
+                }}
+              >
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={scrollToBottom}
+                title={t("desktop.scrollToBottom")}
+                aria-label={t("desktop.scrollToBottom")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 36, height: 28, padding: 0,
+                  border: 0,
+                  background: "transparent",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = "var(--text)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }}
+              >
+                <ArrowDownIcon size={15} />
+              </button>
+              </div>
+            )}
             <div
               style={{
                 display: "flex",
@@ -2416,8 +2638,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
             onInput={handleInput}
             onPaste={handlePaste}
-            onFocus={() => setInputFocused(true)}
-            onBlur={() => setInputFocused(false)}
+            onFocus={() => { inputFocusedRef.current = true; setInputFocused(true); setCompact((prev) => nextInputCompactState(prev, { kind: "focus" })); }}
+            onBlur={() => { inputFocusedRef.current = false; setInputFocused(false); }}
             placeholder={
               isStreaming && (onSteer || onFollowUp)
                 ? t("desktop.steerOrQueueFollowUp")
@@ -2455,7 +2677,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
           </div>
 
-        {bashMode && (
+        {bashMode && !compact && (
           <div style={{ marginTop: 4, padding: "2px 8px", fontSize: 11, color: bashExcluded ? "var(--text-muted)" : "var(--accent)" }}>
             {t("desktop.shellCommand")} · {bashExcluded ? t("desktop.shellOutputLocal") : t("desktop.shellOutputModel")}
           </div>

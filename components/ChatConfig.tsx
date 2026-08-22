@@ -40,6 +40,7 @@ export function getStoredNotificationDuration(): NotificationDuration {
 
 const STORAGE_KEY = "pi-input-shortcut";
 const MARKDOWN_LIST_KEY = "pi-markdown-list-continue";
+const COMPACT_INPUT_KEY = "pi-compact-input";
 
 function getStoredShortcut(): InputShortcut {
   try {
@@ -53,6 +54,14 @@ function getStoredShortcut(): InputShortcut {
 function getStoredMarkdownList(): boolean {
   try {
     return localStorage.getItem(MARKDOWN_LIST_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function getStoredCompactInput(): boolean {
+  try {
+    return localStorage.getItem(COMPACT_INPUT_KEY) !== "off";
   } catch {
     return true;
   }
@@ -78,6 +87,7 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
   const { t } = useI18n();
   const [shortcut, setShortcut] = useState<InputShortcut>(getStoredShortcut);
   const [markdownList, setMarkdownList] = useState<boolean>(getStoredMarkdownList);
+  const [compactInput, setCompactInput] = useState<boolean>(getStoredCompactInput);
   const [notificationDuration, setNotificationDuration] = useState<NotificationDuration>(getStoredNotificationDuration);
   const [titleAuto, setTitleAuto] = useState<boolean>(getTitleAutoEnabled);
   const [titleModel, setTitleModelState] = useState<{ provider: string; modelId: string } | null>(getTitleModel);
@@ -110,6 +120,7 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
     const handler = () => {
       setShortcut(getStoredShortcut());
       setMarkdownList(getStoredMarkdownList());
+      setCompactInput(getStoredCompactInput());
       setNotificationDuration(getStoredNotificationDuration());
       setTitleAuto(getTitleAutoEnabled());
       setTitleModelState(getTitleModel());
@@ -126,6 +137,11 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
   const setMarkdownListAndPersist = useCallback((checked: boolean) => {
     setMarkdownList(checked);
     persistSetting(MARKDOWN_LIST_KEY, checked ? "on" : "off");
+  }, []);
+
+  const setCompactInputAndPersist = useCallback((checked: boolean) => {
+    setCompactInput(checked);
+    persistSetting(COMPACT_INPUT_KEY, checked ? "on" : "off");
   }, []);
 
   const setNotificationDurationAndPersist = useCallback((value: NotificationDuration) => {
@@ -188,6 +204,13 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
           checked={markdownList}
           onChange={setMarkdownListAndPersist}
           label={t("desktop.markdownListContinueLabel")}
+        />
+      </SettingsSection>
+      <SettingsSection title={t("desktop.compactInputWhileReading")} description={t("desktop.compactInputWhileReadingDescription")}>
+        <SettingToggle
+          checked={compactInput}
+          onChange={setCompactInputAndPersist}
+          label={t("desktop.compactInputWhileReadingLabel")}
         />
       </SettingsSection>
       <SettingsSection title={t("desktop.notificationDuration")} description={t("desktop.notificationDurationDescription")}>

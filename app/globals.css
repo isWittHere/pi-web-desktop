@@ -660,6 +660,25 @@ pre, code {
 .chat-input-shell.is-manual-height .chat-input-textarea {
   min-height: 0 !important; /* override the desktop 50px floor so it shrinks */
 }
+/* Reading-mode collapse: the composer shrinks to a single text row and the
+   toolbar + drag handle disappear once the user scrolls away from the bottom
+   of the conversation (see lib/input-compact.ts). The height override also
+   wins over the manual resize mode so a dragged composer collapses too, and
+   returns to its fixed height on expand. The textarea clamp beats both the
+   desktop 50px floor and the inline auto-grow height with !important. */
+.chat-input-shell.is-compact {
+  height: auto !important;
+}
+.chat-input-shell.is-compact .chat-input-toolbar,
+.chat-input-shell.is-compact .chat-input-resize-handle {
+  /* !important wins over the toolbar's inline `display: flex/grid` style. */
+  display: none !important;
+}
+.chat-input-shell.is-compact .chat-input-textarea {
+  min-height: 0 !important;
+  height: 24px !important; /* one 14px / 1.625 text row */
+  overflow: hidden !important;
+}
 .chat-input-toolbar {
   min-height: 32px;
   padding: 4px;
