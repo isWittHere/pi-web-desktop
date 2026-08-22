@@ -4,7 +4,9 @@
  *
  * Workflow:
  *   1. (optional) git backup of modified work files (excludes ref-repos/)
- *   2. npm dedupe && npm run build   (flatten deps, produce .next/)
+ *   2. warn if the dev app is still listening on 127.0.0.1:30141 (dev and
+ *      build share .next/ and corrupt each other's output), then clean
+ *      release/ + .next/, npm dedupe && npm run build
  *   3. npm prune --production        (strip devDependencies)
  *   4. electron-builder --win <target>
  *   5. npm install                   (restore devDependencies)
@@ -23,6 +25,7 @@
 "use strict";
 
 import { spawnSync } from "node:child_process";
+import { createConnection } from "node:net";
 import {
   cpSync,
   existsSync,
@@ -87,6 +90,23 @@ const PKG     = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 const VER     = PKG.version;
 const RELDIR  = join(ROOT, "release");
 const UNPKDIR = join(RELDIR, "win-unpacked");
+const NEXT_DIR = join(ROOT, ".next");
+
+// ── running-server check ─────────────────────────────────────────────────────
+// `next dev` and `next build` share the same .next/ directory. Running the
+// release build while the app's dev server is up has been observed to corrupt
+// the production CSS output (whole rule blocks dropped from the emitted chunk,
+// e.g. .chat-input-ghost). Warn loudly so the user closes the app first.
+const DEV_PORT = 30141;
+function isPortInUse(port) {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: "127.0.0.1", port });
+    const done = (used) => { socket.destroy(); resolve(used); };
+    socket.once("connect", () => done(true));
+    socket.once("error", () => done(false));
+    socket.setTimeout(800, () => done(false));
+  });
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. Git backup (optional)
@@ -117,8 +137,24 @@ if (DO_BAK) {
 // 2. Clean + dedupe + next build
 // ══════════════════════════════════════════════════════════════════════════════
 log("Step 2: clean, dedupe & npm run build");
+
+// The dev app and a release build must not share .next/ concurrently: the
+// Turbopack build can then emit an incomplete CSS chunk (dropped rules), and
+// deleting .next/ underneath a running `next dev` breaks that session. Warn
+// first, then clean .next/ (guarded by DO_CLEAN like release/) so every
+// release build starts from a fresh compilation instead of a stale cache.
+if (await isPortInUse(DEV_PORT)) {
+  console.warn(`\n[build-release] WARNING: a server is listening on 127.0.0.1:${DEV_PORT}.`);
+  console.warn("  This is the Pi Web dev app. `next build` and `next dev` share .next/,");
+  console.warn("  so building now can corrupt the production CSS (missing rules).");
+  console.warn("  Close the app / stop `npm run dev` and re-run for a reliable build.\n");
+}
 if (DO_CLEAN && existsSync(RELDIR)) {
   rmSync(RELDIR, { recursive: true, force: true });
+}
+if (DO_CLEAN && existsSync(NEXT_DIR)) {
+  log("  cleaning .next/ for a fresh build");
+  rmSync(NEXT_DIR, { recursive: true, force: true });
 }
 mkdirSync(RELDIR, { recursive: true });
 
