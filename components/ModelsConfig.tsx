@@ -178,6 +178,16 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{children}</div>;
 }
 
+/** Sidebar group header: uppercase section label above list items. */
+const groupHeaderStyle: React.CSSProperties = {
+  padding: "4px 8px 3px",
+  fontSize: 10,
+  fontWeight: 600,
+  color: "var(--text-dim)",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
+
 // ── Provider detail ───────────────────────────────────────────────────────────
 
 function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddModels }: {
@@ -1817,49 +1827,56 @@ export function ModelsConfig({
         sidebar={
           <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
-              {/* Active OAuth subscriptions */}
-              {activeOAuth.map((p) => {
-                const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => setSelection({ type: "oauth", providerId: p.id })}
-                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
-                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
-                  >
-                    <ProviderIcon id={p.id} size={16} />
-                    <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                  </div>
-                );
-              })}
-
-              {/* Active API key providers */}
-              {activeApiKey.map((p) => {
-                const isSelected = selection?.type === "apikey" && selection.providerId === p.id;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => setSelection({ type: "apikey", providerId: p.id })}
-                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
-                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
-                  >
-                    <ProviderIcon id={p.id} size={16} />
-                    <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</span>
-                  </div>
-                );
-              })}
-
-              {/* Divider before custom providers, only when there are active managed providers */}
-              {(activeOAuth.length > 0 || activeApiKey.length > 0) && providers.length > 0 && (
-                <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
+              {/* ── Subscriptions (OAuth providers) ── */}
+              {activeOAuth.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={groupHeaderStyle}>{t("desktop.modelsSubscriptions")}</div>
+                  {activeOAuth.map((p) => {
+                    const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => setSelection({ type: "oauth", providerId: p.id })}
+                        style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
+                        onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
+                      >
+                        <ProviderIcon id={p.id} size={16} />
+                        <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
 
-              {/* Custom providers */}
-              {loading ? (
-                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("desktop.modelsLoading")}</div>
-              ) : providers.map(([pName, pData]) => {
+              {/* ── Preset providers (built-in API key providers) ── */}
+              {activeApiKey.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={groupHeaderStyle}>{t("desktop.modelsPresetProviders")}</div>
+                  {activeApiKey.map((p) => {
+                    const isSelected = selection?.type === "apikey" && selection.providerId === p.id;
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => setSelection({ type: "apikey", providerId: p.id })}
+                        style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
+                        onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
+                      >
+                        <ProviderIcon id={p.id} size={16} />
+                        <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ── Custom providers (models.json) ── */}
+              <div style={{ marginBottom: 6 }}>
+                {!loading && providers.length > 0 && <div style={groupHeaderStyle}>{t("desktop.modelsCustom")}</div>}
+                {loading ? (
+                  <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("desktop.modelsLoading")}</div>
+                ) : providers.map(([pName, pData]) => {
                 const isProviderSelected = selection?.type === "provider" && selection.name === pName;
                 const models = pData.models ?? [];
                 return (
@@ -1915,6 +1932,7 @@ export function ModelsConfig({
                   </div>
                 );
               })}
+              </div>
             </div>
 
             {/* Add provider */}

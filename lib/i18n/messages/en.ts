@@ -405,6 +405,7 @@ export const enLocale = {
     "desktop.modelsDefault": "Default",
     "desktop.modelsDisabled": "Disabled",
     "desktop.modelsCustom": "Custom",
+    "desktop.modelsPresetProviders": "Preset providers",
     "desktop.modelsModelSection": "Model",
     "desktop.modelsTestingConnection": "Testing model connection...",
     "desktop.modelsConnected": "Connected",

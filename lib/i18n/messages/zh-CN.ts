@@ -405,6 +405,7 @@ export const zhCNLocale = {
     "desktop.modelsDefault": "默认",
     "desktop.modelsDisabled": "已禁用",
     "desktop.modelsCustom": "自定义",
+    "desktop.modelsPresetProviders": "预置供应商",
     "desktop.modelsModelSection": "模型",
     "desktop.modelsTestingConnection": "正在测试模型连接...",
     "desktop.modelsConnected": "已连接",
