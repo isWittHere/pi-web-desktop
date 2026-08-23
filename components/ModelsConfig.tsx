@@ -1814,18 +1814,19 @@ export function ModelsConfig({
 
   return (
     <>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {/* Body */}
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
 
-          {/* Left: tree */}
+          {/* Left: tree — its own scroll column */}
           <div style={{
             width: isMobile ? "100%" : 220,
             borderRight: isMobile ? "none" : "1px solid var(--border)",
             borderBottom: isMobile ? "1px solid var(--border)" : "none",
             display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)",
+            minHeight: 0,
           }}>
-            <div style={{ padding: "8px 6px" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {/* Active OAuth subscriptions */}
               {activeOAuth.map((p) => {
                 const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
@@ -1941,10 +1942,10 @@ export function ModelsConfig({
             </div>
           </div>
 
-          {/* Right: detail */}
-          <div style={{ padding: 20 }}>
+          {/* Right: detail — its own scroll column */}
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", padding: 20 }}>
             {loading ? null : detailContent ?? (
-              <div style={{ padding: "48px 0", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
+              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
                 {t("desktop.modelsSelectProviderOrModel")}
               </div>
             )}

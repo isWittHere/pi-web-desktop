@@ -35,6 +35,20 @@ const tabIcons: Record<SettingsTab, typeof Cpu> = {
   plugins: Plug,
 };
 
+/** Manager pages render their own list+detail columns; the page area then
+ * stops scrolling as a whole so each column scrolls independently. */
+const MANAGER_TABS: SettingsTab[] = ["models", "skills", "plugins"];
+
+/**
+ * Preference pages scroll as one document; manager pages hand scrolling
+ * to their own list and detail columns.
+ */
+function pageAreaOverflow(isManager: boolean, isMobile: boolean): "hidden" | "auto" {
+  // On mobile the manager columns stack, so the page area scrolls again
+  // instead of clipping the stacked panels.
+  return isManager && !isMobile ? "hidden" : "auto";
+}
+
 export function SettingsModal({
   initialTab = "models",
   cwd,
@@ -102,6 +116,7 @@ export function SettingsModal({
 
   const activeSection = settingsSectionOf(activeTab);
   const activeItem = settingsNavItems().find((item) => item.id === activeTab);
+  const isManager = MANAGER_TABS.includes(activeTab);
 
   return (
     <div
@@ -217,8 +232,13 @@ export function SettingsModal({
             {!cwd && <div className="settings-nav-note">{t("desktop.noWorkspaceSettings")}</div>}
           </nav>
 
-          {/* Page area: the only scroll container in the dialog. */}
-          <div ref={contentScrollRef} style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+          {/* Page area: one document scroll for preference pages; for
+              manager pages the container stops scrolling so the manager's
+              own list and detail columns each scroll independently. */}
+          <div
+            ref={contentScrollRef}
+            style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: pageAreaOverflow(isManager, isMobile) }}
+          >
             {activeTab === "display" && <DisplayConfig />}
             {activeTab === "chat" && <ChatConfig cwd={cwd} />}
             {activeTab === "models" && <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />}
