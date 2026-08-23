@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import {
+  CaretDown,
+  CaretRight,
   CheckIcon,
   MagnifyingGlassIcon,
   PlusIcon,
@@ -1586,6 +1588,8 @@ export function ModelsConfig({
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Collapsed custom-provider model lists in the sidebar (default: expanded).
+  const [collapsedProviders, setCollapsedProviders] = useState<Set<string>>(new Set());
 
   const loadOAuthProviders = useCallback(() => {
     fetch("/api/auth/providers")
@@ -1757,6 +1761,14 @@ export function ModelsConfig({
     }
   }, [config, onSavedAction, cwd]);
 
+  const toggleProviderCollapse = useCallback((name: string) => {
+    setCollapsedProviders((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }, []);
+
   const providers = Object.entries(config.providers ?? {});
   const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
   const activeApiKey = apiKeyProviders.filter((p) => p.configured);
@@ -1879,6 +1891,7 @@ export function ModelsConfig({
                 ) : providers.map(([pName, pData]) => {
                 const isProviderSelected = selection?.type === "provider" && selection.name === pName;
                 const models = pData.models ?? [];
+                const collapsed = collapsedProviders.has(pName);
                 return (
                   <div key={pName} style={{ marginBottom: 2 }}>
                     {/* Provider row */}
@@ -1892,10 +1905,35 @@ export function ModelsConfig({
                       <span style={{ fontSize: 12, fontWeight: isProviderSelected ? 600 : 400, color: "var(--text)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {pName}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleProviderCollapse(pName);
+                        }}
+                        aria-expanded={!collapsed}
+                        aria-label={`${collapsed ? t("desktop.open") : t("desktop.close")} ${pName}`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          width: 20,
+                          height: 20,
+                          padding: 0,
+                          border: "none",
+                          borderRadius: 4,
+                          background: "none",
+                          color: collapsed ? "var(--text-dim)" : "var(--text-muted)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {collapsed ? <CaretRight size={12} weight="bold" aria-hidden="true" /> : <CaretDown size={12} weight="bold" aria-hidden="true" />}
+                      </button>
                     </div>
 
                     {/* Model rows */}
-                    {models.map((m, i) => {
+                    {!collapsed && models.map((m, i) => {
                       const isModelSelected = selection?.type === "model" && selection.providerName === pName && selection.index === i;
                       const isFav = favoriteModels.has(`${pName}:${m.id}`);
                       return (
@@ -1921,6 +1959,7 @@ export function ModelsConfig({
                     })}
 
                     {/* Add model button */}
+                    {!collapsed && (
                     <div
                       onClick={(e) => { e.stopPropagation(); addModel(pName); }}
                       style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px 4px 26px", borderRadius: 5, cursor: "pointer", color: "var(--text-dim)" }}
@@ -1929,6 +1968,7 @@ export function ModelsConfig({
                     >
                       <span style={{ fontSize: 11 }}>{t("desktop.modelsAddModel")}</span>
                     </div>
+                    )}
                   </div>
                 );
               })}
