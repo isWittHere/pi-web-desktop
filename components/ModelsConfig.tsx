@@ -294,15 +294,24 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
         </SettingsButton>
       </div>
 
-      <SettingsField label={t("desktop.modelsProviderName")}>
-        <SettingsInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
-        {editingName !== name && editingName.trim() && (
-          <button onClick={() => onRename(editingName.trim())}
-            style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}>
-            {t("desktop.rename")}
-          </button>
-        )}
-      </SettingsField>
+      {/* Provider name + icon mode picker share one row: name is the primary
+          editor, the icon picker sits at its right side. */}
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <SettingsField label={t("desktop.modelsProviderName")}>
+          <SettingsInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono
+            style={{ minWidth: 240 }} />
+          {editingName !== name && editingName.trim() && (
+            <button onClick={() => onRename(editingName.trim())}
+              style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}>
+              {t("desktop.rename")}
+            </button>
+          )}
+        </SettingsField>
+
+        <SettingsField label={t("desktop.providerIcon")}>
+          <IconModePicker providerId={name} api={provider.api} />
+        </SettingsField>
+      </div>
 
       <SettingsField label={t("desktop.modelsBaseUrl")}>
         <SettingsInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
@@ -393,10 +402,6 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
           </div>
         )}
       </div>
-
-      <SettingsField label={t("desktop.providerIcon")}>
-        <IconModePicker providerId={name} api={provider.api} />
-      </SettingsField>
 
       <SettingsField label={t("desktop.modelsHeaders")}>
         <HeaderListEditor
