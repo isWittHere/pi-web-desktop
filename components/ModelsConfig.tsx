@@ -17,6 +17,7 @@ import {
   SettingsNumInput,
   SettingsSelect,
   SettingsButton,
+  SegmentedControl,
   inputStyle,
 } from "@/components/settings-ui";
 import type { DiscoveredModel } from "@/lib/model-discovery";
@@ -413,34 +414,17 @@ function IconModePicker({ providerId, api }: { providerId: string; api?: string 
   const current = getProviderIconMode(providerId);
 
   return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-      {PROVIDER_ICON_MODES.map((m) => {
-        const isActive = current === m;
-        return (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setProviderIconMode(providerId, m)}
-            aria-pressed={isActive}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "4px 10px",
-              borderRadius: 5,
-              border: "1px solid var(--border)",
-              background: isActive ? "var(--bg-selected)" : "var(--bg-panel)",
-              color: isActive ? "var(--accent)" : "var(--text-muted)",
-              cursor: "pointer", fontSize: 11,
-              transition: "background 0.12s, color 0.12s",
-            }}
-            onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-            onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-panel)"; }}
-          >
-            <ProviderIcon id={providerId} api={api} size={12} mode={m} />
-            {t(ICON_MODE_LABEL_KEYS[m])}
-          </button>
-        );
-      })}
-    </div>
+    <SegmentedControl
+      size="sm"
+      value={current}
+      onChange={(next) => setProviderIconMode(providerId, next as ProviderIconMode)}
+      ariaLabel={t("desktop.providerIcon")}
+      options={PROVIDER_ICON_MODES.map((m) => ({
+        value: m,
+        label: t(ICON_MODE_LABEL_KEYS[m]),
+        icon: <ProviderIcon id={providerId} api={api} size={12} mode={m} />,
+      }))}
+    />
   );
 }
 

@@ -1,18 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Moon, PaintBrush, Sun, Monitor, ArrowSquareOut, Link, Check, CircleHalf, Sparkle, Rows, SquaresFour } from "@phosphor-icons/react";
+import { ArrowSquareOut, CaretDown, CaretRight, Check, Link, Monitor, Moon, Rows, SquaresFour, Sun } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { resolveWallpaperUrl } from "@/lib/wallpaper";
-import { SettingsSection, SettingsButton } from "@/components/settings-ui";
-import { SettingToggle } from "@/components/SettingToggle";
+import { SettingsPage, SettingsGroup, SettingsRow, SettingsButton, SegmentedControl } from "@/components/settings-ui";
+import { Toggle } from "@/components/Toggle";
 import { isRecommendedEnabled, setRecommendedEnabledStorage } from "@/components/WelcomeLobby";
 import type { ThemeSetInfo } from "@/lib/theme";
 
-// ── Tag / chip helpers ───────────────────────────────────────────────────────
+// ── Tag / chip helpers (discrete value presets: themes, text size) ──────────
 
 const tagGroupStyle: React.CSSProperties = {
   display: "flex", gap: 6, flexWrap: "wrap",
@@ -46,18 +46,6 @@ function tagStyle(active: boolean, hovered: boolean, disabled?: boolean): React.
   };
 }
 
-function SectionLabel({ icon, label, actions }: { icon: React.ReactNode; label: string; actions?: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, width: "100%" }}>
-      <span style={{ color: "var(--text-dim)", display: "inline-flex", flexShrink: 0 }}>{icon}</span>
-      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-        {label}
-      </span>
-      {actions && <span style={{ display: "inline-flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>{actions}</span>}
-    </div>
-  );
-}
-
 const textActionButtonStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -81,42 +69,17 @@ const underlineOnHover = {
   },
 };
 
-// ── Border depth icon ───────────────────────────────────────────────────────
-
-function BorderIcon({ depth }: { depth: number }) {
-  const n = depth / 100;
-  return (
-    <svg width={14} height={14} viewBox="0 0 14 14" style={{ flexShrink: 0 }}>
-      <rect
-        x={1.5} y={1.5} width={11} height={11} rx={2.5}
-        style={{
-          fill: "none",
-          stroke: "var(--text-dim)",
-          strokeWidth: 1 + n * 2,
-          opacity: 0.2 + n * 0.8,
-        }}
-      />
-      <rect
-        x={4} y={4} width={6} height={6} rx={1}
-        style={{
-          fill: "var(--text-dim)",
-          opacity: 0.05 + n * 0.35,
-        }}
-      />
-    </svg>
-  );
-}
-
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export function DisplayConfig() {
-  const { mode, resolvedMode, themeName, setMode, setTheme, borderDepth, setBorderDepth, fontScale, setFontScale } = useTheme();
+  const { mode, themeName, setMode, setTheme, borderDepth, setBorderDepth, fontScale, setFontScale } = useTheme();
   const { locale: language, setLocale: setLanguage, t } = useI18n();
   const { viewMode, setViewMode } = useViewMode();
   const [themeSets, setThemeSets] = useState<ThemeSetInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
   const [hoveredTag, setHoveredTag] = useState<string | null>(null);
+  const [effectsOpen, setEffectsOpen] = useState(false);
 
   // Recommended-workspaces toggle (welcome lobby section 2). Default on;
   // read/written through the shared helpers so the lobby and settings agree.
@@ -147,12 +110,20 @@ export function DisplayConfig() {
     setTheme(name).finally(() => setApplying(null));
   }, [setTheme]);
 
-  const handleModeChange = useCallback((m: ThemeMode) => {
-    setMode(m);
+  const handleModeChange = useCallback((m: string) => {
+    setMode(m as ThemeMode);
   }, [setMode]);
 
+  const handleViewModeChange = useCallback((v: string) => {
+    setViewMode(v as ViewMode);
+  }, [setViewMode]);
+
+  const handleLanguageChange = useCallback((lang: string) => {
+    setLanguage(lang === "zh-CN" ? "zh-CN" : "en");
+  }, [setLanguage]);
+
   // ── Wallpaper ──
-  const { enabled: wallpaperEnabled, url: wallpaperUrl, scrim: wallpaperScrim, inputMode: wallpaperInputMode, messageMode: wallpaperMessageMode, panelMode: wallpaperPanelMode, busy: wallpaperBusy, error: wallpaperError, choose: chooseWallpaper, remove: removeWallpaper, setEnabled: setWallpaperEnabled, setScrim: setWallpaperScrim, setInputMode: setWallpaperInputMode, setMessageMode: setWallpaperMessageMode, setPanelMode: setWallpaperPanelMode } = useWallpaper();
+  const { enabled: wallpaperEnabled, url: wallpaperUrl, scrim: wallpaperScrim, messageMode: wallpaperMessageMode, panelMode: wallpaperPanelMode, inputMode: wallpaperInputMode, busy: wallpaperBusy, error: wallpaperError, choose: chooseWallpaper, remove: removeWallpaper, setEnabled: setWallpaperEnabled, setScrim: setWallpaperScrim, setInputMode: setWallpaperInputMode, setMessageMode: setWallpaperMessageMode, setPanelMode: setWallpaperPanelMode } = useWallpaper();
   const wallpaperFileRef = useRef<HTMLInputElement>(null);
 
   const pickWallpaper = useCallback(() => {
@@ -182,340 +153,354 @@ export function DisplayConfig() {
     window.open("https://pi.dev/docs/latest/themes", "_blank", "noopener,noreferrer");
   }, []);
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+  const wallpaperEffects = [
+    ["input", t("desktop.wallpaperBlurInput"), wallpaperInputMode, setWallpaperInputMode],
+    ["message", t("desktop.wallpaperBlurMessage"), wallpaperMessageMode, setWallpaperMessageMode],
+    ["panel", t("desktop.wallpaperBlurPanel"), wallpaperPanelMode, setWallpaperPanelMode],
+  ] as const;
 
-      {/* ── Theme ── */}
-      <SettingsSection title={t("desktop.theme")} description={t("desktop.themeDescription")}>
-        {/* Color Scheme */}
-        <SectionLabel
-          icon={<PaintBrush size={14} weight="fill" />}
-          label={t("desktop.colorScheme")}
-          actions={
-            <>
-              <button
-                type="button"
-                onClick={openThemeFolder}
-                style={textActionButtonStyle}
-                {...underlineOnHover}
-              >
-                <ArrowSquareOut size={12} weight="regular" aria-hidden="true" />
-                {t("desktop.openThemeFolder")}
-              </button>
-              <button
-                type="button"
-                onClick={openThemeDocs}
-                style={textActionButtonStyle}
-                {...underlineOnHover}
-              >
-                <Link size={12} weight="regular" aria-hidden="true" />
-                {t("desktop.learnPiThemes")}
-              </button>
-            </>
+  return (
+    <SettingsPage>
+
+      {/* ── Theme & color ── */}
+      <SettingsGroup title={t("desktop.displayGroupTheme")}>
+        <SettingsRow
+          label={t("desktop.theme")}
+          description={t("desktop.themeDescription")}
+          control={
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, width: "100%" }}>
+              {loading ? (
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("desktop.loadingThemes")}</span>
+              ) : (
+                <div style={{ ...tagGroupStyle, justifyContent: "flex-end" }}>
+                  <button
+                    type="button" onClick={() => handleThemeChange("")} disabled={applying !== null}
+                    style={tagStyle(themeName === "", hoveredTag === "__default__", applying !== null)}
+                    onMouseEnter={() => setHoveredTag("__default__")}
+                    onMouseLeave={() => setHoveredTag(null)}
+                  >
+                    {t("desktop.defaultTheme")}
+                  </button>
+
+                  {themeSets.map((ts) => (
+                    <button
+                      key={ts.name} type="button"
+                      onClick={() => handleThemeChange(ts.name)} disabled={applying !== null}
+                      style={tagStyle(themeName === ts.name, hoveredTag === ts.name, applying === ts.name)}
+                      onMouseEnter={() => setHoveredTag(ts.name)}
+                      onMouseLeave={() => setHoveredTag(null)}
+                    >
+                      {ts.displayName}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={openThemeFolder}
+                  style={textActionButtonStyle}
+                  {...underlineOnHover}
+                >
+                  <ArrowSquareOut size={12} weight="regular" aria-hidden="true" />
+                  {t("desktop.openThemeFolder")}
+                </button>
+                <button
+                  type="button"
+                  onClick={openThemeDocs}
+                  style={textActionButtonStyle}
+                  {...underlineOnHover}
+                >
+                  <Link size={12} weight="regular" aria-hidden="true" />
+                  {t("desktop.learnPiThemes")}
+                </button>
+              </div>
+              {!loading && themeSets.length === 0 && (
+                <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5, textAlign: "right" }}>
+                  {t("desktop.noCustomThemes")}{" "}
+                  {t("desktop.noCustomThemesHint")}{" "}
+                  <code style={{ fontSize: 10, background: "var(--bg-secondary)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>~/.pi/agent/themes/*.json</code>{" "}
+                  {t("desktop.noCustomThemesHint2")}
+                </p>
+              )}
+            </div>
           }
         />
-        {loading ? (
-          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("desktop.loadingThemes")}</span>
-        ) : (
-          <div style={tagGroupStyle}>
-            <button
-              type="button" onClick={() => handleThemeChange("")} disabled={applying !== null}
-              style={tagStyle(themeName === "", hoveredTag === "__default__", applying !== null)}
-              onMouseEnter={() => setHoveredTag("__default__")}
-              onMouseLeave={() => setHoveredTag(null)}
-            >
-              {t("desktop.defaultTheme")}
-            </button>
 
-            {themeSets.map((ts) => (
-              <button
-                key={ts.name} type="button"
-                onClick={() => handleThemeChange(ts.name)} disabled={applying !== null}
-                style={tagStyle(themeName === ts.name, hoveredTag === ts.name, applying === ts.name)}
-                onMouseEnter={() => setHoveredTag(ts.name)}
-                onMouseLeave={() => setHoveredTag(null)}
-              >
-                {ts.displayName}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Border depth — preset swatches only, the range slider is hidden */}
-        <div style={{ marginTop: 20 }}>
-          <SectionLabel
-            icon={<BorderIcon depth={borderDepth} />}
-            label={`${t("desktop.borderVisibility")} (${borderDepth})`}
-          />
-          <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-            {[25, 50, 75, 100].map((d) => {
-              const active = borderDepth === d;
-              const previewBorder = d <= 50
-                ? `color-mix(in srgb, var(--border-orig) ${d * 2}%, var(--bg) ${100 - d * 2}%)`
-                : `color-mix(in srgb, var(--border-orig) ${100 - (d - 50) * 2}%, var(--text) ${(d - 50) * 2}%)`;
-              return (
-                <div
-                  key={d}
-                  onClick={() => setBorderDepth(d)}
-                  style={{
-                    width: 28, height: 20,
-                    border: `2px solid ${previewBorder}`,
-                    borderRadius: 5,
-                    background: "var(--bg-card)",
-                    cursor: "pointer",
-                    transition: "border-color 0.1s",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  {active && <Check size={13} weight="bold" color="var(--accent)" aria-hidden="true" />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Appearance Mode */}
-        <div style={{ marginTop: 20 }}>
-          <SectionLabel
-            icon={resolvedMode === "dark" ? <Moon size={14} weight="fill" /> : <Sun size={14} weight="fill" />}
-            label={t("desktop.appearanceMode")}
-          />
-          <div style={tagGroupStyle}>
-            {([
-              { value: "light" as ThemeMode, icon: <Sun size={15} weight={mode === "light" ? "fill" : "regular"} /> },
-              { value: "dark" as ThemeMode, icon: <Moon size={15} weight={mode === "dark" ? "fill" : "regular"} /> },
-              { value: "system" as ThemeMode, icon: <Monitor size={15} weight={mode === "system" ? "fill" : "regular"} /> },
-            ]).map((opt) => {
-              const active = mode === opt.value;
-              return (
-                <button
-                  key={opt.value} type="button" onClick={() => handleModeChange(opt.value)}
-                  style={tagStyle(active, hoveredTag === `mode:${opt.value}`)}
-                  onMouseEnter={() => setHoveredTag(`mode:${opt.value}`)}
-                  onMouseLeave={() => setHoveredTag(null)}
-                >
-                  {opt.icon}
-                  {t(`desktop.${opt.value}`)}
-                </button>
-              );
-            })}
-          </div>
-
-        </div>
-
-        {!loading && themeSets.length === 0 && (
-          <p style={{ margin: "14px 0 0", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-            {t("desktop.noCustomThemes")}{" "}
-            {t("desktop.noCustomThemesHint")}{" "}
-            <code style={{ fontSize: 10, background: "var(--bg-secondary)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>~/.pi/agent/themes/*.json</code>{" "}
-            {t("desktop.noCustomThemesHint2")}
-          </p>
-        )}
-      </SettingsSection>
-
-      {/* ── Recommended workspaces ── */}
-      <SettingsSection title={t("desktop.recommendedWorkspaces")} description={t("desktop.recommendedWorkspacesSettingDescription")}>
-        <SettingToggle
-          checked={recommendedEnabled}
-          onChange={handleRecommendedToggle}
-          label={t("desktop.recommendedWorkspacesSetting")}
+        <SettingsRow
+          label={t("desktop.appearanceMode")}
+          control={
+            <SegmentedControl
+              value={mode}
+              onChange={handleModeChange}
+              ariaLabel={t("desktop.appearanceMode")}
+              options={[
+                { value: "light", label: t("desktop.light"), icon: <Sun size={14} weight="fill" /> },
+                { value: "dark", label: t("desktop.dark"), icon: <Moon size={14} weight="fill" /> },
+                { value: "system", label: t("desktop.system"), icon: <Monitor size={14} weight="fill" /> },
+              ]}
+            />
+          }
         />
-      </SettingsSection>
 
-      {/* ── Wallpaper ── */}
-      <SettingsSection title={t("desktop.wallpaper")} description={t("desktop.wallpaperDescription")}>
-        {/* Master switch first; everything else hides while it is off.
-            Always enabled — a user image or the theme painting provides
-            the wallpaper either way. */}
-        <SettingToggle
-          checked={wallpaperEnabled}
-          onChange={setWallpaperEnabled}
+        <SettingsRow
+          label={`${t("desktop.borderVisibility")} (${borderDepth})`}
+          control={
+            <div style={{ display: "flex", gap: 10 }}>
+              {[25, 50, 75, 100].map((d) => {
+                const active = borderDepth === d;
+                const previewBorder = d <= 50
+                  ? `color-mix(in srgb, var(--border-orig) ${d * 2}%, var(--bg) ${100 - d * 2}%)`
+                  : `color-mix(in srgb, var(--border-orig) ${100 - (d - 50) * 2}%, var(--text) ${(d - 50) * 2}%)`;
+                return (
+                  <div
+                    key={d}
+                    role="radio"
+                    aria-checked={active}
+                    aria-label={`${t("desktop.borderVisibility")} ${d}`}
+                    onClick={() => setBorderDepth(d)}
+                    style={{
+                      width: 28, height: 20,
+                      border: `2px solid ${previewBorder}`,
+                      borderRadius: 5,
+                      background: "var(--bg-card)",
+                      cursor: "pointer",
+                      transition: "border-color 0.1s",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    {active && <Check size={13} weight="bold" color="var(--accent)" aria-hidden="true" />}
+                  </div>
+                );
+              })}
+            </div>
+          }
+        />
+      </SettingsGroup>
+
+      {/* ── Interface ── */}
+      <SettingsGroup title={t("desktop.displayGroupInterface")}>
+        <SettingsRow
+          label={t("desktop.textSize")}
+          description={t("desktop.textSizeDescription")}
+          control={
+            <div style={{ ...tagGroupStyle, justifyContent: "flex-end" }}>
+              {[0.9, 1, 1.1, 1.2, 1.25, 1.3, 1.35].map((s) => {
+                const active = fontScale === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setFontScale(s)}
+                    style={tagStyle(active, hoveredTag === `scale:${s}`)}
+                    onMouseEnter={() => setHoveredTag(`scale:${s}`)}
+                    onMouseLeave={() => setHoveredTag(null)}
+                  >
+                    {Math.round(s * 100)}%
+                  </button>
+                );
+              })}
+            </div>
+          }
+        />
+
+        <SettingsRow
+          label={t("desktop.viewMode")}
+          description={t("desktop.viewModeDescription")}
+          control={
+            <SegmentedControl
+              value={viewMode}
+              onChange={handleViewModeChange}
+              ariaLabel={t("desktop.viewMode")}
+              options={[
+                { value: "classic", label: t("desktop.viewModeClassic"), icon: <Rows size={14} weight="fill" /> },
+                { value: "tabs", label: t("desktop.viewModeTabs"), icon: <SquaresFour size={14} weight="fill" /> },
+              ]}
+            />
+          }
+        />
+
+        <SettingsRow
+          label={t("desktop.language")}
+          description={t("desktop.languageDescription")}
+          control={
+            <SegmentedControl
+              value={language === "zh-CN" ? "zh-CN" : "en"}
+              onChange={handleLanguageChange}
+              ariaLabel={t("desktop.language")}
+              options={[
+                { value: "en", label: t("desktop.english") },
+                { value: "zh-CN", label: t("desktop.chinese") },
+              ]}
+            />
+          }
+        />
+
+        <SettingsRow
+          label={t("desktop.recommendedWorkspaces")}
+          description={t("desktop.recommendedWorkspacesSettingDescription")}
+          control={
+            <Toggle
+              checked={recommendedEnabled}
+              onChange={handleRecommendedToggle}
+              label={t("desktop.recommendedWorkspaces")}
+            />
+          }
+        />
+      </SettingsGroup>
+
+      {/* ── Background ── */}
+      <SettingsGroup title={t("desktop.displayGroupBackground")}>
+        <SettingsRow
           label={t("desktop.wallpaperEnable")}
+          control={
+            <Toggle
+              checked={wallpaperEnabled}
+              onChange={setWallpaperEnabled}
+              label={t("desktop.wallpaperEnable")}
+            />
+          }
         />
-        {wallpaperError && (
-          <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--status-danger)", lineHeight: 1.5 }}>
-            {t("desktop.wallpaperError")}: {wallpaperError}
-          </p>
-        )}
-
-        {/* Pick entry; "Reset to default" only applies to a user image. */}
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <SettingsButton size="sm" onClick={pickWallpaper} disabled={wallpaperBusy}>
-            {wallpaperBusy ? t("desktop.wallpaperUploading") : t("desktop.wallpaperChoose")}
-          </SettingsButton>
-          {wallpaperUrl && (
-            <SettingsButton size="sm" onClick={handleWallpaperRemove}>
-              {t("desktop.wallpaperResetDefault")}
-            </SettingsButton>
-          )}
-        </div>
 
         {wallpaperEnabled && (
           <>
-            {/* Live preview: the user image or the theme painting under
-                the current scrim opacity. */}
-            <div
-              style={{
-                position: "relative",
-                height: 64,
-                marginTop: 10,
-                borderRadius: 7,
-                border: "1px solid var(--border)",
-                overflow: "hidden",
-                backgroundColor: "var(--bg-secondary)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element -- local data URL / static asset, not optimizer-routable */}
-              <img
-                src={resolveWallpaperUrl(wallpaperUrl, themeName)}
-                alt=""
-                draggable={false}
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
-              />
+            <SettingsRow
+              label={t("desktop.wallpaperImage")}
+              description={t("desktop.wallpaperImageDescription")}
+              control={
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <SettingsButton size="sm" onClick={pickWallpaper} disabled={wallpaperBusy}>
+                    {wallpaperBusy ? t("desktop.wallpaperUploading") : t("desktop.wallpaperChoose")}
+                  </SettingsButton>
+                  {wallpaperUrl && (
+                    <SettingsButton size="sm" onClick={handleWallpaperRemove}>
+                      {t("desktop.wallpaperResetDefault")}
+                    </SettingsButton>
+                  )}
+                </div>
+              }
+            />
+
+            {/* Live preview: the user image or the theme painting under the
+                current scrim opacity. */}
+            <div style={{ padding: "8px 12px 0", margin: "0 -12px" }}>
               <div
-                aria-hidden="true"
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  // Scrim overlay — same color-mix the real layer uses.
-                  background: `color-mix(in srgb, var(--bg) ${wallpaperScrim}%, transparent)`,
+                  position: "relative",
+                  height: 64,
+                  borderRadius: 7,
+                  border: "1px solid var(--border)",
+                  overflow: "hidden",
+                  backgroundColor: "var(--bg-secondary)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
-              />
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- local data URL / static asset, not optimizer-routable */}
+                <img
+                  src={resolveWallpaperUrl(wallpaperUrl, themeName)}
+                  alt=""
+                  draggable={false}
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+                />
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    // Scrim overlay — same color-mix the real layer uses.
+                    background: `color-mix(in srgb, var(--bg) ${wallpaperScrim}%, transparent)`,
+                  }}
+                />
+              </div>
             </div>
 
-            <div style={{ marginTop: 16 }}>
-              <SectionLabel
-                icon={<CircleHalf size={14} weight="fill" />}
-                label={`${t("desktop.wallpaperOpacity")} (${wallpaperScrim}%)`}
-              />
-              <input
-                type="range"
-                min={30}
-                max={95}
-                step={5}
-                value={wallpaperScrim}
-                onChange={(e) => setWallpaperScrim(parseInt(e.target.value, 10))}
-                style={{ width: "100%", accentColor: "var(--accent)", cursor: "pointer", marginTop: 4 }}
-                aria-label={t("desktop.wallpaperOpacity")}
-              />
-            </div>
+            <SettingsRow
+              label={`${t("desktop.wallpaperOpacity")} (${wallpaperScrim}%)`}
+              control={
+                <input
+                  type="range"
+                  min={30}
+                  max={95}
+                  step={5}
+                  value={wallpaperScrim}
+                  onChange={(e) => setWallpaperScrim(parseInt(e.target.value, 10))}
+                  style={{ width: 220, maxWidth: "100%", accentColor: "var(--accent)", cursor: "pointer" }}
+                  aria-label={t("desktop.wallpaperOpacity")}
+                />
+              }
+            />
           </>
         )}
 
-        {/* Effects: each area picks none / translucency / blur. Hidden
-            entirely while the wallpaper is off — there is nothing to
-            frost or to show through. */}
-        {wallpaperEnabled && (
-        <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-          <SectionLabel icon={<Sparkle size={14} weight="fill" />} label={t("desktop.wallpaperEffects")} />
-          {([
-            ["input", t("desktop.wallpaperBlurInput"), wallpaperInputMode, setWallpaperInputMode],
-            ["message", t("desktop.wallpaperBlurMessage"), wallpaperMessageMode, setWallpaperMessageMode],
-            ["panel", t("desktop.wallpaperBlurPanel"), wallpaperPanelMode, setWallpaperPanelMode],
-          ] as const).map(([area, label, mode, setter]) => (
-            <div key={area} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-              <span style={{ width: 84, flexShrink: 0, fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
-              <div style={{ ...tagGroupStyle, flex: 1 }}>
-                {([
-                  ["none", t("desktop.wallpaperModeNone")],
-                  ["trans", t("desktop.wallpaperModeTrans")],
-                  ["blur", t("desktop.wallpaperModeBlur")],
-                ] as const).map(([m, mLabel]) => (
-                  <button
-                    key={m}
-                    type="button"
-                    aria-pressed={mode === m}
-                    onClick={() => setter(m)}
-                    style={tagStyle(mode === m, hoveredTag === `wmode:${area}:${m}`)}
-                    onMouseEnter={() => setHoveredTag(`wmode:${area}:${m}`)}
-                    onMouseLeave={() => setHoveredTag(null)}
-                  >
-                    {mLabel}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        {wallpaperError && (
+          <p style={{ margin: "8px 12px 0", fontSize: 11, color: "var(--status-danger)", lineHeight: 1.5 }}>
+            {t("desktop.wallpaperError")}: {wallpaperError}
+          </p>
         )}
-        {/* Hidden file input, shared by both pick entries. */}
-        <input
-          ref={wallpaperFileRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          style={{ display: "none" }}
-          onChange={handleWallpaperFile}
-        />
-      </SettingsSection>
+      </SettingsGroup>
 
-      {/* ── Text Size ── */}
-      <SettingsSection title={t("desktop.textSize")} description={t("desktop.textSizeDescription")}>
-        <div style={tagGroupStyle}>
-          {[0.9, 1, 1.1, 1.2, 1.25, 1.3, 1.35].map((s) => {
-            const active = fontScale === s;
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setFontScale(s)}
-                style={tagStyle(active, hoveredTag === `scale:${s}`)}
-                onMouseEnter={() => setHoveredTag(`scale:${s}`)}
-                onMouseLeave={() => setHoveredTag(null)}
-              >
-                {Math.round(s * 100)}%
-              </button>
-            );
-          })}
-        </div>
-      </SettingsSection>
+      {/* ── Advanced background effects (disclosed only with the wallpaper on) ── */}
+      {wallpaperEnabled && (
+        <div style={{ padding: "var(--settings-section-gap) var(--settings-pad-x)", borderBottom: "1px solid var(--border)" }}>
+          <button
+            type="button"
+            onClick={() => setEffectsOpen((open) => !open)}
+            aria-expanded={effectsOpen}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: 0,
+              border: 0,
+              background: "transparent",
+              color: "var(--text-dim)",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            {effectsOpen ? <CaretDown size={12} weight="bold" aria-hidden="true" /> : <CaretRight size={12} weight="bold" aria-hidden="true" />}
+            {t("desktop.advancedBackgroundEffects")}
+          </button>
 
-      {/* ── View Mode ── */}
-      <SettingsSection title={t("desktop.viewMode")} description={t("desktop.viewModeDescription")}>
-        <div style={tagGroupStyle}>
-          {([
-            { value: "classic" as ViewMode, icon: <Rows size={15} weight={viewMode === "classic" ? "fill" : "regular"} /> },
-            { value: "tabs" as ViewMode, icon: <SquaresFour size={15} weight={viewMode === "tabs" ? "fill" : "regular"} /> },
-          ]).map((opt) => {
-            const active = viewMode === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setViewMode(opt.value)}
-                style={tagStyle(active, hoveredTag === `viewmode:${opt.value}`)}
-                onMouseEnter={() => setHoveredTag(`viewmode:${opt.value}`)}
-                onMouseLeave={() => setHoveredTag(null)}
-              >
-                {opt.icon}
-                {t(opt.value === "classic" ? "desktop.viewModeClassic" : "desktop.viewModeTabs")}
-              </button>
-            );
-          })}
+          {effectsOpen && (
+            <div style={{ marginTop: 4 }}>
+              {wallpaperEffects.map(([id, label, mode, setter]) => (
+                <SettingsRow
+                  key={id}
+                  label={label}
+                  control={
+                    <SegmentedControl
+                      size="sm"
+                      value={mode}
+                      onChange={(value) => setter(value as "none" | "trans" | "blur")}
+                      ariaLabel={label}
+                      options={[
+                        { value: "none", label: t("desktop.wallpaperModeNone") },
+                        { value: "trans", label: t("desktop.wallpaperModeTrans") },
+                        { value: "blur", label: t("desktop.wallpaperModeBlur") },
+                      ]}
+                    />
+                  }
+                />
+              ))}
+            </div>
+          )}
         </div>
-      </SettingsSection>
+      )}
 
-      {/* ── Language ── */}
-      <SettingsSection title={t("desktop.language")} description={t("desktop.languageDescription")}>
-        <div style={tagGroupStyle}>
-          {(["en", "zh-CN"] as const).map((lang) => {
-            const active = (lang === "zh-CN") ? language === "zh-CN" : language !== "zh-CN";
-            return (
-              <button
-                key={lang} type="button"
-                onClick={() => setLanguage(lang === "zh-CN" ? "zh-CN" : "en")}
-                style={tagStyle(active, hoveredTag === `lang:${lang}`)}
-                onMouseEnter={() => setHoveredTag(`lang:${lang}`)}
-                onMouseLeave={() => setHoveredTag(null)}
-              >
-                {lang === "en" ? t("desktop.english") : t("desktop.chinese")}
-              </button>
-            );
-          })}
-        </div>
-      </SettingsSection>
-    </div>
+      {/* Hidden file input, shared by both pick entries. */}
+      <input
+        ref={wallpaperFileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        style={{ display: "none" }}
+        onChange={handleWallpaperFile}
+      />
+    </SettingsPage>
   );
 }

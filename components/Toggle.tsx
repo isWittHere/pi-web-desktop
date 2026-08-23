@@ -3,8 +3,7 @@
 /**
  * Shared switch control for settings panels and list rows.
  *
- * Unifies the previously duplicated toggles in SettingToggle.tsx,
- * PluginsConfig.tsx and SkillsConfig.tsx into one implementation:
+ * Unifies the previously duplicated toggles into one implementation:
  * 40×22 pill track, 16px thumb, accent when on. Uses `role="switch"`
  * with `aria-checked` so screen readers announce the checked state.
  */

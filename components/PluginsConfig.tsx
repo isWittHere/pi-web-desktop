@@ -6,7 +6,7 @@ import { sendAgentCommand } from "@/lib/agent-client";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl } from "@/components/settings-ui";
 import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
 
 type Translate = ReturnType<typeof useI18n>["t"];
@@ -177,36 +177,16 @@ function SegmentedScope({
 }) {
   const { t } = useI18n();
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        border: "1px solid var(--border)",
-        borderRadius: 7,
-        overflow: "hidden",
-        height: 30,
-      }}
-    >
-      {(["global", "project"] as PluginScope[]).map((scope) => {
-        const active = value === scope;
-        return (
-          <button
-            key={scope}
-            onClick={() => onChange(scope)}
-            style={{
-              width: 76,
-              border: "none",
-              borderRight: scope === "global" ? "1px solid var(--border)" : "none",
-              background: active ? "var(--bg-selected)" : "none",
-              color: active ? "var(--text)" : "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 12,
-            }}
-          >
-            {t(`desktop.${scope}`)}
-          </button>
-        );
-      })}
-    </div>
+    <SegmentedControl
+      size="sm"
+      value={value}
+      onChange={(next) => onChange(next as PluginScope)}
+      ariaLabel={t("desktop.pluginsScope")}
+      options={(["global", "project"] as PluginScope[]).map((scope) => ({
+        value: scope,
+        label: t(`desktop.${scope}`),
+      }))}
+    />
   );
 }
 

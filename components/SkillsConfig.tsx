@@ -5,7 +5,7 @@ import { PlusIcon } from "@phosphor-icons/react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl } from "@/components/settings-ui";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -409,38 +409,24 @@ function AddSkillPanel({
 
         {/* Scope + install path row */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div
-            style={{
-              display: "flex",
-              borderRadius: 5,
-              border: "1px solid var(--border)",
-              overflow: "hidden",
-              fontSize: 12,
-              flexShrink: 0,
-            }}
-          >
-            {(["global", "project"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setScope(s)}
-                disabled={s === "project" && !projectResourcesLoaded}
-                title={s === "project" && !projectResourcesLoaded ? t("desktop.projectSkillInstallUnavailable") : undefined}
-                style={{
-                  padding: "3px 10px",
-                  border: "none",
-                  cursor: s === "project" && !projectResourcesLoaded ? "not-allowed" : "pointer",
-                  opacity: s === "project" && !projectResourcesLoaded ? 0.5 : 1,
-                  background: scope === s ? "var(--bg-selected)" : "none",
-                  color: scope === s ? "var(--text)" : "var(--text-dim)",
-                  fontWeight: scope === s ? 600 : 400,
-                  borderRight:
-                    s === "global" ? "1px solid var(--border)" : "none",
-                }}
-              >
-                {t(`desktop.${s}`)}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            size="sm"
+            value={scope}
+            onChange={(next) => setScope(next as "global" | "project")}
+            ariaLabel={t("desktop.skillsScope")}
+            options={[
+              {
+                value: "global",
+                label: t("desktop.global"),
+              },
+              {
+                value: "project",
+                label: t("desktop.project"),
+                disabled: !projectResourcesLoaded,
+                title: !projectResourcesLoaded ? t("desktop.projectSkillInstallUnavailable") : undefined,
+              },
+            ]}
+          />
           <span
             style={{
               fontSize: 12,
