@@ -461,6 +461,8 @@ export function SettingsSelect({
   options,
   emptyLabel,
   style,
+  disabled,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -469,12 +471,16 @@ export function SettingsSelect({
   /** Label for the empty "inherit / none" option. Only rendered when provided. */
   emptyLabel?: string;
   style?: CSSProperties;
+  disabled?: boolean;
+  ariaLabel?: string;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)", cursor: "pointer", ...style }}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1, ...style }}
     >
       {emptyLabel !== undefined && <option value="">{emptyLabel}</option>}
       {options.map((o) => {

@@ -7,7 +7,7 @@ import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { resolveWallpaperUrl } from "@/lib/wallpaper";
-import { SettingsPage, SettingsGroup, SettingsRow, SettingsButton, SegmentedControl } from "@/components/settings-ui";
+import { SettingsPage, SettingsGroup, SettingsRow, SettingsButton, SettingsSelect, SegmentedControl } from "@/components/settings-ui";
 import { Toggle } from "@/components/Toggle";
 import { isRecommendedEnabled, setRecommendedEnabledStorage } from "@/components/WelcomeLobby";
 import type { ThemeSetInfo } from "@/lib/theme";
@@ -167,33 +167,16 @@ export function DisplayConfig() {
           label={t("desktop.theme")}
           description={t("desktop.themeDescription")}
           control={
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, width: "100%" }}>
-              {loading ? (
-                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("desktop.loadingThemes")}</span>
-              ) : (
-                <div style={{ ...tagGroupStyle, justifyContent: "flex-end" }}>
-                  <button
-                    type="button" onClick={() => handleThemeChange("")} disabled={applying !== null}
-                    style={tagStyle(themeName === "", hoveredTag === "__default__", applying !== null)}
-                    onMouseEnter={() => setHoveredTag("__default__")}
-                    onMouseLeave={() => setHoveredTag(null)}
-                  >
-                    {t("desktop.defaultTheme")}
-                  </button>
-
-                  {themeSets.map((ts) => (
-                    <button
-                      key={ts.name} type="button"
-                      onClick={() => handleThemeChange(ts.name)} disabled={applying !== null}
-                      style={tagStyle(themeName === ts.name, hoveredTag === ts.name, applying === ts.name)}
-                      onMouseEnter={() => setHoveredTag(ts.name)}
-                      onMouseLeave={() => setHoveredTag(null)}
-                    >
-                      {ts.displayName}
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <SettingsSelect
+                value={themeName}
+                onChange={handleThemeChange}
+                disabled={applying !== null || loading}
+                emptyLabel={t("desktop.defaultTheme")}
+                options={themeSets.map((ts) => ({ value: ts.name, label: ts.displayName }))}
+                style={{ width: "min(280px, 100%)" }}
+                aria-label={t("desktop.theme")}
+              />
               <div style={{ display: "flex", gap: 12 }}>
                 <button
                   type="button"
@@ -214,14 +197,6 @@ export function DisplayConfig() {
                   {t("desktop.learnPiThemes")}
                 </button>
               </div>
-              {!loading && themeSets.length === 0 && (
-                <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5, textAlign: "right" }}>
-                  {t("desktop.noCustomThemes")}{" "}
-                  {t("desktop.noCustomThemesHint")}{" "}
-                  <code style={{ fontSize: 10, background: "var(--bg-secondary)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)" }}>~/.pi/agent/themes/*.json</code>{" "}
-                  {t("desktop.noCustomThemesHint2")}
-                </p>
-              )}
             </div>
           }
         />
