@@ -7,7 +7,7 @@ import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { resolveWallpaperUrl } from "@/lib/wallpaper";
-import { SettingsPage, SettingsGroup, SettingsRow, SettingsButton, SettingsSelect, SegmentedControl } from "@/components/settings-ui";
+import { SettingsPage, SettingsGroup, SettingsRow, SettingsButton, SegmentedControl } from "@/components/settings-ui";
 import { Toggle } from "@/components/Toggle";
 import { isRecommendedEnabled, setRecommendedEnabledStorage } from "@/components/WelcomeLobby";
 import type { ThemeSetInfo } from "@/lib/theme";
@@ -167,39 +167,70 @@ export function DisplayConfig() {
           label={t("desktop.theme")}
           description={t("desktop.themeDescription")}
           control={
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <SettingsSelect
-                value={themeName}
-                onChange={handleThemeChange}
-                disabled={applying !== null || loading}
-                emptyLabel={t("desktop.defaultTheme")}
-                options={themeSets.map((ts) => ({ value: ts.name, label: ts.displayName }))}
-                style={{ width: "min(280px, 100%)" }}
-                aria-label={t("desktop.theme")}
-              />
-              <div style={{ display: "flex", gap: 12 }}>
-                <button
-                  type="button"
-                  onClick={openThemeFolder}
-                  style={textActionButtonStyle}
-                  {...underlineOnHover}
-                >
-                  <ArrowSquareOut size={12} weight="regular" aria-hidden="true" />
-                  {t("desktop.openThemeFolder")}
-                </button>
-                <button
-                  type="button"
-                  onClick={openThemeDocs}
-                  style={textActionButtonStyle}
-                  {...underlineOnHover}
-                >
-                  <Link size={12} weight="regular" aria-hidden="true" />
-                  {t("desktop.learnPiThemes")}
-                </button>
-              </div>
+            <div style={{ display: "flex", gap: 12, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={openThemeFolder}
+                style={textActionButtonStyle}
+                {...underlineOnHover}
+              >
+                <ArrowSquareOut size={12} weight="regular" aria-hidden="true" />
+                {t("desktop.openThemeFolder")}
+              </button>
+              <button
+                type="button"
+                onClick={openThemeDocs}
+                style={textActionButtonStyle}
+                {...underlineOnHover}
+              >
+                <Link size={12} weight="regular" aria-hidden="true" />
+                {t("desktop.learnPiThemes")}
+              </button>
             </div>
           }
         />
+
+        {/* Theme options live on their own line below the title row. */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+            padding: "0 12px 10px",
+            margin: "-6px -12px 0",
+          }}
+        >
+          {loading ? (
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("desktop.loadingThemes")}</span>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => handleThemeChange("")}
+                disabled={applying !== null}
+                style={tagStyle(themeName === "", hoveredTag === "__default__", applying !== null)}
+                onMouseEnter={() => setHoveredTag("__default__")}
+                onMouseLeave={() => setHoveredTag(null)}
+              >
+                {t("desktop.defaultTheme")}
+              </button>
+              {themeSets.map((ts) => (
+                <button
+                  key={ts.name}
+                  type="button"
+                  onClick={() => handleThemeChange(ts.name)}
+                  disabled={applying !== null}
+                  style={tagStyle(themeName === ts.name, hoveredTag === ts.name, applying === ts.name)}
+                  onMouseEnter={() => setHoveredTag(ts.name)}
+                  onMouseLeave={() => setHoveredTag(null)}
+                >
+                  {ts.displayName}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
 
         <SettingsRow
           label={t("desktop.appearanceMode")}
