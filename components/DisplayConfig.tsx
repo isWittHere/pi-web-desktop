@@ -342,7 +342,6 @@ export function DisplayConfig() {
 
         <SettingsRow
           label={t("desktop.recommendedWorkspaces")}
-          description={t("desktop.recommendedWorkspacesSettingDescription")}
           control={
             <Toggle
               checked={recommendedEnabled}
