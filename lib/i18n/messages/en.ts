@@ -11,7 +11,7 @@ export const enLocale = {
     "desktop.closeSettings": "Close settings",
     "desktop.settingsGroupGeneral": "General",
     "desktop.settingsGroupModels": "Models",
-    "desktop.settingsGroupWorkspace": "Current workspace",
+    "desktop.settingsGroupWorkspace": "Agent",
     "desktop.settingsPageDisplay": "Configure the interface, theme and background.",
     "desktop.settingsPageChat": "Configure input, notifications and session titles.",
     "desktop.settingsPageModels": "Configure providers, authentication and models.",

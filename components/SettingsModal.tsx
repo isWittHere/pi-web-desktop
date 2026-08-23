@@ -28,6 +28,14 @@ interface SettingsModalProps {
   onSessionReloadedAction: () => void;
 }
 
+/** Counts shown on the nav badges (skills total, plugins loaded/configured). */
+interface SettingsNavStats {
+  skills: number | null;
+  plugins: { loaded: number; configured: number } | null;
+}
+
+const EMPTY_NAV_STATS: SettingsNavStats = { skills: null, plugins: null };
+
 const tabIcons: Record<SettingsTab, typeof Cpu> = {
   display: Monitor,
   chat: ChatCenteredText,
@@ -52,6 +60,7 @@ export function SettingsModal({
   const [activeTab, setActiveTab] = useState<SettingsTab>(
     initialTab === "skills" || initialTab === "plugins" ? (cwd ? initialTab : "display") : initialTab,
   );
+  const [navStats, setNavStats] = useState<SettingsNavStats>(EMPTY_NAV_STATS);
   const dialogRef = useRef<HTMLElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   // One scroll container for the page area: pages flow inside it together
@@ -73,6 +82,40 @@ export function SettingsModal({
   useEffect(() => {
     contentScrollRef.current?.scrollTo(0, 0);
   }, [activeTab]);
+
+  // Nav badges: skill count and plugin load status for the current workspace.
+  useEffect(() => {
+    if (!cwd) {
+      setNavStats(EMPTY_NAV_STATS);
+      return;
+    }
+    let cancelled = false;
+    setNavStats((prev) => ({ ...prev, plugins: null, skills: null }));
+    void fetch(`/api/skills?cwd=${encodeURIComponent(cwd)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { skills?: unknown[] } | null) => {
+        if (!cancelled && data) setNavStats((prev) => ({ ...prev, skills: data.skills?.length ?? null }));
+      })
+      .catch(() => {});
+    void fetch(`/api/plugins?cwd=${encodeURIComponent(cwd)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { packages?: { status?: string }[] } | null) => {
+        const packages = data?.packages;
+        if (!cancelled && packages) {
+          setNavStats((prev) => ({
+            ...prev,
+            plugins: {
+              loaded: packages.filter((pkg) => pkg.status === "loaded").length,
+              configured: packages.length,
+            },
+          }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [cwd]);
 
   // Trap Tab navigation inside the dialog so the focus cannot escape into
   // the app behind the modal while it is open.
@@ -208,6 +251,14 @@ export function SettingsModal({
                         >
                           <Icon size={16} aria-hidden="true" />
                           <span>{t(item.labelKey)}</span>
+                          {item.id === "skills" && navStats.skills !== null && (
+                            <span className="settings-nav-badge" aria-hidden="true">{navStats.skills}</span>
+                          )}
+                          {item.id === "plugins" && navStats.plugins && (
+                            <span className="settings-nav-badge" aria-hidden="true">
+                              {navStats.plugins.loaded}/{navStats.plugins.configured}
+                            </span>
+                          )}
                         </button>
                       );
                     })}

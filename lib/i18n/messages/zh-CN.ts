@@ -11,7 +11,7 @@ export const zhCNLocale = {
     "desktop.closeSettings": "关闭设置",
     "desktop.settingsGroupGeneral": "通用",
     "desktop.settingsGroupModels": "模型",
-    "desktop.settingsGroupWorkspace": "当前工作区",
+    "desktop.settingsGroupWorkspace": "Agent",
     "desktop.settingsPageDisplay": "配置界面外观、主题与背景。",
     "desktop.settingsPageChat": "配置输入、通知与会话标题。",
     "desktop.settingsPageModels": "配置提供商、登录与模型。",

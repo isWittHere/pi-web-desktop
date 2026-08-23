@@ -293,6 +293,18 @@ html.dark {
   line-height: 1.5;
 }
 
+.settings-nav-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--text-dim) 10%, transparent);
+  border-radius: 8px;
+  padding: 1px 6px;
+  line-height: 1.6;
+}
+
 /* Settings page layout: a label column on the left and the control on the
    right, stacking on narrow viewports (including the mobile dialog). */
 .settings-row {
