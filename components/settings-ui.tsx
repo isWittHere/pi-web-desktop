@@ -55,30 +55,6 @@ export function SettingsPage({ children }: { children: ReactNode }) {
   );
 }
 
-/** Page header: title + one-line description, with optional aside info
- * (scope markers, config file paths). Rendered by SettingsModal so every
- * page shares the same rhythm. */
-export function SettingsPageHeader({ title, description, aside }: { title: string; description: string; aside?: ReactNode }) {
-  return (
-    <div
-      style={{
-        padding: "16px var(--settings-pad-x) 12px",
-        borderBottom: "1px solid var(--border)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        flexShrink: 0,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, minWidth: 0 }}>
-        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)", minWidth: 0 }}>{title}</h2>
-        {aside && <div style={{ flexShrink: 0, minWidth: 0 }}>{aside}</div>}
-      </div>
-      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}>{description}</p>
-    </div>
-  );
-}
-
 /** Settings group: an uppercase section label above a set of setting rows. */
 export function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
   return (

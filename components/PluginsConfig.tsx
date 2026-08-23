@@ -6,7 +6,7 @@ import { sendAgentCommand } from "@/lib/agent-client";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPageHeader } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl } from "@/components/settings-ui";
 import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
 
 type Translate = ReturnType<typeof useI18n>["t"];
@@ -594,7 +594,6 @@ export function PluginsConfig({
 
   return (
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-      <SettingsPageHeader title={t("desktop.plugins")} description={t("desktop.settingsPagePlugins")} />
       <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
           <div
             style={{

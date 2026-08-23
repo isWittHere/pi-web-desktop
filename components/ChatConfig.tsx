@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Toggle } from "./Toggle";
-import { SettingsPage, SettingsGroup, SettingsRow, SettingsSelect, SettingsPageHeader } from "@/components/settings-ui";
+import { SettingsPage, SettingsGroup, SettingsRow, SettingsSelect } from "@/components/settings-ui";
 import { useI18n } from "@/hooks/useI18n";
 import {
   getTitleAutoEnabled,
@@ -173,7 +173,6 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
 
   return (
     <SettingsPage>
-      <SettingsPageHeader title={t("desktop.chat")} description={t("desktop.settingsPageChat")} />
       <SettingsGroup title={t("desktop.chatGroupSession")}>
         <SettingsRow
           label={t("desktop.titleAutoGenerate")}

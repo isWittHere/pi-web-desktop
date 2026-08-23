@@ -18,7 +18,6 @@ import {
   SettingsSelect,
   SettingsButton,
   SegmentedControl,
-  SettingsPageHeader,
   inputStyle,
 } from "@/components/settings-ui";
 import type { DiscoveredModel } from "@/lib/model-discovery";
@@ -1815,7 +1814,6 @@ export function ModelsConfig({
 
   return (
     <>
-      <SettingsPageHeader title={t("desktop.models")} description={t("desktop.settingsPageModels")} />
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         {/* Body */}
         <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row" }}>

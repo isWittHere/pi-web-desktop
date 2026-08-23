@@ -5,7 +5,7 @@ import { PlusIcon } from "@phosphor-icons/react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPageHeader } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl } from "@/components/settings-ui";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -776,7 +776,6 @@ export function SkillsConfig({
 
   return (
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <SettingsPageHeader title={t("desktop.skills")} description={t("desktop.settingsPageSkills")} />
         {!projectResourcesLoaded && (
           <div
             role="status"
