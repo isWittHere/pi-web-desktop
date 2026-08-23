@@ -7,6 +7,7 @@ import { DisplayConfig } from "./DisplayConfig";
 import { ModelsConfig } from "./ModelsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { SkillsConfig } from "./SkillsConfig";
+import { SettingsPane } from "./settings-ui";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -35,19 +36,9 @@ const tabIcons: Record<SettingsTab, typeof Cpu> = {
   plugins: Plug,
 };
 
-/** Manager pages render their own list+detail columns; the page area then
- * stops scrolling as a whole so each column scrolls independently. */
+/** Manager pages render their own list+detail panes; the SettingsPane body
+ * then stops scrolling so the manager's columns scroll independently. */
 const MANAGER_TABS: SettingsTab[] = ["models", "skills", "plugins"];
-
-/**
- * Preference pages scroll as one document; manager pages hand scrolling
- * to their own list and detail columns.
- */
-function pageAreaOverflow(isManager: boolean, isMobile: boolean): "hidden" | "auto" {
-  // On mobile the manager columns stack, so the page area scrolls again
-  // instead of clipping the stacked panels.
-  return isManager && !isMobile ? "hidden" : "auto";
-}
 
 export function SettingsModal({
   initialTab = "models",
@@ -57,8 +48,7 @@ export function SettingsModal({
   onModelsSavedAction,
   onSessionReloadedAction,
 }: SettingsModalProps) {
-  const isMobile = useIsMobile();
-  const { t } = useI18n();
+  const isMobile = useIsMobile();  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<SettingsTab>(
     initialTab === "skills" || initialTab === "plugins" ? (cwd ? initialTab : "display") : initialTab,
   );
@@ -196,56 +186,46 @@ export function SettingsModal({
           </button>
         </header>
 
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: "hidden" }}>
-          {/* Two-level sidebar: group labels + their pages. Scrolls on its
-              own when the groups overflow. */}
-          <nav
-            aria-label={t("desktop.settingsSections")}
-            className="settings-nav"
-            style={{ width: isMobile ? undefined : 220 }}
-          >
-            {SETTINGS_NAV.map((section) => {
-              const workspaceLocked = section.scope === "workspace" && !cwd;
-              return (
-                <div key={section.id}>
-                  <div className="settings-nav-group">{t(section.labelKey)}</div>
-                  {section.items.map((item) => {
-                    const Icon = tabIcons[item.id];
-                    const active = activeTab === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        disabled={workspaceLocked}
-                        onClick={() => setActiveTab(item.id)}
-                        aria-current={active ? "page" : undefined}
-                        className="settings-nav-item"
-                      >
-                        <Icon size={16} aria-hidden="true" />
-                        <span>{t(item.labelKey)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-            {!cwd && <div className="settings-nav-note">{t("desktop.noWorkspaceSettings")}</div>}
-          </nav>
-
-          {/* Page area: one document scroll for preference pages; for
-              manager pages the container stops scrolling so the manager's
-              own list and detail columns each scroll independently. */}
-          <div
-            ref={contentScrollRef}
-            style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: pageAreaOverflow(isManager, isMobile) }}
-          >
-            {activeTab === "display" && <DisplayConfig />}
-            {activeTab === "chat" && <ChatConfig cwd={cwd} />}
-            {activeTab === "models" && <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />}
-            {cwd && activeTab === "skills" && <SkillsConfig cwd={cwd} />}
-            {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
-          </div>
-        </div>
+        <SettingsPane
+          sidebar={
+            <nav aria-label={t("desktop.settingsSections")} className="settings-nav">
+              {SETTINGS_NAV.map((section) => {
+                const workspaceLocked = section.scope === "workspace" && !cwd;
+                return (
+                  <div key={section.id}>
+                    <div className="settings-nav-group">{t(section.labelKey)}</div>
+                    {section.items.map((item) => {
+                      const Icon = tabIcons[item.id];
+                      const active = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          disabled={workspaceLocked}
+                          onClick={() => setActiveTab(item.id)}
+                          aria-current={active ? "page" : undefined}
+                          className="settings-nav-item"
+                        >
+                          <Icon size={16} aria-hidden="true" />
+                          <span>{t(item.labelKey)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              {!cwd && <div className="settings-nav-note">{t("desktop.noWorkspaceSettings")}</div>}
+            </nav>
+          }
+          bodyScroll={isManager ? "hidden" : "auto"}
+          bodyRef={contentScrollRef}
+        >
+          {activeTab === "display" && <DisplayConfig />}
+          {activeTab === "chat" && <ChatConfig cwd={cwd} />}
+          {activeTab === "models" && <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />}
+          {cwd && activeTab === "skills" && <SkillsConfig cwd={cwd} />}
+          {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
+        </SettingsPane>
       </section>
     </div>
   );

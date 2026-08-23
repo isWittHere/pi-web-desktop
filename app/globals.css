@@ -204,15 +204,15 @@ html.dark {
 /* Settings dialog navigation: grouped sidebar on desktop, a horizontally
    scrollable strip on narrow viewports. The grouping labels disappear on
    mobile so every item stays reachable without a tap-through menu. */
+/* Settings dialog navigation: the sidebar column itself is provided by
+   the shared SettingsPane (width, border, background, independent
+   scroll). This class only styles the inner group labels and items; it
+   turns into a horizontally scrollable strip on narrow viewports. */
 .settings-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 8px;
-  background: var(--bg-panel);
-  border-right: 1px solid var(--border);
-  flex-shrink: 0;
-  overflow-y: auto;
 }
 
 /* Breadcrumb title row: 设置 / 分组 / 当前页. The root crumb is muted,
@@ -323,8 +323,6 @@ html.dark {
   .settings-nav {
     flex-direction: row;
     overflow-x: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
   }
 
   .settings-nav-group,

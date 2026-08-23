@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { PlusIcon } from "@phosphor-icons/react";
-import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane } from "@/components/settings-ui";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -595,7 +594,6 @@ export function SkillsConfig({
 }: {
   cwd: string;
 }) {
-  const isMobile = useIsMobile();
   const { t } = useI18n();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -791,22 +789,10 @@ export function SkillsConfig({
           </div>
         )}
 
-        {/* Body */}
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
-          {/* Left: skill list — its own scroll column */}
-          <div
-            style={{
-              width: isMobile ? "100%" : 220,
-              borderRight: isMobile ? "none" : "1px solid var(--border)",
-              borderBottom: isMobile ? "1px solid var(--border)" : "none",
-              display: "flex",
-              flexDirection: "column",
-              flexShrink: 0,
-              background: "var(--bg-panel)",
-              minHeight: 0,
-            }}
-          >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+        <SettingsPane
+          sidebar={
+            <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div
                   style={{
@@ -1051,9 +1037,42 @@ export function SkillsConfig({
               </div>
             </div>
           </div>
-
-          {/* Right: detail or add panel */}
-          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", padding: 20 }}>
+        }
+        footer={
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {skills.some((skill) => Boolean(skill.install)) && (
+                <SettingsButton
+                  onClick={() => void checkForUpdates()}
+                  disabled={checkingAll || updatingSkill !== null}
+                >
+                  {checkingAll ? t("desktop.checking") : t("desktop.checkUpdates")}
+                </SettingsButton>
+              )}
+              {Object.values(updateStatuses).filter(
+                (status) => status.state === "update-available",
+              ).length > 0 && (
+                <span style={{ fontSize: 12, color: "var(--status-warning)" }}>
+                  {t("desktop.updatesCount")
+                    .replace(
+                      "{count}",
+                      String(Object.values(updateStatuses).filter(
+                        (status) => status.state === "update-available",
+                      ).length),
+                    )
+                    .replace(
+                      "{suffix}",
+                      Object.values(updateStatuses).filter(
+                        (status) => status.state === "update-available",
+                      ).length === 1 ? "" : "s",
+                    )}
+                </span>
+              )}
+            </div>
+          </div>
+        }
+      >
+        <div style={{ padding: 20, minHeight: "100%", boxSizing: "border-box" }}>
             {addMode ? (
               <AddSkillPanel
                 cwd={cwd}
@@ -1112,49 +1131,7 @@ export function SkillsConfig({
               </div>
             )}
           </div>
-        </div>
-
-        {/* Footer */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "10px 18px",
-            borderTop: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {skills.some((skill) => Boolean(skill.install)) && (
-              <SettingsButton
-                onClick={() => void checkForUpdates()}
-                disabled={checkingAll || updatingSkill !== null}
-              >
-                {checkingAll ? t("desktop.checking") : t("desktop.checkUpdates")}
-              </SettingsButton>
-            )}
-            {Object.values(updateStatuses).filter(
-              (status) => status.state === "update-available",
-            ).length > 0 && (
-              <span style={{ fontSize: 12, color: "var(--status-warning)" }}>
-                {t("desktop.updatesCount")
-                  .replace(
-                    "{count}",
-                    String(Object.values(updateStatuses).filter(
-                      (status) => status.state === "update-available",
-                    ).length),
-                  )
-                  .replace(
-                    "{suffix}",
-                    Object.values(updateStatuses).filter(
-                      (status) => status.state === "update-available",
-                    ).length === 1 ? "" : "s",
-                  )}
-              </span>
-            )}
-          </div>
-        </div>
+        </SettingsPane>
       </div>
   );
 }

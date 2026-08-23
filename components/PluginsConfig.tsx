@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlusIcon } from "@phosphor-icons/react";
 import { sendAgentCommand } from "@/lib/agent-client";
-import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane } from "@/components/settings-ui";
 import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
 
 type Translate = ReturnType<typeof useI18n>["t"];
@@ -465,7 +464,6 @@ export function PluginsConfig({
   sessionId: string | null;
   onReloadedAction?: () => void;
 }) {
-  const isMobile = useIsMobile();
   const { t } = useI18n();
   const [data, setData] = useState<PluginsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -593,21 +591,10 @@ export function PluginsConfig({
   const addBusy = busyKey?.startsWith("install:") ?? false;
 
   return (
-    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
-          <div
-            style={{
-              width: isMobile ? "100%" : 220,
-              borderRight: isMobile ? "none" : "1px solid var(--border)",
-              borderBottom: isMobile ? "1px solid var(--border)" : "none",
-              display: "flex",
-              flexDirection: "column",
-              flexShrink: 0,
-              background: "var(--bg-panel)",
-              minHeight: 0,
-            }}
-          >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+    <SettingsPane
+      sidebar={
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>
                   {t("desktop.loading")}
@@ -753,8 +740,9 @@ export function PluginsConfig({
               </button>
             </div>
           </div>
-
-          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", padding: 20 }}>
+        }
+      >
+        <div style={{ padding: 20, minHeight: "100%", boxSizing: "border-box" }}>
             {addMode ? (
               <AddPluginPanel
                 cwd={cwd}
@@ -793,20 +781,9 @@ export function PluginsConfig({
               </div>
             )}
           </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            padding: "10px 18px",
-            borderTop: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ minWidth: 0, flex: 1, fontSize: 11, color: "var(--text-dim)", overflow: "hidden" }}>
+        footer={
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 18px" }}>
+            <div style={{ minWidth: 0, flex: 1, fontSize: 11, color: "var(--text-dim)", overflow: "hidden" }}>
             {data?.diagnostics.length ? (
               <span
                 title={data.diagnostics.map((d) => `${d.type}: ${d.source ? `${d.source}: ` : ""}${d.message}`).join("\n")}
@@ -833,7 +810,8 @@ export function PluginsConfig({
           <SettingsButton onClick={() => void loadPlugins()} disabled={loading || busyKey !== null}>
             {t("desktop.refresh")}
           </SettingsButton>
-        </div>
-      </div>
+          </div>
+        }
+      </SettingsPane>
   );
 }

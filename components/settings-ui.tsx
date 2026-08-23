@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { Eye, EyeSlash } from "@phosphor-icons/react";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 /**
  * Shared control primitives for the settings dialogs and panels.
@@ -45,12 +46,66 @@ export function SettingsSection({ title, description, children }: { title: strin
   );
 }
 
-/** Page root: the page header sits in the dialog shell, the page body
- * scrolls inside SettingsModal — this root only participates in flex. */
+/** Page root: participates in flex only; the surrounding SettingsPane (or
+ * the dialog scroll container) owns scrolling for preference pages. */
 export function SettingsPage({ children }: { children: ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Two-pane shell shared by every settings surface: a scrollable sidebar
+ * column (settings navigation, or the manager item list) next to a body
+ * column, with an optional fixed footer below. On narrow viewports the
+ * columns stack vertically.
+ *
+ * Usage:
+ *   <SettingsPane sidebar={list} footer={saveBar}>{detail}</SettingsPane>
+ */
+export function SettingsPane({
+  sidebar,
+  footer,
+  sidebarWidth = 220,
+  bodyScroll = "auto",
+  bodyRef,
+  children,
+}: {
+  sidebar: ReactNode;
+  footer?: ReactNode;
+  /** Width of the sidebar column on wide viewports. */
+  sidebarWidth?: number;
+  /** "hidden" hands scrolling to the children (a nested SettingsPane page). */
+  bodyScroll?: "auto" | "hidden";
+  bodyRef?: Ref<HTMLDivElement>;
+  children: ReactNode;
+}) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
+        <div
+          style={{
+            width: isMobile ? "100%" : sidebarWidth,
+            flexShrink: 0,
+            minHeight: 0,
+            background: "var(--bg-panel)",
+            borderRight: isMobile ? "none" : "1px solid var(--border)",
+            borderBottom: isMobile ? "1px solid var(--border)" : "none",
+            overflowY: "auto",
+          }}
+        >
+          {sidebar}
+        </div>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: bodyScroll }} ref={bodyRef}>
+          {children}
+        </div>
+      </div>
+      {footer && (
+        <div style={{ flexShrink: 0, borderTop: "1px solid var(--border)" }}>{footer}</div>
+      )}
     </div>
   );
 }

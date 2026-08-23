@@ -7,7 +7,6 @@ import {
   PlusIcon,
   StarIcon,
 } from "@phosphor-icons/react";
-import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import {
@@ -18,6 +17,7 @@ import {
   SettingsSelect,
   SettingsButton,
   SegmentedControl,
+  SettingsPane,
   inputStyle,
 } from "@/components/settings-ui";
 import type { DiscoveredModel } from "@/lib/model-discovery";
@@ -1563,7 +1563,6 @@ export function ModelsConfig({
   cwd?: string | null;
 }) {
   const t = useModelTranslation();
-  const isMobile = useIsMobile();
   const { favorites: favoriteModels, toggleFavorite } = useFavoriteModels();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
   const [profiles, setProfiles] = useState<Record<string, ModelThinkingProfile>>({});
@@ -1814,18 +1813,9 @@ export function ModelsConfig({
 
   return (
     <>
-      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        {/* Body */}
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
-
-          {/* Left: tree — its own scroll column */}
-          <div style={{
-            width: isMobile ? "100%" : 220,
-            borderRight: isMobile ? "none" : "1px solid var(--border)",
-            borderBottom: isMobile ? "1px solid var(--border)" : "none",
-            display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)",
-            minHeight: 0,
-          }}>
+      <SettingsPane
+        sidebar={
+          <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {/* Active OAuth subscriptions */}
               {activeOAuth.map((p) => {
@@ -1941,47 +1931,46 @@ export function ModelsConfig({
               </button>
             </div>
           </div>
-
-          {/* Right: detail — its own scroll column */}
-          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", padding: 20 }}>
+        }
+        footer={
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px" }}>
+            {saveWarnings && (
+              <span style={{ fontSize: 11, color: "var(--status-warning)", flex: 1, lineHeight: 1.4 }}>
+                {t("desktop.modelsConfigBuiltinConflict", { models: saveWarnings.join(", ") })}
+              </span>
+            )}
+            {saveError && <span style={{ fontSize: 12, color: "var(--status-danger)", flex: 1 }}>{saveError}</span>}
+            <button onClick={handleSave} disabled={saving || savedOk} style={{
+              position: "relative",
+              padding: "6px 16px",
+              minWidth: 92,
+              background: savedOk ? "var(--status-success)" : saving ? "var(--bg-panel)" : "var(--accent)",
+              border: "none", borderRadius: 6,
+              color: savedOk ? "#fff" : saving ? "var(--text-muted)" : "#fff",
+              cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              transition: "background-color 0.2s ease, color 0.2s ease",
+              animation: savedOk ? "saved-pop 0.45s ease" : undefined,
+            }}>
+              {savedOk && (
+                <CheckIcon
+                  size={14}
+                  style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s ease forwards", flexShrink: 0 }}
+                />
+              )}
+              <span>{savedOk ? t("desktop.modelsSaved") : saving ? t("desktop.modelsSaving") : t("desktop.modelsSave")}</span>
+            </button>
+          </div>
+        }
+      >
+        <div style={{ padding: 20, minHeight: "100%", boxSizing: "border-box" }}>
             {loading ? null : detailContent ?? (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
                 {t("desktop.modelsSelectProviderOrModel")}
               </div>
             )}
-          </div>
         </div>
-
-        {/* Footer */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-          {saveWarnings && (
-            <span style={{ fontSize: 11, color: "var(--status-warning)", flex: 1, lineHeight: 1.4 }}>
-              {t("desktop.modelsConfigBuiltinConflict", { models: saveWarnings.join(", ") })}
-            </span>
-          )}
-          {saveError && <span style={{ fontSize: 12, color: "var(--status-danger)", flex: 1 }}>{saveError}</span>}
-          <button onClick={handleSave} disabled={saving || savedOk} style={{
-            position: "relative",
-            padding: "6px 16px",
-            minWidth: 92,
-            background: savedOk ? "var(--status-success)" : saving ? "var(--bg-panel)" : "var(--accent)",
-            border: "none", borderRadius: 6,
-            color: savedOk ? "#fff" : saving ? "var(--text-muted)" : "#fff",
-            cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            transition: "background-color 0.2s ease, color 0.2s ease",
-            animation: savedOk ? "saved-pop 0.45s ease" : undefined,
-          }}>
-            {savedOk && (
-              <CheckIcon
-                size={14}
-                style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s ease forwards", flexShrink: 0 }}
-              />
-            )}
-            <span>{savedOk ? t("desktop.modelsSaved") : saving ? t("desktop.modelsSaving") : t("desktop.modelsSave")}</span>
-          </button>
-        </div>
-      </div>
+      </SettingsPane>
     {pickerOpen && (
       <AddProviderPicker
         oauthProviders={oauthProviders}
