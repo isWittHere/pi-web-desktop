@@ -26,12 +26,6 @@ function sourceLabel(skill: Skill): "global" | "project" | "path" {
   return "path";
 }
 
-function skillGroupLabel(skill: Skill): string {
-  const source = sourceLabel(skill);
-  if (source === "path") return source;
-  return skill.install?.skillsShUrl ? `${source} / skills.sh` : source;
-}
-
 function updateKey(skill: Skill): string | null {
   return skill.install
     ? `${skill.install.scope}\0${skill.install.package}`
@@ -608,7 +602,6 @@ export function SkillsConfig({
   const [updatingSkill, setUpdatingSkill] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [projectResourcesLoaded, setProjectResourcesLoaded] = useState(true);
-  const [dormantGroupsOpen, setDormantGroupsOpen] = useState<Record<string, boolean>>({});
 
   const loadSkills = useCallback(async () => {
     setLoading(true);
@@ -623,9 +616,6 @@ export function SkillsConfig({
       if (list.length > 0 && !selected) {
         const initialSkill = list.find((skill) => !skill.disableModelInvocation) ?? list[0];
         setSelected(initialSkill.filePath);
-        if (initialSkill.disableModelInvocation) {
-          setDormantGroupsOpen((current) => ({ ...current, [skillGroupLabel(initialSkill)]: true }));
-        }
       }
       return list;
     } catch (e) {
@@ -756,9 +746,6 @@ export function SkillsConfig({
             : s,
         ),
       );
-      if (next) {
-        setDormantGroupsOpen((current) => ({ ...current, [skillGroupLabel(skill)]: true }));
-      }
     } catch (e) {
       setSaveError(String(e));
     } finally {
@@ -872,10 +859,6 @@ export function SkillsConfig({
                   }
                   return groups.map(
                     ({ key: groupKey, label: grpLabel, skills: grpSkills }) => {
-                      const activeSkills = grpSkills.filter((skill) => !skill.disableModelInvocation);
-                      const dormantSkills = grpSkills.filter((skill) => skill.disableModelInvocation);
-                      const dormantOpen = dormantGroupsOpen[groupKey] ?? false;
-                      const displayedSkills = dormantOpen ? [...activeSkills, ...dormantSkills] : activeSkills;
                       return (
                       <div key={groupKey} style={{ marginBottom: 6 }}>
                         <div
@@ -890,32 +873,7 @@ export function SkillsConfig({
                         >
                           {grpLabel}
                         </div>
-                        {dormantSkills.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setDormantGroupsOpen((current) => ({ ...current, [groupKey]: !dormantOpen }))}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 5,
-                              width: "100%",
-                              padding: "4px 8px 3px",
-                              border: "none",
-                              background: "transparent",
-                              color: "var(--text-dim)",
-                              cursor: "pointer",
-                              fontSize: 10,
-                              fontWeight: 600,
-                              letterSpacing: "0.06em",
-                              textAlign: "left",
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            <span style={{ fontSize: 8 }}>{dormantOpen ? "▾" : "▸"}</span>
-                            {t("desktop.dormant")} ({dormantSkills.length})
-                          </button>
-                        )}
-                        {displayedSkills.map((skill) => {
+                        {grpSkills.map((skill) => {
                           const isSelected =
                             !addMode && selected === skill.filePath;
                           const disabled = skill.disableModelInvocation;
