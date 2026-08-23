@@ -4,7 +4,7 @@
  * sidebar layout; each labelKey must exist in both i18n catalogs.
  */
 
-export type SettingsTab = "display" | "chat" | "models" | "skills" | "plugins" | "prompts" | "themes";
+export type SettingsTab = "display" | "chat" | "models" | "skills" | "plugins" | "prompts";
 
 export interface SettingsNavItem {
   id: SettingsTab;
@@ -43,7 +43,6 @@ export const SETTINGS_NAV: SettingsNavSection[] = [
       { id: "skills", labelKey: "desktop.skills" },
       { id: "plugins", labelKey: "desktop.plugins" },
       { id: "prompts", labelKey: "desktop.prompts" },
-      { id: "themes", labelKey: "desktop.themes" },
     ],
   },
 ];
@@ -56,7 +55,6 @@ export const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTab, string> = {
   skills: "desktop.settingsPageSkills",
   plugins: "desktop.settingsPagePlugins",
   prompts: "desktop.settingsPagePrompts",
-  themes: "desktop.settingsPageThemes",
 };
 
 /** Flattened nav items, in display order. */

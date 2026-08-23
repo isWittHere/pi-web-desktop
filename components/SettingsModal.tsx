@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChatCenteredText, Cpu, Monitor, PaintBrush, Plug, Stack, TextT, X } from "@phosphor-icons/react";
+import { ChatCenteredText, Cpu, Monitor, Plug, Stack, TextT, X } from "@phosphor-icons/react";
 import { ChatConfig } from "./ChatConfig";
 import { DisplayConfig } from "./DisplayConfig";
 import { ModelsConfig } from "./ModelsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { PromptsConfig } from "./PromptsConfig";
-import { ThemesConfig } from "./ThemesConfig";
 import { SettingsPane } from "./settings-ui";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
@@ -45,12 +44,11 @@ const tabIcons: Record<SettingsTab, typeof Cpu> = {
   skills: Stack,
   plugins: Plug,
   prompts: TextT,
-  themes: PaintBrush,
 };
 
 /** Manager pages render their own list+detail panes; the SettingsPane body
  * then stops scrolling so the manager's columns scroll independently. */
-const MANAGER_TABS: SettingsTab[] = ["models", "skills", "plugins", "prompts", "themes"];
+const MANAGER_TABS: SettingsTab[] = ["models", "skills", "plugins", "prompts"];
 
 export function SettingsModal({
   initialTab = "models",
@@ -281,7 +279,6 @@ export function SettingsModal({
           {cwd && activeTab === "skills" && <SkillsConfig cwd={cwd} />}
           {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
           {cwd && activeTab === "prompts" && <PromptsConfig cwd={cwd} />}
-          {cwd && activeTab === "themes" && <ThemesConfig cwd={cwd} />}
         </SettingsPane>
       </section>
     </div>
