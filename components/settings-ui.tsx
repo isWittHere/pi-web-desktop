@@ -87,6 +87,7 @@ export function SettingsPane({
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
         <div
+          className="settings-pane-sidebar"
           style={{
             width: isMobile ? "100%" : sidebarWidth,
             flexShrink: 0,
@@ -100,6 +101,7 @@ export function SettingsPane({
           {sidebar}
         </div>
         <div
+          className="settings-pane-body"
           style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: bodyScroll }}
           ref={bodyRef}
         >
@@ -107,7 +109,16 @@ export function SettingsPane({
         </div>
       </div>
       {footer && (
-        <div style={{ flexShrink: 0, borderTop: "1px solid var(--border)" }}>{footer}</div>
+        <div
+          className="settings-pane-footer"
+          style={{
+            flexShrink: 0,
+            borderTop: "1px solid var(--border)",
+            background: "var(--bg-panel)",
+          }}
+        >
+          {footer}
+        </div>
       )}
     </div>
   );

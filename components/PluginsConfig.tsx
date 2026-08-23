@@ -741,6 +741,37 @@ export function PluginsConfig({
             </div>
           </div>
         }
+        footer={
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 18px" }}>
+            <div style={{ minWidth: 0, flex: 1, fontSize: 11, color: "var(--text-dim)", overflow: "hidden" }}>
+            {data?.diagnostics.length ? (
+              <span
+                title={data.diagnostics.map((d) => `${d.type}: ${d.source ? `${d.source}: ` : ""}${d.message}`).join("\n")}
+                style={{ color: data.diagnostics.some((d) => d.type === "error") ? "var(--status-danger)" : "var(--status-warning)" }}
+              >
+                {t("desktop.diagnosticsCount", {
+                  count: data.diagnostics.length,
+                  suffix: data.diagnostics.length === 1 ? "" : "s",
+                })}
+              </span>
+            ) : (
+              <span>
+                {data
+                  ? t("desktop.pluginResourceTotals", {
+                    extensions: data.totals.extensions,
+                    skills: data.totals.skills,
+                    prompts: data.totals.prompts,
+                    themes: data.totals.themes,
+                  })
+                  : ""}
+              </span>
+            )}
+          </div>
+          <SettingsButton onClick={() => void loadPlugins()} disabled={loading || busyKey !== null}>
+            {t("desktop.refresh")}
+          </SettingsButton>
+          </div>
+        }
       >
         <div style={{ padding: 20, minHeight: "100%", boxSizing: "border-box" }}>
             {addMode ? (
@@ -781,37 +812,6 @@ export function PluginsConfig({
               </div>
             )}
           </div>
-        footer={
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 18px" }}>
-            <div style={{ minWidth: 0, flex: 1, fontSize: 11, color: "var(--text-dim)", overflow: "hidden" }}>
-            {data?.diagnostics.length ? (
-              <span
-                title={data.diagnostics.map((d) => `${d.type}: ${d.source ? `${d.source}: ` : ""}${d.message}`).join("\n")}
-                style={{ color: data.diagnostics.some((d) => d.type === "error") ? "var(--status-danger)" : "var(--status-warning)" }}
-              >
-                {t("desktop.diagnosticsCount", {
-                  count: data.diagnostics.length,
-                  suffix: data.diagnostics.length === 1 ? "" : "s",
-                })}
-              </span>
-            ) : (
-              <span>
-                {data
-                  ? t("desktop.pluginResourceTotals", {
-                    extensions: data.totals.extensions,
-                    skills: data.totals.skills,
-                    prompts: data.totals.prompts,
-                    themes: data.totals.themes,
-                  })
-                  : ""}
-              </span>
-            )}
-          </div>
-          <SettingsButton onClick={() => void loadPlugins()} disabled={loading || busyKey !== null}>
-            {t("desktop.refresh")}
-          </SettingsButton>
-          </div>
-        }
       </SettingsPane>
   );
 }

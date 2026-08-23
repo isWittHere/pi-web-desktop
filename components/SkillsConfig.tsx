@@ -771,6 +771,10 @@ export function SkillsConfig({
   }, [cwd]);
 
   const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
+  const updateAvailableCount = Object.values(updateStatuses).filter(
+    (status) => status.state === "update-available",
+  ).length;
+  const hasInstalledSkills = skills.some((skill) => Boolean(skill.install));
 
   return (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -1039,9 +1043,10 @@ export function SkillsConfig({
           </div>
         }
         footer={
+          hasInstalledSkills || updateAvailableCount > 0 ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {skills.some((skill) => Boolean(skill.install)) && (
+              {hasInstalledSkills && (
                 <SettingsButton
                   onClick={() => void checkForUpdates()}
                   disabled={checkingAll || updatingSkill !== null}
@@ -1049,27 +1054,16 @@ export function SkillsConfig({
                   {checkingAll ? t("desktop.checking") : t("desktop.checkUpdates")}
                 </SettingsButton>
               )}
-              {Object.values(updateStatuses).filter(
-                (status) => status.state === "update-available",
-              ).length > 0 && (
+              {updateAvailableCount > 0 && (
                 <span style={{ fontSize: 12, color: "var(--status-warning)" }}>
                   {t("desktop.updatesCount")
-                    .replace(
-                      "{count}",
-                      String(Object.values(updateStatuses).filter(
-                        (status) => status.state === "update-available",
-                      ).length),
-                    )
-                    .replace(
-                      "{suffix}",
-                      Object.values(updateStatuses).filter(
-                        (status) => status.state === "update-available",
-                      ).length === 1 ? "" : "s",
-                    )}
+                    .replace("{count}", String(updateAvailableCount))
+                    .replace("{suffix}", updateAvailableCount === 1 ? "" : "s")}
                 </span>
               )}
             </div>
           </div>
+          ) : undefined
         }
       >
         <div style={{ padding: 20, minHeight: "100%", boxSizing: "border-box" }}>
