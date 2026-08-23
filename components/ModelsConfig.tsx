@@ -18,6 +18,7 @@ import {
   SettingsSelect,
   SettingsButton,
   SegmentedControl,
+  SettingsPageHeader,
   inputStyle,
 } from "@/components/settings-ui";
 import type { DiscoveredModel } from "@/lib/model-discovery";
@@ -1814,19 +1815,19 @@ export function ModelsConfig({
 
   return (
     <>
-      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <SettingsPageHeader title={t("desktop.models")} description={t("desktop.settingsPageModels")} />
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         {/* Body */}
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
 
           {/* Left: tree */}
           <div style={{
             width: isMobile ? "100%" : 220,
-            maxHeight: isMobile ? "calc(40vh / var(--app-ui-scale, 1))" : undefined,
             borderRight: isMobile ? "none" : "1px solid var(--border)",
             borderBottom: isMobile ? "1px solid var(--border)" : "none",
             display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)",
           }}>
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div style={{ padding: "8px 6px" }}>
               {/* Active OAuth subscriptions */}
               {activeOAuth.map((p) => {
                 const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
@@ -1943,9 +1944,9 @@ export function ModelsConfig({
           </div>
 
           {/* Right: detail */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div style={{ padding: 20 }}>
             {loading ? null : detailContent ?? (
-              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
+              <div style={{ padding: "48px 0", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
                 {t("desktop.modelsSelectProviderOrModel")}
               </div>
             )}

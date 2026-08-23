@@ -7,7 +7,7 @@ import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { resolveWallpaperUrl } from "@/lib/wallpaper";
-import { SettingsPage, SettingsGroup, SettingsRow, SettingsButton, SegmentedControl } from "@/components/settings-ui";
+import { SettingsPage, SettingsGroup, SettingsRow, SettingsButton, SegmentedControl, SettingsPageHeader } from "@/components/settings-ui";
 import { Toggle } from "@/components/Toggle";
 import { isRecommendedEnabled, setRecommendedEnabledStorage } from "@/components/WelcomeLobby";
 import type { ThemeSetInfo } from "@/lib/theme";
@@ -161,6 +161,7 @@ export function DisplayConfig() {
 
   return (
     <SettingsPage>
+      <SettingsPageHeader title={t("desktop.display")} description={t("desktop.settingsPageDisplay")} />
 
       {/* ── Theme & color ── */}
       <SettingsGroup title={t("desktop.displayGroupTheme")}>

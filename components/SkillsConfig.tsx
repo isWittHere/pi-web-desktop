@@ -5,7 +5,7 @@ import { PlusIcon } from "@phosphor-icons/react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPageHeader } from "@/components/settings-ui";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -371,7 +371,7 @@ function AddSkillPanel({
       : `${shortenPath(cwd)}/.pi/skills/`;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column" }}>
       {/* ── Header area ── */}
       <div
         style={{
@@ -456,7 +456,7 @@ function AddSkillPanel({
 
       {/* ── Results list ── */}
       {results.length > 0 ? (
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ flex: 1 }}>
           {results.map((r) => {
             const isInstalled =
               installedPackages[scope].has(r.package) ||
@@ -775,7 +775,8 @@ export function SkillsConfig({
   const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
 
   return (
-    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <SettingsPageHeader title={t("desktop.skills")} description={t("desktop.settingsPageSkills")} />
         {!projectResourcesLoaded && (
           <div
             role="status"
@@ -792,12 +793,11 @@ export function SkillsConfig({
         )}
 
         {/* Body */}
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
           {/* Left: skill list */}
           <div
             style={{
               width: isMobile ? "100%" : 220,
-              maxHeight: isMobile ? "calc(40vh / var(--app-ui-scale, 1))" : undefined,
               borderRight: isMobile ? "none" : "1px solid var(--border)",
               borderBottom: isMobile ? "1px solid var(--border)" : "none",
               display: "flex",
@@ -806,7 +806,7 @@ export function SkillsConfig({
               background: "var(--bg-panel)",
             }}
           >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div style={{ padding: "8px 6px" }}>
               {loading ? (
                 <div
                   style={{
@@ -1053,7 +1053,7 @@ export function SkillsConfig({
           </div>
 
           {/* Right: detail or add panel */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div style={{ padding: 20 }}>
             {addMode ? (
               <AddSkillPanel
                 cwd={cwd}
@@ -1100,7 +1100,7 @@ export function SkillsConfig({
             ) : (
               <div
                 style={{
-                  height: "100%",
+                  padding: "48px 0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",

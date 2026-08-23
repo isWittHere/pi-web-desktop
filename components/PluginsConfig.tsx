@@ -6,7 +6,7 @@ import { sendAgentCommand } from "@/lib/agent-client";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPageHeader } from "@/components/settings-ui";
 import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
 
 type Translate = ReturnType<typeof useI18n>["t"];
@@ -218,7 +218,7 @@ function AddPluginPanel({
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 660, minHeight: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 660 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
@@ -593,12 +593,12 @@ export function PluginsConfig({
   const addBusy = busyKey?.startsWith("install:") ?? false;
 
   return (
-    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      <SettingsPageHeader title={t("desktop.plugins")} description={t("desktop.settingsPagePlugins")} />
+      <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
           <div
             style={{
               width: isMobile ? "100%" : 220,
-              maxHeight: isMobile ? "calc(40vh / var(--app-ui-scale, 1))" : undefined,
               borderRight: isMobile ? "none" : "1px solid var(--border)",
               borderBottom: isMobile ? "1px solid var(--border)" : "none",
               display: "flex",
@@ -607,7 +607,7 @@ export function PluginsConfig({
               background: "var(--bg-panel)",
             }}
           >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div style={{ padding: "8px 6px" }}>
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>
                   {t("desktop.loading")}
@@ -754,7 +754,7 @@ export function PluginsConfig({
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div style={{ padding: 20 }}>
             {addMode ? (
               <AddPluginPanel
                 cwd={cwd}

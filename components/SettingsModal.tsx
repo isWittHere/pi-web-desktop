@@ -7,14 +7,10 @@ import { DisplayConfig } from "./DisplayConfig";
 import { ModelsConfig } from "./ModelsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { SkillsConfig } from "./SkillsConfig";
-import { SettingsPageHeader } from "./settings-ui";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import {
   SETTINGS_NAV,
-  SETTINGS_PAGE_DESCRIPTIONS,
-  settingsNavItems,
-  settingsSectionOf,
   type SettingsTab,
 } from "@/lib/settings-nav";
 
@@ -37,16 +33,6 @@ const tabIcons: Record<SettingsTab, typeof Cpu> = {
   plugins: Plug,
 };
 
-const codeStyle: React.CSSProperties = {
-  fontSize: 11,
-  color: "var(--text-muted)",
-  fontFamily: "var(--font-mono)",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-  maxWidth: 320,
-};
-
 export function SettingsModal({
   initialTab = "models",
   cwd,
@@ -62,6 +48,9 @@ export function SettingsModal({
   );
   const dialogRef = useRef<HTMLElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  // The one scroll container for the whole page content: page headers and
+  // panels flow inside it together; no inner panel scrolls on its own.
+  const contentScrollRef = useRef<HTMLDivElement>(null);
 
   // Focus the dialog on open so keyboard users land inside immediately,
   // and restore the trigger's focus when the dialog unmounts.
@@ -72,6 +61,12 @@ export function SettingsModal({
       restoreFocusRef.current?.focus();
     };
   }, []);
+
+  // Each page owns its scroll position — reset when switching tabs so a
+  // short page never opens mid-scroll after a long one.
+  useEffect(() => {
+    contentScrollRef.current?.scrollTo(0, 0);
+  }, [activeTab]);
 
   // Trap Tab navigation inside the dialog so the focus cannot escape into
   // the app behind the modal while it is open.
@@ -102,10 +97,6 @@ export function SettingsModal({
       first.focus();
     }
   };
-
-  const activeSection = settingsSectionOf(activeTab);
-  const workspaceScoped = activeSection?.scope === "workspace";
-  const activeItem = settingsNavItems().find((item) => item.id === activeTab);
 
   return (
     <div
@@ -203,25 +194,14 @@ export function SettingsModal({
             {!isMobile && !cwd && <div className="settings-nav-note">{t("desktop.noWorkspaceSettings")}</div>}
           </nav>
 
-          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <SettingsPageHeader
-              title={activeItem ? t(activeItem.labelKey) : t("desktop.settings")}
-              description={t(SETTINGS_PAGE_DESCRIPTIONS[activeTab])}
-              aside={
-                workspaceScoped && cwd ? (
-                  <code style={codeStyle} title={cwd}>{cwd}</code>
-                ) : activeTab === "models" ? (
-                  <code style={codeStyle}>~/.pi/agent/models.json</code>
-                ) : undefined
-              }
-            />
-            <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-              {activeTab === "display" && <DisplayConfig />}
-              {activeTab === "chat" && <ChatConfig cwd={cwd} />}
-              {activeTab === "models" && <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />}
-              {cwd && activeTab === "skills" && <SkillsConfig cwd={cwd} />}
-              {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
-            </div>
+          {/* The single scroll container: page headers and panels flow
+              inside it together; no inner panel scrolls on its own. */}
+          <div ref={contentScrollRef} style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+            {activeTab === "display" && <DisplayConfig />}
+            {activeTab === "chat" && <ChatConfig cwd={cwd} />}
+            {activeTab === "models" && <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />}
+            {cwd && activeTab === "skills" && <SkillsConfig cwd={cwd} />}
+            {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
           </div>
         </div>
       </section>
