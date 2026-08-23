@@ -7,6 +7,7 @@ export const enLocale = {
   messages: {
     "desktop.settings": "Settings",
     "desktop.settingsSections": "Settings sections",
+    "desktop.settingsBreadcrumb": "Settings path",
     "desktop.closeSettings": "Close settings",
     "desktop.settingsGroupGeneral": "General",
     "desktop.settingsGroupModels": "Models",

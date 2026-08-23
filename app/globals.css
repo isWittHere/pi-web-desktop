@@ -212,6 +212,35 @@ html.dark {
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
   flex-shrink: 0;
+  overflow-y: auto;
+}
+
+/* Breadcrumb title row: 设置 / 分组 / 当前页. The root crumb is muted,
+   the current page takes the strongest weight of the dialog header. */
+.settings-breadcrumb {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13.5px;
+  min-width: 0;
+}
+
+.settings-breadcrumb .crumb-root {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.settings-breadcrumb .crumb-sep {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.settings-breadcrumb .crumb-current {
+  color: var(--text-muted);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-nav-group {

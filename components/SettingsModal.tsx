@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChatCenteredText, Cpu, Monitor, Plug, Stack, X } from "@phosphor-icons/react";
+import { ChatCenteredText, Cpu, Monitor, Plug, Stack, X } from "@phosphor-icons/react";
 import { ChatConfig } from "./ChatConfig";
 import { DisplayConfig } from "./DisplayConfig";
 import { ModelsConfig } from "./ModelsConfig";
@@ -12,6 +12,7 @@ import { useI18n } from "@/hooks/useI18n";
 import {
   SETTINGS_NAV,
   settingsNavItems,
+  settingsSectionOf,
   type SettingsTab,
 } from "@/lib/settings-nav";
 
@@ -34,10 +35,6 @@ const tabIcons: Record<SettingsTab, typeof Cpu> = {
   plugins: Plug,
 };
 
-/** Manager pages have their own list+detail layout and take over the whole
- * dialog; preference pages sit behind the settings sidebar. */
-const MANAGER_TABS: SettingsTab[] = ["models", "skills", "plugins"];
-
 export function SettingsModal({
   initialTab = "models",
   cwd,
@@ -53,8 +50,8 @@ export function SettingsModal({
   );
   const dialogRef = useRef<HTMLElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  // The one scroll container for the whole page content: page headers and
-  // panels flow inside it together; no inner panel scrolls on its own.
+  // One scroll container for the page area: pages flow inside it together
+  // and no inner panel scrolls on its own.
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
   // Focus the dialog on open so keyboard users land inside immediately,
@@ -85,7 +82,7 @@ export function SettingsModal({
     if (!dialog) return;
     const focusables = Array.from(
       dialog.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [role="radio"]:not([tabindex="-1"]):not([disabled])',
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ),
     );
     if (focusables.length === 0) return;
@@ -103,8 +100,8 @@ export function SettingsModal({
     }
   };
 
-  const isManager = MANAGER_TABS.includes(activeTab);
-  const managerLabel = settingsNavItems().find((item) => item.id === activeTab)?.labelKey;
+  const activeSection = settingsSectionOf(activeTab);
+  const activeItem = settingsNavItems().find((item) => item.id === activeTab);
 
   return (
     <div
@@ -146,117 +143,88 @@ export function SettingsModal({
           overflow: "hidden",
         }}
       >
+        {/* Single title row: 设置 / 分组 / 当前页 */}
         <header
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: 12,
             padding: "12px 18px",
             borderBottom: "1px solid var(--border)",
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("desktop.settings")}</span>
+          <span className="settings-breadcrumb" role="navigation" aria-label={t("desktop.settingsBreadcrumb")}>
+            <span className="crumb-root">{t("desktop.settings")}</span>
+            {activeSection && (
+              <>
+                <span className="crumb-sep" aria-hidden="true">/</span>
+                <span>{t(activeSection.labelKey)}</span>
+              </>
+            )}
+            {activeItem && (
+              <>
+                <span className="crumb-sep" aria-hidden="true">/</span>
+                <span className="crumb-current">{t(activeItem.labelKey)}</span>
+              </>
+            )}
+          </span>
           <button
             type="button"
             onClick={onCloseAction}
             title={t("desktop.closeSettings")}
             aria-label={t("desktop.closeSettings")}
-            style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 4, display: "flex" }}
+            style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}
           >
             <X size={18} aria-hidden="true" />
           </button>
         </header>
 
         <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: "hidden" }}>
-          {isManager ? (
-            /* Manager pages take over the whole dialog: a small toolbar
-               replaces the settings navigation; the panel below keeps its
-               own list+detail layout without a second sidebar shell. */
-            <>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "10px 18px",
-                  borderBottom: "1px solid var(--border)",
-                  flexShrink: 0,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("display")}
-                  title={t("desktop.settings")}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    padding: "4px 8px",
-                    border: "none",
-                    borderRadius: 6,
-                    background: "var(--bg-panel)",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    fontSize: 12,
-                  }}
-                >
-                  <ArrowLeft size={13} aria-hidden="true" />
-                  {t("desktop.settings")}
-                </button>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-                  {managerLabel ? t(managerLabel) : ""}
-                </span>
-              </div>
-              <div ref={contentScrollRef} style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
-                {activeTab === "models" && <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />}
-                {cwd && activeTab === "skills" && <SkillsConfig cwd={cwd} />}
-                {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
-              </div>
-            </>
-          ) : (
-            <>
-              <nav
-                aria-label={t("desktop.settingsSections")}
-                className="settings-nav"
-                style={{ width: isMobile ? undefined : 220 }}
-              >
-                {SETTINGS_NAV.map((section) => {
-                  const workspaceLocked = section.scope === "workspace" && !cwd;
-                  return (
-                    <div key={section.id}>
-                      {!isMobile && <div className="settings-nav-group">{t(section.labelKey)}</div>}
-                      {section.items.map((item) => {
-                        const Icon = tabIcons[item.id];
-                        const active = activeTab === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            disabled={workspaceLocked}
-                            onClick={() => setActiveTab(item.id)}
-                            aria-current={active ? "page" : undefined}
-                            className="settings-nav-item"
-                          >
-                            <Icon size={16} aria-hidden="true" />
-                            <span>{t(item.labelKey)}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-                {!isMobile && !cwd && <div className="settings-nav-note">{t("desktop.noWorkspaceSettings")}</div>}
-              </nav>
+          {/* Two-level sidebar: group labels + their pages. Scrolls on its
+              own when the groups overflow. */}
+          <nav
+            aria-label={t("desktop.settingsSections")}
+            className="settings-nav"
+            style={{ width: isMobile ? undefined : 220 }}
+          >
+            {SETTINGS_NAV.map((section) => {
+              const workspaceLocked = section.scope === "workspace" && !cwd;
+              return (
+                <div key={section.id}>
+                  <div className="settings-nav-group">{t(section.labelKey)}</div>
+                  {section.items.map((item) => {
+                    const Icon = tabIcons[item.id];
+                    const active = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={workspaceLocked}
+                        onClick={() => setActiveTab(item.id)}
+                        aria-current={active ? "page" : undefined}
+                        className="settings-nav-item"
+                      >
+                        <Icon size={16} aria-hidden="true" />
+                        <span>{t(item.labelKey)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {!cwd && <div className="settings-nav-note">{t("desktop.noWorkspaceSettings")}</div>}
+          </nav>
 
-              {/* Preference pages: the only scroll container, panels flow
-                  inside it and nothing scrolls on its own. */}
-              <div ref={contentScrollRef} style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
-                {activeTab === "display" && <DisplayConfig />}
-                {activeTab === "chat" && <ChatConfig cwd={cwd} />}
-              </div>
-            </>
-          )}
+          {/* Page area: the only scroll container in the dialog. */}
+          <div ref={contentScrollRef} style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+            {activeTab === "display" && <DisplayConfig />}
+            {activeTab === "chat" && <ChatConfig cwd={cwd} />}
+            {activeTab === "models" && <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />}
+            {cwd && activeTab === "skills" && <SkillsConfig cwd={cwd} />}
+            {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
+          </div>
         </div>
       </section>
     </div>

@@ -7,6 +7,7 @@ export const zhCNLocale = {
   messages: {
     "desktop.settings": "设置",
     "desktop.settingsSections": "设置分类",
+    "desktop.settingsBreadcrumb": "设置路径",
     "desktop.closeSettings": "关闭设置",
     "desktop.settingsGroupGeneral": "通用",
     "desktop.settingsGroupModels": "模型",
