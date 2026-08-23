@@ -914,11 +914,7 @@ export function SkillsConfig({
                                   background: disabled
                                     ? "var(--border)"
                                     : "var(--accent)",
-                                  boxShadow: disabled
-                                    ? "none"
-                                    : "0 0 4px var(--accent)",
-                                  transition:
-                                    "background 0.15s, box-shadow 0.15s",
+                                  transition: "background 0.15s",
                                 }}
                               />
                               <span
