@@ -165,7 +165,6 @@ export function DisplayConfig() {
       <SettingsGroup title={t("desktop.displayGroupTheme")}>
         <SettingsRow
           label={t("desktop.theme")}
-          description={t("desktop.themeDescription")}
           control={
             <div style={{ display: "flex", gap: 12, flexShrink: 0 }}>
               <button
