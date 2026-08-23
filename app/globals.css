@@ -317,7 +317,9 @@ html.dark {
 }
 
 .settings-row-label {
-  flex: 0 0 190px;
+  /* Labels get a comfortable column so one-line descriptions do not wrap
+     into three or four lines; on narrow viewports rows stack anyway. */
+  flex: 0 0 clamp(250px, 40%, 360px);
   min-width: 0;
 }
 
