@@ -151,18 +151,17 @@ export function SettingsGroup({ title, children }: { title: string; children: Re
   );
 }
 
-/** Settings row: label column (title + one-line result-oriented description)
- * on the left, the single control on the right. One row = one setting. */
+/** Settings row: title with the control on one line (control right-aligned);
+ * the description sits on a full-width line below, so long descriptions
+ * never wrap inside a narrow label column. */
 export function SettingsRow({ label, description, control }: { label: string; description?: string; control: ReactNode }) {
   return (
     <div className="settings-row">
-      <span className="settings-row-label">
-        <span style={{ display: "block", fontSize: 13, fontWeight: 550, color: "var(--text)", lineHeight: 1.4 }}>{label}</span>
-        {description && (
-          <span style={{ display: "block", fontSize: 11, lineHeight: 1.5, color: "var(--text-muted)", marginTop: 2 }}>{description}</span>
-        )}
-      </span>
-      <span className="settings-row-control">{control}</span>
+      <div className="settings-row-head">
+        <span className="settings-row-title">{label}</span>
+        <span className="settings-row-control">{control}</span>
+      </div>
+      {description && <div className="settings-row-description">{description}</div>}
     </div>
   );
 }
