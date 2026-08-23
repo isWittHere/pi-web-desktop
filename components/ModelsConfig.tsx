@@ -297,20 +297,23 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
       {/* Provider name + icon mode picker share one row: name is the primary
           editor, the icon picker sits at its right side. */}
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <SettingsField label={t("desktop.modelsProviderName")}>
-          <SettingsInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono
-            style={{ minWidth: 240 }} />
-          {editingName !== name && editingName.trim() && (
-            <button onClick={() => onRename(editingName.trim())}
-              style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}>
-              {t("desktop.rename")}
-            </button>
-          )}
-        </SettingsField>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <SettingsField label={t("desktop.modelsProviderName")}>
+            <SettingsInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
+            {editingName !== name && editingName.trim() && (
+              <button onClick={() => onRename(editingName.trim())}
+                style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}>
+                {t("desktop.rename")}
+              </button>
+            )}
+          </SettingsField>
+        </div>
 
-        <SettingsField label={t("desktop.providerIcon")}>
-          <IconModePicker providerId={name} api={provider.api} />
-        </SettingsField>
+        <div style={{ flexShrink: 0 }}>
+          <SettingsField label={t("desktop.providerIcon")}>
+            <IconModePicker providerId={name} api={provider.api} />
+          </SettingsField>
+        </div>
       </div>
 
       <SettingsField label={t("desktop.modelsBaseUrl")}>
