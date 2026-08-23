@@ -99,7 +99,10 @@ export function SettingsPane({
         >
           {sidebar}
         </div>
-        <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: bodyScroll }} ref={bodyRef}>
+        <div
+          style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: bodyScroll }}
+          ref={bodyRef}
+        >
           {children}
         </div>
       </div>

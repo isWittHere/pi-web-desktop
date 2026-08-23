@@ -217,7 +217,7 @@ export function SettingsModal({
               {!cwd && <div className="settings-nav-note">{t("desktop.noWorkspaceSettings")}</div>}
             </nav>
           }
-          bodyScroll={isManager ? "hidden" : "auto"}
+          bodyScroll={isManager && !isMobile ? "hidden" : "auto"}
           bodyRef={contentScrollRef}
         >
           {activeTab === "display" && <DisplayConfig />}
