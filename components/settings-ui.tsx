@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { Eye, EyeSlash } from "@phosphor-icons/react";
 
 /**
@@ -42,6 +42,238 @@ export function SettingsSection({ title, description, children }: { title: strin
       <p style={{ margin: "5px 0 14px", fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}>{description}</p>
       <div>{children}</div>
     </section>
+  );
+}
+
+/** Page root: the page header sits in the dialog shell, the page body
+ * scrolls inside SettingsModal — this root only participates in flex. */
+export function SettingsPage({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
+      {children}
+    </div>
+  );
+}
+
+/** Page header: title + one-line description, with optional aside info
+ * (scope markers, config file paths). Rendered by SettingsModal so every
+ * page shares the same rhythm. */
+export function SettingsPageHeader({ title, description, aside }: { title: string; description: string; aside?: ReactNode }) {
+  return (
+    <div
+      style={{
+        padding: "16px var(--settings-pad-x) 12px",
+        borderBottom: "1px solid var(--border)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        flexShrink: 0,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, minWidth: 0 }}>
+        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)", minWidth: 0 }}>{title}</h2>
+        {aside && <div style={{ flexShrink: 0, minWidth: 0 }}>{aside}</div>}
+      </div>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: "var(--text-muted)" }}>{description}</p>
+    </div>
+  );
+}
+
+/** Settings group: an uppercase section label above a set of setting rows. */
+export function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section
+      style={{
+        padding: "var(--settings-section-gap) var(--settings-pad-x)",
+        borderBottom: "1px solid var(--border)",
+      }}
+    >
+      <h3
+        style={{
+          margin: 0,
+          fontSize: 11,
+          fontWeight: 700,
+          color: "var(--text-dim)",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginBottom: 8,
+        }}
+      >
+        {title}
+      </h3>
+      <div>{children}</div>
+    </section>
+  );
+}
+
+/** Settings row: label column (title + one-line result-oriented description)
+ * on the left, the single control on the right. One row = one setting. */
+export function SettingsRow({ label, description, control }: { label: string; description?: string; control: ReactNode }) {
+  return (
+    <div className="settings-row">
+      <span className="settings-row-label">
+        <span style={{ display: "block", fontSize: 13, fontWeight: 550, color: "var(--text)", lineHeight: 1.4 }}>{label}</span>
+        {description && (
+          <span style={{ display: "block", fontSize: 11, lineHeight: 1.5, color: "var(--text-muted)", marginTop: 2 }}>{description}</span>
+        )}
+      </span>
+      <span className="settings-row-control">{control}</span>
+    </div>
+  );
+}
+
+/** Segmented option — one mutually-exclusive choice inside the control. */
+export interface SegmentedOption {
+  value: string;
+  label: string;
+  icon?: ReactNode;
+  disabled?: boolean;
+  title?: string;
+}
+
+/**
+ * Segmented control for mutually-exclusive choices (mode, scope, view).
+ * A single bordered track, selected option as an inset highlight — the
+ * value readout of a setting, distinct from action buttons. Implements
+ * radiogroup semantics with arrow-key navigation.
+ */
+export function SegmentedControl({
+  value,
+  onChange,
+  options,
+  size = "md",
+  ariaLabel,
+  style,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: SegmentedOption[];
+  size?: "sm" | "md";
+  ariaLabel?: string;
+  style?: CSSProperties;
+}) {
+  const selectedIndex = Math.max(0, options.findIndex((o) => o.value === value));
+  const [focusIndex, setFocusIndex] = useState(selectedIndex);
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // Keep the roaming tab stop in sync with external value changes so the
+  // wrong option never claims the tab position after a controlled update.
+  useEffect(() => {
+    setFocusIndex(selectedIndex);
+  }, [selectedIndex]);
+
+  const focusEnabled = (from: number, delta: number) => {
+    const enabled = options.map((o) => !o.disabled);
+    if (delta === 0 || !enabled.some(Boolean)) return;
+    let index = from;
+    for (let step = 0; step < options.length; step += 1) {
+      index = (index + delta + options.length) % options.length;
+      if (enabled[index]) break;
+    }
+    if (enabled[index]) {
+      setFocusIndex(index);
+      refs.current[index]?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number) => (event: KeyboardEvent<HTMLButtonElement>) => {
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        event.preventDefault();
+        focusEnabled(index, 1);
+        break;
+      case "ArrowLeft":
+      case "ArrowUp":
+        event.preventDefault();
+        focusEnabled(index, -1);
+        break;
+      case "Home":
+        event.preventDefault();
+        focusEnabled(index, -options.length);
+        break;
+      case "End":
+        event.preventDefault();
+        focusEnabled(index, options.length);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const height = size === "sm" ? 24 : "var(--control-height)";
+  const padding = size === "sm" ? "0 10px" : "0 12px";
+  const fontSize = size === "sm" ? 11 : 12.5;
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      style={{
+        display: "inline-flex",
+        background: "var(--control-container-bg)",
+        border: `1px solid var(--control-container-border)`,
+        borderRadius: "var(--control-radius)",
+        padding: 2,
+        gap: 2,
+        flexWrap: "nowrap",
+        ...style,
+      }}
+    >
+      {options.map((option, index) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={option.label}
+            title={option.title ?? option.label}
+            disabled={option.disabled}
+            tabIndex={index === focusIndex ? 0 : -1}
+            ref={(element) => {
+              refs.current[index] = element;
+            }}
+            onClick={() => onChange(option.value)}
+            onKeyDown={handleKeyDown(index)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              height,
+              padding,
+              border: "none",
+              borderRadius: "calc(var(--control-radius) - 2px)",
+              background: selected ? "var(--control-option-active-bg)" : "transparent",
+              color: selected ? "var(--control-option-active-text)" : "var(--control-option-text)",
+              fontWeight: selected ? 600 : 400,
+              fontSize,
+              whiteSpace: "nowrap",
+              cursor: option.disabled ? "not-allowed" : "pointer",
+              opacity: option.disabled ? 0.45 : 1,
+              transition: "background 0.12s, color 0.12s",
+            }}
+            onMouseEnter={(event) => {
+              if (!selected && !option.disabled) {
+                event.currentTarget.style.background = "var(--control-option-hover-bg)";
+                event.currentTarget.style.color = "var(--text)";
+              }
+            }}
+            onMouseLeave={(event) => {
+              if (!selected && !option.disabled) {
+                event.currentTarget.style.background = "transparent";
+                event.currentTarget.style.color = "var(--control-option-text)";
+              }
+            }}
+          >
+            {option.icon && <span style={{ display: "inline-flex", flexShrink: 0 }} aria-hidden="true">{option.icon}</span>}
+            <span>{option.label}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

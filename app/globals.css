@@ -111,6 +111,16 @@
   --control-pad-x: 10px;
   --settings-pad-x: 22px;
   --settings-section-gap: 20px;
+  /* Segmented control tokens — reference the themed palette above so
+     they follow pi CLI themes automatically. The container is a single
+     bordered track; options are transparent until hovered or selected. */
+  --control-container-bg: var(--bg-panel);
+  --control-container-border: var(--border);
+  --control-option-hover-bg: var(--bg-hover);
+  --control-option-active-bg: var(--bg-selected);
+  --control-option-active-text: var(--text);
+  --control-option-text: var(--text-muted);
+  --control-option-disabled-text: var(--text-dim);
   /* Semantic status colors — alias the theme accents so danger /
      success / warning states follow the active theme. */
   --status-success: var(--accent-green);
@@ -189,6 +199,134 @@ html.dark {
 .settings-dialog :is(button, input, select, textarea):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* Settings dialog navigation: grouped sidebar on desktop, a horizontally
+   scrollable strip on narrow viewports. The grouping labels disappear on
+   mobile so every item stays reachable without a tap-through menu. */
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-nav-group {
+  padding: 10px 10px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.settings-nav-item:hover:not(:disabled):not([aria-current="page"]) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.settings-nav-item[aria-current="page"] {
+  background: var(--bg-selected);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.settings-nav-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-nav-note {
+  padding: 10px 10px 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* Settings page layout: a label column on the left and the control on the
+   right, stacking on narrow viewports (including the mobile dialog). */
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: 7px;
+  transition: background 0.12s;
+}
+
+.settings-row:hover {
+  background: var(--bg-hover);
+}
+
+.settings-row-label {
+  flex: 0 0 190px;
+  min-width: 0;
+}
+
+.settings-row-control {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .settings-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .settings-nav-group,
+  .settings-nav-note {
+    display: none;
+  }
+
+  .settings-nav-item {
+    flex: none;
+    width: auto;
+  }
+
+  .settings-row {
+    align-items: flex-start;
+  }
+
+  .settings-row-label {
+    flex: none;
+    width: 100%;
+  }
+
+  .settings-row-control {
+    flex: none;
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 /* Catppuccin file icons use Latte in light mode and Mocha in dark mode.
