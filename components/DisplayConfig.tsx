@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowSquareOut, CaretDown, CaretRight, Check, Link, Monitor, Moon, Rows, SquaresFour, Sun } from "@phosphor-icons/react";
+import { ArrowSquareOut, Check, Link, Monitor, Moon, Rows, SquaresFour, Sun } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
 import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
@@ -79,7 +79,6 @@ export function DisplayConfig() {
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
   const [hoveredTag, setHoveredTag] = useState<string | null>(null);
-  const [effectsOpen, setEffectsOpen] = useState(false);
 
   // Recommended-workspaces toggle (welcome lobby section 2). Default on;
   // read/written through the shared helpers so the lobby and settings agree.
@@ -434,6 +433,26 @@ export function DisplayConfig() {
                 />
               }
             />
+
+            {wallpaperEffects.map(([id, label, mode, setter]) => (
+              <SettingsRow
+                key={id}
+                label={label}
+                control={
+                  <SegmentedControl
+                    size="sm"
+                    value={mode}
+                    onChange={(value) => setter(value as "none" | "trans" | "blur")}
+                    ariaLabel={label}
+                    options={[
+                      { value: "none", label: t("desktop.wallpaperModeNone") },
+                      { value: "trans", label: t("desktop.wallpaperModeTrans") },
+                      { value: "blur", label: t("desktop.wallpaperModeBlur") },
+                    ]}
+                  />
+                }
+              />
+            ))}
           </>
         )}
 
@@ -443,58 +462,6 @@ export function DisplayConfig() {
           </p>
         )}
       </SettingsGroup>
-
-      {/* ── Advanced background effects (disclosed only with the wallpaper on) ── */}
-      {wallpaperEnabled && (
-        <div style={{ padding: "var(--settings-section-gap) var(--settings-pad-x)", borderBottom: "1px solid var(--border)" }}>
-          <button
-            type="button"
-            onClick={() => setEffectsOpen((open) => !open)}
-            aria-expanded={effectsOpen}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: 0,
-              border: 0,
-              background: "transparent",
-              color: "var(--text-dim)",
-              cursor: "pointer",
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            {effectsOpen ? <CaretDown size={12} weight="bold" aria-hidden="true" /> : <CaretRight size={12} weight="bold" aria-hidden="true" />}
-            {t("desktop.advancedBackgroundEffects")}
-          </button>
-
-          {effectsOpen && (
-            <div style={{ marginTop: 4 }}>
-              {wallpaperEffects.map(([id, label, mode, setter]) => (
-                <SettingsRow
-                  key={id}
-                  label={label}
-                  control={
-                    <SegmentedControl
-                      size="sm"
-                      value={mode}
-                      onChange={(value) => setter(value as "none" | "trans" | "blur")}
-                      ariaLabel={label}
-                      options={[
-                        { value: "none", label: t("desktop.wallpaperModeNone") },
-                        { value: "trans", label: t("desktop.wallpaperModeTrans") },
-                        { value: "blur", label: t("desktop.wallpaperModeBlur") },
-                      ]}
-                    />
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Hidden file input, shared by both pick entries. */}
       <input

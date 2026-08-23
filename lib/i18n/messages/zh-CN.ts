@@ -91,7 +91,6 @@ export const zhCNLocale = {
     "desktop.displayGroupTheme": "主题与色彩",
     "desktop.displayGroupInterface": "界面",
     "desktop.displayGroupBackground": "背景",
-    "desktop.advancedBackgroundEffects": "高级背景效果",
     "desktop.wallpaperResetDefault": "重置为默认",
     "desktop.wallpaperUploading": "应用中…",
     "desktop.wallpaperError": "壁纸应用失败",

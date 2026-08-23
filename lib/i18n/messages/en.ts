@@ -91,7 +91,6 @@ export const enLocale = {
     "desktop.displayGroupTheme": "Theme",
     "desktop.displayGroupInterface": "Interface",
     "desktop.displayGroupBackground": "Background",
-    "desktop.advancedBackgroundEffects": "Advanced background effects",
     "desktop.wallpaperResetDefault": "Reset to default",
     "desktop.wallpaperUploading": "Applying…",
     "desktop.wallpaperError": "Failed to apply wallpaper",
