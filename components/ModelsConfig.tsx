@@ -1905,11 +1905,11 @@ export function ModelsConfig({
                     {/* Provider row */}
                     <div
                       onClick={() => setSelection({ type: "provider", name: pName })}
-                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderRadius: 5, cursor: "pointer", background: isProviderSelected ? "var(--bg-selected)" : "none" }}
+                      style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isProviderSelected ? "var(--bg-selected)" : "none" }}
                       onMouseEnter={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "none"; }}
                     >
-                      <ProviderIcon id={pName} api={pData.api} size={12} />
+                      <ProviderIcon id={pName} api={pData.api} size={16} />
                       <span style={{ fontSize: 12, fontWeight: isProviderSelected ? 600 : 400, color: "var(--text)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {pName}
                       </span>
@@ -1926,8 +1926,8 @@ export function ModelsConfig({
                           alignItems: "center",
                           justifyContent: "center",
                           flexShrink: 0,
-                          width: 20,
-                          height: 20,
+                          width: 16,
+                          height: 16,
                           padding: 0,
                           border: "none",
                           borderRadius: 4,
@@ -1936,7 +1936,7 @@ export function ModelsConfig({
                           cursor: "pointer",
                         }}
                       >
-                        {collapsed ? <CaretRight size={12} weight="bold" aria-hidden="true" /> : <CaretDown size={12} weight="bold" aria-hidden="true" />}
+                        {collapsed ? <CaretRight size={10} weight="bold" aria-hidden="true" /> : <CaretDown size={10} weight="bold" aria-hidden="true" />}
                       </button>
                     </div>
 
