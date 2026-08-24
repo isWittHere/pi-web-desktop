@@ -1974,6 +1974,7 @@ export function ModelsConfig({
                       onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
                     >
+                      <PlusIcon size={11} weight="bold" style={{ flexShrink: 0 }} aria-hidden="true" />
                       <span style={{ fontSize: 11 }}>{t("desktop.modelsAddModel")}</span>
                     </div>
                     )}
