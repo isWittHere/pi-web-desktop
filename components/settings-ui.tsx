@@ -173,6 +173,8 @@ export interface SegmentedOption {
   icon?: ReactNode;
   disabled?: boolean;
   title?: string;
+  /** Render the icon only (label stays as tooltip/aria-label). */
+  hideLabel?: boolean;
 }
 
 /**
@@ -188,6 +190,7 @@ export function SegmentedControl({
   size = "md",
   ariaLabel,
   style,
+  registerOptionRef,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -195,6 +198,8 @@ export function SegmentedControl({
   size?: "sm" | "md";
   ariaLabel?: string;
   style?: CSSProperties;
+  /** Optional per-option button ref callback (e.g. anchoring a popover). */
+  registerOptionRef?: (value: string, element: HTMLButtonElement | null) => void;
 }) {
   const selectedIndex = Math.max(0, options.findIndex((o) => o.value === value));
   const [focusIndex, setFocusIndex] = useState(selectedIndex);
@@ -278,6 +283,7 @@ export function SegmentedControl({
             tabIndex={index === focusIndex ? 0 : -1}
             ref={(element) => {
               refs.current[index] = element;
+              registerOptionRef?.(option.value, element);
             }}
             onClick={() => onChange(option.value)}
             onKeyDown={handleKeyDown(index)}
@@ -313,7 +319,7 @@ export function SegmentedControl({
             }}
           >
             {option.icon && <span style={{ display: "inline-flex", flexShrink: 0 }} aria-hidden="true">{option.icon}</span>}
-            <span>{option.label}</span>
+            {!option.hideLabel && <span>{option.label}</span>}
           </button>
         );
       })}

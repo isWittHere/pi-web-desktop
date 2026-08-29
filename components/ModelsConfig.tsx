@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import {
   CaretDown,
   CaretRight,
+  CaretUp,
   CheckIcon,
   MagnifyingGlassIcon,
   PlusIcon,
@@ -23,6 +25,7 @@ import {
   inputStyle,
 } from "@/components/settings-ui";
 import type { DiscoveredModel } from "@/lib/model-discovery";
+import { cssPx } from "@/lib/ui-scale";
 import type { ModelThinkingProfile, ThinkingRequestSpec } from "@/lib/thinking-request-core";
 import { buildProfileFromFields } from "@/lib/thinking-request-core";
 import { THINKING_LEVELS, type ThinkingLevel } from "@/lib/thinking-levels";
@@ -34,9 +37,11 @@ import {
   type ModelCostKey,
 } from "./models-config-helpers";
 import {
+  getProviderEmoji,
   getProviderIconMode,
   getProviderIconModesVersion,
   PROVIDER_ICON_MODES,
+  setProviderEmoji,
   setProviderIconMode,
   subscribeProviderIconModes,
   type ProviderIconMode,
@@ -296,8 +301,8 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
 
       {/* Provider name + icon mode picker share one row: name is the primary
           editor, the icon picker sits at its right side. */}
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 240 }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
           <SettingsField label={t("desktop.modelsProviderName")}>
             <SettingsInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
             {editingName !== name && editingName.trim() && (
@@ -425,26 +430,257 @@ const ICON_MODE_LABEL_KEYS: Record<ProviderIconMode, string> = {
   auto: "desktop.providerIconAuto",
   api: "desktop.providerIconApi",
   letter: "desktop.providerIconLetter",
+  emoji: "desktop.providerIconEmoji",
 };
 
-/** Segmented 3-way picker (auto / api / letter) with live icon previews. */
+/**
+ * Segmented 4-way picker (auto / api / letter / emoji) with live icon
+ * previews. The emoji segment doubles as the dropdown trigger: clicking it
+ * toggles the emoji picker panel (portal to <body>), and its preview shows
+ * the stored emoji, defaulting to ✨ when unset.
+ */
 function IconModePicker({ providerId, api }: { providerId: string; api?: string }) {
   const t = useModelTranslation();
   useSyncExternalStore(subscribeProviderIconModes, getProviderIconModesVersion, () => 0);
   const current = getProviderIconMode(providerId);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiPos, setEmojiPos] = useState<{ top: number; left: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const openEmojiDropdown = () => {
+    // Anchor the panel's RIGHT edge to the emoji segment button (the
+    // rightmost segment): the menu opens leftward from the trigger, which
+    // never collides with the viewport edge as left-anchoring does.
+    // getBoundingClientRect()/innerWidth report *physical* pixels (the app
+    // zooms via `--app-ui-scale`), so all anchoring math must run in CSS
+    // pixels via cssPx() — otherwise the fixed panel drifts and, at zoom
+    // > 1, its right edge lands outside the visible area.
+    const btn = emojiBtnRef.current ?? wrapRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const panelWidth = 264;
+    const estHeight = 160;
+    const vw = cssPx(window.innerWidth);
+    const vh = cssPx(window.innerHeight);
+    const anchorRight = cssPx(r.right);
+    const anchorTop = cssPx(r.top);
+    const anchorBottom = cssPx(r.bottom);
+    const left = Math.max(8, Math.min(anchorRight - panelWidth, vw - panelWidth - 8));
+    const top = anchorBottom + 6 + estHeight > vh - 8
+      ? Math.max(8, anchorTop - 6 - estHeight)
+      : anchorBottom + 6;
+    setEmojiPos({ top, left });
+    setEmojiOpen(true);
+  };
+
+  // The emoji segment is clicked even when already selected (SegmentedControl
+  // calls onChange unconditionally), so it toggles the dropdown. Picking any
+  // other segment closes the dropdown and switches the mode.
+  const handleChange = (next: string) => {
+    if (next === "emoji") {
+      if (emojiOpen) {
+        setEmojiOpen(false);
+      } else {
+        openEmojiDropdown();
+        if (current !== "emoji") setProviderIconMode(providerId, "emoji");
+        // Selecting emoji mode applies the default spark immediately, so the
+        // icon never degrades to the letter fallback just because no custom
+        // glyph has been picked yet.
+        if (!getProviderEmoji(providerId)) setProviderEmoji(providerId, "✨");
+      }
+      return;
+    }
+    setProviderIconMode(providerId, next as ProviderIconMode);
+    setEmojiOpen(false);
+  };
 
   return (
-    <SegmentedControl
-      size="sm"
-      value={current}
-      onChange={(next) => setProviderIconMode(providerId, next as ProviderIconMode)}
-      ariaLabel={t("desktop.providerIcon")}
-      options={PROVIDER_ICON_MODES.map((m) => ({
-        value: m,
-        label: t(ICON_MODE_LABEL_KEYS[m]),
-        icon: <ProviderIcon id={providerId} api={api} size={12} mode={m} />,
-      }))}
-    />
+    <div ref={wrapRef} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <SegmentedControl
+        size="sm"
+        value={current}
+        onChange={handleChange}
+        registerOptionRef={(v, el) => { if (v === "emoji") emojiBtnRef.current = el; }}
+        ariaLabel={t("desktop.providerIcon")}
+        options={PROVIDER_ICON_MODES.map((m) => ({
+          value: m,
+          label: t(ICON_MODE_LABEL_KEYS[m]),
+          // Icon-only segments (labels stay as tooltips/aria-labels): the
+          // control then fits beside the name field at any width instead of
+          // overflowing the settings pane and getting pushed off-screen.
+          hideLabel: true,
+          icon: m === "emoji"
+            // The emoji segment previews the stored emoji (✨ by default) and
+            // shows a caret hint that it is a dropdown trigger.
+            ? <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: 13, lineHeight: 1 }}>
+                {getProviderEmoji(providerId) ?? "✨"}
+                {emojiOpen ? <CaretUp size={9} weight="bold" /> : <CaretDown size={9} weight="bold" />}
+              </span>
+            : <ProviderIcon id={providerId} api={api} size={13} mode={m} />,
+        }))}
+      />
+      {emojiOpen && emojiPos && typeof document !== "undefined" && createPortal(
+        <EmojiPickerPanel providerId={providerId} pos={emojiPos} onClose={() => setEmojiOpen(false)} />,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// ── Emoji picker panel ─────────────────────────────────────────────────────
+
+/** Curated quick-pick glyphs — a compact, dependency-free alternative to a
+ *  full emoji picker. Any emoji can still be pasted/typed into the input. */
+const EMOJI_PRESETS: readonly string[] = [
+  "✨", "🤖", "🚀", "⚡", "🔥", "🌟", "💡", "🧠", "⚙️", "🔧",
+  "🐱", "🐶", "🦊", "🐼", "🐯", "🦁", "🐸", "🦄", "🐉", "🦉",
+  "👻", "😎", "🧙", "🎭", "🎮", "🧩", "🎲", "🏆", "👑", "💎",
+  "🌙", "☀️", "🌈", "⭐", "🔮", "🍀", "🌸", "❄️", "🛰️", "🌐",
+];
+
+/**
+ * Fixed-position dropdown (portal to <body> so the settings panel's scroll
+ * container never clips it) with an input + quick-pick grid. The trigger is
+ * the emoji segment of the parent SegmentedControl.
+ */
+function EmojiPickerPanel({ providerId, pos, onClose }: {
+  providerId: string;
+  pos: { top: number; left: number };
+  onClose: () => void;
+}) {
+  const t = useModelTranslation();
+  useSyncExternalStore(subscribeProviderIconModes, getProviderIconModesVersion, () => 0);
+  const [draft, setDraft] = useState(() => getProviderEmoji(providerId) ?? "");
+  const panelRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Focus the input on open.
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const commit = useCallback(
+    (value: string) => setProviderEmoji(providerId, value || null),
+    [providerId],
+  );
+  const stored = getProviderEmoji(providerId);
+
+  // Outside click / Escape / viewport scroll close the dropdown. Scroll
+  // closes it because the panel is fixed and would drift from its anchor.
+  // Clicking the emoji segment itself (while open) lands here first on
+  // mousedown and closes; the segment's own click handler then agrees on
+  // the closed state, so no reopen flicker occurs.
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (panelRef.current?.contains(target)) return;
+      commit(draft);
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Like the model picker: a pending emoji clears first, then Escape
+      // (again) closes the dropdown. Clearing restores the default spark.
+      if (draft.trim()) {
+        e.preventDefault();
+        setDraft("");
+        commit("✨");
+        inputRef.current?.focus();
+      } else {
+        onClose();
+      }
+    };
+    const onScrollOrResize = () => onClose();
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [draft, onClose, commit]);
+
+  return (
+    <div
+      ref={panelRef}
+      role="listbox"
+      aria-label={t("desktop.providerIconEmoji")}
+      style={{
+        position: "fixed", top: pos.top, left: pos.left, zIndex: 1000,
+        width: 264,
+        background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 8,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.16)", overflow: "hidden",
+      }}
+    >
+      {/* Pinned-top input area, styled like the model picker's search box. */}
+      <div style={{ borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+          <MagnifyingGlassIcon
+            size={13}
+            color="var(--text-dim)"
+            style={{ position: "absolute", left: 12, pointerEvents: "none" }}
+          />
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => commit(draft)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(draft); onClose(); } }}
+            placeholder={t("desktop.providerIconEmojiPlaceholder")}
+            aria-label={t("desktop.providerIconEmojiPlaceholder")}
+            style={{
+              width: "100%",
+              padding: "5px 12px 5px 34px",
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "var(--text)",
+              fontSize: 12,
+              fontFamily: "var(--font-mono)",
+            }}
+          />
+        </div>
+      </div>
+      <div style={{ padding: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 2 }}>
+          {EMOJI_PRESETS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              role="option"
+              aria-selected={stored === e}
+              aria-label={e}
+              onClick={() => { setDraft(e); commit(e); }}
+              style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                height: 24, padding: 0, fontSize: 14, lineHeight: 1,
+                background: stored === e ? "var(--bg-selected)" : "none",
+                border: "1px solid transparent", borderRadius: 4, cursor: "pointer",
+              }}
+              onMouseEnter={(ev) => { if (stored !== e) ev.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(ev) => { if (stored !== e) ev.currentTarget.style.background = "none"; }}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+        {(stored || draft.trim()) && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+            <button
+              type="button"
+              // "Clear" resets to the default spark, matching the other
+              // places that restore the default rather than leaving the
+              // icon without an emoji.
+              onClick={() => { setDraft(""); commit("✨"); inputRef.current?.focus(); }}
+              style={{ background: "none", border: "none", padding: 0, color: "var(--text-dim)", cursor: "pointer", fontSize: 10 }}
+            >
+              {t("desktop.providerIconEmojiClear")}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

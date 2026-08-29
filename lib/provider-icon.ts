@@ -6,11 +6,14 @@
  * and ModelsConfig. The store is a no-op on the server.
  */
 
-export type ProviderIconMode = "auto" | "api" | "letter";
+export type ProviderIconMode = "auto" | "api" | "letter" | "emoji";
 
-export const PROVIDER_ICON_MODES: readonly ProviderIconMode[] = ["auto", "api", "letter"];
+export const PROVIDER_ICON_MODES: readonly ProviderIconMode[] = ["auto", "api", "letter", "emoji"];
 
 export const PROVIDER_ICON_MODES_KEY = "pi-provider-icon-mode";
+
+/** Separate key for the per-provider custom emoji glyphs (mode "emoji"). */
+export const PROVIDER_ICON_EMOJIS_KEY = "pi-provider-icon-emoji";
 
 /**
  * API type → badge letter shown in the icon's bottom-right corner.
@@ -44,17 +47,39 @@ export function resolveProviderLetter(providerId: string): string {
 
 /** Parse a stored mode value; anything invalid → "auto". */
 export function parseProviderIconMode(raw: unknown): ProviderIconMode {
-  return raw === "api" || raw === "letter" ? raw : "auto";
+  return raw === "api" || raw === "letter" || raw === "emoji" ? raw : "auto";
+}
+
+// Intl.Segmenter keeps emoji ZWJ sequences (👨‍💻) and flags (🇨🇳) as one
+// grapheme; structured typing avoids depending on the TS lib version.
+const graphemeSegmenter: { segment(input: string): Iterable<{ segment: string }> } | null =
+  typeof Intl !== "undefined" && "Segmenter" in Intl
+    ? new (Intl as unknown as {
+        Segmenter: new (locale?: string, opts?: { granularity: string }) => { segment(input: string): Iterable<{ segment: string }> };
+      }).Segmenter(undefined, { granularity: "grapheme" })
+    : null;
+
+/** First grapheme cluster of a string; "" when empty/blank. */
+export function firstGrapheme(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+  if (graphemeSegmenter) {
+    for (const { segment } of graphemeSegmenter.segment(trimmed)) return segment;
+  }
+  return Array.from(trimmed)[0] ?? "";
 }
 
 export type ProviderIconSource =
   | { type: "letter"; letter: string }
   | { type: "provider-logo" }
   | { type: "api-logo"; api: string; badge: string }
+  | { type: "emoji"; emoji: string }
   | { type: "cpu" };
 
 /**
  * Resolve which icon to render for a provider/model cell.
+ * - emoji: the provider's custom emoji glyph; without stored data it degrades
+ *   to the letter badge rather than rendering an empty cell.
  * - letter: always the letter badge, no corner badge.
  * - api: the API-type representative logo + badge letter.
  * - auto: preset provider logo (plain, no badge) when available, else the
@@ -65,7 +90,13 @@ export function resolveProviderIconSource(
   api: string | null | undefined,
   mode: ProviderIconMode,
   hasProviderLogo: boolean,
+  emoji?: string | null,
 ): ProviderIconSource {
+  if (mode === "emoji") {
+    const glyph = emoji ? firstGrapheme(emoji) : "";
+    if (glyph) return { type: "emoji", emoji: glyph };
+    return { type: "letter", letter: resolveProviderLetter(providerId) };
+  }
   if (mode === "letter") return { type: "letter", letter: resolveProviderLetter(providerId) };
   const badge = resolveApiBadge(api);
   if (mode === "api") {
@@ -134,6 +165,52 @@ export function setProviderIconMode(providerId: string, mode: ProviderIconMode):
     // Storage unavailable (private mode) — the change just won't persist.
   }
   modesCache = null;
+  modesVersion++;
+  for (const listener of listeners) listener();
+}
+
+// ── Per-provider emoji store (client-only) ─────────────────────────────────────
+
+function loadStoredEmojis(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(PROVIDER_ICON_EMOJIS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const emojis: Record<string, string> = {};
+    for (const [providerId, value] of Object.entries(parsed)) {
+      if (typeof value === "string" && value.trim()) emojis[providerId] = value;
+    }
+    return emojis;
+  } catch {
+    // Unreadable or non-JSON value — treat as unset.
+    return {};
+  }
+}
+
+let emojisCache: Record<string, string> | null = null;
+
+/** Stored emoji for a provider (raw stored string); null when unset. */
+export function getProviderEmoji(providerId: string): string | null {
+  if (emojisCache === null) emojisCache = loadStoredEmojis();
+  return emojisCache[providerId] ?? null;
+}
+
+/**
+ * Persist a provider's custom emoji (kept as its first grapheme so ZWJ
+ * sequences stay whole) and notify subscribers. Empty/null clears it.
+ */
+export function setProviderEmoji(providerId: string, emoji: string | null): void {
+  const emojis = loadStoredEmojis();
+  const glyph = emoji ? firstGrapheme(emoji) : "";
+  if (glyph) emojis[providerId] = glyph;
+  else delete emojis[providerId];
+  try {
+    window.localStorage.setItem(PROVIDER_ICON_EMOJIS_KEY, JSON.stringify(emojis));
+  } catch {
+    // Storage unavailable — the change just won't persist.
+  }
+  emojisCache = null;
   modesVersion++;
   for (const listener of listeners) listener();
 }

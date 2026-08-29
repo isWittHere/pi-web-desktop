@@ -39,6 +39,7 @@ import ZAIIcon from "@lobehub/icons/es/ZAI/components/Mono";
 import CodexIcon from "@lobehub/icons/es/Codex/components/Mono";
 import BedrockIcon from "@lobehub/icons/es/Bedrock/components/Mono";
 import {
+  getProviderEmoji,
   getProviderIconMode,
   getProviderIconModesVersion,
   resolveProviderIconSource,
@@ -46,7 +47,9 @@ import {
   type ProviderIconMode,
 } from "@/lib/provider-icon";
 
-type IconComponent = ComponentType<{ size?: number | string; style?: CSSProperties }>;
+// title="" lets us suppress the glyphs' embedded <title> tooltips (see the
+// render branch below); the components accept it via prop passthrough.
+type IconComponent = ComponentType<{ size?: number | string; style?: CSSProperties; title?: string }>;
 
 const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }> = {
   anthropic: { Icon: AnthropicIcon, hasColor: false }, openai: { Icon: OpenAIIcon, hasColor: false }, "openai-codex": { Icon: OpenAIIcon, hasColor: false }, reqtoken: { Icon: OpenAIIcon, hasColor: false },
@@ -170,15 +173,40 @@ function useProviderIconMode(providerId: string) {
 
 /**
  * Renders a provider's logo, falling back to an API-type representative
- * icon, a letter badge, or a neutral CPU icon. The per-provider display
- * mode ("auto" | "api" | "letter") is user-configurable in ModelsConfig;
- * an explicit `mode` prop overrides the stored setting (used for previews).
- * Preset providers keep their plain logo in auto mode; the API-type
- * corner badge only appears for fallback icons or the forced "api" mode.
+ * icon, a letter badge, a custom emoji, or a neutral CPU icon. The
+ * per-provider display mode ("auto" | "api" | "letter" | "emoji") is
+ * user-configurable in ModelsConfig; an explicit `mode` prop overrides the
+ * stored setting (used for previews). Preset providers keep their plain logo
+ * in auto mode; the API-type corner badge only appears for fallback icons or
+ * the forced "api" mode.
  */
 export function ProviderIcon({ id, api, size = 14, mode }: { id: string; api?: string | null; size?: number; mode?: ProviderIconMode }) {
   const storedMode = useProviderIconMode(id);
-  const source = resolveProviderIconSource(id, api, mode ?? storedMode, id in PROVIDER_ICONS);
+  const emoji = getProviderEmoji(id);
+  const source = resolveProviderIconSource(id, api, mode ?? storedMode, id in PROVIDER_ICONS, emoji);
+
+  if (source.type === "emoji") {
+    // Emoji glyphs fill their box less than letters/SVG paths; a slight
+    // upscale keeps them visually on par with logos at the same size.
+    // The fixed width/height box keeps list alignment intact.
+    return (
+      <span
+        aria-hidden="true"
+        style={{
+          width: size,
+          height: size,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          fontSize: Math.max(10, Math.round(size * 1.08)),
+          lineHeight: 1,
+        }}
+      >
+        {source.emoji}
+      </span>
+    );
+  }
 
   if (source.type === "letter") {
     return (
@@ -189,24 +217,32 @@ export function ProviderIcon({ id, api, size = 14, mode }: { id: string; api?: s
   }
 
   let icon: ReactNode = null;
+  // Every SVG here gets title="" so the icons' built-in <title> elements
+  // (e.g. lobehub brand glyphs embed <title>OpenAI</title>) cannot pop a
+  // native tooltip that overrides the caller's own title/aria context —
+  // inside the icon-mode picker that made hover tips change between
+  // segments (brand name vs. mode name).
   if (source.type === "provider-logo") {
     const entry = PROVIDER_ICONS[id];
     icon = entry.hasColor
-      ? <entry.Icon size={size} />
-      : <entry.Icon size={size} style={{ color: "currentColor" }} />;
+      ? <entry.Icon size={size} title="" />
+      : <entry.Icon size={size} title="" style={{ color: "currentColor" }} />;
   } else if (source.type === "api-logo") {
     const entry = API_TYPE_ICONS[source.api];
     icon = entry
       ? (entry.hasColor
-        ? <entry.Icon size={size} />
-        : <entry.Icon size={size} style={{ color: "currentColor" }} />)
+        ? <entry.Icon size={size} title="" />
+        : <entry.Icon size={size} title="" style={{ color: "currentColor" }} />)
       : <CpuIcon size={size} weight="regular" aria-hidden="true" />;
   } else {
     icon = <CpuIcon size={size} weight="regular" aria-hidden="true" />;
   }
 
   return (
-    <span style={{ position: "relative", display: "inline-flex", flexShrink: 0, width: size, height: size }}>
+    // pointerEvents: none routes hover straight to the surrounding button,
+    // so the caller's title wins and the icon's embedding <title> can never
+    // pop its own native tooltip.
+    <span style={{ position: "relative", display: "inline-flex", flexShrink: 0, width: size, height: size, pointerEvents: "none" }}>
       {icon}
       {source.type === "api-logo" && <CornerBadge letter={source.badge} size={size} />}
     </span>
