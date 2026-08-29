@@ -356,6 +356,10 @@ export function AppShell() {
   const tabsState = tabsApi.state;
   const tabsStateRef = useRef(tabsState);
   useEffect(() => { tabsStateRef.current = tabsState; }, [tabsState]);
+  // Bumped when a workspace is picked from a picker menu while tabs view is
+  // active; the workspace tab strip uses it to reveal the newly opened tab
+  // (explicit intent) without scrolling on programmatic switches.
+  const [workspaceTabFocusToken, setWorkspaceTabFocusToken] = useState(0);
   // Workspace project list + per-project running/unread counts, reported by
   // the sidebar (it owns the session list) for the title-bar tab bar.
   const [workspaceActivity, setWorkspaceActivity] = useState<{
@@ -435,6 +439,10 @@ export function AppShell() {
       if (token !== openProjectTokenRef.current) return; // superseded
       if (viewModeRef.current === "tabs") {
         tabsApi.open(cwd, cwd);
+        // Explicit picker intent: bump the token so the tab strip reveals
+        // the newly opened tab once it commits. Programmatic switches
+        // (close-tab fallback, restore) never bump and keep scroll place.
+        setWorkspaceTabFocusToken((n) => n + 1);
       }
       requestWorkspaceSwitch(cwd, cwd);
     })();
@@ -1183,6 +1191,7 @@ export function AppShell() {
         <WorkspaceTabBar
           tabs={tabsState.tabs}
           activeKey={tabsState.activeKey}
+          focusToken={workspaceTabFocusToken}
           activity={workspaceActivity.activity}
           onSelectTab={handleSelectTab}
           onCloseTab={handleCloseTab}

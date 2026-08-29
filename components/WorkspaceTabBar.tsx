@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import type { WorkspaceTab } from "@/lib/workspace-tabs";
@@ -17,6 +17,11 @@ import type { WorkspaceTab } from "@/lib/workspace-tabs";
 interface WorkspaceTabBarProps {
   tabs: WorkspaceTab[];
   activeKey: string | null;
+  /** Bumped whenever a workspace is opened explicitly (picking a project
+   *  from the workspace picker): an intent to reveal the newly active tab.
+   *  Plain programmatic activeKey changes (close-tab fallback, restore)
+   *  never bump it — they must not steal the user's scroll position. */
+  focusToken: number;
   /** Per-workspace running counts (tab dot). */
   activity: Map<string, { running: number; unread: number }>;
   onSelectTab: (key: string) => void;
@@ -75,6 +80,7 @@ function UnreadDotIndicator() {
 export function WorkspaceTabBar({
   tabs,
   activeKey,
+  focusToken,
   activity,
   onSelectTab,
   onCloseTab,
@@ -101,6 +107,85 @@ export function WorkspaceTabBar({
     ro.observe(strip);
     return () => ro.disconnect();
   }, [tabs.length]);
+
+  // ── Reveal a tab: scroll the strip so the tab is fully visible ─────────
+  // Triggered only by explicit user intents (mount/re-enter, tab click,
+  // picker open); programmatic switches (close-tab fallback, restore) must
+  // never fight the user's scroll position. The scrollbar is hidden, so an
+  // un-revealed tab is effectively invisible without this. Uses rect math
+  // (not offsetLeft) because the strip lives in a portal host inside the
+  // title bar, and offsetParent can climb past the static strip to an outer
+  // positioned ancestor.
+  const tabRefs = useRef(new Map<string, HTMLDivElement>());
+  const scrollToTab = useCallback((key: string, behavior: ScrollBehavior = "smooth") => {
+    const strip = stripRef.current;
+    const el = tabRefs.current.get(key);
+    if (!strip || !el) return;
+    const sRect = strip.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    const MARGIN = 10;
+    const left = eRect.left - sRect.left + strip.scrollLeft;
+    const right = left + eRect.width;
+    const viewLeft = strip.scrollLeft;
+    const viewRight = viewLeft + strip.clientWidth;
+    if (left < viewLeft + MARGIN) {
+      strip.scrollTo({ left: left - MARGIN, behavior });
+    } else if (right > viewRight - MARGIN) {
+      strip.scrollTo({ left: right - strip.clientWidth + MARGIN, behavior });
+    }
+  }, []);
+
+  // Reveal the restored active tab on mount — covers both app start and
+  // re-entering the tabs view (the strip unmounts when switching view modes).
+  // The key is captured in a ref at mount render so the effect never scrolls
+  // on later programmatic activeKey changes; scrollToTab is stable.
+  // rAF: the first layout pass after a portal mount can still be unstable.
+  const mountActiveKeyRef = useRef(activeKey);
+  useEffect(() => {
+    const initial = mountActiveKeyRef.current;
+    if (!initial) return;
+    const raf = requestAnimationFrame(() => scrollToTab(initial, "auto"));
+    return () => cancelAnimationFrame(raf);
+  }, [scrollToTab]);
+
+  // Picker-opened workspace: the focusToken bump is an explicit intent, so
+  // reveal the tab that is active after the open commits. Token bumps are
+  // rare and batched with the tabs state update, so props.activeKey is
+  // already the opened tab when this effect runs.
+  const prevFocusTokenRef = useRef(focusToken);
+  useEffect(() => {
+    if (focusToken === prevFocusTokenRef.current) return;
+    prevFocusTokenRef.current = focusToken;
+    if (activeKey) scrollToTab(activeKey, "smooth");
+  }, [focusToken, activeKey, scrollToTab]);
+
+  // Wheel-to-horizontal scrolling. Must be a native non-passive listener:
+  // React registers wheel passively at the root, so preventDefault() inside
+  // onWheel is a no-op (and logs a console warning). The gate uses the live
+  // DOM scrollable range (not the stripOverflow state) so it is immune to
+  // the ResizeObserver async gap; when nothing overflows the strip is the
+  // window drag region anyway and wheel events never reach this handler.
+  // The wheel passes through at the ends so it never traps over the bar.
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const onWheel = (e: WheelEvent) => {
+      const maxScroll = strip.scrollWidth - strip.clientWidth;
+      if (maxScroll <= 1) return;
+      // Touchpads already produce deltaX for lateral swipes; wheels only
+      // produce deltaY — map it to the horizontal axis.
+      const raw = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+      if (raw === 0) return;
+      // Line-mode deltas (deltaMode 1) scroll too slowly as raw pixels.
+      const px = e.deltaMode === 1 ? raw * 16 : raw;
+      const canGo = (px < 0 && strip.scrollLeft > 0) || (px > 0 && strip.scrollLeft < maxScroll);
+      if (!canGo) return;
+      e.preventDefault();
+      strip.scrollLeft += px;
+    };
+    strip.addEventListener("wheel", onWheel, { passive: false });
+    return () => strip.removeEventListener("wheel", onWheel);
+  }, []);
 
   // ── Drag & drop reorder ──────────────────────────────────────────────────
   const handleDragStart = (e: React.DragEvent, tab: WorkspaceTab) => {
@@ -195,9 +280,16 @@ export function WorkspaceTabBar({
               onDragOver={(e) => handleDragOver(e, tab)}
               onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
               onDragEnd={handleDragEnd}
-              onClick={() => onSelectTab(tab.key)}
+              onClick={() => { scrollToTab(tab.key); onSelectTab(tab.key); }}
               onDoubleClick={(e) => e.stopPropagation()}
               title={tab.cwd}
+              ref={(el) => {
+                if (el) {
+                  tabRefs.current.set(tab.key, el);
+                } else {
+                  tabRefs.current.delete(tab.key);
+                }
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
