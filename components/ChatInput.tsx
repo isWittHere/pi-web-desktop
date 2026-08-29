@@ -3166,14 +3166,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           maxWidth: panelMaxWidth,
                         };
 
-                    // Build favorites list (preserving localStorage insertion order)
-                    const favKeys = [...favorites];
-                    const favModels: ModelOption[] = [];
-                    for (const key of favKeys) {
-                      const [provider, modelId] = key.split(":", 2);
-                      const match = modelOptions.find((o) => o.provider === provider && o.modelId === modelId);
-                      if (match) favModels.push(match);
-                    }
+                    // Build favorites list, ordered to match the provider groups
+                    // rendered below: group by provider (in the same group order as
+                    // modelsByProvider), then by the model's position within its
+                    // group — not by the localStorage insertion order.
+                    const favModelIndex = new Map<string, { group: number; groupIdx: number; opt: ModelOption }>();
+                    modelsByProvider.forEach((g, gi) => {
+                      g.options.forEach((o, oi) => {
+                        favModelIndex.set(`${o.provider}:${o.modelId}`, { group: gi, groupIdx: oi, opt: o });
+                      });
+                    });
+                    const favModels: ModelOption[] = [...favorites]
+                      .map((key) => favModelIndex.get(key))
+                      .filter((e): e is { group: number; groupIdx: number; opt: ModelOption } => e !== undefined)
+                      .sort((a, b) => a.group - b.group || a.groupIdx - b.groupIdx)
+                      .map((e) => e.opt);
 
                     // Model search filter — matches name, model id, and provider.
                     const searchQuery = modelSearch.trim().toLowerCase();

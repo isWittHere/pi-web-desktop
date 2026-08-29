@@ -1955,13 +1955,15 @@ export function ModelsConfig({
                           <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: m.id ? "var(--text-muted)" : "var(--text-dim)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {m.id || t("desktop.modelsNewModel")}
                           </span>
-                          <StarIcon
-                            size={11}
-                            weight={isFav ? "fill" : "regular"}
-                            color={isFav ? "var(--accent)" : "var(--text-dim)"}
-                            style={{ flexShrink: 0, opacity: isFav ? 1 : 0.45 }}
-                            aria-hidden="true"
-                          />
+                          {isFav && (
+                            <StarIcon
+                              size={11}
+                              weight="fill"
+                              color="var(--accent)"
+                              style={{ flexShrink: 0 }}
+                              aria-hidden="true"
+                            />
+                          )}
                         </div>
                       );
                     })}
