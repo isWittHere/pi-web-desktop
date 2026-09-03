@@ -3022,13 +3022,13 @@ function SessionItem({
               {!session.isDraft && session.mark && (
                 <SessionMarkBadge mark={session.mark} />
               )}
-              {session.worktreeBranch && (
+              {session.isWorktree && session.branch && (
                 <span
                   title={t("desktop.worktree", { cwd: session.cwd })}
                   style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", minWidth: 0, overflow: "hidden" }}
                 >
                   <GitBranch size={9} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.worktreeBranch}</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.branch}</span>
                 </span>
               )}
             </div>

@@ -836,7 +836,7 @@ export function AppShell() {
   // Build the completion popup content for a session that just finished.
   const buildDonePayload = useCallback((session: SessionInfo | null, model: { provider: string; modelId: string } | null, stats: SessionStatsInfo | null, ctx: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
     const workspace = session ? lastPathSegment(workspaceKeyOf(session)) : undefined;
-    const branch = session?.worktreeBranch;
+    const branch = session?.branch;
     const cost = stats?.sessionId === session?.id && stats?.cost ? stats.cost : 0;
     const parts: { workspace?: string; model?: string; usage?: string } = {};
     if (workspace) parts.workspace = branch ? `${workspace} · ${branch}` : workspace;

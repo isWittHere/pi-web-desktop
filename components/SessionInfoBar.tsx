@@ -45,6 +45,8 @@ export interface SessionInfoBarProps {
   branchTree?: SessionTreeNode[];
   branchActiveLeafId?: string | null;
   onBranchLeafChange?: (leafId: string | null) => void;
+  /** Current project info (root, git branch, worktree) shown in the session panel. */
+  projectInfo?: { projectRoot: string; cwd: string; branch?: string | null; isWorktree?: boolean } | null;
   /** Show text label alongside the sound icon (e.g. "提示音：开启") */
   showSoundLabel?: boolean;
   /** Session title rendered in the center slot (between the branch buttons
@@ -71,7 +73,7 @@ function formatDuration(ms: number): string {
   return `${s}s`;
 }
 
-type SessionCopyField = "file" | "id";
+type SessionCopyField = "file" | "id" | "projectDir" | "gitBranch" | "gitWorktree";
 
 export function SessionInfoBar({
   onViewFullHistory,
@@ -93,6 +95,7 @@ export function SessionInfoBar({
   onBranchLeafChange,
   showSoundLabel,
   sessionTitle,
+  projectInfo,
 }: SessionInfoBarProps) {
   const { t: translate } = useI18n();
   const [activePanel, setActivePanel] = useState<"system" | "session" | "branches" | null>(null);
@@ -433,11 +436,18 @@ export function SessionInfoBar({
 
                     const copyBtn = (field: SessionCopyField, val: string) => {
                       const copied = copiedField === field;
+                      const copyTitleKey: Record<SessionCopyField, string> = {
+                        file: "desktop.copyFilePath",
+                        id: "desktop.copySessionId",
+                        projectDir: "desktop.copyProjectDir",
+                        gitBranch: "desktop.copyGitBranch",
+                        gitWorktree: "desktop.copyGitWorktree",
+                      };
                       return (
                         <button
                           type="button"
                           className={`session-stats-copy${copied ? " is-copied" : ""}`}
-                          title={copied ? translate("desktop.copied") : field === "file" ? translate("desktop.copyFilePath") : translate("desktop.copySessionId")}
+                          title={copied ? translate("desktop.copied") : translate(copyTitleKey[field])}
                           onClick={() => handleCopyField(field, val)}
                         >
                           {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
@@ -468,6 +478,22 @@ export function SessionInfoBar({
                         {copyBtn("id", sessionStats.sessionId)}
                       </div>,
                     );
+
+                    // ── Project Info rows ──
+                    const projectRows: { label: string; value: string; copyField: SessionCopyField }[] = [];
+                    if (projectInfo) {
+                      projectRows.push({
+                        label: translate("desktop.projectDir"),
+                        value: projectInfo.projectRoot || projectInfo.cwd,
+                        copyField: "projectDir",
+                      });
+                      if (projectInfo.branch) {
+                        projectRows.push({ label: translate("desktop.gitBranch"), value: projectInfo.branch, copyField: "gitBranch" });
+                      }
+                      if (projectInfo.isWorktree) {
+                        projectRows.push({ label: translate("desktop.gitWorktree"), value: projectInfo.cwd, copyField: "gitWorktree" });
+                      }
+                    }
 
                     // ── Messages rows ──
                     const msgRows: [string, string][] = [
@@ -513,6 +539,19 @@ export function SessionInfoBar({
                         <div className="session-stats-info-block">
                           {sessionInfoRows}
                         </div>
+
+                        {/* Project Info — project root / git branch / worktree */}
+                        {projectRows.length > 0 && (
+                          <div className="session-stats-info-block">
+                            <div className="session-stats-section-title">{translate("desktop.projectSection")}</div>
+                            {projectRows.map((row) => (
+                              <div key={`project-${row.copyField}`} className="session-stats-info-line">
+                                <span className="session-stats-info-text">{row.value}</span>
+                                {copyBtn(row.copyField, row.value)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Messages + Tokens side-by-side */}
                         <div className="session-stats-side-by-side">

@@ -40,7 +40,8 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       firstMessage: s.firstMessage || "(no messages)",
       parentSessionId: s.parentSessionPath ? pathToId.get(normalizePath(s.parentSessionPath)) : undefined,
       projectRoot: project?.projectRoot ?? s.cwd,
-      ...(project?.isWorktree && project.branch ? { worktreeBranch: project.branch } : {}),
+      ...(project?.branch ? { branch: project.branch } : {}),
+      ...(project?.isWorktree ? { isWorktree: true } : {}),
       ...readSessionFlags(s.path),
     };
   });
@@ -61,7 +62,8 @@ export async function attachSessionProjectInfo(sessions: SessionInfo[]): Promise
     return {
       ...session,
       projectRoot: project?.projectRoot ?? session.cwd,
-      ...(project?.isWorktree && project.branch ? { worktreeBranch: project.branch } : {}),
+      ...(project?.branch ? { branch: project.branch } : {}),
+      ...(project?.isWorktree ? { isWorktree: true } : {}),
     };
   });
 }

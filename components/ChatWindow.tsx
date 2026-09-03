@@ -710,6 +710,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                 branchActiveLeafId={branchActiveLeafId}
                 onBranchLeafChange={handleLeafChange}
                 sessionTitle={sessionTitle}
+                projectInfo={session ? { projectRoot: session.projectRoot ?? session.cwd, cwd: session.cwd, branch: session.branch ?? null, isWorktree: session.isWorktree ?? false } : null}
               />
             </div>
           </div>
@@ -1085,6 +1086,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
               branchActiveLeafId={branchActiveLeafId}
               onBranchLeafChange={handleLeafChange}
               sessionTitle={sessionTitle}
+              projectInfo={session ? { projectRoot: session.projectRoot ?? session.cwd, cwd: session.cwd, branch: session.branch ?? null, isWorktree: session.isWorktree ?? false } : null}
             />
           </div>
         </div>
