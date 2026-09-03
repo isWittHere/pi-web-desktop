@@ -587,7 +587,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [loadAgentState, applySessionData]);
 
-  const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null) => {
+  const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null, opts?: { captureAnchor?: () => void }) => {
     try {
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       if (leafId) params.set("leafId", leafId);
@@ -613,6 +613,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return { ...prev, context };
       });
       if (before) {
+        // Capture the scroll anchor at the last synchronous moment before the
+        // prepend lands. Capturing earlier (at fetch start) would go stale:
+        // the user keeps scrolling while the request is in flight, and the
+        // restore would land the viewport offset by exactly that drift.
+        if (d.context.messages.length > 0) opts?.captureAnchor?.();
         // Older page: prepend so scroll position stays anchored.
         setMessages((prev) => [...d.context.messages, ...prev]);
         setEntryIds((prev) => [...d.context.entryIds, ...prev]);

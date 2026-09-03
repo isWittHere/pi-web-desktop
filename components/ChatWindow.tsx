@@ -342,6 +342,10 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   const [visibleCount, setVisibleCount] = useState(VISIBLE_PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const prevScrollDistanceRef = useRef<number | null>(null);
+  // scrollHeight captured alongside the anchor: prepends land across two
+  // commits (messages first, the grown render window next), so the restore
+  // must only fire once the new content is actually in the DOM.
+  const prevScrollHeightRef = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
 
   // IntersectionObserver on the sentinel div at the top of the message list.
@@ -363,8 +367,18 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
         const sid = session?.id ?? sessionIdRef.current;
         if (!sid) return;
         loadingOlderRef.current = true;
-        prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
-        void loadContext(sid, branchActiveLeafId, oldestId).finally(() => {
+        void loadContext(sid, branchActiveLeafId, oldestId, {
+          // The anchor is captured inside loadContext right before the prepend
+          // lands — capturing here (before the network round trip) would go
+          // stale by however far the user scrolls while the request is in
+          // flight, and the restore would land offset by exactly that drift.
+          captureAnchor: () => {
+            const anchorContainer = scrollContainerRef.current;
+            if (!anchorContainer) return;
+            prevScrollDistanceRef.current = captureScrollDistance(anchorContainer.scrollHeight, anchorContainer.scrollTop);
+            prevScrollHeightRef.current = anchorContainer.scrollHeight;
+          },
+        }).finally(() => {
           loadingOlderRef.current = false;
         });
       },
@@ -380,16 +394,27 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     setVisibleCount((current) => Math.max(current, messages.length));
   }, [messages.length]);
 
-  // After visibleCount increases (more messages prepended), restore the
-  // scroll position so the viewport doesn't jump.
-  useEffect(() => {
-    if (prevScrollDistanceRef.current == null) return;
+  // After the prepended page commits, restore the scroll position so the
+  // viewport doesn't jump. Runs as a layout effect (before paint) and only
+  // consumes the anchor once the grown window is actually in the DOM.
+  useLayoutEffect(() => {
+    const anchor = prevScrollDistanceRef.current;
+    if (anchor == null) return;
     const container = scrollContainerRef.current;
     if (!container) return;
-    container.scrollTop = restoreScrollTop(container.scrollHeight, prevScrollDistanceRef.current);
+    if (prevScrollHeightRef.current === container.scrollHeight) return;
+    container.scrollTop = restoreScrollTop(container.scrollHeight, anchor);
     updateChatFades();
     prevScrollDistanceRef.current = null;
+    prevScrollHeightRef.current = null;
   }, [visibleCount, scrollContainerRef, updateChatFades]);
+
+  // A pending anchor must never leak across sessions: the first prepend in a
+  // newly opened session would otherwise restore against a stale snapshot.
+  useEffect(() => {
+    prevScrollDistanceRef.current = null;
+    prevScrollHeightRef.current = null;
+  }, [session?.id]);
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
   const statsKey = sessionStats

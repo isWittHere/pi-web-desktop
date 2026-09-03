@@ -156,3 +156,19 @@ test("ChatWindow groups a headless leading run instead of the legacy renderer", 
   assert.match(chatWindowSource, /key="headless-process-group"/);
   assert.match(chatWindowSource, /headlessEnd < messages\.length && messages\[headlessEnd\]\.role !== "user" && !isCompactionBoundary\(messages\[headlessEnd\]\)/);
 });
+
+test("scroll anchoring captures at prepend time and restores only after the DOM grows", async () => {
+  const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
+  const loadContextSource = source.slice(
+    source.indexOf("const loadContext = useCallback"),
+    source.indexOf("const loadTools = useCallback"),
+  );
+  // The anchor must be captured inside loadContext (post-fetch, pre-setState),
+  // not at fetch start — otherwise user scrolling during the request goes stale.
+  assert.match(loadContextSource, /opts\?\.captureAnchor\?\.\(\)/);
+  assert.doesNotMatch(chatWindowSource, /loadingOlderRef\.current = true;\s*\n\s*prevScrollDistanceRef\.current = captureScrollDistance/);
+  // The restore must wait until the grown window is actually in the DOM.
+  assert.match(chatWindowSource, /prevScrollHeightRef\.current === container\.scrollHeight\) return/);
+  // Anchors must not leak across sessions.
+  assert.match(chatWindowSource, /prevScrollDistanceRef\.current = null;\s*\n\s*prevScrollHeightRef\.current = null;\s*\n\s*\}, \[session\?\.id\]\)/);
+});
