@@ -3046,145 +3046,156 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 backdropFilter: "blur(10px)",
               } : null),
             }}>
-            {onToolPresetChange && (
-              <div ref={toolDropdownRef} className="chat-input-toolbar-tools" style={{ position: "relative" }}>
-                <button
-                  onClick={(e) => { const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolDropdownRect({ top: cssPx(rect.top), left: cssPx(rect.left), width: cssPx(rect.width) }); setToolDropdownOpen((v) => !v); }}
-                  title={isStreaming ? t("desktop.changeToolPresetWhileRunning", { preset: toolPresetLabel }) : t("desktop.changeToolPreset", { preset: toolPresetLabel })}
-                  aria-label={t("desktop.toolPreset")}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 5px" : "3px 7px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 24,
-                    background: toolDropdownOpen ? "var(--bg-hover)" : "none",
-                    border: "none",
-                    borderRadius: 6,
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
-                  }}
-                >
-                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
-                  {isStreaming && <ClockIcon size={11} weight="bold" color="var(--accent)" aria-hidden="true" />}
-                  <CaretDownIcon
-                    size={11}
-                    weight="bold"
-                    aria-hidden="true"
-                    style={{ transform: toolDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.12s" }}
-                  />
-                </button>
-                {toolDropdownOpen && toolDropdownRect && (() => {
-                    const vh = cssPx(window.visualViewport?.height ?? window.innerHeight);
-                    const vw = cssPx(window.innerWidth);
-                    const panelMaxW = Math.min(200, vw - 16);
-                    // Anchor the menu's bottom-right corner to the selector's
-                    // top-right corner. `right` preserves the alignment even
-                    // when the menu width follows its content.
-                    const r = Math.max(8, vw - (toolDropdownRect.left + toolDropdownRect.width));
-                    const b = vh - toolDropdownRect.top + 6;
-                    const maxH = Math.min(320, Math.max(100, Math.min(toolDropdownRect.top - 8, vh * 0.5)));
-                    return (
-                  <div className="chat-input-menu-panel" style={{
-                    position: "fixed", bottom: b, right: r,
-                    zIndex: 2001, background: "var(--bg-panel)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
-                    overflow: "hidden", minWidth: 120, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
-                  }}>
-                    {isStreaming && <NextTurnBanner />}
-                    <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
-                    {TOOL_PRESETS.map((lvl) => {
-                      const preset = TOOL_PRESET_MAP[lvl];
-                      const isActive = (toolPreset ?? "default") === preset;
-                      const desc = lvl === "off" ? t("desktop.noTools") : lvl === "read-only" ? t("desktop.readOnlyBuiltInTools") : lvl === "default" ? t("desktop.fourBuiltInTools") : t("desktop.allBuiltInTools");
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "4px 10px",
-                            borderRadius: 4,
-                            background: isActive ? "var(--bg-selected)" : "none",
-                            border: "none",
-                            color: isActive ? "var(--accent)" : "var(--text)",
-                            cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontFamily: "var(--font-mono)",
-                            whiteSpace: "nowrap",
-                            transition: "background 0.1s ease",
-                          }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                        >
-                          <span style={{ flex: 1 }}>{toolPresetLabels[lvl]}</span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                          {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
-                        </button>
-                      );
-                    })}
-                    </div>
+            {(onToolPresetChange || onLoadTools) && (
+              <div
+                className="chat-input-toolbar-tools-group"
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  height: 24,
+                }}
+              >
+                {/* 已启用工具（面板）段 —— 左侧，Wrench 图标独立触发 */}
+                {onLoadTools && (
+                  <div ref={toolsPanelBtnRef} style={{ position: "relative", display: "flex" }}>
+                    <button
+                      onClick={(e) => {
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        setToolsPanelRect({ top: cssPx(rect.top), left: cssPx(rect.left), width: cssPx(rect.width) });
+                        const next = !toolsPanelOpen;
+                        setToolsPanelOpen(next);
+                        if (next) onLoadTools();
+                      }}
+                      title={t("tools.open")}
+                      aria-label={t("tools.open")}
+                      aria-expanded={toolsPanelOpen}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        padding: isMobile ? "0 5px" : "0 7px",
+                        height: 24,
+                        boxSizing: "border-box",
+                        borderRadius: "6px 0 0 6px",
+                        background: toolsPanelOpen ? "var(--bg-hover)" : "none",
+                        border: "none",
+                        color: toolsPanelOpen ? "var(--accent)" : "var(--text-muted)",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        transition: "background 0.12s, color 0.12s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--bg-hover)";
+                        e.currentTarget.style.color = "var(--text)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = toolsPanelOpen ? "var(--bg-hover)" : "none";
+                        e.currentTarget.style.color = toolsPanelOpen ? "var(--accent)" : "var(--text-muted)";
+                      }}
+                    >
+                      <WrenchIcon size={13} weight="regular" aria-hidden="true" />
+                    </button>
+                    {toolsPanelOpen && (
+                      <ToolsPanelPopup
+                        tools={tools ?? []}
+                        loading={toolsLoading}
+                        onClose={() => setToolsPanelOpen(false)}
+                        rect={toolsPanelRect}
+                      />
+                    )}
                   </div>
-                    );
-                  })()}
-              </div>
-            )}
+                )}
 
-            {/* Tools definitions panel — opens a popup listing the active
-                tools with their parameter schemas. Triggering it refreshes the
-                tool list and system prompt on demand. */}
-            {onLoadTools && (
-              <div ref={toolsPanelBtnRef} className="chat-input-toolbar-tools-panel" style={{ position: "relative" }}>
-                <button
-                  onClick={(e) => {
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    setToolsPanelRect({ top: cssPx(rect.top), left: cssPx(rect.left), width: cssPx(rect.width) });
-                    const next = !toolsPanelOpen;
-                    setToolsPanelOpen(next);
-                    if (next) onLoadTools();
-                  }}
-                  title={t("tools.open")}
-                  aria-label={t("tools.open")}
-                  aria-expanded={toolsPanelOpen}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    padding: isMobile ? "0 5px" : "0 6px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 24,
-                    background: toolsPanelOpen ? "var(--bg-hover)" : "none",
-                    border: "none",
-                    borderRadius: 6,
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = toolsPanelOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
-                  }}
-                >
-                  <WrenchIcon size={13} weight="regular" aria-hidden="true" />
-                </button>
-                {toolsPanelOpen && (
-                  <ToolsPanelPopup
-                    tools={tools ?? []}
-                    loading={toolsLoading}
-                    onClose={() => setToolsPanelOpen(false)}
-                    rect={toolsPanelRect}
-                  />
+                {/* 工具预设段 —— 右侧，含下拉箭头 */}
+                {onToolPresetChange && (
+                  <div ref={toolDropdownRef} style={{ position: "relative", display: "flex" }}>
+                    <button
+                      onClick={(e) => { const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolDropdownRect({ top: cssPx(rect.top), left: cssPx(rect.left), width: cssPx(rect.width) }); setToolDropdownOpen((v) => !v); }}
+                      title={isStreaming ? t("desktop.changeToolPresetWhileRunning", { preset: toolPresetLabel }) : t("desktop.changeToolPreset", { preset: toolPresetLabel })}
+                      aria-label={t("desktop.toolPreset")}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                        padding: isMobile ? "0 5px" : "3px 7px",
+                        height: 24,
+                        boxSizing: "border-box",
+                        borderRadius: "0 6px 6px 0",
+                        background: toolDropdownOpen ? "var(--bg-hover)" : "none",
+                        border: "none",
+                        color: "var(--text-muted)",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        transition: "background 0.12s, color 0.12s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--bg-hover)";
+                        e.currentTarget.style.color = "var(--text)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
+                        e.currentTarget.style.color = "var(--text-muted)";
+                      }}
+                    >
+                      {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
+                      {isStreaming && <ClockIcon size={11} weight="bold" color="var(--accent)" aria-hidden="true" />}
+                      <CaretDownIcon
+                        size={11}
+                        weight="bold"
+                        aria-hidden="true"
+                        style={{ transform: toolDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.12s" }}
+                      />
+                    </button>
+                    {toolDropdownOpen && toolDropdownRect && (() => {
+                        const vh = cssPx(window.visualViewport?.height ?? window.innerHeight);
+                        const vw = cssPx(window.innerWidth);
+                        const panelMaxW = Math.min(200, vw - 16);
+                        // Anchor the menu's bottom-right corner to the selector's
+                        // top-right corner. `right` preserves the alignment even
+                        // when the menu width follows its content.
+                        const r = Math.max(8, vw - (toolDropdownRect.left + toolDropdownRect.width));
+                        const b = vh - toolDropdownRect.top + 6;
+                        const maxH = Math.min(320, Math.max(100, Math.min(toolDropdownRect.top - 8, vh * 0.5)));
+                        return (
+                      <div className="chat-input-menu-panel" style={{
+                        position: "fixed", bottom: b, right: r,
+                        zIndex: 2001, background: "var(--bg-panel)", border: "1px solid var(--border)",
+                        borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
+                        overflow: "hidden", minWidth: 120, maxWidth: panelMaxW, maxHeight: maxH, overflowY: "auto",
+                      }}>
+                        {isStreaming && <NextTurnBanner />}
+                        <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+                        {TOOL_PRESETS.map((lvl) => {
+                          const preset = TOOL_PRESET_MAP[lvl];
+                          const isActive = (toolPreset ?? "default") === preset;
+                          const desc = lvl === "off" ? t("desktop.noTools") : lvl === "read-only" ? t("desktop.readOnlyBuiltInTools") : lvl === "default" ? t("desktop.fourBuiltInTools") : t("desktop.allBuiltInTools");
+                          return (
+                            <button
+                              key={lvl}
+                              onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 8,
+                                width: "100%", padding: "4px 10px",
+                                borderRadius: 4,
+                                background: isActive ? "var(--bg-selected)" : "none",
+                                border: "none",
+                                color: isActive ? "var(--accent)" : "var(--text)",
+                                cursor: "pointer", fontSize: 12, textAlign: "left",
+                                fontFamily: "var(--font-mono)",
+                                whiteSpace: "nowrap",
+                                transition: "background 0.1s ease",
+                              }}
+                              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                              onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                            >
+                              <span style={{ flex: 1 }}>{toolPresetLabels[lvl]}</span>
+                              <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
+                              {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
+                            </button>
+                          );
+                        })}
+                        </div>
+                      </div>
+                        );
+                      })()}
+                  </div>
                 )}
               </div>
             )}
