@@ -18,3 +18,13 @@ test("the ANSI renderer is backed by the shared parser", () => {
   assert.match(source, /function renderAnsiLine\(line: string, keyPrefix: string\)/);
   assert.match(source, /parseAnsiLine\(line\)\.map/);
 });
+
+test("the extension select dialog scrolls instead of overflowing", () => {
+  const dialogStart = source.indexOf("maxHeight: \"min(760px, 100%)\");
+  assert.notEqual(dialogStart, -1, "select dialog height cap not found");
+  const dialogBlock = source.slice(dialogStart, dialogStart + 2600);
+  assert.match(dialogBlock, /flexDirection: "column"/);
+  assert.match(dialogBlock, /flexShrink: 0/);
+  assert.match(dialogBlock, /overflowY: "auto" as const/);
+  assert.match(dialogBlock, /overflowWrap: "anywhere"/);
+});
