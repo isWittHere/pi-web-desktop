@@ -4,8 +4,7 @@ import type { ToolEntry } from "@/lib/tool-presets";
 import { getToolParameterFields } from "@/lib/tool-parameters";
 import { useI18n } from "@/hooks/useI18n";
 import { useMemo, useState } from "react";
-import { FunctionIcon } from "@phosphor-icons/react/Function";
-import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
+import { WrenchIcon } from "@phosphor-icons/react/Wrench";
 import { XIcon } from "@phosphor-icons/react/X";
 
 interface ToolsPanelProps {
@@ -71,7 +70,7 @@ export function ToolsPanel({ tools, loading = false, title, onClose }: ToolsPane
           fontWeight: 600,
         }}
       >
-        <FunctionIcon size={14} weight="bold" color="var(--accent)" aria-hidden="true" />
+        <WrenchIcon size={14} weight="regular" aria-hidden="true" />
         <span style={{ flex: 1 }}>{title}</span>
         {activeTools.length > 0 && (
           <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
@@ -132,7 +131,7 @@ export function ToolsPanel({ tools, loading = false, title, onClose }: ToolsPane
                     borderRadius: 4,
                     background: isActive ? "var(--bg-selected)" : "none",
                     border: "none",
-                    color: isActive ? "var(--accent)" : "var(--text)",
+                    color: "var(--text)",
                     cursor: "pointer",
                     fontSize: 12,
                     textAlign: "left",
@@ -149,12 +148,6 @@ export function ToolsPanel({ tools, loading = false, title, onClose }: ToolsPane
                     if (!isActive) e.currentTarget.style.background = "none";
                   }}
                 >
-                  <CaretRightIcon
-                    size={10}
-                    weight="bold"
-                    aria-hidden="true"
-                    style={{ visibility: isActive ? "visible" : "hidden", flexShrink: 0 }}
-                  />
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{tool.name}</span>
                   {paramCount > 0 && (
                     <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0 }}>{paramCount}</span>
