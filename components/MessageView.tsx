@@ -681,13 +681,11 @@ function AssistantMessageView({
   writtenFiles?: WrittenFile[];
 }) {
   const { t } = useI18n();
-  const time = showTimestamp ? formatTime(message.timestamp) : null;
   const blockItems = (message.content ?? [])
     .map((block, originalIndex) => ({ block, originalIndex }))
     .filter(({ block }) => !isEmptyThinkingBlock(block, { isStreaming }));
   const blocks = blockItems.map(({ block }) => block);
   const [hovered, setHovered] = useState(false);
-  const [copied, setCopied] = useState(false);
   const streamStartRef = useRef<number | null>(null);
   const [tps, setTps] = useState<number | null>(null);
   const blockItemsRef = useRef(blockItems);
@@ -743,18 +741,6 @@ function AssistantMessageView({
     return map;
   }, [toolResults, message.timestamp]);
 
-  const textContent = blocks
-    .filter((b): b is TextContent => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-
-  const copyContent = () => {
-    copyText(textContent).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
   useEffect(() => {
     if (!isStreaming) {
       // Finalise any un-finished thinking block durations on stream end
@@ -805,12 +791,6 @@ function AssistantMessageView({
     const id = setInterval(tick, 300);
     return () => clearInterval(id);
   }, [isStreaming]);
-
-  const fmtToken = (n: number) => {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-    return n.toLocaleString();
-  };
 
   const failureMessage = message.stopReason === "error" && message.errorMessage
     ? message.errorMessage
@@ -871,59 +851,120 @@ function AssistantMessageView({
       <div style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
-        {!isStreaming && (message.provider || message.usage) && (
-          <div style={{ fontSize: 11, color: hovered ? "var(--text-muted)" : "var(--text-dim)", opacity: hovered ? 1 : 0.5, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", transition: "color 0.15s, opacity 0.15s" }}>
-            {message.provider && (
-              <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
-            )}
-            {message.usage && message.usage.input > 0 && (
-              <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <ArrowUpIcon size={10} />
-                {fmtToken(message.usage.input)}
-              </span>
-            )}
-            {message.usage && message.usage.output > 0 && (
-              <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <ArrowDownIcon size={10} />
-                {fmtToken(message.usage.output)}
-              </span>
-            )}
-            {message.usage && message.usage.cacheRead > 0 && (
-              <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <DatabaseIcon size={10} />
-                {fmtToken(message.usage.cacheRead)}
-              </span>
-            )}
-            {message.usage && message.usage.cost?.total > 0 && (
-              <span>${message.usage.cost.total.toFixed(4)}</span>
-            )}
-          </div>
-        )}
-        {textContent && !isStreaming && (
-          <button
-            onClick={copyContent}
-            title={t("desktop.copyMessage")}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 22, height: 22,
-              background: "none", border: "none",
-              borderRadius: 5,
-              color: copied ? "var(--accent)" : "var(--text-dim)",
-              cursor: "pointer",
-              opacity: hovered ? 1 : 0,
-              pointerEvents: hovered ? "auto" : "none",
-              transition: "opacity 0.12s, color 0.12s",
-            }}
-            onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
-          >
-            {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
-          </button>
-        )}
-        {time && !isStreaming && (
-          <span style={{ fontSize: 11, color: hovered ? "var(--text-muted)" : "var(--text-dim)", opacity: hovered ? 1 : 0.5, marginLeft: "auto", transition: "color 0.15s, opacity 0.15s" }}>{time}</span>
-        )}
+        <AssistantMetaRow message={message} modelNames={modelNames} showTimestamp={showTimestamp} hovered={hovered} isStreaming={isStreaming} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Bottom info row of an assistant turn: model name, token usage/cost, copy
+ * button, and timestamp. Extracted from AssistantMessageView so a turn whose
+ * output is entirely process blocks — with no answer bubble to host the row —
+ * can still render it standalone at the end of its ProcessGroup.
+ */
+function AssistantMetaRow({ message, modelNames, showTimestamp, hovered, isStreaming }: {
+  message: AssistantMessage;
+  modelNames?: Record<string, string>;
+  showTimestamp?: boolean;
+  hovered: boolean;
+  isStreaming?: boolean;
+}) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const time = showTimestamp ? formatTime(message.timestamp) : null;
+  const textContent = (message.content ?? [])
+    .filter((b): b is TextContent => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+  const copyContent = () => {
+    copyText(textContent).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  const fmtToken = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+    return n.toLocaleString();
+  };
+  return (
+    <>
+      {!isStreaming && (message.provider || message.usage) && (
+        <div style={{ fontSize: 11, color: hovered ? "var(--text-muted)" : "var(--text-dim)", opacity: hovered ? 1 : 0.5, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", transition: "color 0.15s, opacity 0.15s" }}>
+          {message.provider && (
+            <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
+          )}
+          {message.usage && message.usage.input > 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <ArrowUpIcon size={10} />
+              {fmtToken(message.usage.input)}
+            </span>
+          )}
+          {message.usage && message.usage.output > 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <ArrowDownIcon size={10} />
+              {fmtToken(message.usage.output)}
+            </span>
+          )}
+          {message.usage && message.usage.cacheRead > 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <DatabaseIcon size={10} />
+              {fmtToken(message.usage.cacheRead)}
+            </span>
+          )}
+          {message.usage && message.usage.cost?.total > 0 && (
+            <span>${message.usage.cost.total.toFixed(4)}</span>
+          )}
+        </div>
+      )}
+      {textContent && !isStreaming && (
+        <button
+          onClick={copyContent}
+          title={t("desktop.copyMessage")}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 22, height: 22,
+            background: "none", border: "none",
+            borderRadius: 5,
+            color: copied ? "var(--accent)" : "var(--text-dim)",
+            cursor: "pointer",
+            opacity: hovered ? 1 : 0,
+            pointerEvents: hovered ? "auto" : "none",
+            transition: "opacity 0.12s, color 0.12s",
+          }}
+          onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
+          onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
+        >
+          {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+        </button>
+      )}
+      {time && !isStreaming && (
+        <span style={{ fontSize: 11, color: hovered ? "var(--text-muted)" : "var(--text-dim)", opacity: hovered ? 1 : 0.5, marginLeft: "auto", transition: "color 0.15s, opacity 0.15s" }}>{time}</span>
+      )}
+    </>
+  );
+}
+
+/**
+ * Standalone variant of the assistant turn info row with its own hover
+ * region, used when the turn has no answer message to render it inside.
+ */
+export function StandaloneAssistantMetaRow({ message, modelNames, showTimestamp }: {
+  message: AssistantMessage;
+  modelNames?: Record<string, string>;
+  showTimestamp?: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      // Same turn spacing as .chat-assistant-message, which the standalone
+      // row replaces when the turn has no answer bubble to host it.
+      style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, marginBottom: 22 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <AssistantMetaRow message={message} modelNames={modelNames} showTimestamp={showTimestamp} hovered={hovered} />
     </div>
   );
 }

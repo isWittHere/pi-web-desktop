@@ -8,7 +8,8 @@ import { getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/
 import { cssPx } from "@/lib/ui-scale";
 import { collectProcessContentBlocks, splitAssistantContentBlocks } from "@/lib/process-content";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
-import { MessageView } from "./MessageView";
+import { TurnWrittenFiles } from "./TurnWrittenFiles";
+import { MessageView, StandaloneAssistantMetaRow } from "./MessageView";
 import { ProcessGroup, buildProcessSteps } from "./ProcessGroup";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { SessionInfoBar } from "./SessionInfoBar";
@@ -128,6 +129,22 @@ function hasDisplayableProcessMessage(message: AgentMessage): boolean {
   return message.role === "custom";
 }
 
+/**
+ * Written files across a turn's assistant messages in messages[from..to].
+ * Each tool call is stored as its own assistant entry, so no single message
+ * carries the record of what the turn wrote.
+ */
+function collectTurnWrittenFiles(messages: AgentMessage[], fromIdx: number, toIdx: number, toolResultsMap: Map<string, ToolResultMessage>, cwd?: string): WrittenFile[] {
+  const turnContent: AssistantContentBlock[] = [];
+  for (let i = fromIdx; i <= toIdx; i++) {
+    const m = messages[i];
+    if (m?.role === "assistant") {
+      for (const b of (m as AssistantMessage).content ?? []) turnContent.push(b);
+    }
+  }
+  return extractTurnWrittenFiles(turnContent, toolResultsMap, cwd);
+}
+
 function isCompactionBoundary(message: AgentMessage): boolean {
   return message.role === "custom" && message.customType === "compaction";
 }
@@ -202,7 +219,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     handleRecallQueue,
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
-    loadSystemInfo,
+    loadSystemInfoOnDemand,
     loadContext,
   } = useAgentSession({
     session, sessionRunning, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
@@ -218,15 +235,17 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   const [toolsLoading, setToolsLoading] = useState(false);
   const toolsLoadingRef = useRef(false);
   const handleLoadTools = useCallback(() => {
-    const sid = sessionIdRef.current;
-    if (!sid || toolsLoadingRef.current) return;
+    if (toolsLoadingRef.current) return;
+    // New-session composers may not have a runtime yet; the on-demand variant
+    // lazily creates one so the panel shows the real tool set instead of
+    // an empty "no tools" state.
     toolsLoadingRef.current = true;
     setToolsLoading(true);
-    void loadSystemInfo(sid).finally(() => {
+    void loadSystemInfoOnDemand(sessionIdRef.current).finally(() => {
       toolsLoadingRef.current = false;
       setToolsLoading(false);
     });
-  }, [loadSystemInfo, sessionIdRef]);
+  }, [loadSystemInfoOnDemand, sessionIdRef]);
 
   useEffect(() => {
     if (!extensionDialog || soundedExtensionDialogIdRef.current === extensionDialog.id) return;
@@ -895,16 +914,12 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                       entryId: entryIds[headAssistantIdx],
                       toolResults: toolResultsMap,
                     }).processBlocks);
+                    // Compute written files even when the run produced no
+                    // answer text — the chip is then rendered after the
+                    // ProcessGroup instead of inside an answer message.
+                    headWrittenFiles = collectTurnWrittenFiles(messages, 0, headAssistantIdx, toolResultsMap, messageCwd);
                     if (headSplit.answerBlocks.length > 0) {
                       headAnswerMessage = withAssistantBlocks(headAssistant, headSplit.answerBlocks);
-                      const headTurnContent: AssistantContentBlock[] = [];
-                      for (let i = 0; i <= headAssistantIdx; i++) {
-                        const m = messages[i];
-                        if (m?.role === "assistant") {
-                          for (const b of (m as AssistantMessage).content ?? []) headTurnContent.push(b);
-                        }
-                      }
-                      headWrittenFiles = extractTurnWrittenFiles(headTurnContent, toolResultsMap, messageCwd);
                     }
                   }
                   if (headProcessBlocks.length > 0) {
@@ -929,6 +944,22 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                   }
                   if (headAnswerMessage) {
                     rendered.push(renderMessage(headAssistantIdx, { messageOverride: headAnswerMessage, writtenFiles: headWrittenFiles }));
+                  } else if (headAssistantIdx >= 0) {
+                    // All-process run: no answer bubble to host the chip and
+                    // the usage/timestamp row — render both standalone.
+                    if (headWrittenFiles.length > 0) {
+                      rendered.push(
+                        <TurnWrittenFiles key="headless-turn-written-files" files={headWrittenFiles} onOpenFile={onOpenFile} />,
+                      );
+                    }
+                    rendered.push(
+                      <StandaloneAssistantMetaRow
+                        key="headless-turn-meta"
+                        message={messages[headAssistantIdx] as AssistantMessage}
+                        modelNames={modelNames}
+                        showTimestamp
+                      />,
+                    );
                   }
                   if (headProcessBlocks.length === 0 && !headAnswerMessage) {
                     // Degenerate headless run (no displayable process content
@@ -1085,20 +1116,29 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                   );
                 }
 
+                // Each tool call is stored as its own assistant entry, so the
+                // final answer alone carries no record of what the turn wrote.
+                const writtenFiles = collectTurnWrittenFiles(messages, userIdx + 1, finalAssistantIdx, toolResultsMap, messageCwd);
                 if (finalAnswerMessage) {
-                  // Each tool call is stored as its own assistant entry, so the
-                  // final answer alone carries no record of what the turn wrote.
-                  // Gather the turn's assistant blocks and derive the file list
-                  // from the write/edit calls among them.
-                  const turnContent: AssistantContentBlock[] = [];
-                  for (let i = userIdx + 1; i <= finalAssistantIdx; i++) {
-                    const m = messages[i];
-                    if (m?.role === "assistant") {
-                      for (const b of (m as AssistantMessage).content ?? []) turnContent.push(b);
-                    }
-                  }
-                  const writtenFiles = extractTurnWrittenFiles(turnContent, toolResultsMap, messageCwd);
                   rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, writtenFiles }));
+                } else {
+                  // A turn whose output is entirely process blocks has no
+                  // answer message to host the chip and the usage/timestamp
+                  // row — render both standalone after the ProcessGroup so
+                  // the turn reads like any other.
+                  if (writtenFiles.length > 0) {
+                    rendered.push(
+                      <TurnWrittenFiles key={`turn-written-files-${userIdx}-${finalAssistantIdx}`} files={writtenFiles} onOpenFile={onOpenFile} />,
+                    );
+                  }
+                  rendered.push(
+                    <StandaloneAssistantMetaRow
+                      key={`turn-meta-${userIdx}-${finalAssistantIdx}`}
+                      message={finalAssistant}
+                      modelNames={modelNames}
+                      showTimestamp
+                    />,
+                  );
                 }
                 for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
                   rendered.push(renderMessage(renderIdx));
