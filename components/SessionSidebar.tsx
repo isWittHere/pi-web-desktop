@@ -15,7 +15,7 @@ import { getTitleModel } from "@/lib/title-settings";
 import { bucketOf, TIME_BUCKET_ORDER, timeBucketKey } from "@/lib/time-groups";
 import { loadCollapsedTimeGroups, saveCollapsedTimeGroups, type CollapsedTimeGroups } from "@/lib/time-group-state";
 import { samePath } from "@/lib/path-match";
-import { shouldNotifyCwdChange } from "@/lib/workspace-switch";
+import { shouldNotifyCwdChange, type WorkspaceSwitchRequest } from "@/lib/workspace-switch";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -77,7 +77,7 @@ interface Props {
    *  with the same cwd apply again (e.g. re-activating a tab). projectKey
    *  carries the authoritative workspace identity (the tab's project root)
    *  so restoring a worktree tab does not lose the workspace memory key. */
-  requestedCwd?: { cwd: string | null; projectKey?: string | null; token: number } | null;
+  requestedCwd?: WorkspaceSwitchRequest | null;
   /** How a picked project is opened. When provided, every workspace picker
    *  menu (title bar / welcome / sidebar) calls this instead of switching
    *  the cwd directly, so the shell can open a workspace tab instead. */

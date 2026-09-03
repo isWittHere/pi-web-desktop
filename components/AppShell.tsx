@@ -24,6 +24,7 @@ import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useWorkspaceTabs } from "@/hooks/useWorkspaceTabs";
 import { closeTab as closeWorkspaceTab, loadWorkspaceTabs, saveWorkspaceTabs, type WorkspaceTabsState } from "@/lib/workspace-tabs";
+import type { WorkspaceSwitchRequest } from "@/lib/workspace-switch";
 import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
@@ -373,7 +374,7 @@ export function AppShell() {
   // carries the authoritative workspace identity (tab.key /
   // workspaceKeyOf(session)) so the restore anchor never depends on the
   // sidebar re-resolving a worktree path back to its root.
-  const [cwdRequest, setCwdRequest] = useState<{ cwd: string | null; projectKey?: string | null; token: number } | null>(null);
+  const [cwdRequest, setCwdRequest] = useState<WorkspaceSwitchRequest | null>(null);
   const requestWorkspaceSwitch = useCallback((cwd: string | null, projectKey?: string | null) => {
     setCwdRequest((prev) => ({ cwd, projectKey, token: (prev?.token ?? 0) + 1 }));
   }, []);
