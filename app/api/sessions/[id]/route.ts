@@ -8,11 +8,13 @@ import {
   invalidateSessionPathCache,
   invalidateSessionListCache,
   buildSessionContext,
+  findFirstUserMessage,
   readSessionHeader,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
-import type { SessionMark } from "@/lib/types";
+import { computeSessionStats } from "@/lib/session-stats";
+import type { SessionEntry, SessionMark } from "@/lib/types";
 
 const SESSION_MARKS: readonly SessionMark[] = ["completed", "discussion", "pending", "abandoned"];
 
@@ -116,41 +118,19 @@ function projectTreeForResponse<T extends { entry: { id: string }; children: T[]
   return projectedRoots;
 }
 
-// Lightweight completion stats for the notification popup. Mirrors
-// AgentSession.getSessionStats: the last model_change entry is the model in
-// use, and usage is accumulated from assistant/toolResult messages and
-// compaction/branch_summary entries (usage.cost is an object with a total).
-// Unlike the live session we cannot reproduce context usage (needs the model
-// runtime), so the popup shows model + cost only for background sessions.
-function computeSessionStats(entries: unknown[]) {
-  let model: { provider: string; modelId: string } | null = null;
-  const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
-  const addUsage = (usage: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: { total?: number } } | undefined) => {
-    if (!usage) return;
-    totals.input += usage.input ?? 0;
-    totals.output += usage.output ?? 0;
-    totals.cacheRead += usage.cacheRead ?? 0;
-    totals.cacheWrite += usage.cacheWrite ?? 0;
-    totals.cost += usage.cost?.total ?? 0;
-  };
+// Cumulative usage across ALL session-file entries — the same aggregation the
+// SDK's getSessionStats() uses. Lets the client keep monotonic token/cost
+// counters across compaction and page reloads. The last model in use feeds
+// the notification popup (model + cost for background sessions).
+function summarizeSessionFile(entries: unknown[]) {
+  const fileStats = computeSessionStats(entries as SessionEntry[]);
+  let popupModel: { provider: string; modelId: string } | null = null;
   for (const entry of entries as Array<Record<string, unknown>>) {
     if (entry.type === "model_change") {
-      model = { provider: String(entry.provider ?? ""), modelId: String(entry.modelId ?? "") };
-    } else if (entry.type === "message") {
-      const message = entry.message as { role?: string; usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: { total?: number } } } | undefined;
-      if (message?.role === "assistant" || message?.role === "toolResult") {
-        addUsage(message.usage);
-      }
-    } else if ((entry.type === "compaction" || entry.type === "branch_summary") && entry.usage) {
-      addUsage(entry.usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: { total?: number } });
+      popupModel = { provider: String(entry.provider ?? ""), modelId: String(entry.modelId ?? "") };
     }
   }
-  const totalTokens = totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
-  return {
-    model,
-    cost: totals.cost,
-    tokens: { ...totals, total: totalTokens },
-  };
+  return { fileStats, popupModel };
 }
 
 export async function GET(
@@ -186,8 +166,14 @@ export async function GET(
     const tree = projectTreeForResponse(sm.getTree());
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
-    const context = buildSessionContext(entries as never, leafId, { deferThinking, deferToolResultImages });
+    // ?tail bounds the returned ancestor chain (capped at 1000) for clients
+    // that page explicitly. Absent tail keeps the legacy full-chain response;
+    // the tail-pagination experiment lives on the exp/tail-pagination branch.
+    const rawTail = Number(searchParams.get("tail"));
+    const tail = Number.isFinite(rawTail) && rawTail > 0 ? Math.min(rawTail, 1000) : undefined;
+    const context = buildSessionContext(entries as never, leafId, { deferThinking, deferToolResultImages, tail });
     const totalActiveMs = computeSessionTotalActiveMs(entries);
+    const { fileStats, popupModel } = summarizeSessionFile(entries);
 
     const header = sm.getHeader();
     let modified = header?.timestamp ?? new Date().toISOString();
@@ -195,6 +181,9 @@ export async function GET(
     const parentSessionId = header?.parentSession
       ? await resolveSessionIdByPath(header.parentSession)
       : undefined;
+    // messageCount/firstMessage describe the whole session, so derive them from
+    // the full entries — the tail-sliced context only carries the last page.
+    const firstUserMessage = findFirstUserMessage(entries as never);
     const info = header ? {
       path: filePath,
       id: header.id,
@@ -202,11 +191,10 @@ export async function GET(
       name: sm.getSessionName(),
       created: header.timestamp,
       modified,
-      messageCount: context.messages.length,
-      firstMessage: context.messages.find((m) => m.role === "user")
+      messageCount: fileStats.totalMessages,
+      firstMessage: firstUserMessage
         ? (() => {
-            const msg = context.messages.find((m) => m.role === "user")!;
-            const c = (msg as { content: unknown }).content;
+            const c = (firstUserMessage as { content: unknown }).content;
             return typeof c === "string" ? c : (Array.isArray(c) ? (c.find((b: { type: string }) => b.type === "text") as { text: string } | undefined)?.text ?? "" : "") || "(no messages)";
           })()
         : "(no messages)",
@@ -224,7 +212,9 @@ export async function GET(
       // Estimated active (non-idle) wall-clock time across the session file.
       totalActiveMs,
       // Completion stats for the notification popup (model + accumulated cost).
-      stats: computeSessionStats(entries),
+      stats: { model: popupModel, cost: fileStats.cost, tokens: fileStats.tokens },
+      // Cumulative all-entries stats for monotonic live counters.
+      fileStats,
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

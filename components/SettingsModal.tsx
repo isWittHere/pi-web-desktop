@@ -274,7 +274,7 @@ export function SettingsModal({
           bodyRef={contentScrollRef}
         >
           {activeTab === "display" && <DisplayConfig />}
-          {activeTab === "chat" && <ChatConfig cwd={cwd} />}
+          {activeTab === "chat" && <ChatConfig cwd={cwd} sessionId={sessionId} onSessionReloaded={onSessionReloadedAction} />}
           {activeTab === "models" && <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />}
           {cwd && activeTab === "skills" && <SkillsConfig cwd={cwd} />}
           {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}

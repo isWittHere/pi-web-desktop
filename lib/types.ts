@@ -53,6 +53,20 @@ export interface UserMessage {
   timestamp?: number;
 }
 
+export interface AgentUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    total: number;
+  };
+}
+
 export interface AssistantMessage {
   role: "assistant";
   content: AssistantContentBlock[];
@@ -61,19 +75,7 @@ export interface AssistantMessage {
   stopReason?: string;
   errorMessage?: string;
   timestamp?: number;
-  usage?: {
-    input: number;
-    output: number;
-    cacheRead: number;
-    cacheWrite: number;
-    cost: {
-      input: number;
-      output: number;
-      cacheRead: number;
-      cacheWrite: number;
-      total: number;
-    };
-  };
+  usage?: AgentUsage;
 }
 
 export interface ToolResultMessage {
@@ -83,6 +85,7 @@ export interface ToolResultMessage {
   content: (TextContent | ImageContent)[];
   isError?: boolean;
   details?: unknown;
+  usage?: AgentUsage;
   timestamp?: number;
 }
 
@@ -226,6 +229,7 @@ export interface CompactionEntry extends SessionEntryBase {
   firstKeptEntryId: string;
   tokensBefore: number;
   details?: unknown;
+  usage?: AgentUsage;
   fromHook?: boolean;
 }
 
@@ -234,6 +238,7 @@ export interface BranchSummaryEntry extends SessionEntryBase {
   fromId: string;
   summary: string;
   details?: unknown;
+  usage?: AgentUsage;
   fromHook?: boolean;
 }
 
@@ -316,13 +321,19 @@ export interface SessionInfo {
   /** True while the runtime session exists only in memory and its JSONL file
    *  has not been created yet. Disk-backed actions must wait until this clears. */
   transient?: boolean;
-  /** Branch name when cwd is a linked git worktree (not the main checkout) */
-  worktreeBranch?: string;
+  /** Current git branch for any git repo (undefined for non-git or detached HEAD) */
+  branch?: string;
+  /** True when cwd is a linked git worktree (not the main checkout) */
+  isWorktree?: boolean;
 }
 
 export interface SessionContext {
   messages: AgentMessage[];
   entryIds: string[]; // parallel to messages — the session entry id for each message
+  /** First entry of the returned window (raw chain boundary, pre-compaction-reorder). */
+  oldestEntryId: string | null;
+  /** True when the window was truncated by ?tail and older pages exist. */
+  hasMore: boolean;
   thinkingLevel: string;
   model: { provider: string; modelId: string } | null;
 }

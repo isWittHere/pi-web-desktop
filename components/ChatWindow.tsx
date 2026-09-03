@@ -8,7 +8,8 @@ import { getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/
 import { cssPx } from "@/lib/ui-scale";
 import { collectProcessContentBlocks, splitAssistantContentBlocks } from "@/lib/process-content";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
-import { MessageView } from "./MessageView";
+import { TurnWrittenFiles } from "./TurnWrittenFiles";
+import { MessageView, StandaloneAssistantMetaRow } from "./MessageView";
 import { ProcessGroup, buildProcessSteps } from "./ProcessGroup";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { SessionInfoBar } from "./SessionInfoBar";
@@ -21,8 +22,8 @@ import { ImagesIcon } from "@phosphor-icons/react/Images";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import {
   captureScrollDistance,
-  getNextVisibleCount,
   getVisibleRenderWindow,
+  getNextVisibleCount,
   restoreScrollTop,
   VISIBLE_PAGE_SIZE,
 } from "@/lib/chat-lazy-load";
@@ -128,6 +129,22 @@ function hasDisplayableProcessMessage(message: AgentMessage): boolean {
   return message.role === "custom";
 }
 
+/**
+ * Written files across a turn's assistant messages in messages[from..to].
+ * Each tool call is stored as its own assistant entry, so no single message
+ * carries the record of what the turn wrote.
+ */
+function collectTurnWrittenFiles(messages: AgentMessage[], fromIdx: number, toIdx: number, toolResultsMap: Map<string, ToolResultMessage>, cwd?: string): WrittenFile[] {
+  const turnContent: AssistantContentBlock[] = [];
+  for (let i = fromIdx; i <= toIdx; i++) {
+    const m = messages[i];
+    if (m?.role === "assistant") {
+      for (const b of (m as AssistantMessage).content ?? []) turnContent.push(b);
+    }
+  }
+  return extractTurnWrittenFiles(turnContent, toolResultsMap, cwd);
+}
+
 function isCompactionBoundary(message: AgentMessage): boolean {
   return message.role === "custom" && message.customType === "compaction";
 }
@@ -184,7 +201,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   }, [chatInputRef]);
 
   const {
-    loading, error, messages, entryIds, streamState,
+    loading, error, messages, entryIds, historyCursor, hasEarlierMessages, streamState,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
@@ -202,7 +219,8 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     handleRecallQueue,
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
-    loadSystemInfo,
+    loadSystemInfoOnDemand,
+    loadContext,
   } = useAgentSession({
     session, sessionRunning, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
@@ -217,15 +235,17 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   const [toolsLoading, setToolsLoading] = useState(false);
   const toolsLoadingRef = useRef(false);
   const handleLoadTools = useCallback(() => {
-    const sid = sessionIdRef.current;
-    if (!sid || toolsLoadingRef.current) return;
+    if (toolsLoadingRef.current) return;
+    // New-session composers may not have a runtime yet; the on-demand variant
+    // lazily creates one so the panel shows the real tool set instead of
+    // an empty "no tools" state.
     toolsLoadingRef.current = true;
     setToolsLoading(true);
-    void loadSystemInfo(sid).finally(() => {
+    void loadSystemInfoOnDemand(sessionIdRef.current).finally(() => {
       toolsLoadingRef.current = false;
       setToolsLoading(false);
     });
-  }, [loadSystemInfo, sessionIdRef]);
+  }, [loadSystemInfoOnDemand, sessionIdRef]);
 
   useEffect(() => {
     if (!extensionDialog || soundedExtensionDialogIdRef.current === extensionDialog.id) return;
@@ -342,6 +362,12 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   const [visibleCount, setVisibleCount] = useState(VISIBLE_PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const prevScrollDistanceRef = useRef<number | null>(null);
+  // scrollHeight captured alongside the anchor: prepends land across two
+  // commits (messages first, the grown render window next), so the restore
+  // must only fire once the new content is actually in the DOM.
+  const prevScrollHeightRef = useRef<number | null>(null);
+  const loadingOlderRef = useRef(false);
+  const serverPrependRef = useRef(false);
 
   // IntersectionObserver on the sentinel div at the top of the message list.
   // When it becomes visible, load the next page of older messages.
@@ -351,28 +377,75 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     if (!sentinel || !container) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          // Save distance from top before prepending to restore scroll later
-          prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
-          setVisibleCount((prev) => getNextVisibleCount(prev));
+        if (!entries[0]?.isIntersecting) return;
+        if (loadingOlderRef.current) return;
+        if (hasEarlierMessages) {
+          // Server-side paging (dormant while routes default to the full
+          // chain): fetch the previous page and prepend it. loadContext
+          // captures the scroll anchor right before the prepend lands —
+          // capturing before the network round trip would go stale by
+          // however far the user scrolls while the request is in flight.
+          const oldestId = historyCursor;
+          if (!oldestId) return;
+          const sid = session?.id ?? sessionIdRef.current;
+          if (!sid) return;
+          loadingOlderRef.current = true;
+          serverPrependRef.current = true;
+          void loadContext(sid, branchActiveLeafId, oldestId, {
+            captureAnchor: () => {
+              const anchorContainer = scrollContainerRef.current;
+              if (!anchorContainer) return;
+              prevScrollDistanceRef.current = captureScrollDistance(anchorContainer.scrollHeight, anchorContainer.scrollTop);
+              prevScrollHeightRef.current = anchorContainer.scrollHeight;
+            },
+          }).finally(() => {
+            loadingOlderRef.current = false;
+          });
+          return;
         }
+        // Legacy client-side render-window paging: older entries are already
+        // in memory, so reveal the next page in the same frame.
+        prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
+        prevScrollHeightRef.current = container.scrollHeight;
+        setVisibleCount((prev) => getNextVisibleCount(prev));
       },
       { root: container, threshold: 0 }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [visibleCount, messages.length, scrollContainerRef]);
+  }, [historyCursor, hasEarlierMessages, session, branchActiveLeafId, loadContext, sessionIdRef, scrollContainerRef]);
 
-  // After visibleCount increases (more messages prepended), restore the
-  // scroll position so the viewport doesn't jump.
+  // Grow the rendered window to cover server-prepended pages (dormant while
+  // routes default to the full chain). Client-side paging grows the window
+  // incrementally in the observer instead — growing it here to the full
+  // history would defeat that lazy render entirely.
   useEffect(() => {
-    if (prevScrollDistanceRef.current == null) return;
+    if (!serverPrependRef.current) return;
+    serverPrependRef.current = false;
+    setVisibleCount((current) => Math.max(current, messages.length));
+  }, [messages.length]);
+
+  // After the prepended page commits, restore the scroll position so the
+  // viewport doesn't jump. Runs as a layout effect (before paint) and only
+  // consumes the anchor once the grown window is actually in the DOM.
+  useLayoutEffect(() => {
+    const anchor = prevScrollDistanceRef.current;
+    if (anchor == null) return;
     const container = scrollContainerRef.current;
     if (!container) return;
-    container.scrollTop = restoreScrollTop(container.scrollHeight, prevScrollDistanceRef.current);
+    if (prevScrollHeightRef.current === container.scrollHeight) return;
+    container.scrollTop = restoreScrollTop(container.scrollHeight, anchor);
     updateChatFades();
     prevScrollDistanceRef.current = null;
+    prevScrollHeightRef.current = null;
   }, [visibleCount, scrollContainerRef, updateChatFades]);
+
+  // A pending anchor must never leak across sessions: the first prepend in a
+  // newly opened session would otherwise restore against a stale snapshot.
+  useEffect(() => {
+    prevScrollDistanceRef.current = null;
+    prevScrollHeightRef.current = null;
+  }, [session?.id]);
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
   const statsKey = sessionStats
@@ -710,6 +783,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                 branchActiveLeafId={branchActiveLeafId}
                 onBranchLeafChange={handleLeafChange}
                 sessionTitle={sessionTitle}
+                projectInfo={session ? { projectRoot: session.projectRoot ?? session.cwd, cwd: session.cwd, branch: session.branch ?? null, isWorktree: session.isWorktree ?? false } : null}
               />
             </div>
           </div>
@@ -816,6 +890,85 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
               for (let idx = 0; idx < messages.length;) {
                 const msg = messages[idx];
                 const startsCompactionTurn = isCompactionBoundary(msg);
+                // Tail pagination can start the window mid-turn (a single agent
+                // run can outspan the page, leaving no user prompt in the
+                // window). Group that headless leading run through the
+                // ProcessGroup path too instead of the legacy flat renderer.
+                if (idx === 0 && msg.role !== "user" && !startsCompactionTurn) {
+                  let headlessEnd = 0;
+                  while (headlessEnd < messages.length && messages[headlessEnd].role !== "user" && !isCompactionBoundary(messages[headlessEnd])) headlessEnd += 1;
+                  const headAssistantIdx = findFinalAssistantIndex(messages, -1, headlessEnd);
+                  const headProcessIndices: number[] = [];
+                  const headProcessEnd = headAssistantIdx === -1 ? headlessEnd : headAssistantIdx;
+                  for (let headIdx = 0; headIdx < headProcessEnd; headIdx++) {
+                    if (hasDisplayableProcessMessage(messages[headIdx])) headProcessIndices.push(headIdx);
+                  }
+                  let headProcessBlocks = collectProcessContentBlocks(messages, entryIds, headProcessIndices, toolResultsMap);
+                  let headAnswerMessage: AssistantMessage | null = null;
+                  let headWrittenFiles: WrittenFile[] = [];
+                  if (headAssistantIdx >= 0) {
+                    const headAssistant = messages[headAssistantIdx] as AssistantMessage;
+                    const headSplit = splitFinalAssistantBlocks(headAssistant);
+                    headProcessBlocks = headProcessBlocks.concat(splitAssistantContentBlocks(headAssistant, {
+                      messageIndex: headAssistantIdx,
+                      entryId: entryIds[headAssistantIdx],
+                      toolResults: toolResultsMap,
+                    }).processBlocks);
+                    // Compute written files even when the run produced no
+                    // answer text — the chip is then rendered after the
+                    // ProcessGroup instead of inside an answer message.
+                    headWrittenFiles = collectTurnWrittenFiles(messages, 0, headAssistantIdx, toolResultsMap, messageCwd);
+                    if (headSplit.answerBlocks.length > 0) {
+                      headAnswerMessage = withAssistantBlocks(headAssistant, headSplit.answerBlocks);
+                    }
+                  }
+                  if (headProcessBlocks.length > 0) {
+                    const headRefIdx = headProcessIndices
+                      .map((headIdx) => visibleRefIndexByMessage.get(headIdx))
+                      .find((value): value is number => typeof value === "number")
+                      ?? (headAnswerMessage ? undefined : visibleRefIndexByMessage.get(headAssistantIdx));
+                    rendered.push(
+                      <div
+                        key="headless-process-group"
+                        ref={headRefIdx === undefined ? undefined : (el) => { messageRefs.current[headRefIdx] = el; }}
+                      >
+                        <ProcessGroup
+                          blocks={headProcessBlocks}
+                          isStreaming={false}
+                          cwd={messageCwd}
+                          onOpenFile={onOpenFile}
+                          sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                        />
+                      </div>,
+                    );
+                  }
+                  if (headAnswerMessage) {
+                    rendered.push(renderMessage(headAssistantIdx, { messageOverride: headAnswerMessage, writtenFiles: headWrittenFiles }));
+                  } else if (headAssistantIdx >= 0) {
+                    // All-process run: no answer bubble to host the chip and
+                    // the usage/timestamp row — render both standalone.
+                    if (headWrittenFiles.length > 0) {
+                      rendered.push(
+                        <TurnWrittenFiles key="headless-turn-written-files" files={headWrittenFiles} onOpenFile={onOpenFile} />,
+                      );
+                    }
+                    rendered.push(
+                      <StandaloneAssistantMetaRow
+                        key="headless-turn-meta"
+                        message={messages[headAssistantIdx] as AssistantMessage}
+                        modelNames={modelNames}
+                        showTimestamp
+                      />,
+                    );
+                  }
+                  if (headProcessBlocks.length === 0 && !headAnswerMessage) {
+                    // Degenerate headless run (no displayable process content
+                    // and no answer): nothing to group, keep the flat renderer.
+                    for (let headIdx = 0; headIdx < headlessEnd; headIdx++) rendered.push(renderMessage(headIdx));
+                  }
+                  idx = headlessEnd;
+                  continue;
+                }
                 // The SDK may trim the user prompt that triggered compaction from
                 // the rebuilt context. Treat the retained compaction entry as the
                 // turn boundary so its first following agent response still uses
@@ -963,27 +1116,37 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                   );
                 }
 
+                // Each tool call is stored as its own assistant entry, so the
+                // final answer alone carries no record of what the turn wrote.
+                const writtenFiles = collectTurnWrittenFiles(messages, userIdx + 1, finalAssistantIdx, toolResultsMap, messageCwd);
                 if (finalAnswerMessage) {
-                  // Each tool call is stored as its own assistant entry, so the
-                  // final answer alone carries no record of what the turn wrote.
-                  // Gather the turn's assistant blocks and derive the file list
-                  // from the write/edit calls among them.
-                  const turnContent: AssistantContentBlock[] = [];
-                  for (let i = userIdx + 1; i <= finalAssistantIdx; i++) {
-                    const m = messages[i];
-                    if (m?.role === "assistant") {
-                      for (const b of (m as AssistantMessage).content ?? []) turnContent.push(b);
-                    }
-                  }
-                  const writtenFiles = extractTurnWrittenFiles(turnContent, toolResultsMap, messageCwd);
                   rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, writtenFiles }));
+                } else {
+                  // A turn whose output is entirely process blocks has no
+                  // answer message to host the chip and the usage/timestamp
+                  // row — render both standalone after the ProcessGroup so
+                  // the turn reads like any other.
+                  if (writtenFiles.length > 0) {
+                    rendered.push(
+                      <TurnWrittenFiles key={`turn-written-files-${userIdx}-${finalAssistantIdx}`} files={writtenFiles} onOpenFile={onOpenFile} />,
+                    );
+                  }
+                  rendered.push(
+                    <StandaloneAssistantMetaRow
+                      key={`turn-meta-${userIdx}-${finalAssistantIdx}`}
+                      message={finalAssistant}
+                      modelNames={modelNames}
+                      showTimestamp
+                    />,
+                  );
                 }
                 for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
                   rendered.push(renderMessage(renderIdx));
                 }
                 idx = endIdx;
               }
-              const { startIndex, hasMore } = getVisibleRenderWindow(rendered.length, visibleCount);
+              const { startIndex } = getVisibleRenderWindow(rendered.length, visibleCount);
+              const hasMore = startIndex > 0 || hasEarlierMessages;
               return (
                 <>
                   {hasMore && (
@@ -1085,6 +1248,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
               branchActiveLeafId={branchActiveLeafId}
               onBranchLeafChange={handleLeafChange}
               sessionTitle={sessionTitle}
+              projectInfo={session ? { projectRoot: session.projectRoot ?? session.cwd, cwd: session.cwd, branch: session.branch ?? null, isWorktree: session.isWorktree ?? false } : null}
             />
           </div>
         </div>
@@ -1141,7 +1305,12 @@ function ExtensionWidgets({ widgets }: { widgets: Array<{ key: string; lines: st
             {widget.key}
           </div>
           <pre style={{ margin: 0, padding: "8px 9px", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--font-mono)" }}>
-            {widget.lines.join("\n")}
+            {widget.lines.map((line, lineIndex) => (
+              <span key={`${widget.key}:${lineIndex}`}>
+                {renderAnsiLine(line, `widget:${widget.key}:${lineIndex}`)}
+                {lineIndex < widget.lines.length - 1 ? "\n" : null}
+              </span>
+            ))}
           </pre>
         </div>
       ))}
@@ -1260,6 +1429,9 @@ function ExtensionDialog({
         aria-modal="true"
         style={{
           width: "min(560px, 100%)",
+          maxHeight: "min(760px, 100%)",
+          display: "flex",
+          flexDirection: "column",
           border: "1px solid var(--border)",
           borderRadius: 8,
           background: "var(--bg)",
@@ -1267,12 +1439,19 @@ function ExtensionDialog({
           overflow: "hidden",
         }}
       >
-        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ flexShrink: 0, padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
           <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 650 }}>{request.title}</div>
           <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>{t("desktop.extensionRequest")}</div>
         </div>
 
-        <div style={{ padding: 14 }}>
+        <div
+          style={{
+            padding: 14,
+            ...(request.method === "select"
+              ? { flex: "1 1 auto", minHeight: 0, overflowY: "auto" }
+              : {}),
+          }}
+        >
           {request.method === "confirm" && (
             <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{request.message}</div>
           )}
@@ -1292,6 +1471,7 @@ function ExtensionDialog({
                     cursor: "pointer",
                     textAlign: "left",
                     fontSize: 13,
+                    overflowWrap: "anywhere",
                   }}
                 >
                   {option}
@@ -1348,7 +1528,7 @@ function ExtensionDialog({
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 14px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+        <div style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 14px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
           <button
             onClick={() => onRespond(request, { cancelled: true })}
             style={{

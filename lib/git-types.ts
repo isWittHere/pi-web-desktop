@@ -12,6 +12,10 @@ export interface GitFileStatus {
   code: "M" | "A" | "D" | "R" | "U" | "C";
   indexStatus: string;
   worktreeStatus: string;
+  /** Added lines for this file; null when the diff stat is unavailable. */
+  additions: number | null;
+  /** Deleted lines for this file; null when the diff stat is unavailable. */
+  deletions: number | null;
 }
 
 export interface GitStatusResponse {

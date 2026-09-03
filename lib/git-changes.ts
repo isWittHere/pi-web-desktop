@@ -42,24 +42,53 @@ async function readStatusEntries(repositoryRoot: string): Promise<GitPorcelainEn
   return parseGitPorcelainV1(output);
 }
 
-async function readTrackedLineStats(repositoryRoot: string, cwd: string): Promise<{ additions: number; deletions: number }> {
+interface NumstatRecord {
+  additions: number | null;
+  deletions: number | null;
+  path: string;
+}
+
+/**
+ * Parse the null-delimited form of `git diff --numstat -z --find-renames HEAD`.
+ * Regular records are "<added>\t<deleted>\t<path>". Renames/copies are emitted
+ * as an empty-path counts record followed by the original and the new path.
+ * Binary files report "-" for the line counts.
+ */
+function parseNumstat(output: string): Map<string, NumstatRecord> {
+  const records = output.split("\0");
+  const entries = new Map<string, NumstatRecord>();
+  const toCount = (value: string) => (/^\d+$/.test(value) ? Number(value) : null);
+
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    if (!record) continue;
+    const parts = record.split("\t");
+    if (parts.length < 3) continue;
+    const path = parts.slice(2).join("\t");
+    if (path === "") {
+      // Rename/copy group: the next two records hold the original and the new
+      // path; the diff is reported under the new (displayed) path.
+      const newPath = records[index + 2];
+      if (records[index + 1] && newPath) {
+        entries.set(newPath, { additions: toCount(parts[0]), deletions: toCount(parts[1]), path: newPath });
+        index += 2;
+      }
+      continue;
+    }
+    entries.set(path, { additions: toCount(parts[0]), deletions: toCount(parts[1]), path });
+  }
+
+  return entries;
+}
+
+async function readNumstatByPath(repositoryRoot: string, cwd: string): Promise<Map<string, NumstatRecord>> {
   const relativeCwd = toGitPath(path.relative(repositoryRoot, cwd));
   const pathspec = relativeCwd || ".";
   try {
-    const output = await git(repositoryRoot, ["diff", "--no-color", "--no-ext-diff", "--numstat", "HEAD", "--", pathspec]);
-    let additions = 0;
-    let deletions = 0;
-    for (const line of output.split(/\r?\n/)) {
-      if (!line) continue;
-      const [added, deleted] = line.split("\t", 2);
-      const addedCount = Number(added);
-      const deletedCount = Number(deleted);
-      if (Number.isInteger(addedCount)) additions += addedCount;
-      if (Number.isInteger(deletedCount)) deletions += deletedCount;
-    }
-    return { additions, deletions };
+    const output = await git(repositoryRoot, ["diff", "--no-color", "--no-ext-diff", "--numstat", "-z", "--find-renames", "HEAD", "--", pathspec]);
+    return parseNumstat(output);
   } catch {
-    return { additions: 0, deletions: 0 };
+    return new Map();
   }
 }
 
@@ -163,33 +192,47 @@ export async function getGitStatus(cwd: string): Promise<GitStatusResponse> {
     };
   }
 
-  const [entries, trackedLineStats, ignoredPaths] = await Promise.all([
+  const [entries, numstatByPath, ignoredPaths] = await Promise.all([
     readStatusEntries(repositoryRoot),
-    readTrackedLineStats(repositoryRoot, cwd),
+    readNumstatByPath(repositoryRoot, cwd),
     readIgnoredPaths(repositoryRoot),
   ]);
   const files = entries.flatMap((entry): GitFileStatus[] => {
     const filePath = path.resolve(repositoryRoot, entry.path);
     if (!isWithinPath(cwd, filePath)) return [];
+    const lineStat = numstatByPath.get(entry.path);
+    const classified = classifyGitStatus(entry);
     return [{
       filePath,
-      ...classifyGitStatus(entry),
+      ...classified,
       indexStatus: entry.indexStatus,
       worktreeStatus: entry.worktreeStatus,
+      // Untracked files are diffed against nothing; report their full content
+      // as additions once it is counted below. Binary/binary-diff files get
+      // null so the UI can omit the stat.
+      additions: classified.status === "untracked" ? null : (lineStat?.additions ?? null),
+      deletions: lineStat?.deletions ?? null,
     }];
   });
-  const untrackedAdditions = files.reduce(
-    (total, file) => total + (file.status === "untracked" ? countUntrackedTextLines(file.filePath) : 0),
-    0,
-  );
+  for (const file of files) {
+    if (file.status === "untracked") file.additions = countUntrackedTextLines(file.filePath);
+  }
 
+  // Sum the per-file stats so the header numbers always match the per-row
+  // values shown in the Quick Changes list.
+  let totalAdditions = 0;
+  let totalDeletions = 0;
+  for (const file of files) {
+    totalAdditions += file.additions ?? 0;
+    totalDeletions += file.deletions ?? 0;
+  }
 
   return {
     isGitRepository: true,
     repositoryRoot,
     files,
-    additions: trackedLineStats.additions + untrackedAdditions,
-    deletions: trackedLineStats.deletions,
+    additions: totalAdditions,
+    deletions: totalDeletions,
     ignoredPaths: ignoredPaths.filter((ignoredPath) => isWithinPath(cwd, ignoredPath)),
   };
 }

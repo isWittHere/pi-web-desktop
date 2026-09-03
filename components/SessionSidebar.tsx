@@ -15,6 +15,7 @@ import { getTitleModel } from "@/lib/title-settings";
 import { bucketOf, TIME_BUCKET_ORDER, timeBucketKey } from "@/lib/time-groups";
 import { loadCollapsedTimeGroups, saveCollapsedTimeGroups, type CollapsedTimeGroups } from "@/lib/time-group-state";
 import { samePath } from "@/lib/path-match";
+import { shouldNotifyCwdChange, type WorkspaceSwitchRequest } from "@/lib/workspace-switch";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -76,7 +77,7 @@ interface Props {
    *  with the same cwd apply again (e.g. re-activating a tab). projectKey
    *  carries the authoritative workspace identity (the tab's project root)
    *  so restoring a worktree tab does not lose the workspace memory key. */
-  requestedCwd?: { cwd: string | null; projectKey?: string | null; token: number } | null;
+  requestedCwd?: WorkspaceSwitchRequest | null;
   /** How a picked project is opened. When provided, every workspace picker
    *  menu (title bar / welcome / sidebar) calls this instead of switching
    *  the cwd directly, so the shell can open a workspace tab instead. */
@@ -85,6 +86,9 @@ interface Props {
    *  (tabs view mode: the title-bar tab bar needs both for dots and for the
    *  picker list). Only fires when the data actually changed. */
   onWorkspaceActivityChange?: (snapshot: { projects: string[]; activity: Map<string, { running: number; unread: number }> }) => void;
+  /** Workspace keys currently open as tabs (tabs view mode) — rendered as
+   *  the picker menu's "Open Workspaces" group. Empty in classic view. */
+  openWorkspaceKeys?: string[];
   /** View mode: tabs mode hides the sidebar CWD picker / inline worktree
    *  switcher (replaced by the WorktreePanel) and the title-bar worktree
    *  button. Classic mode keeps every existing entry point. */
@@ -315,7 +319,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor, onNoWorkspaceChange, viewMode = "classic" }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, openWorkspaceKeys, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor, onNoWorkspaceChange, viewMode = "classic" }: Props) {
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -618,9 +622,22 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // effect below can tell "this cwd came from a tab/session pick (use the
   // trusted project key)" apart from a sidebar-internal selection (re-resolve
   // via projectRootFor as before).
+  //
+  // The notify decision is token-aware (see shouldNotifyCwdChange): besides
+  // the value-change case, a NEW shell request for the cwd already in effect
+  // re-notifies — without this, re-issued switches (re-clicking the active
+  // workspace tab) were deduplicated away and could never repair a drifted
+  // highlight/content state.
+  const lastConsumedRequestTokenRef = useRef(0);
   useEffect(() => {
-    if (lastNotifiedCwdRef.current === selectedCwd) return;
-    lastNotifiedCwdRef.current = selectedCwd;
+    const decision = shouldNotifyCwdChange(
+      selectedCwd,
+      requestedCwd,
+      { lastNotifiedCwd: lastNotifiedCwdRef.current, lastConsumedToken: lastConsumedRequestTokenRef.current },
+    );
+    if (!decision.notify) return;
+    lastNotifiedCwdRef.current = decision.lastNotifiedCwd;
+    lastConsumedRequestTokenRef.current = decision.lastConsumedToken;
     const isAutoSelect = autoSelectRef.current;
     autoSelectRef.current = false;
     // The switch request is the newest prop in this commit, while selectedCwd
@@ -1251,11 +1268,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               )}
             </span>
           </button>
-          <AnimatedDropdown open={isProjectDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)" }}>
+          <AnimatedDropdown open={isProjectDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 280, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(calc(55vh / var(--app-ui-scale, 1)), 440px)" }}>
             <WorkspacePickerMenu
               projects={recentProjects}
               selectedProject={selectedProject}
               activity={projectActivity}
+              openWorkspaces={openWorkspaceKeys}
               homeDir={homeDir}
               onSelectProject={handleSelectProjectFromMenu}
               onRequestClose={() => setWorkspaceProjectDropdownOpen(null)}
@@ -1308,8 +1326,8 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               <PathLabel text={compactWorktreeLabel ?? ""} style={{ flex: 1, minWidth: 0, color: "inherit", direction: "ltr", fontFamily: "inherit" }} />
               {showWorktreeSwitcher && <CaretDown size={12} weight="regular" style={{ flexShrink: 0, transition: "transform 0.12s", transform: isWorktreeDropdownOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />}
             </button>
-            <AnimatedDropdown open={showWorktreeSwitcher && isWorktreeDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 320, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)" }}>
-              <div style={{ maxHeight: "min(calc(32vh / var(--app-ui-scale, 1)), 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
+            <AnimatedDropdown open={showWorktreeSwitcher && isWorktreeDropdownOpen} style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 280, zIndex: 1000, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.16)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "min(calc(55vh / var(--app-ui-scale, 1)), 440px)" }}>
+              <div style={{ maxHeight: "min(calc(46vh / var(--app-ui-scale, 1)), 360px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
                 {worktreeState?.worktrees.map((wt) => {
                   const isCurrent = samePath(wt.path, selectedCwd) || (wt.isMain && !worktreeState.worktrees.some((w) => samePath(w.path, selectedCwd)));
                   return (
@@ -1646,13 +1664,14 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)",
+              maxHeight: "min(calc(55vh / var(--app-ui-scale, 1)), 440px)",
             }}
           >
             <WorkspacePickerMenu
               projects={recentProjects}
               selectedProject={selectedProject}
               activity={projectActivity}
+              openWorkspaces={openWorkspaceKeys}
               homeDir={homeDir}
               onSelectProject={handleSelectProjectFromMenu}
               onRequestClose={() => setDropdownOpen(false)}
@@ -1722,10 +1741,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                   overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
-                  maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)",
+                  maxHeight: "min(calc(55vh / var(--app-ui-scale, 1)), 440px)",
                 }}
               >
-                  <div style={{ maxHeight: "min(calc(32vh / var(--app-ui-scale, 1)), 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
+                  <div style={{ maxHeight: "min(calc(46vh / var(--app-ui-scale, 1)), 360px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
                     {worktreeState.worktrees.map((wt) => {
                       const isCurrent = samePath(wt.path, selectedCwd) || (wt.isMain && !worktreeState.worktrees.some((w) => samePath(w.path, selectedCwd)));
                       if (wtConfirmRemove === wt.path) {
@@ -3022,13 +3041,13 @@ function SessionItem({
               {!session.isDraft && session.mark && (
                 <SessionMarkBadge mark={session.mark} />
               )}
-              {session.worktreeBranch && (
+              {session.isWorktree && session.branch && (
                 <span
                   title={t("desktop.worktree", { cwd: session.cwd })}
                   style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", minWidth: 0, overflow: "hidden" }}
                 >
                   <GitBranch size={9} weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.worktreeBranch}</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.branch}</span>
                 </span>
               )}
             </div>

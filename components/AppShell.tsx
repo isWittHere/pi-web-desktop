@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -24,6 +24,7 @@ import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useWorkspaceTabs } from "@/hooks/useWorkspaceTabs";
 import { closeTab as closeWorkspaceTab, loadWorkspaceTabs, saveWorkspaceTabs, type WorkspaceTabsState } from "@/lib/workspace-tabs";
+import type { WorkspaceSwitchRequest } from "@/lib/workspace-switch";
 import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
@@ -366,6 +367,12 @@ export function AppShell() {
     projects: string[];
     activity: Map<string, { running: number; unread: number }>;
   }>({ projects: [], activity: new Map() });
+  // Keys of the workspaces currently open as tabs, in tab order — consumed
+  // by the "Open Workspaces" group of the title-bar " + " picker menu.
+  const openWorkspaceKeys = useMemo(
+    () => tabsState.tabs.map((tab) => tab.key),
+    [tabsState.tabs],
+  );
   // Cwd switch requests for the sidebar's effective cwd (tab activation,
   // project pick, last-tab-closed). The token guarantees a fresh object
   // reference so the requestedCwd effect re-runs even when the cwd is
@@ -373,7 +380,7 @@ export function AppShell() {
   // carries the authoritative workspace identity (tab.key /
   // workspaceKeyOf(session)) so the restore anchor never depends on the
   // sidebar re-resolving a worktree path back to its root.
-  const [cwdRequest, setCwdRequest] = useState<{ cwd: string | null; projectKey?: string | null; token: number } | null>(null);
+  const [cwdRequest, setCwdRequest] = useState<WorkspaceSwitchRequest | null>(null);
   const requestWorkspaceSwitch = useCallback((cwd: string | null, projectKey?: string | null) => {
     setCwdRequest((prev) => ({ cwd, projectKey, token: (prev?.token ?? 0) + 1 }));
   }, []);
@@ -451,9 +458,15 @@ export function AppShell() {
   // Activate a workspace tab: switching the effective cwd re-runs the same
   // single-workspace state machine as the classic view (last-open restore,
   // session remount). Never touches the running agent session.
+  //
+  // No already-active guard: re-clicking the active tab re-issues the switch
+  // as a recovery gesture. When highlight and content agree, handleCwdChange
+  // no-ops on its same-workspace checks; when they drifted apart, the
+  // re-issue repairs them instead of being silently dropped. The fresh token
+  // makes the sidebar re-notify even for an unchanged cwd.
   const handleSelectTab = useCallback((key: string) => {
     const tab = tabsStateRef.current.tabs.find((t) => t.key === key);
-    if (!tab || key === tabsStateRef.current.activeKey) return;
+    if (!tab) return;
     tabsApi.activate(key);
     requestWorkspaceSwitch(tab.cwd, tab.key);
   }, [tabsApi, requestWorkspaceSwitch]);
@@ -608,10 +621,16 @@ export function AppShell() {
     }
     setActiveCwd(cwd);
     // Keep the active workspace tab's cwd in sync — worktree switches inside
-    // one project do not create new tabs (tabs are per project root).
+    // one project do not create new tabs (tabs are per project root). A cwd
+    // from another workspace must never bleed into the bookmark: the key is
+    // the workspace identity, and a foreign cwd would corrupt the next
+    // activation request for this tab (requesting the wrong directory and
+    // tripping the unchanged-cwd path).
     if (cwd && viewModeRef.current === "tabs") {
       const activeKey = tabsStateRef.current.activeKey;
-      if (activeKey) tabsApi.updateCwd(activeKey, cwd);
+      if (activeKey && samePath(projectRoot ?? cwd, activeKey)) {
+        tabsApi.updateCwd(activeKey, cwd);
+      }
     }
     // Skip if cwd is null (initial mount) or during the initial URL restore.
     if (!cwd) return;
@@ -637,6 +656,13 @@ export function AppShell() {
     if (selectedSession && samePath(workspaceKeyOf(selectedSession), newProject)) {
       return;
     }
+    // A welcome draft is the workspace's visible content too: re-issuing a
+    // switch to the workspace the empty draft already shows (re-click on the
+    // active tab) must not drop and recreate the draft — that would churn the
+    // composer and could land on the workspace's last session instead.
+    if (!selectedSession && activeDraftIdRef.current !== null && newSessionCwd && samePath(newSessionCwd, cwd)) {
+      return;
+    }
     // Leaving the draft for another project: an empty draft is meaningless.
     cleanupEmptyActiveDraft();
     // A cross-project switch must not keep the outgoing draft key bound to the
@@ -656,7 +682,7 @@ export function AppShell() {
     // Restore the workspace we switched to: its last session or draft, or a
     // fresh welcome draft so the composer matches the "+" flow.
     restoreWorkspaceContext(cwd, newProject);
-  }, [selectedSession, cleanupEmptyActiveDraft, restoreWorkspaceContext, tabsApi, requestWorkspaceSwitch]);
+  }, [selectedSession, newSessionCwd, cleanupEmptyActiveDraft, restoreWorkspaceContext, tabsApi, requestWorkspaceSwitch]);
 
   // Update browser tab title when workspace changes
   useEffect(() => {
@@ -690,11 +716,16 @@ export function AppShell() {
       requestWorkspaceSwitch(session.cwd, workspaceKeyOf(session));
     }
     // Tabs mode: entering a session directly (lobby rows) must surface its
-    // workspace as a tab, exactly like a project pick would.
+    // workspace as a tab, exactly like a project pick would. A tab that
+    // already exists must be *activated*: the strip highlight and the chat
+    // content must never disagree, or the next click on the still-highlighted
+    // tab would request a cwd the pipeline considers already-in-effect.
     if (viewModeRef.current === "tabs") {
       const tabKey = workspaceKeyOf(session);
       if (!tabsStateRef.current.tabs.some((t) => t.key === tabKey)) {
         tabsApi.open(tabKey, session.cwd);
+      } else if (tabsStateRef.current.activeKey !== tabKey) {
+        tabsApi.activate(tabKey);
       }
     }
     // Wait for the session content before hiding the startup splash (only
@@ -836,7 +867,7 @@ export function AppShell() {
   // Build the completion popup content for a session that just finished.
   const buildDonePayload = useCallback((session: SessionInfo | null, model: { provider: string; modelId: string } | null, stats: SessionStatsInfo | null, ctx: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
     const workspace = session ? lastPathSegment(workspaceKeyOf(session)) : undefined;
-    const branch = session?.worktreeBranch;
+    const branch = session?.branch;
     const cost = stats?.sessionId === session?.id && stats?.cost ? stats.cost : 0;
     const parts: { workspace?: string; model?: string; usage?: string } = {};
     if (workspace) parts.workspace = branch ? `${workspace} · ${branch}` : workspace;
@@ -1124,6 +1155,7 @@ export function AppShell() {
         requestedCwd={cwdRequest}
         onOpenProject={handleOpenProject}
         onWorkspaceActivityChange={setWorkspaceActivity}
+        openWorkspaceKeys={openWorkspaceKeys}
         viewMode={viewMode}
         workspaceControlsHosts={{
           // Tabs mode: the title-bar host belongs to the workspace tab bar
@@ -1184,6 +1216,7 @@ export function AppShell() {
         showPiLogo={viewMode === "tabs"}
         pickerProjects={workspaceActivity.projects}
         pickerActivity={workspaceActivity.activity}
+        pickerOpenWorkspaces={openWorkspaceKeys}
         onSelectProject={handleOpenProject}
       />
       {/* Tabs view mode: browser-style workspace tabs in the title-bar host */}

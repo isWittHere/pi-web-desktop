@@ -10,9 +10,12 @@ import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import {
   createProjectCommandBashExtension,
   createProjectCommandBashOperations,
+  createProjectCommandPowerShellExtension,
   preferUserBashExtension,
+  preferUserPowerShellExtension,
 } from "./project-command-env";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
+import { resolveShellTools } from "./powershell-settings";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import { rememberThinkingLevel } from "./thinking-level-memory";
@@ -77,7 +80,7 @@ export interface RpcSessionStartOptions {
   thinkingLevel?: ThinkingLevel;
 }
 
-const CODING_TOOL_NAMES = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+const CODING_TOOL_NAMES = ["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"];
 
 // pi's Theme constructor eagerly ANSI-compiles every token at construction
 // time and expands optional fallbacks (e.g. searchMatchText ?? text). Pass an
@@ -166,6 +169,8 @@ export class AgentSessionWrapper {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
+  private sessionShutdownEmitted = false;
+  private forceShutdownOnIdle = false;
   private _alive = true;
 
   constructor(public readonly inner: AgentSessionLike, public readonly cwd: string) {}
@@ -299,8 +304,10 @@ export class AgentSessionWrapper {
 
   private resetIdleTimer(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
+    if (!this._alive) return;
+    if (!this.isRunning()) this.forceShutdownOnIdle = false;
     this.idleTimer = setTimeout(() => {
-      if (this.isRunning()) {
+      if (this.isRunning() && !this.forceShutdownOnIdle) {
         this.resetIdleTimer();
         return;
       }
@@ -375,8 +382,9 @@ export class AgentSessionWrapper {
   }
 
   async send(command: Record<string, unknown>): Promise<unknown> {
-    this.resetIdleTimer();
     const type = command.type as string;
+    // Status reconciliation must not postpone forced cleanup after Stop.
+    if (type !== "get_state") this.resetIdleTimer();
     if (type === "prompt" || type === "steer" || type === "follow_up") {
       const imageError = validateAgentImages(command.images);
       if (imageError) throw new Error(imageError);
@@ -417,8 +425,13 @@ export class AgentSessionWrapper {
       }
 
       case "abort":
-        await this.inner.abort();
-        return null;
+        this.forceShutdownOnIdle = true;
+        try {
+          await this.inner.abort();
+          return null;
+        } finally {
+          if (!this.isRunning()) this.forceShutdownOnIdle = false;
+        }
 
       case "get_state": {
         const model = this.inner.model;
@@ -616,7 +629,11 @@ export class AgentSessionWrapper {
       case "set_tools": {
         const toolNames = command.toolNames as string[];
         this.setForceEmptySystemPrompt(toolNames.length === 0);
-        this.inner.setActiveToolsByName(withExtensionTools(this.inner, toolNames));
+        const selectedToolNames = resolveShellTools(
+          toolNames,
+          this.inner.settingsManager.getDefaultTools(),
+        );
+        this.inner.setActiveToolsByName(withExtensionTools(this.inner, selectedToolNames));
         this.applyForcedEmptySystemPrompt();
         return null;
       }
@@ -674,6 +691,7 @@ export class AgentSessionWrapper {
       }
 
       case "abort_bash": {
+        this.forceShutdownOnIdle = true;
         this.inner.abortBash();
         return null;
       }
@@ -693,11 +711,38 @@ export class AgentSessionWrapper {
     for (const id of Array.from(this.activeCustomUis.keys())) this.closeCustomUi(id, undefined);
     this.pendingUiResponses.clear();
     this.pendingUiRequests.clear();
-    try {
-      this.inner.dispose();
-    } finally {
-      this.onDestroyCallback?.();
+
+    const finishDispose = () => {
+      try {
+        this.inner.dispose();
+      } finally {
+        this.onDestroyCallback?.();
+      }
+    };
+
+    // Always emit session_shutdown before dispose, even when callers skip
+    // shutdown() (process exit, direct destroy). Await when possible so
+    // extension MCP children can reap before the runner is invalidated.
+    if (this.sessionShutdownEmitted) {
+      finishDispose();
+      return;
     }
+
+    this.sessionShutdownEmitted = true;
+    const emit = this.inner.extensionRunner.emit;
+    if (typeof emit !== "function") {
+      finishDispose();
+      return;
+    }
+
+    void (async () => emit.call(this.inner.extensionRunner, { type: "session_shutdown", reason: "quit" }))()
+      .catch((error) => {
+        console.error(
+          "[pi-web] session_shutdown before dispose failed:",
+          error instanceof Error ? error.message : error,
+        );
+      })
+      .finally(finishDispose);
   }
 
   async shutdown(): Promise<void> {
@@ -714,7 +759,10 @@ export class AgentSessionWrapper {
             error instanceof Error ? error.message : error,
           );
         }
-        await this.inner.extensionRunner.emit?.({ type: "session_shutdown", reason: "quit" });
+        if (!this.sessionShutdownEmitted) {
+          this.sessionShutdownEmitted = true;
+          await this.inner.extensionRunner.emit?.({ type: "session_shutdown", reason: "quit" });
+        }
       } finally {
         this.destroy();
       }
@@ -1278,8 +1326,14 @@ export async function startRpcSession(
             cwd: sessionCwd,
             settings: settingsManager,
           }),
+          // PowerShell tool exists only on Windows; registering the isolated
+          // operations keeps host env out of agent-invoked PowerShell commands.
+          ...(process.platform === "win32"
+            ? [createProjectCommandPowerShellExtension({ cwd: sessionCwd })]
+            : []),
         ],
-        extensionsOverride: preferUserBashExtension,
+        extensionsOverride: (base) =>
+          preferUserPowerShellExtension(preferUserBashExtension(base)),
       },
       ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
     });
@@ -1337,7 +1391,8 @@ export async function startRpcSession(
     // requested builtin coding tools PLUS all extension/package tools, so installed
     // extensions stay usable in pi-web just like in the `pi` CLI.
     if (toolNames && toolNames.length > 0) {
-      inner.setActiveToolsByName(withExtensionTools(inner, toolNames));
+      const selectedToolNames = resolveShellTools(toolNames, settingsManager.getDefaultTools());
+      inner.setActiveToolsByName(withExtensionTools(inner, selectedToolNames));
     }
 
     const wrapper = new AgentSessionWrapper(inner, sessionCwd);

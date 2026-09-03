@@ -3044,7 +3044,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}>
             {(onToolPresetChange || onLoadTools) && (
               <div
-                className="chat-input-toolbar-tools-group"
+                className={(toolPreset ?? "default") === "none" ? "chat-input-toolbar-tools-group tools-group-preset-off" : "chat-input-toolbar-tools-group"}
                 style={{
                   position: "relative",
                   display: "flex",
