@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect } from "react";
 import { Toggle } from "./Toggle";
 import { SettingsPage, SettingsGroup, SettingsRow, SettingsSelect } from "@/components/settings-ui";
 import { useI18n } from "@/hooks/useI18n";
+import { sendAgentCommand } from "@/lib/agent-client";
+import type { ShellToolSettingsResponse } from "@/lib/api-types";
 import {
   getTitleAutoEnabled,
   getTitleModel,
@@ -83,7 +85,7 @@ interface ModelOption {
   label: string;
 }
 
-export function ChatConfig({ cwd }: { cwd?: string | null }) {
+export function ChatConfig({ cwd, sessionId, onSessionReloaded }: { cwd?: string | null; sessionId?: string | null; onSessionReloaded?: () => void }) {
   const { t } = useI18n();
   const [shortcut, setShortcut] = useState<InputShortcut>(getStoredShortcut);
   const [markdownList, setMarkdownList] = useState<boolean>(getStoredMarkdownList);
@@ -92,6 +94,9 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
   const [titleAuto, setTitleAuto] = useState<boolean>(getTitleAutoEnabled);
   const [titleModel, setTitleModelState] = useState<{ provider: string; modelId: string } | null>(getTitleModel);
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
+  const [shellSettings, setShellSettings] = useState<ShellToolSettingsResponse | null>(null);
+  const [shellSaving, setShellSaving] = useState(false);
+  const [shellError, setShellError] = useState<string | null>(null);
 
   // Load the configured/visible model list for the title-model picker.
   useEffect(() => {
@@ -115,6 +120,44 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
         setModelOptions([]);
       });
   }, [cwd]);
+
+  // Load the shell-tool preference (Windows only).
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/tools/settings")
+      .then(async (response) => {
+        const data = await response.json() as ShellToolSettingsResponse & { error?: string };
+        if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+        if (!cancelled) setShellSettings(data);
+      })
+      .catch((cause) => {
+        if (!cancelled) setShellError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const togglePowerShell = useCallback(async (enabled: boolean) => {
+    setShellSaving(true);
+    setShellError(null);
+    try {
+      const response = await fetch("/api/tools/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await response.json() as ShellToolSettingsResponse & { error?: string };
+      if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+      setShellSettings(data);
+      if (sessionId) {
+        await sendAgentCommand(sessionId, { type: "reload" });
+        onSessionReloaded?.();
+      }
+    } catch (cause) {
+      setShellError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setShellSaving(false);
+    }
+  }, [sessionId, onSessionReloaded]);
 
   useEffect(() => {
     const handler = () => {
@@ -199,6 +242,26 @@ export function ChatConfig({ cwd }: { cwd?: string | null }) {
           }
         />
       </SettingsGroup>
+
+      {shellSettings?.isWindows && (
+        <SettingsGroup title={t("desktop.shellTool")}>
+          <SettingsRow
+            label={t("desktop.usePowerShell")}
+            description={t("desktop.shellToolDescription")}
+            control={
+              <Toggle
+                checked={shellSettings.powerShellEnabled}
+                disabled={shellSaving}
+                onChange={togglePowerShell}
+                label={t("desktop.usePowerShell")}
+              />
+            }
+          />
+          {shellError && (
+            <div style={{ marginTop: 8, color: "#ef4444", fontSize: 11 }}>{shellError}</div>
+          )}
+        </SettingsGroup>
+      )}
 
       <SettingsGroup title={t("desktop.chatGroupInput")}>
         <SettingsRow

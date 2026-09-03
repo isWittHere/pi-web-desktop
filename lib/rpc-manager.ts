@@ -10,9 +10,12 @@ import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import {
   createProjectCommandBashExtension,
   createProjectCommandBashOperations,
+  createProjectCommandPowerShellExtension,
   preferUserBashExtension,
+  preferUserPowerShellExtension,
 } from "./project-command-env";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
+import { resolveShellTools } from "./powershell-settings";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import { rememberThinkingLevel } from "./thinking-level-memory";
@@ -77,7 +80,7 @@ export interface RpcSessionStartOptions {
   thinkingLevel?: ThinkingLevel;
 }
 
-const CODING_TOOL_NAMES = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+const CODING_TOOL_NAMES = ["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"];
 
 // pi's Theme constructor eagerly ANSI-compiles every token at construction
 // time and expands optional fallbacks (e.g. searchMatchText ?? text). Pass an
@@ -626,7 +629,11 @@ export class AgentSessionWrapper {
       case "set_tools": {
         const toolNames = command.toolNames as string[];
         this.setForceEmptySystemPrompt(toolNames.length === 0);
-        this.inner.setActiveToolsByName(withExtensionTools(this.inner, toolNames));
+        const selectedToolNames = resolveShellTools(
+          toolNames,
+          this.inner.settingsManager.getDefaultTools(),
+        );
+        this.inner.setActiveToolsByName(withExtensionTools(this.inner, selectedToolNames));
         this.applyForcedEmptySystemPrompt();
         return null;
       }
@@ -1319,8 +1326,14 @@ export async function startRpcSession(
             cwd: sessionCwd,
             settings: settingsManager,
           }),
+          // PowerShell tool exists only on Windows; registering the isolated
+          // operations keeps host env out of agent-invoked PowerShell commands.
+          ...(process.platform === "win32"
+            ? [createProjectCommandPowerShellExtension({ cwd: sessionCwd })]
+            : []),
         ],
-        extensionsOverride: preferUserBashExtension,
+        extensionsOverride: (base) =>
+          preferUserPowerShellExtension(preferUserBashExtension(base)),
       },
       ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
     });
@@ -1378,7 +1391,8 @@ export async function startRpcSession(
     // requested builtin coding tools PLUS all extension/package tools, so installed
     // extensions stay usable in pi-web just like in the `pi` CLI.
     if (toolNames && toolNames.length > 0) {
-      inner.setActiveToolsByName(withExtensionTools(inner, toolNames));
+      const selectedToolNames = resolveShellTools(toolNames, settingsManager.getDefaultTools());
+      inner.setActiveToolsByName(withExtensionTools(inner, selectedToolNames));
     }
 
     const wrapper = new AgentSessionWrapper(inner, sessionCwd);

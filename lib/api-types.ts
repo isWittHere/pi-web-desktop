@@ -1,3 +1,8 @@
+export interface ShellToolSettingsResponse {
+  isWindows: boolean;
+  powerShellEnabled: boolean;
+}
+
 export interface SkillSearchResult {
   package: string;
   installs: string;

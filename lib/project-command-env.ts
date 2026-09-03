@@ -1,10 +1,13 @@
 import {
   createBashToolDefinition,
   createLocalBashOperations,
+  createLocalPowerShellOperations,
+  createPowerShellToolDefinition,
   getAgentDir,
   type BashOperations,
   type InlineExtension,
   type LoadExtensionsResult,
+  type PowerShellOperations,
 } from "@earendil-works/pi-coding-agent";
 import { join } from "node:path";
 
@@ -124,6 +127,86 @@ export function preferUserBashExtension(base: LoadExtensionsResult): LoadExtensi
     errors: base.errors.filter((error) => !(
       error.path === HOST_EXTENSION_PATH
       && error.error === `Tool "bash" conflicts with ${userBashOwner.path}`
+    )),
+  };
+}
+
+const HOST_POWERSHELL_EXTENSION_PATH = `<inline:${HOST_EXTENSION_NAME}-powershell>`;
+
+type ProjectCommandPowerShellOperationsOptions = {
+  agentBinDir?: string;
+  baseEnvironment?: NodeJS.ProcessEnv;
+  localOperations?: PowerShellOperations;
+  platform?: NodeJS.Platform;
+};
+
+/**
+ * Wrap PowerShell operations with the same project-command environment
+ * isolation as bash (drop PORT/NODE_ENV/NEXT_* and prepend pi's bin dir), so
+ * the host runtime never leaks into agent-invoked PowerShell commands.
+ */
+export function createProjectCommandPowerShellOperations(
+  options: ProjectCommandPowerShellOperationsOptions = {},
+): PowerShellOperations {
+  const {
+    agentBinDir = join(getAgentDir(), "bin"),
+    baseEnvironment = process.env,
+    localOperations = createLocalPowerShellOperations(),
+    platform = process.platform,
+  } = options;
+
+  return {
+    exec(command, cwd, executionOptions) {
+      const environment = withAgentBinDirectory(
+        sanitizeProjectCommandEnvironment(executionOptions.env ?? baseEnvironment, platform),
+        agentBinDir,
+        platform,
+      );
+      return localOperations.exec(command, cwd, {
+        ...executionOptions,
+        env: environment,
+      });
+    },
+  };
+}
+
+/** Inline extension that overrides the PowerShell tool with the isolated operations. */
+export function createProjectCommandPowerShellExtension(options: {
+  cwd: string;
+}): InlineExtension {
+  return {
+    name: `${HOST_EXTENSION_NAME}-powershell`,
+    hidden: true,
+    factory: (pi) => {
+      const displayDefinition = createPowerShellToolDefinition(options.cwd);
+      pi.registerTool({
+        ...displayDefinition,
+        execute(toolCallId, params, signal, onUpdate, context) {
+          const executionDefinition = createPowerShellToolDefinition(options.cwd, {
+            operations: createProjectCommandPowerShellOperations(),
+          });
+          return executionDefinition.execute(toolCallId, params, signal, onUpdate, context);
+        },
+      });
+    },
+  };
+}
+
+export function preferUserPowerShellExtension(base: LoadExtensionsResult): LoadExtensionsResult {
+  const hostExtensionIndex = base.extensions.findIndex((extension) => extension.path === HOST_POWERSHELL_EXTENSION_PATH);
+  if (hostExtensionIndex < 0) return base;
+
+  const userPowerShellOwner = base.extensions
+    .slice(0, hostExtensionIndex)
+    .find((extension) => extension.tools.has("powershell"));
+  if (!userPowerShellOwner) return base;
+
+  return {
+    ...base,
+    extensions: base.extensions.filter((_, index) => index !== hostExtensionIndex),
+    errors: base.errors.filter((error) => !(
+      error.path === HOST_POWERSHELL_EXTENSION_PATH
+      && error.error === `Tool "powershell" conflicts with ${userPowerShellOwner.path}`
     )),
   };
 }
