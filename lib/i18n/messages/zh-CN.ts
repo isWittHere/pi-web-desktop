@@ -200,7 +200,7 @@ export const zhCNLocale = {
     "desktop.recommendedWorkspacesSettingDescription": "检测其他编辑器和编码代理（VS Code、Zed、Claude Code、Codex、OpenCode）的最近工作区。只读——绝不会写入它们的任何数据。",
     "desktop.hideRecommendedWorkspaces": "隐藏推荐工作区",
     "desktop.loadingSession": "正在加载会话...",
-    "desktop.scrollToLoadEarlierMessages": "向上滚动以加载更早的消息（隐藏了 {count} 条）",
+    "desktop.scrollToLoadEarlierMessages": "向上滚动以加载更早的消息",
     "desktop.runningTool": "正在运行工具...",
     "desktop.runningTools": "正在运行 {tools}...",
     "desktop.runningToolProgress": "正在运行 {name}：",

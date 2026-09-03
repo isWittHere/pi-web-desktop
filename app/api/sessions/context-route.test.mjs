@@ -17,9 +17,7 @@ const jiti = createJiti(import.meta.url, {
 const { buildSessionContext } = await jiti.import("@/lib/session-reader");
 
 test("context route parses ?tail and ?before, excluding the boundary on paging", () => {
-  // Step A keeps the legacy full-chain behavior when ?tail is absent; the
-  // default-50 switch lands together with the client pagination wiring.
-  assert.match(routeSrc, /const tail = Number\.isFinite\(rawTail\) && rawTail > 0 \? Math\.min\(rawTail, 1000\) : undefined/);
+  assert.match(routeSrc, /const tail = Number\.isFinite\(rawTail\) && rawTail > 0 \? Math\.min\(rawTail, 1000\) : 50/);
   assert.match(routeSrc, /const before = url\.searchParams\.get\("before"\)/);
   assert.match(routeSrc, /buildSessionContext\(sm\.getEntries\(\) as never, before \?\? leafId, \{[^}]*excludeLeaf: Boolean\(before\)/);
 });

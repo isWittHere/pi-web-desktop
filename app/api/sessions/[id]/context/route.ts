@@ -12,11 +12,11 @@ export async function GET(
   const leafId = url.searchParams.get("leafId") ?? undefined;
   const deferThinking = url.searchParams.has("deferThinking");
   const deferToolResultImages = url.searchParams.has("deferMedia");
-  // `tail` caps the ancestor chain returned; `before` rewinds the walk start to
-  // an older entry so the client can page upward without re-fetching the whole
-  // active branch. Absent tail keeps the full-chain legacy behavior.
+  // `tail` caps the ancestor chain returned (default 50, capped at 1000);
+  // `before` rewinds the walk start to an older entry so the client can page
+  // upward without re-fetching the whole active branch.
   const rawTail = Number(url.searchParams.get("tail"));
-  const tail = Number.isFinite(rawTail) && rawTail > 0 ? Math.min(rawTail, 1000) : undefined;
+  const tail = Number.isFinite(rawTail) && rawTail > 0 ? Math.min(rawTail, 1000) : 50;
   const before = url.searchParams.get("before") ?? undefined;
 
   try {
@@ -39,7 +39,7 @@ export async function GET(
       excludeLeaf: Boolean(before),
     });
 
-    return NextResponse.json({ context, tail: tail ?? null, before: before ?? null });
+    return NextResponse.json({ context, tail, before: before ?? null });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

@@ -200,7 +200,7 @@ export const enLocale = {
     "desktop.recommendedWorkspacesSettingDescription": "Detect recent workspaces from other editors and coding agents (VS Code, Zed, Claude Code, Codex, OpenCode). Read-only — nothing is ever written to their data.",
     "desktop.hideRecommendedWorkspaces": "Hide recommended workspaces",
     "desktop.loadingSession": "Loading session...",
-    "desktop.scrollToLoadEarlierMessages": "Scroll up to load earlier messages ({count} hidden)",
+    "desktop.scrollToLoadEarlierMessages": "Scroll up to load earlier messages",
     "desktop.runningTool": "Running tool...",
     "desktop.runningTools": "Running {tools}...",
     "desktop.runningToolProgress": "Running {name}:",

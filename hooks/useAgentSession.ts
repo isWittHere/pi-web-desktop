@@ -34,6 +34,10 @@ export interface SessionData {
   context: {
     messages: AgentMessage[];
     entryIds: string[];
+    /** First entry of the loaded window (raw chain boundary). */
+    oldestEntryId: string | null;
+    /** True when older pages exist server-side (tail truncation). */
+    hasMore: boolean;
     thinkingLevel: string;
     model: { provider: string; modelId: string } | null;
   };
@@ -346,6 +350,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
+  const [hasEarlierMessages, setHasEarlierMessages] = useState(false);
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const [agentRunning, setAgentRunning] = useState(false);
   const [bashRunning, setBashRunning] = useState(false);
@@ -479,6 +485,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setActiveLeafId(d.leafId);
     setMessages(d.context.messages);
     setEntryIds(d.context.entryIds ?? []);
+    setHistoryCursor(d.context.oldestEntryId);
+    setHasEarlierMessages(d.context.hasMore);
     setCurrentModelOverride(null);
     setError(null);
     if (d.context.thinkingLevel) {
@@ -552,6 +560,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           setData(null);
           setActiveLeafId(null);
           setMessages([]);
+          setEntryIds([]);
+          setHistoryCursor(null);
+          setHasEarlierMessages(false);
           setError(null);
         }
         return null;
@@ -576,16 +587,39 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [loadAgentState, applySessionData]);
 
-  const loadContext = useCallback(async (sid: string, leafId: string | null) => {
+  const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null) => {
     try {
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       if (leafId) params.set("leafId", leafId);
+      // Page upward: ask the server for the `tail` ancestors preceding `before`,
+      // then prepend them. Omitting `before` fetches the most-recent page.
+      if (before) params.set("before", before);
       const url = `/api/sessions/${encodeURIComponent(sid)}/context?${params}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[] } };
-      setMessages(d.context.messages);
-      setEntryIds(d.context.entryIds ?? []);
+      const d = await res.json() as { context: SessionData["context"] };
+      if (sessionIdRef.current !== sid) return;
+      setHistoryCursor(d.context.oldestEntryId);
+      setHasEarlierMessages(d.context.hasMore);
+      setData((prev) => {
+        if (!prev || prev.sessionId !== sid) return prev;
+        const context = before ? {
+          ...prev.context,
+          messages: [...d.context.messages, ...prev.context.messages],
+          entryIds: [...d.context.entryIds, ...prev.context.entryIds],
+          oldestEntryId: d.context.oldestEntryId,
+          hasMore: d.context.hasMore,
+        } : d.context;
+        return { ...prev, context };
+      });
+      if (before) {
+        // Older page: prepend so scroll position stays anchored.
+        setMessages((prev) => [...d.context.messages, ...prev]);
+        setEntryIds((prev) => [...d.context.entryIds, ...prev]);
+      } else {
+        setMessages(d.context.messages);
+        setEntryIds(d.context.entryIds ?? []);
+      }
     } catch (e) {
       console.error("Failed to load context:", e);
     }
@@ -1965,7 +1999,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     // State
-    loading, error, activeLeafId, messages, entryIds, streamState,
+    loading, error, activeLeafId, messages, entryIds, historyCursor, hasEarlierMessages, streamState,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel, sessionStats,
@@ -1987,5 +2021,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
     loadSystemInfo,
     handleLeafChange,
+    loadContext,
   };
 }

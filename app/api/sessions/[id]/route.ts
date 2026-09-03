@@ -165,10 +165,9 @@ export async function GET(
     const tree = projectTreeForResponse(sm.getTree());
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
-    // ?tail bounds the returned ancestor chain (capped at 1000). Absent or
-    // invalid tail returns the full chain until the client learns to page.
+    // ?tail bounds the returned ancestor chain (default 50, capped at 1000).
     const rawTail = Number(searchParams.get("tail"));
-    const tail = Number.isFinite(rawTail) && rawTail > 0 ? Math.min(rawTail, 1000) : undefined;
+    const tail = Number.isFinite(rawTail) && rawTail > 0 ? Math.min(rawTail, 1000) : 50;
     const context = buildSessionContext(entries as never, leafId, { deferThinking, deferToolResultImages, tail });
     const totalActiveMs = computeSessionTotalActiveMs(entries);
     const { fileStats, popupModel } = summarizeSessionFile(entries);
@@ -179,6 +178,11 @@ export async function GET(
     const parentSessionId = header?.parentSession
       ? await resolveSessionIdByPath(header.parentSession)
       : undefined;
+    // messageCount/firstMessage describe the whole session, so derive them from
+    // the full entries — the tail-sliced context only carries the last page.
+    const firstUserMessage = (entries as unknown as Extract<SessionEntry, { type: "message" }>[]).find(
+      (entry) => entry.message.role === "user",
+    )?.message;
     const info = header ? {
       path: filePath,
       id: header.id,
@@ -186,11 +190,10 @@ export async function GET(
       name: sm.getSessionName(),
       created: header.timestamp,
       modified,
-      messageCount: context.messages.length,
-      firstMessage: context.messages.find((m) => m.role === "user")
+      messageCount: fileStats.totalMessages,
+      firstMessage: firstUserMessage
         ? (() => {
-            const msg = context.messages.find((m) => m.role === "user")!;
-            const c = (msg as { content: unknown }).content;
+            const c = (firstUserMessage as { content: unknown }).content;
             return typeof c === "string" ? c : (Array.isArray(c) ? (c.find((b: { type: string }) => b.type === "text") as { text: string } | undefined)?.text ?? "" : "") || "(no messages)";
           })()
         : "(no messages)",
