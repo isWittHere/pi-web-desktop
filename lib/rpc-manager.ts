@@ -166,6 +166,8 @@ export class AgentSessionWrapper {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
+  private sessionShutdownEmitted = false;
+  private forceShutdownOnIdle = false;
   private _alive = true;
 
   constructor(public readonly inner: AgentSessionLike, public readonly cwd: string) {}
@@ -299,8 +301,10 @@ export class AgentSessionWrapper {
 
   private resetIdleTimer(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
+    if (!this._alive) return;
+    if (!this.isRunning()) this.forceShutdownOnIdle = false;
     this.idleTimer = setTimeout(() => {
-      if (this.isRunning()) {
+      if (this.isRunning() && !this.forceShutdownOnIdle) {
         this.resetIdleTimer();
         return;
       }
@@ -375,8 +379,9 @@ export class AgentSessionWrapper {
   }
 
   async send(command: Record<string, unknown>): Promise<unknown> {
-    this.resetIdleTimer();
     const type = command.type as string;
+    // Status reconciliation must not postpone forced cleanup after Stop.
+    if (type !== "get_state") this.resetIdleTimer();
     if (type === "prompt" || type === "steer" || type === "follow_up") {
       const imageError = validateAgentImages(command.images);
       if (imageError) throw new Error(imageError);
@@ -417,8 +422,13 @@ export class AgentSessionWrapper {
       }
 
       case "abort":
-        await this.inner.abort();
-        return null;
+        this.forceShutdownOnIdle = true;
+        try {
+          await this.inner.abort();
+          return null;
+        } finally {
+          if (!this.isRunning()) this.forceShutdownOnIdle = false;
+        }
 
       case "get_state": {
         const model = this.inner.model;
@@ -674,6 +684,7 @@ export class AgentSessionWrapper {
       }
 
       case "abort_bash": {
+        this.forceShutdownOnIdle = true;
         this.inner.abortBash();
         return null;
       }
@@ -693,11 +704,39 @@ export class AgentSessionWrapper {
     for (const id of Array.from(this.activeCustomUis.keys())) this.closeCustomUi(id, undefined);
     this.pendingUiResponses.clear();
     this.pendingUiRequests.clear();
-    try {
-      this.inner.dispose();
-    } finally {
-      this.onDestroyCallback?.();
+
+    const finishDispose = () => {
+      try {
+        this.inner.dispose();
+      } finally {
+        this.onDestroyCallback?.();
+      }
+    };
+
+    // Always emit session_shutdown before dispose, even when callers skip
+    // shutdown() (process exit, direct destroy). Await when possible so
+    // extension MCP children can reap before the runner is invalidated.
+    if (this.sessionShutdownEmitted) {
+      finishDispose();
+      return;
     }
+
+    this.sessionShutdownEmitted = true;
+    const extensionRunner = this.inner.extensionRunner as { emit?: (event: unknown) => Promise<void> } | undefined;
+    const emit = extensionRunner?.emit;
+    if (typeof emit !== "function") {
+      finishDispose();
+      return;
+    }
+
+    void (async () => emit.call(extensionRunner, { type: "session_shutdown", reason: "quit" }))()
+      .catch((error) => {
+        console.error(
+          "[pi-web] session_shutdown before dispose failed:",
+          error instanceof Error ? error.message : error,
+        );
+      })
+      .finally(finishDispose);
   }
 
   async shutdown(): Promise<void> {
@@ -714,7 +753,10 @@ export class AgentSessionWrapper {
             error instanceof Error ? error.message : error,
           );
         }
-        await this.inner.extensionRunner.emit?.({ type: "session_shutdown", reason: "quit" });
+        if (!this.sessionShutdownEmitted) {
+          this.sessionShutdownEmitted = true;
+          await this.inner.extensionRunner.emit?.({ type: "session_shutdown", reason: "quit" });
+        }
       } finally {
         this.destroy();
       }
