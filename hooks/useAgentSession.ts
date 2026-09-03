@@ -358,6 +358,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
   const [newSessionDefaultModel, setNewSessionDefaultModel] = useState<SelectedModel | null>(null);
   const [toolPreset, setToolPreset] = useState<ToolPreset>("default");
+  const [tools, setTools] = useState<ToolEntry[]>([]);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
@@ -617,12 +618,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const tools = await sendAgentCommand<ToolEntry[]>(sid, { type: "get_tools" });
       if (tools) {
         const { getPresetFromTools } = await import("@/lib/tool-presets");
+        setTools(tools);
         setToolPresetState(getPresetFromTools(tools));
       }
     } catch (e) {
       console.error("Failed to load tools:", e);
     }
   }, [setToolPresetState]);
+
+  // Loading the latest system info on demand: refresh the full tool list (for
+  // the tools panel) and re-fetch the in-process agent state so the system
+  // prompt is fresh (not just what was passively synced at load time).
+  const loadSystemInfo = useCallback(async (sid: string) => {
+    await Promise.all([loadTools(sid), loadAgentState(sid)]);
+  }, [loadTools, loadAgentState]);
 
   const promoteNewSession = useCallback((messageCount = 0, firstMessage = "(no messages)") => {
     const sid = sessionIdRef.current;
@@ -1987,6 +1996,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
     isNew,
+    tools,
     branchTree,
     // Refs
     sessionIdRef, messagesEndRef, scrollContainerRef,
@@ -1997,6 +2007,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleRecallQueue,
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
+    loadSystemInfo,
     handleLeafChange,
   };
 }

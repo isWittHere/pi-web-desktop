@@ -21,6 +21,10 @@ export interface ModelLike {
 export interface ToolInfo {
   name: string;
   description: string;
+  /** JSON-schema (TypeBox) parameter schema. Omitted for tools without parameters. */
+  parameters?: unknown;
+  /** Guideline bullets appended to the default system prompt when this tool is active. */
+  promptGuidelines?: string[];
 }
 
 export interface NavigateTreeResult {

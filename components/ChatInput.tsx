@@ -6,6 +6,7 @@ import type { SkillsResponse } from "@/lib/api-types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
 import { continueMarkdownList } from "@/lib/markdown-list";
 import type { ToolPreset } from "@/lib/tool-presets";
+import type { ToolEntry } from "@/lib/tool-presets";
 import { isBase64ImageWithinLimits } from "@/lib/image-attachments";
 import type { TextContent, UserMessage } from "@/lib/types";
 import {
@@ -20,6 +21,7 @@ import { cssPx, getUiScale } from "@/lib/ui-scale";
 import type { ThinkingLevelOption } from "@/lib/thinking-levels";
 import { filterThinkingLevelOptions } from "@/lib/thinking-levels";
 import { FolderIcon, getFileIcon } from "./FileIcons";
+import { ToolsPanel } from "./ToolsPanel";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableHeight } from "@/hooks/useResizableHeight";
 import { scrollRemaining, nextInputCompactState, COMPACT_RESTORE_TRIGGER, type InputCompactScrollDirection } from "@/lib/input-compact";
@@ -37,6 +39,7 @@ import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
 import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
 import { ClockIcon } from "@phosphor-icons/react/Clock";
 import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
+import { FunctionIcon } from "@phosphor-icons/react/Function";
 import { CheckIcon } from "@phosphor-icons/react/Check";
 import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
 import { LightningIcon } from "@phosphor-icons/react/Lightning";
@@ -87,6 +90,12 @@ interface Props {
   compactResult?: CompactResultInfo | null;
   toolPreset?: ToolPreset;
   onToolPresetChange?: (preset: ToolPreset) => void;
+  /** Full tool definitions (with parameter schemas) for the active session. */
+  tools?: ToolEntry[];
+  /** True while a fresh tool/system-info load is in flight. */
+  toolsLoading?: boolean;
+  /** Trigger an on-demand refresh of tools + system prompt when the panel opens. */
+  onLoadTools?: () => void;
   thinkingLevel?: ThinkingLevelOption;
   onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
   availableThinkingLevels?: string[] | null;
@@ -167,6 +176,29 @@ function compareModelOptions(a: ModelOption, b: ModelOption): number {
   return MODEL_OPTION_COLLATOR.compare(a.name || a.modelId, b.name || b.modelId)
     || MODEL_OPTION_COLLATOR.compare(a.provider, b.provider)
     || MODEL_OPTION_COLLATOR.compare(a.modelId, b.modelId);
+}
+
+// Fixed-position popup that anchors the ToolsPanel to the toolbar button that
+// opened it. Closing is handled by ChatInput's document-level mousedown/Escape
+// handlers via `onClose`.
+function ToolsPanelPopup({ tools, loading, rect, onClose }: { tools: ToolEntry[]; loading: boolean; rect: { top: number; left: number; width: number } | null; onClose: () => void }) {
+  const { t } = useI18n();
+  if (!rect) return null;
+  const vh = cssPx(window.visualViewport?.height ?? window.innerHeight);
+  const vw = cssPx(window.innerWidth);
+  // Anchor the panel's right edge to the button's right edge. Height caps so
+  // it never overflows the viewport top.
+  const r = Math.max(8, vw - (rect.left + rect.width));
+  const maxH = Math.min(420, Math.max(240, rect.top - 8));
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      style={{ position: "fixed", bottom: vh - rect.top + 6, right: r, zIndex: 2001, maxHeight: maxH, overflow: "hidden" }}
+    >
+      <ToolsPanel tools={tools} loading={loading} title={t("tools.title")} onClose={onClose} />
+    </div>
+  );
 }
 
 function ThinkingLevelIcon({ level, size = 14 }: { level: ThinkingLevelOption; size?: number }) {
@@ -404,6 +436,7 @@ function NextTurnBanner() {
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, isCompacting, onAbortCompaction, stepLabel, model, isAutoModelSelection, modelNames, modelList, imageInputByModel, modelScopeWarnings, onModelChange,
   compactResult, toolPreset, onToolPresetChange,
+  tools, toolsLoading = false, onLoadTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
@@ -516,6 +549,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [toolDropdownRect, setToolDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [toolsPanelOpen, setToolsPanelOpen] = useState(false);
+  const [toolsPanelRect, setToolsPanelRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [thinkingDropdownRect, setThinkingDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
@@ -606,6 +641,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const modelDropdownPanelRef = useRef<HTMLDivElement>(null);
   const modelSearchRef = useRef<HTMLInputElement>(null);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
+  const toolsPanelBtnRef = useRef<HTMLDivElement>(null);
   const thinkingDropdownRef = useRef<HTMLDivElement>(null);
   const controlsMenuRef = useRef<HTMLDivElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
@@ -1764,6 +1800,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
         setAttachMenuOpen(false);
       }
+      if (toolsPanelBtnRef.current && !toolsPanelBtnRef.current.contains(e.target as Node)) {
+        setToolsPanelOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -1774,6 +1813,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   useEffect(() => {
     const escHandler = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Escape") setAttachMenuOpen(false);
+      if (e.key === "Escape") setToolsPanelOpen(false);
     };
     document.addEventListener("keydown", escHandler);
     return () => document.removeEventListener("keydown", escHandler);
@@ -3095,6 +3135,58 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   </div>
                     );
                   })()}
+              </div>
+            )}
+
+            {/* Tools definitions panel — opens a popup listing the active
+                tools with their parameter schemas. Triggering it refreshes the
+                tool list and system prompt on demand. */}
+            {onLoadTools && (
+              <div ref={toolsPanelBtnRef} className="chat-input-toolbar-tools-panel" style={{ position: "relative" }}>
+                <button
+                  onClick={(e) => {
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    setToolsPanelRect({ top: cssPx(rect.top), left: cssPx(rect.left), width: cssPx(rect.width) });
+                    const next = !toolsPanelOpen;
+                    setToolsPanelOpen(next);
+                    if (next) onLoadTools();
+                  }}
+                  title={t("tools.open")}
+                  aria-label={t("tools.open")}
+                  aria-expanded={toolsPanelOpen}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: isMobile ? "0 5px" : "3px 7px",
+                    width: isMobile ? "auto" : undefined,
+                    height: 24,
+                    background: toolsPanelOpen ? "var(--bg-hover)" : "none",
+                    border: "none",
+                    borderRadius: 6,
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--bg-hover)";
+                    e.currentTarget.style.color = "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = toolsPanelOpen ? "var(--bg-hover)" : "none";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                >
+                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("tools.title")}</span>}
+                  <FunctionIcon size={12} weight="bold" color="var(--accent)" aria-hidden="true" />
+                </button>
+                {toolsPanelOpen && (
+                  <ToolsPanelPopup
+                    tools={tools ?? []}
+                    loading={toolsLoading}
+                    onClose={() => setToolsPanelOpen(false)}
+                    rect={toolsPanelRect}
+                  />
+                )}
               </div>
             )}
 

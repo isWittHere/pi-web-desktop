@@ -2,6 +2,10 @@ export interface ToolEntry {
   name: string;
   description: string;
   active: boolean;
+  /** JSON-schema (TypeBox) parameter schema. Omitted for tools without parameters. */
+  parameters?: unknown;
+  /** Guideline bullets appended to the default system prompt when this tool is active. */
+  promptGuidelines?: string[];
 }
 
 export const TOOL_PRESET_VALUES = ["none", "read-only", "default", "full"] as const;

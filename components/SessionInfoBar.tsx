@@ -38,6 +38,9 @@ export interface SessionInfoBarProps {
   onNotificationsToggle?: () => void;
   onCompact?: () => void;
   isCompacting?: boolean;
+  /** Invoked when the user opens the system-prompt popover, so the caller can
+   *  refresh the system prompt (and tools) on demand rather than only at load. */
+  onOpenSystemPanel?: () => void;
   compactError?: string | null;
   branchTree?: SessionTreeNode[];
   branchActiveLeafId?: string | null;
@@ -82,6 +85,7 @@ export function SessionInfoBar({
   notificationsEnabled,
   onNotificationsToggle,
   onCompact,
+  onOpenSystemPanel,
   isCompacting,
   compactError,
   branchTree,
@@ -296,7 +300,7 @@ export function SessionInfoBar({
           <button
             type="button"
             className={`session-info-bar-button${activePanel === "system" ? " is-active" : ""}`}
-            onClick={() => setActivePanel((cur) => (cur === "system" ? null : "system"))}
+            onClick={() => { setActivePanel((cur) => (cur === "system" ? null : "system")); if (activePanel !== "system" && onOpenSystemPanel) onOpenSystemPanel(); }}
             title={translate("desktop.systemPrompt")}
             aria-label={translate("desktop.systemPrompt")}
             aria-pressed={activePanel === "system"}

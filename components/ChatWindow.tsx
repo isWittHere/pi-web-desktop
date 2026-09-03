@@ -193,6 +193,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     isAutoModelSelection,
     agentPhase,
     isNew,
+    tools,
     branchTree, activeLeafId: branchActiveLeafId, handleLeafChange,
     sessionIdRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
@@ -201,6 +202,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     handleRecallQueue,
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
+    loadSystemInfo,
   } = useAgentSession({
     session, sessionRunning, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
@@ -209,6 +211,21 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   // Keep the latest model so wrappedOnAgentEnd (stable callback) can surface
   // the model in use at completion without re-creating itself.
   modelRef.current = displayModelValue;
+
+  // On-demand load of tools + system prompt when the tools panel is opened.
+  // The guard avoids overlapping refreshes from rapid open/close.
+  const [toolsLoading, setToolsLoading] = useState(false);
+  const toolsLoadingRef = useRef(false);
+  const handleLoadTools = useCallback(() => {
+    const sid = sessionIdRef.current;
+    if (!sid || toolsLoadingRef.current) return;
+    toolsLoadingRef.current = true;
+    setToolsLoading(true);
+    void loadSystemInfo(sid).finally(() => {
+      toolsLoadingRef.current = false;
+      setToolsLoading(false);
+    });
+  }, [loadSystemInfo, sessionIdRef]);
 
   useEffect(() => {
     if (!extensionDialog || soundedExtensionDialogIdRef.current === extensionDialog.id) return;
@@ -510,6 +527,9 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
       compactResult={compactResult}
       toolPreset={toolPreset}
       onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
+      tools={tools}
+      toolsLoading={toolsLoading}
+      onLoadTools={session || isNew ? handleLoadTools : undefined}
       thinkingLevel={thinkingLevel}
       onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
       availableThinkingLevels={availableThinkingLevels}
@@ -672,6 +692,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
             >
               <SessionInfoBar
                 onViewFullHistory={onViewFullHistory}
+                onOpenSystemPanel={session ? handleLoadTools : undefined}
                 systemPrompt={systemPrompt}
                 sessionStats={sessionStats}
                 contextUsage={contextUsage}
@@ -1047,6 +1068,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
           <div className="session-info-bar-inner">
             <SessionInfoBar
               onViewFullHistory={onViewFullHistory}
+              onOpenSystemPanel={session ? handleLoadTools : undefined}
               systemPrompt={systemPrompt}
               sessionStats={sessionStats}
               contextUsage={contextUsage}

@@ -579,6 +579,8 @@ export class AgentSessionWrapper {
           name: t.name,
           description: t.description,
           active: active.has(t.name),
+          ...(t.parameters !== undefined ? { parameters: t.parameters } : {}),
+          ...(t.promptGuidelines !== undefined ? { promptGuidelines: t.promptGuidelines } : {}),
         }));
       }
 
