@@ -451,9 +451,15 @@ export function AppShell() {
   // Activate a workspace tab: switching the effective cwd re-runs the same
   // single-workspace state machine as the classic view (last-open restore,
   // session remount). Never touches the running agent session.
+  //
+  // No already-active guard: re-clicking the active tab re-issues the switch
+  // as a recovery gesture. When highlight and content agree, handleCwdChange
+  // no-ops on its same-workspace checks; when they drifted apart, the
+  // re-issue repairs them instead of being silently dropped. The fresh token
+  // makes the sidebar re-notify even for an unchanged cwd.
   const handleSelectTab = useCallback((key: string) => {
     const tab = tabsStateRef.current.tabs.find((t) => t.key === key);
-    if (!tab || key === tabsStateRef.current.activeKey) return;
+    if (!tab) return;
     tabsApi.activate(key);
     requestWorkspaceSwitch(tab.cwd, tab.key);
   }, [tabsApi, requestWorkspaceSwitch]);
@@ -637,6 +643,13 @@ export function AppShell() {
     if (selectedSession && samePath(workspaceKeyOf(selectedSession), newProject)) {
       return;
     }
+    // A welcome draft is the workspace's visible content too: re-issuing a
+    // switch to the workspace the empty draft already shows (re-click on the
+    // active tab) must not drop and recreate the draft — that would churn the
+    // composer and could land on the workspace's last session instead.
+    if (!selectedSession && activeDraftIdRef.current !== null && newSessionCwd && samePath(newSessionCwd, cwd)) {
+      return;
+    }
     // Leaving the draft for another project: an empty draft is meaningless.
     cleanupEmptyActiveDraft();
     // A cross-project switch must not keep the outgoing draft key bound to the
@@ -656,7 +669,7 @@ export function AppShell() {
     // Restore the workspace we switched to: its last session or draft, or a
     // fresh welcome draft so the composer matches the "+" flow.
     restoreWorkspaceContext(cwd, newProject);
-  }, [selectedSession, cleanupEmptyActiveDraft, restoreWorkspaceContext, tabsApi, requestWorkspaceSwitch]);
+  }, [selectedSession, newSessionCwd, cleanupEmptyActiveDraft, restoreWorkspaceContext, tabsApi, requestWorkspaceSwitch]);
 
   // Update browser tab title when workspace changes
   useEffect(() => {

@@ -15,6 +15,7 @@ import { getTitleModel } from "@/lib/title-settings";
 import { bucketOf, TIME_BUCKET_ORDER, timeBucketKey } from "@/lib/time-groups";
 import { loadCollapsedTimeGroups, saveCollapsedTimeGroups, type CollapsedTimeGroups } from "@/lib/time-group-state";
 import { samePath } from "@/lib/path-match";
+import { shouldNotifyCwdChange } from "@/lib/workspace-switch";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -618,9 +619,22 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // effect below can tell "this cwd came from a tab/session pick (use the
   // trusted project key)" apart from a sidebar-internal selection (re-resolve
   // via projectRootFor as before).
+  //
+  // The notify decision is token-aware (see shouldNotifyCwdChange): besides
+  // the value-change case, a NEW shell request for the cwd already in effect
+  // re-notifies — without this, re-issued switches (re-clicking the active
+  // workspace tab) were deduplicated away and could never repair a drifted
+  // highlight/content state.
+  const lastConsumedRequestTokenRef = useRef(0);
   useEffect(() => {
-    if (lastNotifiedCwdRef.current === selectedCwd) return;
-    lastNotifiedCwdRef.current = selectedCwd;
+    const decision = shouldNotifyCwdChange(
+      selectedCwd,
+      requestedCwd,
+      { lastNotifiedCwd: lastNotifiedCwdRef.current, lastConsumedToken: lastConsumedRequestTokenRef.current },
+    );
+    if (!decision.notify) return;
+    lastNotifiedCwdRef.current = decision.lastNotifiedCwd;
+    lastConsumedRequestTokenRef.current = decision.lastConsumedToken;
     const isAutoSelect = autoSelectRef.current;
     autoSelectRef.current = false;
     // The switch request is the newest prop in this commit, while selectedCwd
