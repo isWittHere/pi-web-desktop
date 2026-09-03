@@ -35,7 +35,7 @@ test("ProcessNarrative forwards isStreaming to MarkdownBody and ThinkingBlock", 
   // text narrative → MarkdownBody
   assert.match(
     source,
-    /<MarkdownBody key=\{block\.id\} cwd=\{cwd\} onOpenFile=\{onOpenFile\} className="!text-text-dim" isStreaming=\{isStreaming\}>/,
+    /<MarkdownBody key=\{block\.id\} cwd=\{cwd\} onOpenFile=\{onOpenFile\} className="!text-text-muted" isStreaming=\{isStreaming\}>/,
   );
   // thinking narrative → ThinkingBlock (contentOnly) with isStreaming
   const thinkingCall = source.match(/<ThinkingBlock[\s\S]*?contentOnly[\s\S]*?isStreaming=\{isStreaming\}\s*\/>/);
@@ -52,5 +52,5 @@ test("all three StepContent call sites pass isStreaming", () => {
 
 test("step narrative keeps its dimmed styling while streaming", () => {
   // isStreaming must not bypass the existing narrative presentation.
-  assert.match(source, /className="!text-text-dim" isStreaming=\{isStreaming\}/);
+  assert.match(source, /className="!text-text-muted" isStreaming=\{isStreaming\}/);
 });
