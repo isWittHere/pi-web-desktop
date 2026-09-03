@@ -35,19 +35,45 @@ function ChangeRow({ status, cwd, onOpenFile }: {
 }) {
   const [hovered, setHovered] = useState(false);
   const relativePath = getRelativeFilePath(status.filePath, cwd);
+  const fileName = getFileName(status.filePath);
+  // "文件名 + 目录" 布局：目录部分以淡化色跟在文件名后（如 "globals.css app/"）。
+  // relativePath 不以文件名结尾时（cwd 不匹配回退为绝对路径等）退回整体显示。
+  const trailingDirectory = relativePath.endsWith(fileName)
+    ? relativePath.slice(0, relativePath.length - fileName.length)
+    : null;
+  const directoryText = trailingDirectory !== null ? trailingDirectory : relativePath;
+  const hasDiffStat = status.additions !== null || status.deletions !== null;
 
   return (
     <button
       type="button"
-      onClick={() => onOpenFile(status.filePath, getFileName(status.filePath), { initialDisplayMode: "diff" })}
+      onClick={() => onOpenFile(status.filePath, fileName, { initialDisplayMode: "diff" })}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title={status.filePath}
       style={{ width: "100%", display: "flex", alignItems: "center", gap: 4, padding: "0 5px", height: 24, border: "none", borderRadius: 4, background: hovered ? "var(--bg-hover)" : "transparent", color: "var(--text)", cursor: "pointer", textAlign: "left" }}
     >
       <span style={{ width: 14, flexShrink: 0, color: GIT_STATUS_COLORS[status.status], fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, textAlign: "center" }}>{status.code}</span>
-      <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.85 }}>{getFileIcon(getFileName(status.filePath), 13)}</span>
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontSize: 12 }}>{relativePath}</span>
+      <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.85 }}>{getFileIcon(fileName, 13)}</span>
+      <span style={{ minWidth: 0, overflow: "hidden", display: "flex", alignItems: "baseline", flex: 1, whiteSpace: "nowrap", fontSize: 12 }}>
+        <span style={{ flexShrink: 0, color: "var(--text)" }}>{fileName}</span>
+        {directoryText && directoryText !== fileName && (
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", color: "var(--text-muted)", marginLeft: 6 }}>{directoryText}</span>
+        )}
+      </span>
+      {hasDiffStat && (
+        <span style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5, marginLeft: 6, fontFamily: "var(--font-mono)", fontSize: 10.5, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+          {status.additions !== null && status.additions > 0 && (
+            <span style={{ color: "var(--git-status-added)", opacity: 0.9 }}>+{status.additions}</span>
+          )}
+          {status.deletions !== null && status.deletions > 0 && (
+            <span style={{ color: "var(--git-status-deleted)", opacity: 0.9 }}>-{status.deletions}</span>
+          )}
+          {status.additions === 0 && status.deletions === 0 && (
+            <span style={{ color: "var(--text-dim)", opacity: 0.6 }}>±0</span>
+          )}
+        </span>
+      )}
     </button>
   );
 }
