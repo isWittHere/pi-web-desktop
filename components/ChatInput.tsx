@@ -191,11 +191,7 @@ function ToolsPanelPopup({ tools, loading, rect, onClose }: { tools: ToolEntry[]
   const r = Math.max(8, vw - (rect.left + rect.width));
   const maxH = Math.min(420, Math.max(240, rect.top - 8));
   return (
-    <div
-      onClick={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
-      style={{ position: "fixed", bottom: vh - rect.top + 6, right: r, zIndex: 2001, maxHeight: maxH }}
-    >
+    <div style={{ position: "fixed", bottom: vh - rect.top + 6, right: r, zIndex: 2001, maxHeight: maxH }}>
       <ToolsPanel tools={tools} loading={loading} title={t("tools.title")} onClose={onClose} />
     </div>
   );
@@ -3075,7 +3071,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         padding: isMobile ? "0 5px" : "0 7px",
                         height: 24,
                         boxSizing: "border-box",
-                        borderRadius: "6px 0 0 6px",
                         background: toolsPanelOpen ? "var(--bg-hover)" : "none",
                         border: "none",
                         color: toolsPanelOpen ? "var(--accent)" : "var(--text-muted)",
@@ -3105,6 +3100,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   </div>
                 )}
 
+                {/* 短竖线分隔 —— 居中，只跨按钮高度中部，视觉轻量 */}
+                {onToolPresetChange && onLoadTools && (
+                  <div
+                    aria-hidden="true"
+                    style={{ width: 1, height: 12, alignSelf: "center", background: "var(--border)", flexShrink: 0 }}
+                  />
+                )}
+
                 {/* 工具预设段 —— 右侧，含下拉箭头 */}
                 {onToolPresetChange && (
                   <div ref={toolDropdownRef} style={{ position: "relative", display: "flex" }}>
@@ -3117,7 +3120,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         padding: isMobile ? "0 5px" : "3px 7px",
                         height: 24,
                         boxSizing: "border-box",
-                        borderRadius: "0 6px 6px 0",
                         background: toolDropdownOpen ? "var(--bg-hover)" : "none",
                         border: "none",
                         color: "var(--text-muted)",

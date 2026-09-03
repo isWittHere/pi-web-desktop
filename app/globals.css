@@ -890,6 +890,20 @@ pre, code {
   border-radius: 4px !important;
   font-size: inherit !important;
 }
+/* Tools preset + active-tools segmented split button: keep the outer rounded
+   corners but flatten the two corners at the seam so the two buttons read as
+   one joined unit. Inline borderRadius can't win over `.chat-input-toolbar
+   button` here, so it has to be CSS. Each button sits inside its own wrapper
+   div (for fixed-popup refs), so target the group's direct div children. */
+.chat-input-toolbar-tools-group button {
+  border-radius: 0 !important;
+}
+.chat-input-toolbar-tools-group > div:first-child button {
+  border-radius: 4px 0 0 4px !important;
+}
+.chat-input-toolbar-tools-group > div:last-child button {
+  border-radius: 0 4px 4px 0 !important;
+}
 /* Dropdown panels inside the toolbar: menu options share the toolbar
    button radius. */
 .chat-input-menu-panel button {
