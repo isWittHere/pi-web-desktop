@@ -41,6 +41,11 @@ function pathBaseName(path: string): string {
 const NO_DRAG_REGION = { WebkitAppRegion: "no-drag" } as unknown as React.CSSProperties;
 const DRAG_REGION = { WebkitAppRegion: "drag" } as unknown as React.CSSProperties;
 
+// Pointer travel (px) between press and release that turns a press into a
+// drag instead of a click. Small enough to feel immediate, large enough
+// that ordinary click jitter never starts a reorder.
+const DRAG_START_THRESHOLD = 5;
+
 /** Spinning arc — a task is currently running in this workspace. CSS
  *  rotation (not SMIL animateTransform): under the app's CSS zoom scaling
  *  the SMIL rotate center drifts off the arc's center, while a CSS
@@ -77,6 +82,11 @@ function UnreadDotIndicator() {
   );
 }
 
+interface DropTarget {
+  key: string;
+  position: "before" | "after";
+}
+
 export function WorkspaceTabBar({
   tabs,
   activeKey,
@@ -87,13 +97,12 @@ export function WorkspaceTabBar({
   onReorderTab,
 }: WorkspaceTabBarProps) {
   const { t } = useI18n();
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
-  // HTML5 drag & drop state: the tab being dragged and the drop indicator
-  // (insertion line) relative to the hovered tab. The mousedown that starts
-  // the drag happens on the no-drag tab strip, so the Electron window drag
-  // region never intercepts the session.
+  // Pointer drag reorder state: the tab being dragged and the insertion line
+  // position relative to the hovered tab.
   const [dragKey, setDragKey] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ key: string; position: "before" | "after" } | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   // True when the tab strip overflows its container (many tabs): the strip
   // then stays a normal scrollable region instead of the window drag area.
@@ -187,54 +196,96 @@ export function WorkspaceTabBar({
     return () => strip.removeEventListener("wheel", onWheel);
   }, []);
 
-  // ── Drag & drop reorder ──────────────────────────────────────────────────
-  const handleDragStart = (e: React.DragEvent, tab: WorkspaceTab) => {
-    if (tabs.length < 2) return;
-    e.dataTransfer.effectAllowed = "move";
-    // Firefox refuses to start a drag without data being set.
-    e.dataTransfer.setData("text/plain", tab.key);
-    setDragKey(tab.key);
-    setDropTarget(null);
-  };
+  // ── Pointer-based drag reorder ──────────────────────────────────────────
+  // HTML5 draggable was the previous mechanism, and it ate plain clicks:
+  // any pointer jitter past the native drag threshold between mousedown and
+  // mouseup started a real drag and cancelled the click, so switching tabs
+  // failed intermittently. A click and a reorder are indistinguishable
+  // until the pointer actually moves, so pressing only *arms* a pending
+  // drag; past the threshold it becomes one. Pointer capture keeps the
+  // gesture on the pressed tab even when the pointer leaves it, so no
+  // window-level listeners are needed. The click that follows a committed
+  // drag is suppressed once (didDragRef).
+  const dragStateRef = useRef<{
+    pointerId: number;
+    key: string;
+    startX: number;
+    startY: number;
+    active: boolean;
+  } | null>(null);
+  const didDragRef = useRef(false);
+  const dropTargetRef = useRef<DropTarget | null>(null);
 
-  const handleDragOver = (e: React.DragEvent, tab: WorkspaceTab) => {
-    if (!dragKey) return;
-    e.preventDefault(); // required to allow the drop
-    e.stopPropagation(); // the strip fallback must not override the tab hit
-    e.dataTransfer.dropEffect = "move";
-    const rect = e.currentTarget.getBoundingClientRect();
-    const position = e.clientX < rect.left + rect.width / 2 ? "before" : "after";
-    // Keep the same reference so unchanged hovers do not re-render.
+  const applyDropTarget = useCallback((next: DropTarget | null) => {
+    dropTargetRef.current = next;
     setDropTarget((prev) =>
-      prev && prev.key === tab.key && prev.position === position
-        ? prev
-        : { key: tab.key, position },
+      prev && next && prev.key === next.key && prev.position === next.position ? prev : next,
     );
-  };
+  }, []);
 
-  // Cursor over strip whitespace (right of the last tab, or scrolled-out
-  // area): default to the slot after the last tab.
-  const handleStripDragOver = (e: React.DragEvent) => {
-    if (!dragKey || tabs.length === 0) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    const last = tabs[tabs.length - 1];
-    setDropTarget((prev) =>
-      prev && prev.key === last.key && prev.position === "after" ? prev : { key: last.key, position: "after" },
-    );
-  };
+  // Resolve the drop slot under the pointer. elementFromPoint because the
+  // pointer is captured by the pressed tab, so the event target is always
+  // the source tab, never the tab currently hovered.
+  const updateDropTargetFromPoint = useCallback((clientX: number, clientY: number, fromKey: string) => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const hit = document.elementFromPoint(clientX, clientY) as Element | null;
+    const tabEl = hit?.closest("[data-tab-key]") as HTMLElement | null;
+    const targetKey = tabEl?.dataset.tabKey;
+    if (targetKey) {
+      if (targetKey === fromKey) return;
+      const rect = tabEl.getBoundingClientRect();
+      applyDropTarget({
+        key: targetKey,
+        position: clientX < rect.left + rect.width / 2 ? "before" : "after",
+      });
+      return;
+    }
+    if (hit && strip.contains(hit)) {
+      // Strip whitespace right of the last tab: default to the trailing slot.
+      const last = tabs[tabs.length - 1];
+      if (last && last.key !== fromKey) applyDropTarget({ key: last.key, position: "after" });
+      return;
+    }
+    applyDropTarget(null);
+  }, [applyDropTarget, tabs]);
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (!dragKey || !dropTarget) return;
-    onReorderTab(dragKey, dropTarget.key, dropTarget.position);
+  const endDrag = useCallback(() => {
+    const st = dragStateRef.current;
+    dragStateRef.current = null;
+    if (!st?.active) return;
+    const drop = dropTargetRef.current;
+    if (drop && drop.key !== st.key) onReorderTab(st.key, drop.key, drop.position);
     setDragKey(null);
-    setDropTarget(null);
+    applyDropTarget(null);
+  }, [applyDropTarget, onReorderTab]);
+
+  const handleTabPointerDown = (e: React.PointerEvent<HTMLDivElement>, key: string) => {
+    if (e.button !== 0 || e.pointerType !== "mouse" || tabs.length < 2) return;
+    dragStateRef.current = {
+      pointerId: e.pointerId,
+      key,
+      startX: e.clientX,
+      startY: e.clientY,
+      active: false,
+    };
+    didDragRef.current = false;
+    // Capture so moves and the release outside the strip still reach this
+    // tab's handlers.
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
 
-  const handleDragEnd = () => {
-    setDragKey(null);
-    setDropTarget(null);
+  const handleTabPointerMove = (e: React.PointerEvent<HTMLDivElement>, key: string) => {
+    const st = dragStateRef.current;
+    if (!st || st.key !== key) return;
+    if (!st.active) {
+      if (Math.hypot(e.clientX - st.startX, e.clientY - st.startY) < DRAG_START_THRESHOLD) return;
+      st.active = true;
+      didDragRef.current = true;
+      setDragKey(key);
+      applyDropTarget(null);
+    }
+    updateDropTargetFromPoint(e.clientX, e.clientY, key);
   };
 
   // The strip's empty area is the Electron window drag region (the fixed
@@ -261,8 +312,6 @@ export function WorkspaceTabBar({
   return (
     <div
       ref={stripRef}
-      onDragOver={handleStripDragOver}
-      onDrop={handleDrop}
       style={stripStyle}
     >
         {tabs.map((tab) => {
@@ -272,16 +321,11 @@ export function WorkspaceTabBar({
           const isDragging = dragKey === tab.key;
           const isDropBefore = dropTarget?.key === tab.key && dropTarget.position === "before";
           const isDropAfter = dropTarget?.key === tab.key && dropTarget.position === "after";
+          const isHovered = hoveredKey === tab.key;
           return (
             <div
               key={tab.key}
-              draggable={tabs.length > 1}
-              onDragStart={(e) => handleDragStart(e, tab)}
-              onDragOver={(e) => handleDragOver(e, tab)}
-              onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
-              onDragEnd={handleDragEnd}
-              onClick={() => { scrollToTab(tab.key); onSelectTab(tab.key); }}
-              onDoubleClick={(e) => e.stopPropagation()}
+              data-tab-key={tab.key}
               title={tab.cwd}
               ref={(el) => {
                 if (el) {
@@ -290,92 +334,118 @@ export function WorkspaceTabBar({
                   tabRefs.current.delete(tab.key);
                 }
               }}
+              onClick={() => {
+                // A drag that just committed must not also switch tabs.
+                if (didDragRef.current) {
+                  didDragRef.current = false;
+                  return;
+                }
+                scrollToTab(tab.key);
+                onSelectTab(tab.key);
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => handleTabPointerDown(e, tab.key)}
+              onPointerMove={(e) => handleTabPointerMove(e, tab.key)}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              onMouseEnter={() => setHoveredKey(tab.key)}
+              onMouseLeave={() => setHoveredKey((cur) => (cur === tab.key ? null : cur))}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
-                height: 28,
-                margin: "4px 1px 3px 3px",
-                padding: "0 4px 0 10px",
-                borderRadius: 6,
-                ...NO_DRAG_REGION,
-                // Insertion line (drag reorder): inset box-shadow so it does
-                // not change the tab's box size.
-                boxShadow: isDropBefore
-                  ? "inset 2px 0 0 var(--accent)"
-                  : isDropAfter
-                    ? "inset -2px 0 0 var(--accent)"
-                    : "none",
-                background: isActive ? "var(--bg-selected)" : "transparent",
-                color: isActive ? "var(--text)" : "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-                maxWidth: 200,
-                minWidth: 60,
+                height: 36,
+                paddingLeft: 3,
+                paddingRight: 1,
                 flexShrink: 0,
+                minWidth: 60,
+                maxWidth: 200,
+                cursor: "pointer",
                 userSelect: "none",
-                opacity: isDragging ? 0.45 : 1,
-                transition: "background 0.1s, color 0.1s",
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = isActive ? "var(--bg-selected)" : "transparent";
-                e.currentTarget.style.color = isActive ? "var(--text)" : "var(--text-muted)";
+                ...NO_DRAG_REGION,
               }}
             >
-              <span
+              {/* Visual card inside a full-height hit container: the container
+                  covers the whole 36px column and the gaps between cards, so
+                  clicks near the card edges always land on a no-drag element
+                  instead of the strip's window-drag region (which swallows
+                  mousedown in Chromium). */}
+              <div
                 style={{
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
                   flex: 1,
-                  fontWeight: isActive ? 500 : 400,
-                }}
-              >
-                {pathBaseName(tab.key)}
-              </span>
-              {/* Status: spinning arc while a task runs (priority), breathing
-                  dot when finished tasks are unread. */}
-              {running > 0 ? (
-                <span
-                  title={t("desktop.agentRunning")}
-                  style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", color: "var(--accent)" }}
-                  aria-hidden="true"
-                >
-                  <RunningArcIndicator />
-                </span>
-              ) : unread > 0 ? (
-                <span
-                  title={t("desktop.newActivity")}
-                  style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", color: "var(--accent)" }}
-                  aria-hidden="true"
-                >
-                  <UnreadDotIndicator />
-                </span>
-              ) : null}
-              <button
-                onClick={(e) => { e.stopPropagation(); onCloseTab(tab.key); }}
-                onMouseEnter={() => setHoveredClose(tab.key)}
-                onMouseLeave={() => setHoveredClose(null)}
-                title={t("desktop.closeWorkspaceTab")}
-                aria-label={t("desktop.closeWorkspaceTabWithLabel", { label: pathBaseName(tab.key) })}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 22, height: 22, padding: 0, flexShrink: 0,
-                  background: hoveredClose === tab.key ? "var(--bg-hover)" : "transparent",
-                  border: "none", borderRadius: 4,
-                  color: hoveredClose === tab.key ? "var(--text)" : "var(--text-dim)",
-                  cursor: "pointer",
+                  minWidth: 0,
+                  height: 28,
+                  padding: "0 4px 0 10px",
+                  borderRadius: 6,
+                  // Insertion line (drag reorder): inset box-shadow so it does
+                  // not change the tab's box size.
+                  boxShadow: isDropBefore
+                    ? "inset 2px 0 0 var(--accent)"
+                    : isDropAfter
+                      ? "inset -2px 0 0 var(--accent)"
+                      : "none",
+                  background: isActive
+                    ? "var(--bg-selected)"
+                    : isHovered && !isDragging
+                      ? "var(--bg-hover)"
+                      : "transparent",
+                  color: isActive || isHovered ? "var(--text)" : "var(--text-muted)",
+                  fontSize: 12,
+                  whiteSpace: "nowrap",
+                  opacity: isDragging ? 0.45 : 1,
                   transition: "background 0.1s, color 0.1s",
                 }}
               >
-                <X size={14} aria-hidden="true" />
-              </button>
+                <span
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    flex: 1,
+                    fontWeight: isActive ? 500 : 400,
+                  }}
+                >
+                  {pathBaseName(tab.key)}
+                </span>
+                {/* Status: spinning arc while a task runs (priority), breathing
+                    dot when finished tasks are unread. */}
+                {running > 0 ? (
+                  <span
+                    title={t("desktop.agentRunning")}
+                    style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", color: "var(--accent)" }}
+                    aria-hidden="true"
+                  >
+                    <RunningArcIndicator />
+                  </span>
+                ) : unread > 0 ? (
+                  <span
+                    title={t("desktop.newActivity")}
+                    style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", color: "var(--accent)" }}
+                    aria-hidden="true"
+                  >
+                    <UnreadDotIndicator />
+                  </span>
+                ) : null}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCloseTab(tab.key); }}
+                  onMouseEnter={() => setHoveredClose(tab.key)}
+                  onMouseLeave={() => setHoveredClose(null)}
+                  title={t("desktop.closeWorkspaceTab")}
+                  aria-label={t("desktop.closeWorkspaceTabWithLabel", { label: pathBaseName(tab.key) })}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 22, height: 22, padding: 0, flexShrink: 0,
+                    background: hoveredClose === tab.key ? "var(--bg-hover)" : "transparent",
+                    border: "none", borderRadius: 4,
+                    color: hoveredClose === tab.key ? "var(--text)" : "var(--text-dim)",
+                    cursor: "pointer",
+                    transition: "background 0.1s, color 0.1s",
+                  }}
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </div>
             </div>
           );
         })}
