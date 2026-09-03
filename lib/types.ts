@@ -330,6 +330,10 @@ export interface SessionInfo {
 export interface SessionContext {
   messages: AgentMessage[];
   entryIds: string[]; // parallel to messages — the session entry id for each message
+  /** First entry of the returned window (raw chain boundary, pre-compaction-reorder). */
+  oldestEntryId: string | null;
+  /** True when the window was truncated by ?tail and older pages exist. */
+  hasMore: boolean;
   thinkingLevel: string;
   model: { provider: string; modelId: string } | null;
 }

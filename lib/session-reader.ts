@@ -1,7 +1,6 @@
 import {
   SessionManager,
   buildContextEntries as piBuildContextEntries,
-  buildSessionContext as piBuildSessionContext,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { closeSync, openSync, readSync, statSync } from "fs";
@@ -296,17 +295,59 @@ export function getSessionEntries(filePath: string): SessionEntry[] {
   return entries as unknown as SessionEntry[];
 }
 
+/**
+ * Resolve the thinking level and model in effect at `leafId` by walking the
+ * FULL entry list backward — a tail-sliced window may not contain the
+ * model_change / thinking_level_change entries, so the sliced set cannot be
+ * used for this.
+ */
+function getSessionSettings(entries: SessionEntry[], leafId?: string | null): Pick<SessionContext, "thinkingLevel" | "model"> {
+  if (leafId === null) return { thinkingLevel: "off", model: null };
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  let current = leafId ? byId.get(leafId) : undefined;
+  current ??= entries[entries.length - 1];
+  let thinkingLevel: string | undefined;
+  let model: SessionContext["model"] | undefined;
+
+  while (current && (thinkingLevel === undefined || model === undefined)) {
+    if (thinkingLevel === undefined && current.type === "thinking_level_change") {
+      thinkingLevel = current.thinkingLevel;
+    }
+    if (model === undefined && current.type === "model_change") {
+      model = { provider: current.provider, modelId: current.modelId };
+    } else if (model === undefined && current.type === "message" && current.message.role === "assistant") {
+      const message = current.message as { provider?: unknown; model?: unknown };
+      if (typeof message.provider === "string" && typeof message.model === "string") {
+        model = { provider: message.provider, modelId: message.model };
+      }
+    }
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+
+  return { thinkingLevel: thinkingLevel ?? "off", model: model ?? null };
+}
+
+export interface BuildSessionContextOptions {
+  deferThinking?: boolean;
+  deferToolResultImages?: boolean;
+  tail?: number;
+  excludeLeaf?: boolean;
+}
+
 export function buildSessionContext(
   entries: SessionEntry[],
   leafId?: string | null,
-  options: { deferThinking?: boolean; deferToolResultImages?: boolean } = {},
+  options: BuildSessionContextOptions = {},
 ): SessionContext {
+  const { tail, excludeLeaf } = options;
+  // Restrict SDK conversion and the response payload to the requested page.
+  // Without `tail` the full chain is returned (legacy behavior).
+  const sliced = tail && tail > 0 ? sliceActiveBranch(entries, leafId ?? null, tail, excludeLeaf) : entries;
+  const hasMore = Boolean(tail && tail > 0 && sliced[0]?.parentId);
   const byId = new Map<string, SessionEntry>();
-  for (const e of entries) byId.set(e.id, e);
+  for (const e of sliced) byId.set(e.id, e);
 
-  const piEntries = entries as unknown as PiSessionEntry[];
-  const piCtx = piBuildSessionContext(piEntries, leafId, byId as unknown as Map<string, PiSessionEntry>);
-
+  const piEntries = sliced as unknown as PiSessionEntry[];
   const contextEntries = piBuildContextEntries(
     piEntries,
     leafId,
@@ -329,9 +370,42 @@ export function buildSessionContext(
   return {
     messages,
     entryIds,
-    thinkingLevel: piCtx.thinkingLevel,
-    model: piCtx.model,
+    oldestEntryId: sliced[0]?.id ?? null,
+    hasMore,
+    ...getSessionSettings(entries, leafId),
   };
+}
+
+/**
+ * Extract the ancestor chain from `leafId` back toward the root, capped at
+ * `tail` entries (most-recent first after the final reverse). Iterative: a
+ * linear session's chain length equals its entry count, so a recursive walk
+ * would overflow the stack. The result is still a valid prefix of the active
+ * branch — older history is loaded on demand via pagination.
+ */
+export function sliceActiveBranch(
+  entries: SessionEntry[],
+  leafId: string | null,
+  tail: number,
+  excludeLeaf = false,
+): SessionEntry[] {
+  if (tail <= 0) return entries;
+  const byId = new Map<string, SessionEntry>();
+  for (const e of entries) byId.set(e.id, e);
+
+  let leaf = leafId ? byId.get(leafId) : entries[entries.length - 1];
+  // Pagination: `before` is the oldest entry already loaded, so the next page
+  // must start at its parent to avoid duplicating `before` when prepended.
+  if (excludeLeaf) leaf = leaf?.parentId ? byId.get(leaf.parentId) : undefined;
+  if (!leaf) return [];
+  const chain: SessionEntry[] = [];
+  let current: SessionEntry | undefined = leaf;
+  while (current && chain.length < tail) {
+    chain.push(current);
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  chain.reverse();
+  return chain;
 }
 
 function parseEntryTimestamp(timestamp: string): number | undefined {
@@ -393,13 +467,20 @@ function entryToUiMessage(
 ): AgentMessage | null {
   switch (entry.type) {
     case "message": {
-      const message = options.deferToolResultImages
+      let message = options.deferToolResultImages
         ? omitToolResultBase64Images(normalizeToolCalls(entry.message))
         : normalizeToolCalls(entry.message);
+      // Real long sessions may store assistant content as a plain string; the
+      // deferThinking branch maps over content blocks and would 500 (#555).
+      const legacyContent = message.role === "assistant" ? (message as { content: unknown }).content : undefined;
+      if (typeof legacyContent === "string") {
+        message = { ...message, content: [{ type: "text", text: legacyContent }] } as AgentMessage;
+      }
       if (!options.deferThinking || message.role !== "assistant") return message;
+      const content = message.content;
       return {
         ...message,
-        content: message.content.map((block) => (
+        content: content.map((block) => (
           block.type === "thinking" && block.thinking.trim() !== ""
             ? { ...block, thinking: "", deferred: true }
             : block

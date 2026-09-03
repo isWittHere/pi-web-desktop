@@ -165,7 +165,11 @@ export async function GET(
     const tree = projectTreeForResponse(sm.getTree());
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
-    const context = buildSessionContext(entries as never, leafId, { deferThinking, deferToolResultImages });
+    // ?tail bounds the returned ancestor chain (capped at 1000). Absent or
+    // invalid tail returns the full chain until the client learns to page.
+    const rawTail = Number(searchParams.get("tail"));
+    const tail = Number.isFinite(rawTail) && rawTail > 0 ? Math.min(rawTail, 1000) : undefined;
+    const context = buildSessionContext(entries as never, leafId, { deferThinking, deferToolResultImages, tail });
     const totalActiveMs = computeSessionTotalActiveMs(entries);
     const { fileStats, popupModel } = summarizeSessionFile(entries);
 
