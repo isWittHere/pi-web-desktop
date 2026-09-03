@@ -734,6 +734,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [isNew, newSessionCwd, toolPreset, t, addNotice]);
 
+  // On-demand variant for UI entry points that may open before a new-session
+  // composer has a runtime (e.g. the tools panel). It lazily creates the
+  // session first so get_tools reports the real active tool set instead of an
+  // empty list that reads as "no tools enabled".
+  const loadSystemInfoOnDemand = useCallback(async (sid?: string | null) => {
+    const resolved = sid ?? sessionIdRef.current ?? await ensureNewSession();
+    if (!resolved) return;
+    await loadSystemInfo(resolved);
+  }, [ensureNewSession, loadSystemInfo]);
+
   const loadSlashCommands = useCallback(async () => {
     const sid = sessionIdRef.current ?? await ensureNewSession();
     if (!sid) {
@@ -1823,6 +1833,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!sid) return;
     try {
       await sendAgentCommand(sid, { type: "set_tools", toolNames });
+      // Refresh the tools panel so it reflects the new active set instead of
+      // the list loaded before the switch.
+      await loadSystemInfo(sid);
     } catch (e) {
       console.error("Failed to set tools:", e);
       addNotice({
@@ -1830,7 +1843,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         message: e instanceof Error ? e.message : `Failed to set tool preset: ${String(e)}`,
       });
     }
-  }, [setToolPresetState, addNotice]);
+  }, [setToolPresetState, addNotice, loadSystemInfo]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
@@ -2024,7 +2037,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleRecallQueue,
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
-    loadSystemInfo,
+    loadSystemInfo, loadSystemInfoOnDemand,
     handleLeafChange,
     loadContext,
   };

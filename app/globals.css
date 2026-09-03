@@ -916,17 +916,29 @@ pre, code {
 }
 /* Tools preset + active-tools segmented split button: keep the outer rounded
    corners but flatten the two corners at the seam so the two buttons read as
-   one joined unit. Inline borderRadius can't win over `.chat-input-toolbar
-   button` here, so it has to be CSS. Each button sits inside its own wrapper
-   div (for fixed-popup refs), so target the group's direct div children. */
-.chat-input-toolbar-tools-group button {
-  border-radius: 0 !important;
-}
-.chat-input-toolbar-tools-group > div:first-child button {
+   one joined unit. Only the trigger buttons themselves are targeted (direct
+   children of their wrapper divs) — popup panels rendered inside the same
+   wrappers must keep the shared .chat-input-menu-panel radius. Inline
+   borderRadius can't win over `.chat-input-toolbar button`, so CSS it is. */
+.chat-input-toolbar-tools-group > div:first-child > button {
   border-radius: 4px 0 0 4px !important;
 }
-.chat-input-toolbar-tools-group > div:last-child button {
+.chat-input-toolbar-tools-group > div:last-child > button {
   border-radius: 0 4px 4px 0 !important;
+}
+/* Preset "off": the active-tools trigger has nothing to configure, so hide
+   it and the divider, and give the preset trigger all four rounded corners. */
+.chat-input-toolbar-tools-group.tools-group-preset-off > div:first-child,
+.chat-input-toolbar-tools-group.tools-group-preset-off > div:first-child + div {
+  display: none !important;
+}
+.chat-input-toolbar-tools-group.tools-group-preset-off > div:last-child > button {
+  border-radius: 4px !important;
+}
+/* ...but only the trigger buttons — dropdown panels are rendered inside the
+   same wrapper divs, so exclude their option buttons explicitly. */
+.chat-input-toolbar-tools-group > div:last-child .chat-input-menu-panel button {
+  border-radius: 4px !important;
 }
 /* Dropdown panels inside the toolbar: menu options share the toolbar
    button radius. */
