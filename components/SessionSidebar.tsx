@@ -2677,6 +2677,18 @@ function SessionItem({
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
   const ITEM_HEIGHT = 50;
+  // Pending rows draw their accent line as a repeating-gradient dash so the
+  // dash phase is controllable (a native `dashed` border always starts at phase
+  // 0, which makes vertically adjacent pending rows' dashes align and read as a
+  // single continuous run). To make each row show exactly half a dash at its top
+  // AND bottom edge (so the bottom half of one row's dash joins the top half of
+  // the next row's dash into one seamless dash), two conditions must hold:
+  //   - the period P = DASH + GAP evenly divides ITEM_HEIGHT (so the top and
+  //     bottom edges of a row land on the same pattern phase), and
+  //   - the pattern is shifted so that phase sits at the dash midpoint.
+  // DASH=6, GAP=4 give P=10, which divides ITEM_HEIGHT (50) into 5 periods.
+  const PENDING_DASH_LEN = 6;
+  const PENDING_DASH_GAP = 4;
   // Marked rows (completed/pending) grow their accent line on hover/selection.
   // The line is a non-layout overlay scaled with transform, so the text never
   // shifts when it grows.
@@ -2729,11 +2741,22 @@ function SessionItem({
             top: 0,
             bottom: 0,
             width: 4,
-            borderLeft: `${session.mark === "pending" && !confirmDelete ? "dashed" : "solid"} 4px ${lineColor}`,
-            transform: `scaleX(${markLineActive ? 1 : 0.5})`,
-            transformOrigin: "left center",
-            transition: "transform 0.15s ease",
             pointerEvents: "none",
+            transition: "transform 0.15s ease",
+            ...(session.mark === "pending" && !confirmDelete
+              ? {
+                  // Phase-shifted dashes (see PENDING_DASH_* above).
+                  // backgroundPosition shifts the pattern start back by half a dash length.
+                  transformOrigin: "left center",
+                  transform: `scaleX(${markLineActive ? 1 : 0.5})`,
+                  backgroundImage: `repeating-linear-gradient(to bottom, ${lineColor} 0px ${PENDING_DASH_LEN}px, transparent ${PENDING_DASH_LEN}px ${PENDING_DASH_LEN + PENDING_DASH_GAP}px)`,
+                  backgroundPosition: `0 ${-PENDING_DASH_LEN / 2}px`,
+                }
+              : {
+                  borderLeft: `solid 4px ${lineColor}`,
+                  transformOrigin: "left center",
+                  transform: `scaleX(${markLineActive ? 1 : 0.5})`,
+                }),
           }}
         />
       )}
