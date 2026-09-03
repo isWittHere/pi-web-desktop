@@ -262,6 +262,10 @@ export function WorkspaceTabBar({
 
   const handleTabPointerDown = (e: React.PointerEvent<HTMLDivElement>, key: string) => {
     if (e.button !== 0 || e.pointerType !== "mouse" || tabs.length < 2) return;
+    // Presses on the close button must neither arm a drag nor take pointer
+    // capture: capture retargets the follow-up click to this container, so
+    // the button's onClick would never fire and closing would appear dead.
+    if ((e.target as Element).closest("button")) return;
     dragStateRef.current = {
       pointerId: e.pointerId,
       key,
