@@ -147,3 +147,12 @@ test("uses server pagination state instead of guessing from rendered rows", asyn
   assert.match(chatWindowSource, /if \(!hasEarlierMessages\) return/);
   assert.match(chatWindowSource, /const hasMore = startIndex > 0 \|\| hasEarlierMessages/);
 });
+
+test("ChatWindow groups a headless leading run instead of the legacy renderer", async () => {
+  const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
+  // A tail window that starts mid-turn (no user prompt in the window) must go
+  // through the ProcessGroup path, not the flat legacy message renderer.
+  assert.match(chatWindowSource, /idx === 0 && msg\.role !== "user" && !startsCompactionTurn/);
+  assert.match(chatWindowSource, /key="headless-process-group"/);
+  assert.match(chatWindowSource, /headlessEnd < messages\.length && messages\[headlessEnd\]\.role !== "user" && !isCompactionBoundary\(messages\[headlessEnd\]\)/);
+});

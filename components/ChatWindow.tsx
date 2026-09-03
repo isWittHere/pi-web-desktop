@@ -834,6 +834,73 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
               for (let idx = 0; idx < messages.length;) {
                 const msg = messages[idx];
                 const startsCompactionTurn = isCompactionBoundary(msg);
+                // Tail pagination can start the window mid-turn (a single agent
+                // run can outspan the page, leaving no user prompt in the
+                // window). Group that headless leading run through the
+                // ProcessGroup path too instead of the legacy flat renderer.
+                if (idx === 0 && msg.role !== "user" && !startsCompactionTurn) {
+                  let headlessEnd = 0;
+                  while (headlessEnd < messages.length && messages[headlessEnd].role !== "user" && !isCompactionBoundary(messages[headlessEnd])) headlessEnd += 1;
+                  const headAssistantIdx = findFinalAssistantIndex(messages, -1, headlessEnd);
+                  const headProcessIndices: number[] = [];
+                  const headProcessEnd = headAssistantIdx === -1 ? headlessEnd : headAssistantIdx;
+                  for (let headIdx = 0; headIdx < headProcessEnd; headIdx++) {
+                    if (hasDisplayableProcessMessage(messages[headIdx])) headProcessIndices.push(headIdx);
+                  }
+                  let headProcessBlocks = collectProcessContentBlocks(messages, entryIds, headProcessIndices, toolResultsMap);
+                  let headAnswerMessage: AssistantMessage | null = null;
+                  let headWrittenFiles: WrittenFile[] = [];
+                  if (headAssistantIdx >= 0) {
+                    const headAssistant = messages[headAssistantIdx] as AssistantMessage;
+                    const headSplit = splitFinalAssistantBlocks(headAssistant);
+                    headProcessBlocks = headProcessBlocks.concat(splitAssistantContentBlocks(headAssistant, {
+                      messageIndex: headAssistantIdx,
+                      entryId: entryIds[headAssistantIdx],
+                      toolResults: toolResultsMap,
+                    }).processBlocks);
+                    if (headSplit.answerBlocks.length > 0) {
+                      headAnswerMessage = withAssistantBlocks(headAssistant, headSplit.answerBlocks);
+                      const headTurnContent: AssistantContentBlock[] = [];
+                      for (let i = 0; i <= headAssistantIdx; i++) {
+                        const m = messages[i];
+                        if (m?.role === "assistant") {
+                          for (const b of (m as AssistantMessage).content ?? []) headTurnContent.push(b);
+                        }
+                      }
+                      headWrittenFiles = extractTurnWrittenFiles(headTurnContent, toolResultsMap, messageCwd);
+                    }
+                  }
+                  if (headProcessBlocks.length > 0) {
+                    const headRefIdx = headProcessIndices
+                      .map((headIdx) => visibleRefIndexByMessage.get(headIdx))
+                      .find((value): value is number => typeof value === "number")
+                      ?? (headAnswerMessage ? undefined : visibleRefIndexByMessage.get(headAssistantIdx));
+                    rendered.push(
+                      <div
+                        key="headless-process-group"
+                        ref={headRefIdx === undefined ? undefined : (el) => { messageRefs.current[headRefIdx] = el; }}
+                      >
+                        <ProcessGroup
+                          blocks={headProcessBlocks}
+                          isStreaming={false}
+                          cwd={messageCwd}
+                          onOpenFile={onOpenFile}
+                          sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                        />
+                      </div>,
+                    );
+                  }
+                  if (headAnswerMessage) {
+                    rendered.push(renderMessage(headAssistantIdx, { messageOverride: headAnswerMessage, writtenFiles: headWrittenFiles }));
+                  }
+                  if (headProcessBlocks.length === 0 && !headAnswerMessage) {
+                    // Degenerate headless run (no displayable process content
+                    // and no answer): nothing to group, keep the flat renderer.
+                    for (let headIdx = 0; headIdx < headlessEnd; headIdx++) rendered.push(renderMessage(headIdx));
+                  }
+                  idx = headlessEnd;
+                  continue;
+                }
                 // The SDK may trim the user prompt that triggered compaction from
                 // the rebuilt context. Treat the retained compaction entry as the
                 // turn boundary so its first following agent response still uses
