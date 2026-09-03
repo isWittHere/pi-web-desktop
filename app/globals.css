@@ -439,6 +439,30 @@ html {
   min-width: 0;
 }
 
+/* Workspace tab close button: hover is pure CSS (:hover) — a JS hover state
+   desyncs when the tab unmounts under the pointer (close) and the same key
+   reopens later, rendering the new button permanently lit with no
+   mouseleave to clear it. The browser owns :hover, so it self-heals. */
+.workspace-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.workspace-tab-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;

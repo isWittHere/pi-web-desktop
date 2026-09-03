@@ -98,7 +98,13 @@ export function WorkspaceTabBar({
 }: WorkspaceTabBarProps) {
   const { t } = useI18n();
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-  const [hoveredClose, setHoveredClose] = useState<string | null>(null);
+  // A card hovered while its tab closed keeps the stale key: when the same
+  // workspace tab is reopened later (same key), the new card would render
+  // pre-lit, and no mouseleave can ever clear it — the pointer was never
+  // over it. Prune keys that no longer exist whenever the tab list changes.
+  useEffect(() => {
+    setHoveredKey((cur) => (cur !== null && !tabs.some((t) => t.key === cur) ? null : cur));
+  }, [tabs]);
   // Pointer drag reorder state: the tab being dragged and the insertion line
   // position relative to the hovered tab.
   const [dragKey, setDragKey] = useState<string | null>(null);
@@ -432,20 +438,10 @@ export function WorkspaceTabBar({
                   </span>
                 ) : null}
                 <button
+                  className="workspace-tab-close"
                   onClick={(e) => { e.stopPropagation(); onCloseTab(tab.key); }}
-                  onMouseEnter={() => setHoveredClose(tab.key)}
-                  onMouseLeave={() => setHoveredClose(null)}
                   title={t("desktop.closeWorkspaceTab")}
                   aria-label={t("desktop.closeWorkspaceTabWithLabel", { label: pathBaseName(tab.key) })}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    width: 22, height: 22, padding: 0, flexShrink: 0,
-                    background: hoveredClose === tab.key ? "var(--bg-hover)" : "transparent",
-                    border: "none", borderRadius: 4,
-                    color: hoveredClose === tab.key ? "var(--text)" : "var(--text-dim)",
-                    cursor: "pointer",
-                    transition: "background 0.1s, color 0.1s",
-                  }}
                 >
                   <X size={14} aria-hidden="true" />
                 </button>

@@ -31,3 +31,18 @@ test("close button keeps stopPropagation so it never selects the tab", () => {
     /onClick=\{\(e\) => \{ e\.stopPropagation\(\); onCloseTab\(tab\.key\); \}\}/,
   );
 });
+
+test("close button hover is pure CSS, not JS hover state", () => {
+  // A JS hover state desyncs when the tab unmounts under the pointer and
+  // the same key reopens later: the new button renders pre-lit with no
+  // mouseleave to clear it. :hover is owned by the browser and self-heals.
+  assert.match(source, /className="workspace-tab-close"/);
+  assert.doesNotMatch(source, /hoveredClose/);
+});
+
+test("stale card hover keys are pruned when the tab list changes", () => {
+  assert.match(
+    source,
+    /setHoveredKey\(\(cur\) => \(cur !== null && !tabs\.some\(\(t\) => t\.key === cur\) \? null : cur\)\)/,
+  );
+});
