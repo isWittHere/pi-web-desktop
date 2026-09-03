@@ -22,6 +22,7 @@ import type { SessionStatsInfo } from "@/lib/pi-types";
 import {
   captureScrollDistance,
   getVisibleRenderWindow,
+  getNextVisibleCount,
   restoreScrollTop,
   VISIBLE_PAGE_SIZE,
 } from "@/lib/chat-lazy-load";
@@ -347,6 +348,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   // must only fire once the new content is actually in the DOM.
   const prevScrollHeightRef = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
+  const serverPrependRef = useRef(false);
 
   // IntersectionObserver on the sentinel div at the top of the message list.
   // When it becomes visible, load the next page of older messages.
@@ -357,30 +359,36 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
-        // No older history loaded yet: fetch the previous page from the server
-        // and prepend it (loadContext handles prepend + scroll anchoring).
-        // Skip while a page is already loading or nothing older exists.
         if (loadingOlderRef.current) return;
-        if (!hasEarlierMessages) return;
-        const oldestId = historyCursor;
-        if (!oldestId) return;
-        const sid = session?.id ?? sessionIdRef.current;
-        if (!sid) return;
-        loadingOlderRef.current = true;
-        void loadContext(sid, branchActiveLeafId, oldestId, {
-          // The anchor is captured inside loadContext right before the prepend
-          // lands — capturing here (before the network round trip) would go
-          // stale by however far the user scrolls while the request is in
-          // flight, and the restore would land offset by exactly that drift.
-          captureAnchor: () => {
-            const anchorContainer = scrollContainerRef.current;
-            if (!anchorContainer) return;
-            prevScrollDistanceRef.current = captureScrollDistance(anchorContainer.scrollHeight, anchorContainer.scrollTop);
-            prevScrollHeightRef.current = anchorContainer.scrollHeight;
-          },
-        }).finally(() => {
-          loadingOlderRef.current = false;
-        });
+        if (hasEarlierMessages) {
+          // Server-side paging (dormant while routes default to the full
+          // chain): fetch the previous page and prepend it. loadContext
+          // captures the scroll anchor right before the prepend lands —
+          // capturing before the network round trip would go stale by
+          // however far the user scrolls while the request is in flight.
+          const oldestId = historyCursor;
+          if (!oldestId) return;
+          const sid = session?.id ?? sessionIdRef.current;
+          if (!sid) return;
+          loadingOlderRef.current = true;
+          serverPrependRef.current = true;
+          void loadContext(sid, branchActiveLeafId, oldestId, {
+            captureAnchor: () => {
+              const anchorContainer = scrollContainerRef.current;
+              if (!anchorContainer) return;
+              prevScrollDistanceRef.current = captureScrollDistance(anchorContainer.scrollHeight, anchorContainer.scrollTop);
+              prevScrollHeightRef.current = anchorContainer.scrollHeight;
+            },
+          }).finally(() => {
+            loadingOlderRef.current = false;
+          });
+          return;
+        }
+        // Legacy client-side render-window paging: older entries are already
+        // in memory, so reveal the next page in the same frame.
+        prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
+        prevScrollHeightRef.current = container.scrollHeight;
+        setVisibleCount((prev) => getNextVisibleCount(prev));
       },
       { root: container, threshold: 0 }
     );
@@ -388,9 +396,13 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     return () => observer.disconnect();
   }, [historyCursor, hasEarlierMessages, session, branchActiveLeafId, loadContext, sessionIdRef, scrollContainerRef]);
 
-  // Keep the rendered window at least as large as what's loaded, so prepended
-  // (older) pages stay visible instead of being sliced off the top.
+  // Grow the rendered window to cover server-prepended pages (dormant while
+  // routes default to the full chain). Client-side paging grows the window
+  // incrementally in the observer instead — growing it here to the full
+  // history would defeat that lazy render entirely.
   useEffect(() => {
+    if (!serverPrependRef.current) return;
+    serverPrependRef.current = false;
     setVisibleCount((current) => Math.max(current, messages.length));
   }, [messages.length]);
 
@@ -1099,7 +1111,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                 <>
                   {hasMore && (
                     <div ref={sentinelRef} className="py-3 text-center text-xs text-text-muted">
-                      {t("desktop.scrollToLoadEarlierMessages")}
+                      {t("desktop.scrollToLoadEarlierMessages", { count: startIndex })}
                     </div>
                   )}
                   {rendered.slice(startIndex)}

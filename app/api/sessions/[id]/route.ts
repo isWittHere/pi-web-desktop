@@ -166,9 +166,11 @@ export async function GET(
     const tree = projectTreeForResponse(sm.getTree());
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
-    // ?tail bounds the returned ancestor chain (default 50, capped at 1000).
+    // ?tail bounds the returned ancestor chain (capped at 1000) for clients
+    // that page explicitly. Absent tail keeps the legacy full-chain response;
+    // the tail-pagination experiment lives on the exp/tail-pagination branch.
     const rawTail = Number(searchParams.get("tail"));
-    const tail = Number.isFinite(rawTail) && rawTail > 0 ? Math.min(rawTail, 1000) : 50;
+    const tail = Number.isFinite(rawTail) && rawTail > 0 ? Math.min(rawTail, 1000) : undefined;
     const context = buildSessionContext(entries as never, leafId, { deferThinking, deferToolResultImages, tail });
     const totalActiveMs = computeSessionTotalActiveMs(entries);
     const { fileStats, popupModel } = summarizeSessionFile(entries);

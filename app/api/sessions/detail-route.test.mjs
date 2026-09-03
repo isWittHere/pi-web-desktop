@@ -17,17 +17,17 @@ const jiti = createJiti(import.meta.url, {
 });
 const { buildSessionContext } = await jiti.import("@/lib/session-reader");
 
-test("detail route parses ?tail: default 50, NaN-safe, capped at 1000", () => {
+test("detail route keeps the full-chain default; ?tail stays opt-in", () => {
   assert.match(routeSrc, /const rawTail = Number\(searchParams\.get\("tail"\)\)/);
   assert.match(routeSrc, /Math\.min\(rawTail, 1000\)/);
-  assert.match(routeSrc, /Number\.isFinite\(rawTail\) && rawTail > 0 \? Math\.min\(rawTail, 1000\) : 50/);
+  assert.match(routeSrc, /Number\.isFinite\(rawTail\) && rawTail > 0 \? Math\.min\(rawTail, 1000\) : undefined/);
   assert.match(routeSrc, /buildSessionContext\(entries as never, leafId, \{[^}]*\btail\b[^}]*\}\)/);
-  // Session-wide metadata must come from the full entries, not the tail window.
+  // Session-wide metadata must come from the full entries, not a tail window.
   assert.match(routeSrc, /messageCount: fileStats\.totalMessages/);
   assert.match(routeSrc, /firstUserMessage/);
 });
 
-test("detail route bounds history to the tail window (default 50 over 5000 entries)", () => {
+test("detail route honors an explicit ?tail window (opt-in pagination)", () => {
   const entries = [];
   for (let i = 0; i < 5000; i++) {
     entries.push({
@@ -40,7 +40,6 @@ test("detail route bounds history to the tail window (default 50 over 5000 entri
   }
   const ctx = buildSessionContext(entries, "e4999", { tail: 50 });
   assert.equal(ctx.messages.length, 50);
-  // The transferred window is the tail, not the full 5000-entry forest.
   assert.equal(ctx.entryIds[0], "e4950");
   assert.equal(ctx.entryIds[ctx.entryIds.length - 1], "e4999");
 });

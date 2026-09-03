@@ -132,7 +132,7 @@ test("shows the latest streamed tool execution progress in the running phase", a
   assert.match(chatWindowSource, /desktop\.runningToolProgress[\s\S]*latest\.progress/);
 });
 
-test("uses server pagination state instead of guessing from rendered rows", async () => {
+test("uses server pagination state when active and client paging otherwise", async () => {
   const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
   const loadContextSource = source.slice(
     source.indexOf("const loadContext = useCallback"),
@@ -142,9 +142,12 @@ test("uses server pagination state instead of guessing from rendered rows", asyn
   assert.match(source, /setHasEarlierMessages\(d\.context\.hasMore\)/);
   assert.match(source, /setHistoryCursor\(d\.context\.oldestEntryId\)/);
   assert.match(loadContextSource, /setData\(\(prev\) => \{[\s\S]*messages: \[\.\.\.d\.context\.messages, \.\.\.prev\.context\.messages\]/);
+  // Dual-mode sentinel: server paging only when older server pages exist;
+  // the legacy client-side render window covers the full-chain default.
+  assert.match(chatWindowSource, /if \(hasEarlierMessages\) \{/);
   assert.match(chatWindowSource, /const oldestId = historyCursor/);
   assert.doesNotMatch(chatWindowSource, /const oldestId = entryIds\[0\]/);
-  assert.match(chatWindowSource, /if \(!hasEarlierMessages\) return/);
+  assert.match(chatWindowSource, /setVisibleCount\(\(prev\) => getNextVisibleCount\(prev\)\)/);
   assert.match(chatWindowSource, /const hasMore = startIndex > 0 \|\| hasEarlierMessages/);
 });
 
