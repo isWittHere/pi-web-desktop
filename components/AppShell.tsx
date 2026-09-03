@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -367,6 +367,12 @@ export function AppShell() {
     projects: string[];
     activity: Map<string, { running: number; unread: number }>;
   }>({ projects: [], activity: new Map() });
+  // Keys of the workspaces currently open as tabs, in tab order — consumed
+  // by the "Open Workspaces" group of the title-bar " + " picker menu.
+  const openWorkspaceKeys = useMemo(
+    () => tabsState.tabs.map((tab) => tab.key),
+    [tabsState.tabs],
+  );
   // Cwd switch requests for the sidebar's effective cwd (tab activation,
   // project pick, last-tab-closed). The token guarantees a fresh object
   // reference so the requestedCwd effect re-runs even when the cwd is
@@ -1149,6 +1155,7 @@ export function AppShell() {
         requestedCwd={cwdRequest}
         onOpenProject={handleOpenProject}
         onWorkspaceActivityChange={setWorkspaceActivity}
+        openWorkspaceKeys={openWorkspaceKeys}
         viewMode={viewMode}
         workspaceControlsHosts={{
           // Tabs mode: the title-bar host belongs to the workspace tab bar
@@ -1209,6 +1216,7 @@ export function AppShell() {
         showPiLogo={viewMode === "tabs"}
         pickerProjects={workspaceActivity.projects}
         pickerActivity={workspaceActivity.activity}
+        pickerOpenWorkspaces={openWorkspaceKeys}
         onSelectProject={handleOpenProject}
       />
       {/* Tabs view mode: browser-style workspace tabs in the title-bar host */}

@@ -317,6 +317,7 @@ export const enLocale = {
     "desktop.filterProjects": "Filter projects…",
     "desktop.searchProjects": "Search projects…",
     "desktop.recentProjects": "Recent Projects",
+    "desktop.openWorkspaces": "Open Workspaces",
     "desktop.quickWorkspaces": "Quick Workspaces",
     "desktop.quickWorkspace": "Quick workspace",
     "desktop.selectFolder": "Select folder",

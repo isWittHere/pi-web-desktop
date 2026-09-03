@@ -8,6 +8,7 @@ import {
   MagnifyingGlass,
 } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
+import { samePath } from "@/lib/path-match";
 import { useWorkspaceActions } from "@/hooks/useWorkspaceActions";
 import { RunningSessionIndicator, UnreadSessionIndicator } from "@/components/SessionActivityIndicators";
 
@@ -30,6 +31,10 @@ interface WorkspacePickerMenuProps {
   selectedProject?: string | null;
   /** Per-workspace running/unread counts for the list-item indicators. */
   activity: Map<string, { running: number; unread: number }>;
+  /** Workspace keys currently open as tabs (tabs view mode), in tab order.
+   *  Rendered as their own group above Recent Projects and excluded from the
+   *  other groups; omitted/empty in classic view (no tabs exist). */
+  openWorkspaces?: string[];
   homeDir: string;
   /** Called with the resolved project path whenever one is chosen
    *  (recent project, quick workspace or a validated custom path). */
@@ -57,6 +62,7 @@ export function WorkspacePickerMenu({
   projects,
   selectedProject,
   activity,
+  openWorkspaces,
   homeDir,
   onSelectProject,
   onRequestClose,
@@ -83,10 +89,25 @@ export function WorkspacePickerMenu({
     onSelectProject(project);
   }, [cancelCustomPath, onSelectProject]);
 
+  // Path-aware membership check: tab keys are workspaceKeyOf() values and
+  // the picker list uses s.projectRoot ?? s.cwd, so on Windows the same
+  // workspace can differ in drive-letter case / separators.
+  const isOpenWorkspace = useCallback(
+    (project: string) => (openWorkspaces ?? []).some((key) => samePath(key, project)),
+    [openWorkspaces],
+  );
+
   const visibleProjects = projectFilter.trim()
     ? projects.filter((p) => p.toLowerCase().includes(projectFilter.trim().toLowerCase()))
     : projects;
-  const quickProjects = visibleProjects.filter((p) => isQuickWorkspace(p, homeDir));
+  // Open workspaces are their own group (in tab order); a project opened as
+  // a tab is a stronger state than "recent"/"quick", so it is excluded from
+  // those groups instead of appearing twice.
+  const openProjects = (openWorkspaces ?? []).filter(
+    (key) => !projectFilter.trim() || key.toLowerCase().includes(projectFilter.trim().toLowerCase()),
+  );
+  const recentProjects = visibleProjects.filter((p) => !isOpenWorkspace(p));
+  const quickProjects = recentProjects.filter((p) => isQuickWorkspace(p, homeDir));
 
   const projectSearch = (
     <div style={{ borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
@@ -114,7 +135,7 @@ export function WorkspacePickerMenu({
     <div style={{ padding: "5px 8px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
   );
 
-  const projectItem = (project: string) => {
+  const projectItem = (project: string, isOpen = false) => {
     const isSelected = project === selectedProject;
     const isQuick = isQuickWorkspace(project, homeDir);
     const entry = activity.get(project);
@@ -122,10 +143,15 @@ export function WorkspacePickerMenu({
     const unreadCount = entry?.unread ?? 0;
     return (
       <button key={project} onClick={() => selectProject(project)} title={project} style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "3px 8px", background: isSelected ? "var(--bg-selected)" : "transparent", border: "none", borderRadius: 5, color: isSelected ? "var(--accent)" : "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "var(--font-mono)", minWidth: 0 }} onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }} onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}>
-        {isQuick ? (
-          <Lightning size={12} color={isSelected ? "var(--accent)" : "var(--text-dim)"} weight={isSelected ? "fill" : "regular"} style={{ flexShrink: 0 }} aria-hidden="true" />
-        ) : isSelected ? (
+        {isSelected ? (
           <Check size={12} color="var(--accent)" weight="bold" style={{ flexShrink: 0 }} aria-hidden="true" />
+        ) : isQuick ? (
+          <Lightning size={12} color="var(--text-dim)" weight="regular" style={{ flexShrink: 0 }} aria-hidden="true" />
+        ) : isOpen ? (
+          // Open-as-tab marker: a filled dot distinct from the selected Check
+          <span style={{ width: 12, display: "inline-flex", justifyContent: "center", flexShrink: 0 }} aria-hidden="true">
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--text-dim)" }} />
+          </span>
         ) : (
           <span style={{ width: 12, flexShrink: 0 }} />
         )}
@@ -151,20 +177,26 @@ export function WorkspacePickerMenu({
   };
 
   const projectList = (
-    <div style={{ maxHeight: "min(calc(32vh / var(--app-ui-scale, 1)), 240px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
-      {visibleProjects.length > 0 && (
+    <div style={{ maxHeight: "min(calc(46vh / var(--app-ui-scale, 1)), 360px)", overflowY: "auto", flex: 1, minHeight: 0, padding: "4px" }}>
+      {openProjects.length > 0 && (
+        <>
+          {projectGroupHeader(t("desktop.openWorkspaces"))}
+          {openProjects.map((p) => projectItem(p, true))}
+        </>
+      )}
+      {recentProjects.length > 0 && (
         <>
           {projectGroupHeader(t("desktop.recentProjects"))}
-          {visibleProjects.map(projectItem)}
+          {recentProjects.map((p) => projectItem(p, false))}
         </>
       )}
       {quickProjects.length > 0 && (
         <>
           {projectGroupHeader(t("desktop.quickWorkspaces"))}
-          {quickProjects.map(projectItem)}
+          {quickProjects.map((p) => projectItem(p, false))}
         </>
       )}
-      {visibleProjects.length === 0 && <div style={{ padding: "8px", fontSize: 12, color: "var(--text-dim)" }}>{projectFilter.trim() ? t("desktop.noMatchingProjects") : t("desktop.noProjectsYet")}</div>}
+      {recentProjects.length === 0 && openProjects.length === 0 && <div style={{ padding: "8px", fontSize: 12, color: "var(--text-dim)" }}>{projectFilter.trim() ? t("desktop.noMatchingProjects") : t("desktop.noProjectsYet")}</div>}
     </div>
   );
 

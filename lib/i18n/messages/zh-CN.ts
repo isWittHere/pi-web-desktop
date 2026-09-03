@@ -317,6 +317,7 @@ export const zhCNLocale = {
     "desktop.filterProjects": "筛选项目…",
     "desktop.searchProjects": "搜索项目…",
     "desktop.recentProjects": "最近项目",
+    "desktop.openWorkspaces": "已打开的工作区",
     "desktop.quickWorkspaces": "快速工作区",
     "desktop.quickWorkspace": "快速工作区",
     "desktop.selectFolder": "选择文件夹",

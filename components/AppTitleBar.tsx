@@ -62,6 +62,9 @@ interface AppTitleBarProps {
    *  the sidebar, same snapshot the tab bar consumes). */
   pickerProjects?: string[];
   pickerActivity?: Map<string, { running: number; unread: number }>;
+  /** Workspace keys currently open as tabs — shown as the picker's
+   *  "Open Workspaces" group (tabs view mode only; empty in classic). */
+  pickerOpenWorkspaces?: string[];
   /** A project was picked from the "+" menu — open it as a workspace tab. */
   onSelectProject?: (project: string) => void;
 }
@@ -145,6 +148,7 @@ export function AppTitleBar({
   showPiLogo = false,
   pickerProjects = [],
   pickerActivity,
+  pickerOpenWorkspaces,
   onSelectProject,
 }: AppTitleBarProps) {
   const { isElectron, isMac, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
@@ -295,7 +299,7 @@ export function AppTitleBar({
                   position: "absolute",
                   top: "calc(100% + 4px)",
                   left: 0,
-                  width: 320,
+                  width: 280,
                   zIndex: 1000,
                   background: "var(--bg)",
                   border: "1px solid var(--border)",
@@ -304,12 +308,13 @@ export function AppTitleBar({
                   overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
-                  maxHeight: "min(calc(38vh / var(--app-ui-scale, 1)), 300px)",
+                  maxHeight: "min(calc(55vh / var(--app-ui-scale, 1)), 440px)",
                 }}
               >
                 <WorkspacePickerMenu
                   projects={pickerProjects}
                   activity={pickerActivity ?? new Map()}
+                  openWorkspaces={pickerOpenWorkspaces}
                   homeDir={homeDir}
                   onSelectProject={handleAddProject}
                   onRequestClose={() => setAddMenuOpen(false)}
