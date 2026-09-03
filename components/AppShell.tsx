@@ -614,10 +614,16 @@ export function AppShell() {
     }
     setActiveCwd(cwd);
     // Keep the active workspace tab's cwd in sync — worktree switches inside
-    // one project do not create new tabs (tabs are per project root).
+    // one project do not create new tabs (tabs are per project root). A cwd
+    // from another workspace must never bleed into the bookmark: the key is
+    // the workspace identity, and a foreign cwd would corrupt the next
+    // activation request for this tab (requesting the wrong directory and
+    // tripping the unchanged-cwd path).
     if (cwd && viewModeRef.current === "tabs") {
       const activeKey = tabsStateRef.current.activeKey;
-      if (activeKey) tabsApi.updateCwd(activeKey, cwd);
+      if (activeKey && samePath(projectRoot ?? cwd, activeKey)) {
+        tabsApi.updateCwd(activeKey, cwd);
+      }
     }
     // Skip if cwd is null (initial mount) or during the initial URL restore.
     if (!cwd) return;
@@ -703,11 +709,16 @@ export function AppShell() {
       requestWorkspaceSwitch(session.cwd, workspaceKeyOf(session));
     }
     // Tabs mode: entering a session directly (lobby rows) must surface its
-    // workspace as a tab, exactly like a project pick would.
+    // workspace as a tab, exactly like a project pick would. A tab that
+    // already exists must be *activated*: the strip highlight and the chat
+    // content must never disagree, or the next click on the still-highlighted
+    // tab would request a cwd the pipeline considers already-in-effect.
     if (viewModeRef.current === "tabs") {
       const tabKey = workspaceKeyOf(session);
       if (!tabsStateRef.current.tabs.some((t) => t.key === tabKey)) {
         tabsApi.open(tabKey, session.cwd);
+      } else if (tabsStateRef.current.activeKey !== tabKey) {
+        tabsApi.activate(tabKey);
       }
     }
     // Wait for the session content before hiding the startup splash (only
