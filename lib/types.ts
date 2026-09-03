@@ -53,6 +53,20 @@ export interface UserMessage {
   timestamp?: number;
 }
 
+export interface AgentUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    total: number;
+  };
+}
+
 export interface AssistantMessage {
   role: "assistant";
   content: AssistantContentBlock[];
@@ -61,19 +75,7 @@ export interface AssistantMessage {
   stopReason?: string;
   errorMessage?: string;
   timestamp?: number;
-  usage?: {
-    input: number;
-    output: number;
-    cacheRead: number;
-    cacheWrite: number;
-    cost: {
-      input: number;
-      output: number;
-      cacheRead: number;
-      cacheWrite: number;
-      total: number;
-    };
-  };
+  usage?: AgentUsage;
 }
 
 export interface ToolResultMessage {
@@ -83,6 +85,7 @@ export interface ToolResultMessage {
   content: (TextContent | ImageContent)[];
   isError?: boolean;
   details?: unknown;
+  usage?: AgentUsage;
   timestamp?: number;
 }
 
@@ -226,6 +229,7 @@ export interface CompactionEntry extends SessionEntryBase {
   firstKeptEntryId: string;
   tokensBefore: number;
   details?: unknown;
+  usage?: AgentUsage;
   fromHook?: boolean;
 }
 
@@ -234,6 +238,7 @@ export interface BranchSummaryEntry extends SessionEntryBase {
   fromId: string;
   summary: string;
   details?: unknown;
+  usage?: AgentUsage;
   fromHook?: boolean;
 }
 
