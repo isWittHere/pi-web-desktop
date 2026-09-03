@@ -1284,7 +1284,7 @@ function ExtensionDialog({
           style={{
             padding: 14,
             ...(request.method === "select"
-              ? { flex: "1 1 auto", minHeight: 0, overflowY: "auto" as const }
+              ? { flex: "1 1 auto", minHeight: 0, overflowY: "auto" }
               : {}),
           }}
         >

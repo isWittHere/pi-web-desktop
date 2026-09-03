@@ -25,6 +25,6 @@ test("the extension select dialog scrolls instead of overflowing", () => {
   const dialogBlock = source.slice(dialogStart, dialogStart + 2600);
   assert.match(dialogBlock, /flexDirection: "column"/);
   assert.match(dialogBlock, /flexShrink: 0/);
-  assert.match(dialogBlock, /overflowY: "auto" as const/);
+  assert.match(dialogBlock, /overflowY: "auto"/);
   assert.match(dialogBlock, /overflowWrap: "anywhere"/);
 });

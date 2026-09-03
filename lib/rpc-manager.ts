@@ -722,14 +722,13 @@ export class AgentSessionWrapper {
     }
 
     this.sessionShutdownEmitted = true;
-    const extensionRunner = this.inner.extensionRunner as { emit?: (event: unknown) => Promise<void> } | undefined;
-    const emit = extensionRunner?.emit;
+    const emit = this.inner.extensionRunner.emit;
     if (typeof emit !== "function") {
       finishDispose();
       return;
     }
 
-    void (async () => emit.call(extensionRunner, { type: "session_shutdown", reason: "quit" }))()
+    void (async () => emit.call(this.inner.extensionRunner, { type: "session_shutdown", reason: "quit" }))()
       .catch((error) => {
         console.error(
           "[pi-web] session_shutdown before dispose failed:",
