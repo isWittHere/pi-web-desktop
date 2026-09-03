@@ -8,6 +8,7 @@ import {
   invalidateSessionPathCache,
   invalidateSessionListCache,
   buildSessionContext,
+  findFirstUserMessage,
   readSessionHeader,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
@@ -180,9 +181,7 @@ export async function GET(
       : undefined;
     // messageCount/firstMessage describe the whole session, so derive them from
     // the full entries — the tail-sliced context only carries the last page.
-    const firstUserMessage = (entries as unknown as Extract<SessionEntry, { type: "message" }>[]).find(
-      (entry) => entry.message.role === "user",
-    )?.message;
+    const firstUserMessage = findFirstUserMessage(entries as never);
     const info = header ? {
       path: filePath,
       id: header.id,

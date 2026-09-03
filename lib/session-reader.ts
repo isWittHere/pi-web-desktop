@@ -408,6 +408,19 @@ export function sliceActiveBranch(
   return chain;
 }
 
+/**
+ * Find the first user message across the FULL entry list (session-wide
+ * metadata, independent of any tail window). Entries of other types carry no
+ * `.message`, so the type guard must run before reading it.
+ */
+export function findFirstUserMessage(entries: SessionEntry[]): AgentMessage | undefined {
+  const firstUserEntry = entries.find(
+    (entry): entry is Extract<SessionEntry, { type: "message" }> =>
+      entry.type === "message" && entry.message.role === "user",
+  );
+  return firstUserEntry?.message;
+}
+
 function parseEntryTimestamp(timestamp: string): number | undefined {
   const parsed = Date.parse(timestamp);
   return Number.isNaN(parsed) ? undefined : parsed;
