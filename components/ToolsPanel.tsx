@@ -131,7 +131,7 @@ export function ToolsPanel({ tools, loading = false, title, onClose }: ToolsPane
                     borderRadius: 4,
                     background: isActive ? "var(--bg-selected)" : "none",
                     border: "none",
-                    color: "var(--text)",
+                    color: isActive ? "var(--text)" : "var(--text-muted)",
                     cursor: "pointer",
                     fontSize: 12,
                     textAlign: "left",
