@@ -101,7 +101,7 @@ export function ToolsPanel({ tools, loading = false, title, onClose }: ToolsPane
       ) : activeTools.length === 0 ? (
         <div style={{ padding: 16, color: "var(--text-dim)", textAlign: "center" }}>{t("tools.empty")}</div>
       ) : (
-        <div style={{ display: "flex", minHeight: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", minHeight: 0, overflow: "hidden", borderRadius: 8 }}>
           {/* Left: tool sidebar */}
           <div
             style={{

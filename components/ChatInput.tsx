@@ -194,7 +194,7 @@ function ToolsPanelPopup({ tools, loading, rect, onClose }: { tools: ToolEntry[]
     <div
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
-      style={{ position: "fixed", bottom: vh - rect.top + 6, right: r, zIndex: 2001, maxHeight: maxH, overflow: "hidden" }}
+      style={{ position: "fixed", bottom: vh - rect.top + 6, right: r, zIndex: 2001, maxHeight: maxH }}
     >
       <ToolsPanel tools={tools} loading={loading} title={t("tools.title")} onClose={onClose} />
     </div>
