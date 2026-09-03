@@ -1141,7 +1141,12 @@ function ExtensionWidgets({ widgets }: { widgets: Array<{ key: string; lines: st
             {widget.key}
           </div>
           <pre style={{ margin: 0, padding: "8px 9px", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--font-mono)" }}>
-            {widget.lines.join("\n")}
+            {widget.lines.map((line, lineIndex) => (
+              <span key={`${widget.key}:${lineIndex}`}>
+                {renderAnsiLine(line, `widget:${widget.key}:${lineIndex}`)}
+                {lineIndex < widget.lines.length - 1 ? "\n" : null}
+              </span>
+            ))}
           </pre>
         </div>
       ))}
