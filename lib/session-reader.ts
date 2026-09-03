@@ -383,6 +383,21 @@ export function buildSessionContext(
  * would overflow the stack. The result is still a valid prefix of the active
  * branch — older history is loaded on demand via pagination.
  */
+/**
+ * A turn boundary in the raw entry chain: a user prompt or a compaction.
+ * The chat renderer groups each turn (user prompt + its agent run) through
+ * the ProcessGroup path, so a window must start at one of these to render
+ * grouped steps. The type check runs before reading `.message` — other entry
+ * kinds carry no message.
+ */
+function isTurnBoundaryEntry(entry: SessionEntry): boolean {
+  if (entry.type === "compaction") return true;
+  return entry.type === "message" && entry.message.role === "user";
+}
+
+/** Extra entries the window may reach back to find a turn boundary. */
+export const MAX_TURN_ALIGN_ENTRIES = 50;
+
 export function sliceActiveBranch(
   entries: SessionEntry[],
   leafId: string | null,
@@ -403,6 +418,21 @@ export function sliceActiveBranch(
   while (current && chain.length < tail) {
     chain.push(current);
     current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  // Align the window start back to a turn boundary so the client's turn
+  // grouping sees a valid turn start instead of a mid-run orphan (which would
+  // fall back to the flat legacy renderer). Capped: a single turn longer than
+  // the budget stays unaligned and is handled by the headless-run grouping.
+  // The chain is built leaf-first, so the window start sits at the tail.
+  const oldest = chain[chain.length - 1];
+  if (oldest && !isTurnBoundaryEntry(oldest)) {
+    let aligned = 0;
+    while (current && aligned < MAX_TURN_ALIGN_ENTRIES) {
+      chain.push(current);
+      aligned += 1;
+      if (isTurnBoundaryEntry(current)) break;
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
   }
   chain.reverse();
   return chain;
