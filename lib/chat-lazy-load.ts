@@ -9,10 +9,6 @@ export function getVisibleRenderWindow(totalCount: number, visibleCount: number)
   return { startIndex, hasMore: startIndex > 0 };
 }
 
-export function getNextVisibleCount(currentVisibleCount: number, pageSize = VISIBLE_PAGE_SIZE): number {
-  return currentVisibleCount + pageSize;
-}
-
 export function captureScrollDistance(scrollHeight: number, scrollTop: number): number {
   return scrollHeight - scrollTop;
 }
