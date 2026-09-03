@@ -19,7 +19,7 @@ import type { StepIconName } from "@/lib/step-visuals";
 import { ChatTeardropDotsIcon } from "@phosphor-icons/react/ChatTeardropDots";
 import { BookOpenIcon } from "@phosphor-icons/react/BookOpen";
 import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
-import { ColumnsIcon } from "@phosphor-icons/react/Columns";
+import { KanbanIcon } from "@phosphor-icons/react/Kanban";
 import { CopySimpleIcon } from "@phosphor-icons/react/CopySimple";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/DownloadSimple";
 import { FilePlusIcon } from "@phosphor-icons/react/FilePlus";
@@ -192,6 +192,12 @@ function enrichedToolLabel(
         const typeLabel = ts("desktop.processStepFind");
         const query = shell.argument ? ` "${shell.argument.slice(0, 60)}"` : "";
         return { displayLabel: `${typeLabel}${query}`, iconName, tone, typeLabel };
+      }
+      if (shell.kind === "edit") {
+        iconName = "pencilSimpleLine";
+        const typeLabel = ts("desktop.processStepFileEdit");
+        const target = shell.argument ? ` ${shell.argument}` : "";
+        return { displayLabel: `${typeLabel}${target}`, iconName, tone, typeLabel, target: shell.argument || undefined };
       }
       if (shell.kind === "read") {
         iconName = "bookOpen";
@@ -556,7 +562,11 @@ function ProcessFileTag({ filePath }: { filePath: string }) {
 }
 
 function DisplayModeIcon({ mode }: { mode: "timeline" | "tabs" }) {
-  return mode === "timeline" ? <ColumnsIcon size={14} /> : <ListDashesIcon size={14} />;
+  return mode === "timeline" ? (
+    <KanbanIcon size={14} className="-rotate-90" />
+  ) : (
+    <ListDashesIcon size={14} />
+  );
 }
 
 // ---------------------------------------------------------------------------

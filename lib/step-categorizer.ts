@@ -301,7 +301,7 @@ export function basenameResourcePath(filePath: string): string {
 // Shell command subclassification
 // ---------------------------------------------------------------------------
 
-export type ShellCommandKind = "list" | "search" | "find" | "read" | "fetch" | "delete" | "copy" | "run";
+export type ShellCommandKind = "list" | "search" | "find" | "read" | "fetch" | "delete" | "copy" | "edit" | "run";
 
 export interface ShellCommandInfo {
   kind: ShellCommandKind;
@@ -452,7 +452,7 @@ const VALUE_FLAGS_BY_COMMAND: Record<string, ReadonlySet<string>> = {
   ]),
   tail: new Set(["-n", "-c", "-s", "--lines", "--bytes", "--sleep-interval"]),
   head: new Set(["-n", "-c", "--lines", "--bytes"]),
-  sed: new Set(["-e", "-f", "-i"]),
+  sed: new Set(["-e", "-f"]),
   jq: new Set(["-f", "--arg", "--argjson", "--slurpfile"]),
   awk: new Set(["-F", "-v"]),
   make: new Set([
@@ -537,6 +537,65 @@ function flagConsumesNextToken(flag: string, valueFlags: ReadonlySet<string>): b
 }
 
 /**
+ * sed is classified by its script semantics rather than the generic
+ * positional scan: the script expression is a positional that must be skipped
+ * (the file target is the positional AFTER it), and `-i` flips the command
+ * from a non-destructive read into an in-place write.
+ *
+ * `sed -n '945,1000p' file`   → read  (argument: file)
+ * `sed -e 's/a/b/' file`      → read  (argument: file)
+ * `sed -i 's/a/b/' file`      → edit  (argument: file)
+ * `sed -i.bak 's/a/b/' file`  → edit  (attached backup suffix, no value token)
+ * `echo x | sed 's/a/b/'`     → read  (script only, no file target → no argument)
+ */
+function classifySedCommand(words: string[], binaryBase: string, startIndex: number): ShellCommandInfo {
+  const positionals: string[] = [];
+  let inPlace = false;
+  let sawScriptFlag = false;
+  let i = startIndex + 1;
+  while (i < words.length) {
+    const word = words[i];
+    if (word === "--") {
+      positionals.push(...words.slice(i + 1));
+      break;
+    }
+    if (word.startsWith("-") && word.length > 1) {
+      const name = word.split("=")[0];
+      // -i may appear in a short cluster (-in) or carry a backup suffix (-i.bak);
+      // the only long form is --in-place (optionally =SUFFIX).
+      const isShort = !word.startsWith("--");
+      if (name === "--in-place" || (isShort && /^-[a-zA-Z]*i/.test(name))) inPlace = true;
+      // -e/-f specify the script: attached (-e's/a/b/') or as the NEXT token.
+      const separateScriptValue = word === "-e" || word === "-f" ||
+        word === "--expression" || word === "--file";
+      if (separateScriptValue || name === "--expression" || name === "--file" ||
+        (isShort && /^-[a-zA-Z]*[ef]/.test(name))) {
+        sawScriptFlag = true;
+        // Separate-value form consumes the next token (-e EXPR, -f FILE).
+        if (separateScriptValue && i + 1 < words.length) {
+          i += 1;
+        }
+      }
+      i += 1;
+      continue;
+    }
+    positionals.push(word);
+    i += 1;
+  }
+
+  let argument: string | undefined;
+  if (positionals.length >= 2) {
+    argument = positionals[1];
+  } else if (positionals.length === 1 && sawScriptFlag) {
+    // `sed -f script.sed file` — the script came from -f, so the first
+    // positional is already the file target.
+    argument = positionals[0];
+  }
+
+  return { kind: inPlace ? "edit" : "read", binary: binaryBase, argument };
+}
+
+/**
  * Classify the first meaningful command in a shell command string.
  * Skips `cd`, `export`, `echo` etc. to find the real work command, and skips
  * option VALUES (`--max-time 60`) so they are never mistaken for the target
@@ -560,6 +619,9 @@ export function classifyShellCommand(raw: string, depth = 0): ShellCommandInfo {
       if (SKIP_COMMANDS.has(skipBin)) {
         i += 1;
         if (["cd", "chdir", "pushd"].includes(skipBin) && i < words.length) i += 1;
+        // echo's arguments are its own output, not a work command — the rest
+        // of the segment holds nothing to classify (`echo x; sed ...`).
+        if (skipBin === "echo") i = words.length;
         continue;
       }
       if (WRAPPER_SKIP_COMMANDS.has(skipBin)) {
@@ -611,6 +673,7 @@ export function classifyShellCommand(raw: string, depth = 0): ShellCommandInfo {
     }
     const argument = argIndex < words.length ? words[argIndex] : undefined;
 
+    if (binaryBase === "sed") return classifySedCommand(words, binaryBase, i);
     if (LIST_COMMANDS.has(binaryBase)) return { kind: "list", binary: binaryBase, argument };
     if (SEARCH_COMMANDS.has(binaryBase)) return { kind: "search", binary: binaryBase, argument };
     if (FIND_COMMANDS.has(binaryBase)) return { kind: "find", binary: binaryBase, argument };
