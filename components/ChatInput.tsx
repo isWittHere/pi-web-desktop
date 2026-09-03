@@ -39,7 +39,7 @@ import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
 import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
 import { ClockIcon } from "@phosphor-icons/react/Clock";
 import { CaretRightIcon } from "@phosphor-icons/react/CaretRight";
-import { FunctionIcon } from "@phosphor-icons/react/Function";
+import { WrenchIcon } from "@phosphor-icons/react/Wrench";
 import { CheckIcon } from "@phosphor-icons/react/Check";
 import { LightbulbIcon } from "@phosphor-icons/react/Lightbulb";
 import { LightningIcon } from "@phosphor-icons/react/Lightning";
@@ -3155,8 +3155,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   aria-label={t("tools.open")}
                   aria-expanded={toolsPanelOpen}
                   style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 5px" : "3px 7px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: isMobile ? "0 5px" : "0 6px",
                     width: isMobile ? "auto" : undefined,
                     height: 24,
                     background: toolsPanelOpen ? "var(--bg-hover)" : "none",
@@ -3176,8 +3176,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     e.currentTarget.style.color = "var(--text-muted)";
                   }}
                 >
-                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("tools.title")}</span>}
-                  <FunctionIcon size={12} weight="bold" color="var(--accent)" aria-hidden="true" />
+                  <WrenchIcon size={13} weight="regular" aria-hidden="true" />
                 </button>
                 {toolsPanelOpen && (
                   <ToolsPanelPopup
