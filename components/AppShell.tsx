@@ -36,7 +36,7 @@ import {
   SIDEBAR_MIN_WIDTH,
 } from "@/lib/panel-layout";
 import { copyText } from "@/lib/clipboard";
-import { getFileName } from "@/lib/file-paths";
+import { getFileName, encodeFilePathForApi } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
 import { clearDraft, getDraft } from "@/lib/draft-store";
 import { cssPx } from "@/lib/ui-scale";
@@ -49,6 +49,7 @@ import {
   type DraftSession,
 } from "@/lib/draft-sessions";
 import { clearLastWorkspace, clearWelcomeState, getLastOpen, setLastOpen, setLastWorkspace, setWelcomeState, workspaceKeyOf } from "@/lib/workspace-memory";
+import { loadRightTabs, saveRightTabs } from "@/lib/right-tabs-memory";
 import { resolveDraftTarget, resolveRestoreTarget, type RestoreTarget } from "@/lib/workspace-restore";
 import { getSessionList } from "@/lib/session-list";
 import { samePath } from "@/lib/path-match";
@@ -74,6 +75,21 @@ function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
+}
+
+/** Whether the files API can still read a restored tab's path; unreadable
+ *  tabs (deleted files, inaccessible roots) are dropped on restore. */
+async function probeFileReadable(filePath: string, sourceSessionId?: string | null): Promise<boolean> {
+  try {
+    const searchParams = new URLSearchParams({ type: "read" });
+    if (sourceSessionId) searchParams.set("sessionId", sourceSessionId);
+    const response = await fetch(`/api/files/${encodeFilePathForApi(filePath)}?${searchParams.toString()}`);
+    if (!response.ok) return false;
+    const data = await response.json() as { error?: string };
+    return !data.error;
+  } catch {
+    return false;
+  }
 }
 
 export function AppShell() {
@@ -256,7 +272,7 @@ export function AppShell() {
     return () => ro.disconnect();
   }, [activeTopPanel]);
 
-  // Right panel — file tabs only
+  // Right panel — tabs of different kinds (files, changes review, git graph)
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
@@ -267,6 +283,96 @@ export function AppShell() {
     viewerState: FileViewerState,
   ) => {
     setFileTabs((prev) => saveFileViewerState(prev, tabId, viewerRevision, viewerState));
+  }, []);
+
+  // ── Right-panel tab persistence ────────────────────────────────────────────
+  // Tabs are stored per workspace (project root, else cwd) so a restart
+  // restores what was open and switching workspaces swaps the tab set instead
+  // of mixing them. Latest-value refs let the workspace-transition effect save
+  // the outgoing workspace's tabs without depending on tab state the restore
+  // is about to replace.
+  const [activeWorkspaceKey, setActiveWorkspaceKey] = useState<string | null>(null);
+  const fileTabsRef = useRef(fileTabs);
+  const activeFileTabIdRef = useRef(activeFileTabId);
+  const rightPanelOpenRef = useRef(rightPanelOpen);
+  const activeWorkspaceKeyRef = useRef<string | null>(null);
+  useEffect(() => { fileTabsRef.current = fileTabs; }, [fileTabs]);
+  useEffect(() => { activeFileTabIdRef.current = activeFileTabId; }, [activeFileTabId]);
+  useEffect(() => { rightPanelOpenRef.current = rightPanelOpen; }, [rightPanelOpen]);
+
+  useEffect(() => {
+    const outgoingKey = activeWorkspaceKeyRef.current;
+    activeWorkspaceKeyRef.current = activeWorkspaceKey;
+    if (outgoingKey && outgoingKey !== activeWorkspaceKey) {
+      saveRightTabs(outgoingKey, {
+        tabs: fileTabsRef.current,
+        activeTabId: activeFileTabIdRef.current,
+        open: rightPanelOpenRef.current,
+      });
+    }
+    if (!activeWorkspaceKey) return;
+    const entry = loadRightTabs(activeWorkspaceKey);
+    if (!entry || entry.tabs.length === 0) {
+      // The workspace has no stored tab set: never bleed the previous
+      // workspace's tabs into it.
+      setFileTabs([]);
+      setActiveFileTabId(null);
+      if (entry) setRightPanelOpen(entry.open);
+      return;
+    }
+    const tabsAtRestoreStart = fileTabsRef.current;
+    let cancelled = false;
+    void (async () => {
+      // File tabs whose path no longer resolves are dropped silently; view
+      // tabs belong to this workspace by construction and are kept.
+      const readable = await Promise.all(entry.tabs.map(async (tab) => {
+        if (!isFileTab(tab)) return true;
+        return probeFileReadable(tab.filePath, tab.sourceSessionId);
+      }));
+      if (cancelled) return;
+      const valid = entry.tabs.filter((_, index) => readable[index]);
+      // Tabs opened while the probe ran (e.g. the user double-clicked a file
+      // in the explorer) survive the restore.
+      const openedSinceStart = fileTabsRef.current.filter(
+        (tab) => !tabsAtRestoreStart.some((t) => t.id === tab.id) && !valid.some((t) => t.id === tab.id),
+      );
+      const restored = [...valid, ...openedSinceStart];
+      setFileTabs(restored);
+      setActiveFileTabId(
+        restored.some((t) => t.id === entry.activeTabId)
+          ? entry.activeTabId
+          : restored[restored.length - 1]?.id ?? null,
+      );
+      setRightPanelOpen(entry.open && restored.length > 0);
+    })();
+    return () => { cancelled = true; };
+  }, [activeWorkspaceKey]);
+
+  // Debounced save of the current tab set — viewer scroll snapshots flow
+  // through fileTabs, so writes must not happen on every change.
+  useEffect(() => {
+    const key = activeWorkspaceKeyRef.current;
+    if (!key) return;
+    const timer = setTimeout(() => {
+      saveRightTabs(key, { tabs: fileTabs, activeTabId: activeFileTabId, open: rightPanelOpen });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [fileTabs, activeFileTabId, rightPanelOpen]);
+
+  // Flush on unload so the final tab state survives an Electron close.
+  useEffect(() => {
+    const flush = () => {
+      const key = activeWorkspaceKeyRef.current;
+      if (key) {
+        saveRightTabs(key, {
+          tabs: fileTabsRef.current,
+          activeTabId: activeFileTabIdRef.current,
+          open: rightPanelOpenRef.current,
+        });
+      }
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
   }, []);
 
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
@@ -490,6 +596,7 @@ export function AppShell() {
       // tabs seed effect keys off activeCwd, and the async cwdRequest
       // clearing would arrive one render later and resurrect the tab.
       setActiveCwd(null);
+      setActiveWorkspaceKey(null);
       setActiveDraftId(null);
       setSelectedSession(null);
       setNewSessionCwd(null);
@@ -620,6 +727,7 @@ export function AppShell() {
       }
     }
     setActiveCwd(cwd);
+    setActiveWorkspaceKey(cwd ? (projectRoot ?? cwd) : null);
     // Keep the active workspace tab's cwd in sync — worktree switches inside
     // one project do not create new tabs (tabs are per project root). A cwd
     // from another workspace must never bleed into the bookmark: the key is
