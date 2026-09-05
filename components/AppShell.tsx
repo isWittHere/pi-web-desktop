@@ -9,9 +9,9 @@ import { SessionSidebar } from "./SessionSidebar";
 import { WallpaperLayer } from "./WallpaperLayer";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
-import { TabBar, type Tab } from "./TabBar";
+import { TabBar } from "./TabBar";
 import { WorkspaceTabBar } from "./WorkspaceTabBar";
-import { openFileTab, saveFileViewerState } from "./file-tab-state";
+import { fileTabId, isFileTab, openFileTab, saveFileViewerState, type Tab } from "./tab-model";
 import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
@@ -1017,7 +1017,7 @@ export function AppShell() {
   const handleOpenFile = useCallback((filePath: string, fileName: string, sourceOrOptions?: string | null | { initialDisplayMode?: "diff" }, options?: { initialDisplayMode?: "diff" }) => {
     const sourceSessionId = typeof sourceOrOptions === "string" || sourceOrOptions === null ? sourceOrOptions : undefined;
     const openOptions = typeof sourceOrOptions === "object" && sourceOrOptions !== null ? sourceOrOptions : options;
-    const tabId = `file:${filePath}`;
+    const tabId = fileTabId(filePath);
     setFileTabs((prev) => openFileTab(prev, {
       fileName,
       filePath,
@@ -1114,7 +1114,7 @@ export function AppShell() {
     }
   }, [projectTrustBusy, projectTrustCwd]);
 
-  const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
+  const activeTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const settingsCwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
   const openSettings = useCallback((tab: SettingsTab) => {
     setSettingsTab(tab);
@@ -1397,30 +1397,35 @@ export function AppShell() {
         </div>
 
         {/* File content */}
-        <div style={{ flex: 1, overflow: "hidden" }}>
-          {activeFileTab?.filePath ? (
+        <div
+          role="tabpanel"
+          id="right-panel-content"
+          aria-labelledby={activeTab ? `right-panel-tab-${activeTab.id}` : undefined}
+          style={{ flex: 1, overflow: "hidden" }}
+        >
+          {activeTab && isFileTab(activeTab) ? (
             <FileViewer
-              key={`${activeFileTab.id}:${activeFileTab.viewerRevision ?? 0}`}
-              filePath={activeFileTab.filePath}
+              key={`${activeTab.id}:${activeTab.viewerRevision ?? 0}`}
+              filePath={activeTab.filePath}
               cwd={activeCwd ?? undefined}
-              sourceSessionId={activeFileTab.sourceSessionId}
-              initialDisplayMode={activeFileTab.initialDisplayMode}
-              initialState={activeFileTab.viewerState}
+              sourceSessionId={activeTab.sourceSessionId}
+              initialDisplayMode={activeTab.initialDisplayMode}
+              initialState={activeTab.viewerState}
               onStateChange={(viewerState) => handleFileViewerStateChange(
-                activeFileTab.id,
-                activeFileTab.viewerRevision ?? 0,
+                activeTab.id,
+                activeTab.viewerRevision ?? 0,
                 viewerState,
               )}
               onAtMention={handleAtMention}
               onOpenFile={(filePath) => handleOpenFile(
                 filePath,
                 getFileName(filePath),
-                activeFileTab.sourceSessionId,
+                activeTab.sourceSessionId,
               )}
             />
           ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-              No file open
+              {t("desktop.noFileOpen")}
             </div>
           )}
         </div>

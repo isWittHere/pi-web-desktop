@@ -1,23 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { X } from "@phosphor-icons/react";
+import { useRef, useState } from "react";
+import { GitDiff, TreeStructure, X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { getFileIcon } from "./FileIcons";
-import type { FileViewerState } from "@/lib/file-viewer-state";
-
-export interface Tab {
-  id: string;
-  label: string;
-  filePath: string;
-  sourceSessionId?: string | null;
-  initialDisplayMode?: "diff";
-  /** Last viewer state, restored when the tab becomes active again. */
-  viewerState?: FileViewerState;
-  /** Bumped whenever the tab is re-opened with a fresh mode/source, so a stale
-   *  save cannot overwrite newer state. */
-  viewerRevision?: number;
-}
+import { isFileTab, type Tab } from "./tab-model";
 
 interface Props {
   tabs: Tab[];
@@ -29,9 +16,25 @@ interface Props {
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
   const { t } = useI18n();
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
+  const tabRefs = useRef(new Map<string, HTMLDivElement | null>());
+
+  const handleTabKeyDown = (event: React.KeyboardEvent, index: number) => {
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tabs.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextId = tabs[nextIndex].id;
+    onSelectTab(nextId);
+    tabRefs.current.get(nextId)?.focus();
+  };
 
   return (
     <div
+      role="tablist"
+      aria-label={t("desktop.panelTabs")}
       style={{
         display: "flex",
         alignItems: "flex-end",
@@ -41,12 +44,25 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
         height: 36,
       }}
     >
-      {tabs.map((tab) => {
+      {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
+        const label = isFileTab(tab) ? tab.label : tab.kind === "changes" ? t("desktop.changesTab") : t("desktop.gitGraphTab");
+        const icon = isFileTab(tab)
+          ? getFileIcon(tab.label, 13)
+          : tab.kind === "changes"
+            ? <GitDiff size={13} aria-hidden="true" />
+            : <TreeStructure size={13} aria-hidden="true" />;
         return (
           <div
             key={tab.id}
+            ref={(el) => { tabRefs.current.set(tab.id, el); }}
+            role="tab"
+            id={`right-panel-tab-${tab.id}`}
+            aria-selected={isActive}
+            aria-controls="right-panel-content"
+            tabIndex={isActive ? 0 : -1}
             onClick={() => onSelectTab(tab.id)}
+            onKeyDown={(event) => handleTabKeyDown(event, index)}
             style={{
               display: "flex",
               alignItems: "center",
@@ -64,11 +80,12 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               minWidth: 80,
               flexShrink: 0,
               userSelect: "none",
+              outline: "none",
               transition: "background 0.1s, color 0.1s",
             }}
           >
             <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7, display: "flex", alignItems: "center" }}>
-              {getFileIcon(tab.label, 13)}
+              {icon}
             </span>
             <span
               style={{
@@ -77,9 +94,9 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
                 flex: 1,
                 fontWeight: isActive ? 500 : 400,
               }}
-              title={tab.filePath}
+              title={isFileTab(tab) ? tab.filePath : label}
             >
-              {tab.label}
+              {label}
             </span>
             <button
               onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
@@ -98,7 +115,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
                 transition: "background 0.1s, color 0.1s",
               }}
               title={t("desktop.closeTab")}
-              aria-label={t("desktop.closeTabWithLabel", { label: tab.label })}
+              aria-label={t("desktop.closeTabWithLabel", { label })}
             >
               <X size={11} aria-hidden="true" />
             </button>

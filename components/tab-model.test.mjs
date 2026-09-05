@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { openFileTab, saveFileViewerState } from "./file-tab-state.ts";
+import {
+  changesTabId,
+  fileTabId,
+  gitGraphTabId,
+  openFileTab,
+  openViewTab,
+  saveFileViewerState,
+} from "./tab-model.ts";
 
 const tabA = {
+  kind: "file",
   id: "file:/repo/a.ts",
   label: "a.ts",
   filePath: "/repo/a.ts",
@@ -17,6 +25,7 @@ const tabA = {
 };
 
 const tabB = {
+  kind: "file",
   id: "file:/repo/b.ts",
   label: "b.ts",
   filePath: "/repo/b.ts",
@@ -95,4 +104,34 @@ test("a remounted viewer ignores the previous revision's late cleanup", () => {
   const stale = saveFileViewerState(reopened, tabA.id, 0, tabA.viewerState);
   assert.strictEqual(stale, reopened);
   assert.equal(stale[0].viewerState.displayMode, "diff");
+});
+
+test("file tab ids are prefixed with the file scheme", () => {
+  assert.equal(fileTabId("/repo/a.ts"), "file:/repo/a.ts");
+});
+
+test("view tabs are workspace singletons", () => {
+  const first = openViewTab([], { kind: "changes", cwd: "/repo" });
+  assert.deepEqual(first, [{ kind: "changes", id: "changes:/repo", cwd: "/repo" }]);
+
+  // Re-opening with the same cwd keeps the exact same array and tab.
+  assert.strictEqual(openViewTab(first, { kind: "changes", cwd: "/repo" }), first);
+
+  const both = openViewTab(first, { kind: "git-graph", cwd: "/repo" });
+  assert.deepEqual(both, [
+    { kind: "changes", id: "changes:/repo", cwd: "/repo" },
+    { kind: "git-graph", id: "git-graph:/repo", cwd: "/repo" },
+  ]);
+
+  // A different workspace gets its own singleton instance.
+  const otherWorkspace = openViewTab(both, { kind: "changes", cwd: "/other" });
+  assert.equal(otherWorkspace.length, 3);
+  assert.equal(changesTabId("/other"), "changes:/other");
+  assert.equal(gitGraphTabId("/other"), "git-graph:/other");
+});
+
+test("re-opening an id that belongs to a view tab leaves the view tab untouched", () => {
+  const viewTab = { kind: "changes", id: "changes:/repo", cwd: "/repo" };
+  const tabs = [viewTab];
+  assert.strictEqual(openFileTab(tabs, { ...openA, tabId: "changes:/repo" }), tabs);
 });
