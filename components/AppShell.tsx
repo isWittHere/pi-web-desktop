@@ -278,6 +278,24 @@ export function AppShell() {
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  // Tabs whose content is (or was) mounted. Keep-alive rendering: a tab's
+  // component stays mounted once activated and is merely hidden while
+  // inactive, so switching tabs never re-fetches or loses live state. Tabs
+  // are mounted lazily on first activation so a restored workspace only
+  // fetches the tab the user actually left open.
+  const [mountedTabIds, setMountedTabIds] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    if (!activeFileTabId) return;
+    setMountedTabIds((prev) => (prev.has(activeFileTabId) ? prev : new Set(prev).add(activeFileTabId)));
+  }, [activeFileTabId]);
+  // A closed tab's keep-alive entry must not survive: re-opening the same
+  // path later must mount a fresh viewer, not resurrect the closed one.
+  useEffect(() => {
+    setMountedTabIds((prev) => {
+      const next = new Set([...prev].filter((id) => fileTabs.some((tab) => tab.id === id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [fileTabs]);
 
   const handleFileViewerStateChange = useCallback((
     tabId: string,
@@ -1515,48 +1533,60 @@ export function AppShell() {
 
         </div>
 
-        {/* File content */}
+        {/* Tab content — keep-alive: every mounted tab stays in the DOM and is
+            hidden while inactive, so switching never re-fetches or resets it. */}
         <div
           role="tabpanel"
           id="right-panel-content"
           aria-labelledby={activeTab ? `right-panel-tab-${activeTab.id}` : undefined}
           style={{ flex: 1, overflow: "hidden" }}
         >
-          {activeTab && isFileTab(activeTab) ? (
-            <FileViewer
-              key={`${activeTab.id}:${activeTab.viewerRevision ?? 0}`}
-              filePath={activeTab.filePath}
-              cwd={activeCwd ?? undefined}
-              sourceSessionId={activeTab.sourceSessionId}
-              initialDisplayMode={activeTab.initialDisplayMode}
-              initialState={activeTab.viewerState}
-              onStateChange={(viewerState) => handleFileViewerStateChange(
-                activeTab.id,
-                activeTab.viewerRevision ?? 0,
-                viewerState,
-              )}
-              onAtMention={handleAtMention}
-              onOpenFile={(filePath) => handleOpenFile(
-                filePath,
-                getFileName(filePath),
-                activeTab.sourceSessionId,
-              )}
-            />
-          ) : activeTab?.kind === "changes" ? (
-            <ChangesTabView
-              cwd={activeTab.cwd}
-              onOpenFile={(filePath, fileName, options) => handleOpenFile(filePath, fileName, selectedSession?.id ?? null, options)}
-              onOpenGraph={(graphCwd) => handleOpenViewTab("git-graph", graphCwd)}
-            />
-          ) : activeTab?.kind === "git-graph" ? (
-            <GitGraphTab
-              cwd={activeTab.cwd}
-              onOpenFile={(filePath, fileName) => handleOpenFile(filePath, fileName, selectedSession?.id ?? null)}
-            />
-          ) : (
+          {fileTabs.length === 0 ? (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
               {t("desktop.noFileOpen")}
             </div>
+          ) : (
+            fileTabs.map((tab) => {
+              if (!mountedTabIds.has(tab.id)) return null;
+              const isActive = tab.id === activeFileTabId;
+              const wrapperStyle = { display: isActive ? "block" : "none", height: "100%", overflow: "hidden" } as const;
+              if (isFileTab(tab)) {
+                return (
+                  <div key={tab.id} style={wrapperStyle}>
+                    <FileViewer
+                      key={`${tab.id}:${tab.viewerRevision ?? 0}`}
+                      filePath={tab.filePath}
+                      cwd={activeCwd ?? undefined}
+                      sourceSessionId={tab.sourceSessionId}
+                      initialDisplayMode={tab.initialDisplayMode}
+                      initialState={tab.viewerState}
+                      onStateChange={(viewerState) => handleFileViewerStateChange(tab.id, tab.viewerRevision ?? 0, viewerState)}
+                      onAtMention={handleAtMention}
+                      onOpenFile={(filePath) => handleOpenFile(filePath, getFileName(filePath), tab.sourceSessionId)}
+                    />
+                  </div>
+                );
+              }
+              if (tab.kind === "changes") {
+                return (
+                  <div key={tab.id} style={wrapperStyle}>
+                    <ChangesTabView
+                      cwd={tab.cwd}
+                      onOpenFile={(filePath, fileName, options) => handleOpenFile(filePath, fileName, selectedSession?.id ?? null, options)}
+                      onOpenGraph={(graphCwd) => handleOpenViewTab("git-graph", graphCwd)}
+                    />
+                  </div>
+                );
+              }
+              return (
+                <div key={tab.id} style={wrapperStyle}>
+                  <GitGraphTab
+                    cwd={tab.cwd}
+                    onOpenFile={(filePath, fileName) => handleOpenFile(filePath, fileName, selectedSession?.id ?? null)}
+                  />
+                </div>
+              );
+            })
           )}
         </div>
       </div>
