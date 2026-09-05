@@ -249,6 +249,7 @@ export const zhCNLocale = {
     "desktop.gitNotRepository": "不是 Git 仓库",
     "desktop.gitGraphEmpty": "暂无提交",
     "desktop.gitGraphLoadMore": "加载更多",
+    "desktop.gitGraphOpenView": "打开 Git 图谱",
     "desktop.gitGraphCommitFiles": "变更文件",
     "desktop.gitGraphOpenFile": "打开文件",
     "desktop.injectMessageNow": "中断当前运行并立即注入此消息",

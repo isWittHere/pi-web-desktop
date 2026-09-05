@@ -13,6 +13,7 @@ import { TabBar } from "./TabBar";
 import { WorkspaceTabBar } from "./WorkspaceTabBar";
 import { fileTabId, changesTabId, gitGraphTabId, isFileTab, openFileTab, openViewTab, saveFileViewerState, type Tab } from "./tab-model";
 import { ChangesTabView } from "./ChangesTabView";
+import { GitGraphTab } from "./GitGraphTab";
 import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
@@ -1545,6 +1546,12 @@ export function AppShell() {
             <ChangesTabView
               cwd={activeTab.cwd}
               onOpenFile={(filePath, fileName, options) => handleOpenFile(filePath, fileName, selectedSession?.id ?? null, options)}
+              onOpenGraph={(graphCwd) => handleOpenViewTab("git-graph", graphCwd)}
+            />
+          ) : activeTab?.kind === "git-graph" ? (
+            <GitGraphTab
+              cwd={activeTab.cwd}
+              onOpenFile={(filePath, fileName) => handleOpenFile(filePath, fileName, selectedSession?.id ?? null)}
             />
           ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>

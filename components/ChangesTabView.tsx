@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowClockwise, Spinner } from "@phosphor-icons/react";
+import { ArrowClockwise, GitBranch, Spinner } from "@phosphor-icons/react";
 import type { GitStatusResponse } from "@/lib/git-types";
 import { useI18n } from "@/hooks/useI18n";
 import { ChangeRow, fetchGitStatus } from "./QuickChangesPanel";
@@ -12,6 +12,8 @@ interface Props {
   /** Drill-down into one file: opens a file tab in diff mode, reusing the
    *  FileViewer's diff rendering instead of duplicating it here. */
   onOpenFile: (filePath: string, fileName: string, options?: { initialDisplayMode?: "diff" }) => void;
+  /** Open the git graph tab for this workspace. */
+  onOpenGraph?: (cwd: string) => void;
 }
 
 /**
@@ -20,7 +22,7 @@ interface Props {
  * QuickChangesPanel in the sidebar stays as the indicator; this tab is where
  * the actual review happens.
  */
-export function ChangesTabView({ cwd, onOpenFile }: Props) {
+export function ChangesTabView({ cwd, onOpenFile, onOpenGraph }: Props) {
   const { t } = useI18n();
   const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,17 @@ export function ChangesTabView({ cwd, onOpenFile }: Props) {
             <span style={{ marginLeft: 6, color: "var(--git-status-added)", fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
             <span style={{ marginLeft: 5, color: "var(--git-status-deleted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
           </>
+        )}
+        {onOpenGraph && (
+          <button
+            type="button"
+            onClick={() => onOpenGraph(cwd)}
+            title={t("desktop.gitGraphOpenView")}
+            aria-label={t("desktop.gitGraphOpenView")}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, border: "none", borderRadius: 5, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
+          >
+            <GitBranch size={13} weight="regular" aria-hidden="true" />
+          </button>
         )}
         <button
           type="button"

@@ -11,7 +11,7 @@ const GIT_TIMEOUT_MS = 10_000;
 const GIT_STATUS_MAX_BUFFER = 8 * 1024 * 1024;
 
 
-async function git(cwd: string, args: string[], maxBuffer = GIT_STATUS_MAX_BUFFER): Promise<string> {
+export async function git(cwd: string, args: string[], maxBuffer = GIT_STATUS_MAX_BUFFER): Promise<string> {
   const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
     timeout: GIT_TIMEOUT_MS,
     maxBuffer,
@@ -20,7 +20,7 @@ async function git(cwd: string, args: string[], maxBuffer = GIT_STATUS_MAX_BUFFE
   return stdout;
 }
 
-async function findRepositoryRoot(cwd: string): Promise<string | null> {
+export async function findRepositoryRoot(cwd: string): Promise<string | null> {
   try {
     return (await git(cwd, ["rev-parse", "--show-toplevel"])).trim() || null;
   } catch {
