@@ -11,7 +11,8 @@ import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar } from "./TabBar";
 import { WorkspaceTabBar } from "./WorkspaceTabBar";
-import { fileTabId, isFileTab, openFileTab, saveFileViewerState, type Tab } from "./tab-model";
+import { fileTabId, changesTabId, gitGraphTabId, isFileTab, openFileTab, openViewTab, saveFileViewerState, type Tab } from "./tab-model";
+import { ChangesTabView } from "./ChangesTabView";
 import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
@@ -1156,6 +1157,14 @@ export function AppShell() {
     });
   }, [fileTabs]);
 
+  // View tabs (changes review, git graph) are workspace singletons: re-opening
+  // activates the existing tab instead of duplicating it.
+  const handleOpenViewTab = useCallback((kind: "changes" | "git-graph", cwd: string) => {
+    setFileTabs((prev) => openViewTab(prev, { kind, cwd }));
+    setActiveFileTabId(kind === "changes" ? changesTabId(cwd) : gitGraphTabId(cwd));
+    setRightPanelOpen(true);
+  }, []);
+
   const sessionTitle = selectedSession
     ? selectedSession.name || getSessionDisplayFirstMessage(selectedSession.firstMessage).slice(0, 50) || selectedSession.id.slice(0, 12)
     : null;
@@ -1236,6 +1245,7 @@ export function AppShell() {
         selectedDraftId={activeDraftId}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
+        onOpenChangesView={(cwd) => handleOpenViewTab("changes", cwd)}
         draftSessions={draftSessions}
         onSelectDraft={handleSelectDraft}
         onDeleteDraft={handleDeleteDraft}
@@ -1530,6 +1540,11 @@ export function AppShell() {
                 getFileName(filePath),
                 activeTab.sourceSessionId,
               )}
+            />
+          ) : activeTab?.kind === "changes" ? (
+            <ChangesTabView
+              cwd={activeTab.cwd}
+              onOpenFile={(filePath, fileName, options) => handleOpenFile(filePath, fileName, selectedSession?.id ?? null, options)}
             />
           ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>

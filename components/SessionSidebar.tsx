@@ -67,6 +67,8 @@ interface Props {
   /** Session id currently having its title regenerated (disables the menu item). */
   titleGeneratingId?: string | null;
   onOpenFile?: (filePath: string, fileName: string, options?: { initialDisplayMode?: "diff" }) => void;
+  /** Open the full-surface changes review tab in the right panel. */
+  onOpenChangesView?: (cwd: string) => void;
   explorerRefreshKey?: number;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   onAtMentions?: (relativePaths: string[]) => void;
@@ -319,7 +321,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, openWorkspaceKeys, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor, onNoWorkspaceChange, viewMode = "classic" }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, onOpenChangesView, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, openWorkspaceKeys, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor, onNoWorkspaceChange, viewMode = "classic" }: Props) {
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -2131,6 +2133,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           cwd={selectedCwd ?? selectedCwdProp!}
           refreshKey={explorerKey}
           onOpenFile={onOpenFile ?? (() => {})}
+          onOpenChangesView={onOpenChangesView}
         />
       )}
     </div>

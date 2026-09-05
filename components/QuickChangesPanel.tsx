@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowClockwise, CaretRight, Spinner } from "@phosphor-icons/react";
+import { ArrowClockwise, CaretRight, ListChecks, Spinner } from "@phosphor-icons/react";
 import { getFileIcon } from "./FileIcons";
 import { getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
@@ -11,6 +11,8 @@ interface Props {
   cwd: string;
   refreshKey?: number;
   onOpenFile: (filePath: string, fileName: string, options?: { initialDisplayMode?: "diff" }) => void;
+  /** Open the full-surface changes review tab in the right panel. */
+  onOpenChangesView?: (cwd: string) => void;
 }
 
 const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
@@ -22,13 +24,13 @@ const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
   conflict: "var(--git-status-deleted)",
 };
 
-async function fetchGitStatus(cwd: string): Promise<GitStatusResponse> {
+export async function fetchGitStatus(cwd: string): Promise<GitStatusResponse> {
   const response = await fetch(`/api/git/status?${new URLSearchParams({ cwd }).toString()}`);
   if (!response.ok) throw new Error(`Failed to load Git status (HTTP ${response.status})`);
   return response.json() as Promise<GitStatusResponse>;
 }
 
-function ChangeRow({ status, cwd, onOpenFile }: {
+export function ChangeRow({ status, cwd, onOpenFile }: {
   status: GitFileStatus;
   cwd: string;
   onOpenFile: Props["onOpenFile"];
@@ -78,7 +80,7 @@ function ChangeRow({ status, cwd, onOpenFile }: {
   );
 }
 
-export function QuickChangesPanel({ cwd, refreshKey, onOpenFile }: Props) {
+export function QuickChangesPanel({ cwd, refreshKey, onOpenFile, onOpenChangesView }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
@@ -145,6 +147,17 @@ export function QuickChangesPanel({ cwd, refreshKey, onOpenFile }: Props) {
         </div>
         <span style={{ marginLeft: 6, color: "var(--git-status-added)", fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
         <span style={{ marginLeft: 5, color: "var(--git-status-deleted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
+        {onOpenChangesView && (
+          <button
+            type="button"
+            onClick={() => onOpenChangesView(cwd)}
+            title={t("desktop.changesOpenReview")}
+            aria-label={t("desktop.changesOpenReview")}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, border: "none", borderRadius: 5, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
+          >
+            <ListChecks size={13} weight="regular" aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void loadGitStatus()}
