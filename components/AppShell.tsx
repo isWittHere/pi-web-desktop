@@ -11,7 +11,7 @@ import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar } from "./TabBar";
 import { WorkspaceTabBar } from "./WorkspaceTabBar";
-import { fileTabId, changesTabId, gitGraphTabId, isFileTab, openFileTab, openViewTab, saveFileViewerState, type Tab } from "./tab-model";
+import { fileTabId, changesTabId, gitGraphTabId, isFileTab, openFileTab, openViewTab, type Tab } from "./tab-model";
 import { ChangesTabView } from "./ChangesTabView";
 import { GitGraphTab } from "./GitGraphTab";
 import { SettingsModal, type SettingsTab } from "./SettingsModal";
@@ -61,7 +61,6 @@ import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { ProjectTrustStatus } from "@/lib/api-types";
-import type { FileViewerState } from "@/lib/file-viewer-state";
 
 type SessionCopyField = "file" | "id";
 
@@ -296,14 +295,6 @@ export function AppShell() {
       return next.size === prev.size ? prev : next;
     });
   }, [fileTabs]);
-
-  const handleFileViewerStateChange = useCallback((
-    tabId: string,
-    viewerRevision: number,
-    viewerState: FileViewerState,
-  ) => {
-    setFileTabs((prev) => saveFileViewerState(prev, tabId, viewerRevision, viewerState));
-  }, []);
 
   // ── Right-panel tab persistence ────────────────────────────────────────────
   // Tabs are stored per workspace (project root, else cwd) so a restart
@@ -1560,7 +1551,6 @@ export function AppShell() {
                       sourceSessionId={tab.sourceSessionId}
                       initialDisplayMode={tab.initialDisplayMode}
                       initialState={tab.viewerState}
-                      onStateChange={(viewerState) => handleFileViewerStateChange(tab.id, tab.viewerRevision ?? 0, viewerState)}
                       onAtMention={handleAtMention}
                       onOpenFile={(filePath) => handleOpenFile(filePath, getFileName(filePath), tab.sourceSessionId)}
                     />

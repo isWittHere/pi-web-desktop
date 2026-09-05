@@ -5,8 +5,7 @@ import { ArrowClockwise, Spinner, X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { getFileName, getRelativeFilePath } from "@/lib/file-paths";
-import type { GitCommitFile } from "@/lib/git-graph";
-import type { GitLogCommit } from "@/lib/git-graph-parser";
+import { type GitCommitFile, type GitLogResponse } from "@/lib/git-graph";
 import { buildGitGraphLayout, type GitGraphEdge, type GitGraphLayout } from "@/lib/git-graph-lanes";
 import { deriveLanePalette } from "@/lib/git-graph-palette";
 
@@ -15,12 +14,6 @@ interface Props {
   cwd: string;
   /** Open a file mentioned in a commit's changed-file list (source mode). */
   onOpenFile: (filePath: string, fileName: string) => void;
-}
-
-interface GitLogResponse {
-  isGitRepository: boolean;
-  commits: GitLogCommit[];
-  truncated: boolean;
 }
 
 const DEFAULT_LIMIT = 400;

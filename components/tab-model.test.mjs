@@ -7,7 +7,6 @@ import {
   gitGraphTabId,
   openFileTab,
   openViewTab,
-  saveFileViewerState,
 } from "./tab-model.ts";
 
 const tabA = {
@@ -37,19 +36,6 @@ const openA = {
   filePath: "/repo/a.ts",
   tabId: "file:/repo/a.ts",
 };
-
-test("saving viewer state updates only the matching revision", () => {
-  const tabs = [tabA, tabB];
-  const nextState = { ...tabA.viewerState, scrollTop: 480 };
-  const saved = saveFileViewerState(tabs, tabA.id, 0, nextState);
-
-  assert.notStrictEqual(saved, tabs);
-  assert.deepEqual(saved[0].viewerState, nextState);
-  assert.strictEqual(saved[1], tabB);
-
-  const stale = saveFileViewerState(saved, tabA.id, 9, tabA.viewerState);
-  assert.strictEqual(stale, saved);
-});
 
 test("opening an existing tab normally preserves its state and revision", () => {
   const tabs = [tabA, tabB];
@@ -93,17 +79,9 @@ test("every explicit diff activation resets the mode and increments the revision
     scrollLeft: 0,
   });
 
-  const returnedToSource = saveFileViewerState(first, tabA.id, 1, tabA.viewerState);
-  const second = openFileTab(returnedToSource, { ...openA, modeHint: "diff" });
+  const second = openFileTab(first, { ...openA, modeHint: "diff" });
   assert.equal(second[0].viewerRevision, 2);
   assert.equal(second[0].viewerState.displayMode, "diff");
-});
-
-test("a remounted viewer ignores the previous revision's late cleanup", () => {
-  const reopened = openFileTab([tabA], { ...openA, modeHint: "diff" });
-  const stale = saveFileViewerState(reopened, tabA.id, 0, tabA.viewerState);
-  assert.strictEqual(stale, reopened);
-  assert.equal(stale[0].viewerState.displayMode, "diff");
 });
 
 test("file tab ids are prefixed with the file scheme", () => {

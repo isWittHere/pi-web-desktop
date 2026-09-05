@@ -21,10 +21,11 @@ export interface FileTab {
   filePath: string;
   sourceSessionId?: string | null;
   initialDisplayMode?: "diff";
-  /** Last viewer state, restored when the tab becomes active again. */
+  /** Initial viewer state (display mode / wrap) applied on first mount and
+   *  when a restored workspace mounts the tab for the first time. */
   viewerState?: FileViewerState;
-  /** Bumped whenever the tab is re-opened with a fresh mode/source, so a stale
-   *  save cannot overwrite newer state. */
+  /** Bumped when the tab is re-opened with a fresh mode/source so the viewer
+   *  remounts and applies the new mode instead of keeping the live one. */
   viewerRevision?: number;
 }
 
@@ -130,35 +131,4 @@ export function openViewTab(tabs: Tab[], input: OpenViewTabInput): Tab[] {
     ? { kind: "changes", id, cwd: input.cwd }
     : { kind: "git-graph", id, cwd: input.cwd };
   return [...tabs, tab];
-}
-
-export function saveFileViewerState(
-  tabs: Tab[],
-  tabId: string,
-  viewerRevision: number,
-  viewerState: FileViewerState,
-): Tab[] {
-  const index = tabs.findIndex((tab) => tab.id === tabId);
-  if (index === -1 || !isFileTab(tabs[index]) || (tabs[index] as FileTab).viewerRevision !== viewerRevision) {
-    return tabs;
-  }
-
-  // Bail out when the state is unchanged. Without this, every unmount of a
-  // viewer (tab switch, panel close) produced a fresh Tab array, which flowed
-  // into the FileViewer's initialState prop and re-ran its load effect, whose
-  // cleanup saved again — an AppShell-level setState loop.
-  const current = (tabs[index] as FileTab).viewerState;
-  if (
-    current
-    && current.displayMode === viewerState.displayMode
-    && current.wrapLines === viewerState.wrapLines
-    && current.scrollTop === viewerState.scrollTop
-    && current.scrollLeft === viewerState.scrollLeft
-  ) {
-    return tabs;
-  }
-
-  const next = [...tabs];
-  next[index] = { ...(next[index] as FileTab), viewerState };
-  return next;
 }

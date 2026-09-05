@@ -251,7 +251,6 @@ export const enLocale = {
     "desktop.gitGraphLoadMore": "Load more",
     "desktop.gitGraphOpenView": "Open Git graph",
     "desktop.gitGraphCommitFiles": "Changed files",
-    "desktop.gitGraphOpenFile": "Open file",
     "desktop.injectMessageNow": "Interrupt the current run and inject this message now",
     "desktop.queueMessageAfterFinish": "Queue this message after the agent finishes",
     "desktop.attachImage": "Attach image",

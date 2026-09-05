@@ -80,6 +80,10 @@ pi-web-main/
 │   │   ├── default-cwd/route.ts      # POST create ~/pi-cwd-YYYYMMDD
 │   │   ├── file-index/route.ts       # GET file index for search
 │   │   ├── files/[...path]/route.ts  # GET file contents (scoped allow-list)
+│   │   ├── git/
+│   │   │   ├── diff/route.ts         # GET per-file working-tree diff
+│   │   │   ├── log/route.ts          # GET bounded git log + per-commit files (git graph)
+│   │   │   └── status/route.ts       # GET working-tree status
 │   │   ├── home/route.ts             # GET user home directory
 │   │   ├── models/route.ts           # GET available models, default model, thinking levels
 │   │   ├── models-config/route.ts    # GET/PUT read/write ~/.pi/agent/models.json
@@ -117,6 +121,9 @@ pi-web-main/
 │   ├── FileExplorer.tsx          # File tree inside sidebar
 │   ├── FileIcons.tsx             # File icon helpers
 │   ├── FileViewer.tsx            # Source, diff, image, audio, PDF, DOCX preview
+│   ├── ChangesTabView.tsx        # Right-panel changes review tab (git status + diff drill-down)
+│   ├── GitGraphTab.tsx           # Right-panel git graph tab (SVG lanes, commit details)
+│   ├── tab-model.ts              # Right-panel Tab union + open/close/keep-alive pure logic
 │   ├── ModelsConfig.tsx          # Modal for editing models.json
 │   ├── PluginsConfig.tsx         # Modal for installed package plugins
 │   ├── SkillsConfig.tsx          # Modal for loaded/search/installable skills
@@ -126,7 +133,7 @@ pi-web-main/
 │   ├── ChatConfig.tsx            # Chat settings panel (input shortcut, etc.)
 │   ├── ProviderIcon.tsx          # Provider logo icon component (30+ providers)
 │   ├── SettingToggle.tsx         # Reusable toggle switch + settings section layout
-│   ├── TabBar.tsx                # Tab bar (Chat + open file tabs)
+│   ├── TabBar.tsx                # Right-panel tab bar (file / changes / git-graph tabs, tablist a11y)
 │   └── MarkdownBody.test.mjs     # Markdown rendering tests
 │
 ├── hooks/                        # React hooks
@@ -156,6 +163,10 @@ pi-web-main/
 │   ├── file-paths.ts             # Client/server path encoding helpers
 │   ├── file-types.ts             # File type detection
 │   ├── file-upload.ts            # File upload handling
+│   ├── git-graph-lanes.ts        # Git graph lane state machine (pure, tested)
+│   ├── git-graph-parser.ts       # Unit-separator git log parser (pure, tested)
+│   ├── git-graph-palette.ts      # Theme-accent-derived lane palette (pure, tested)
+│   ├── git-graph.ts              # Server-side git log / commit-files helpers
 │   ├── markdown.ts               # Markdown/Mermaid/KaTeX plugin configuration
 │   ├── message-display.ts        # Message display helpers
 │   ├── models-cache.ts           # Models configuration cache
@@ -164,6 +175,7 @@ pi-web-main/
 │   ├── patch.ts                  # Object patching utilities
 │   ├── pi-types.ts               # Local structural types for pi SDK objects
 │   ├── process-content.ts        # Process content categorization
+│   ├── right-tabs-memory.ts      # Per-workspace right-panel tab persistence (localStorage)
 │   ├── rpc-manager.ts            # AgentSessionWrapper + registry + startRpcSession
 │   ├── session-file-references.ts        # Session file reference resolution
 │   ├── session-file-references-core.ts   # Core session file reference logic
@@ -460,6 +472,12 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - `/api/files` is intentionally not a general filesystem browser. Allowed roots come from session cwds, their resolved project roots, `~/pi-cwd-*`, and roots explicitly added with `allowFileRoot()`.
 - `/api/cwd/validate`, `/api/default-cwd`, and `/api/worktrees` call `allowFileRoot()` when they make a new location browsable.
 
+### Right Panel Multi-Kind Tabs
+- The right panel hosts a discriminated `Tab` union (`components/tab-model.ts`): `file` tabs (multi-instance, id `file:<absPath>`), plus workspace-singleton view tabs `changes` (ChangesTabView, git status + diff drill-down) and `git-graph` (GitGraphTab, lane state machine over a bounded `git log`; geometry is derived from parent links — no `--graph` needed).
+- **Keep-alive rendering**: tab content stays mounted once activated and is hidden with CSS while inactive — switching tabs never re-fetches or resets live state. Tabs mount lazily on first activation; closed tabs drop their keep-alive entry so re-opening starts fresh.
+- Tabs persist per workspace via `lib/right-tabs-memory.ts` (project root key, workspace-memory conventions). Restored entries are sanitized; unreadable file tabs are silently dropped. Because content stays mounted, FileViewer's old unmount-snapshot machinery (`onStateChange`/`saveFileViewerState`) was removed — `viewerState` on a tab only seeds the initial display mode.
+- The sidebar QuickChangesPanel is the compact indicator; its "open review" button opens the full `changes` tab. Do not reintroduce remount-on-switch rendering for panel tabs.
+
 ### Plugins and Skills
 - `/api/plugins` uses pi's `SettingsManager` + `DefaultPackageManager` for global/project package install, remove, update, enable, and disable. Disabling writes empty `extensions/skills/prompts/themes` arrays for that package entry.
 - `/api/skills` uses `DefaultResourceLoader` so settings paths, package skills, and project `.agents/skills` are listed the same way the runtime sees them.
@@ -515,5 +533,5 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 
 ---
 
-*Last Updated: 2026-07-31*
+*Last Updated: 2026-09-05*
 *Generated by: AGENTS-maker*

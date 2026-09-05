@@ -251,7 +251,6 @@ export const zhCNLocale = {
     "desktop.gitGraphLoadMore": "加载更多",
     "desktop.gitGraphOpenView": "打开 Git 图谱",
     "desktop.gitGraphCommitFiles": "变更文件",
-    "desktop.gitGraphOpenFile": "打开文件",
     "desktop.injectMessageNow": "中断当前运行并立即注入此消息",
     "desktop.queueMessageAfterFinish": "在 Agent 完成后将此消息加入队列",
     "desktop.attachImage": "添加图片",

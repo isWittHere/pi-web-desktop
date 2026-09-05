@@ -147,23 +147,3 @@ export function saveRightTabs(workspaceKey: string, entry: RightTabsEntry): void
     // storage unavailable — memory is best-effort
   }
 }
-
-export function clearRightTabs(workspaceKey: string): void {
-  try {
-    const map = readMap();
-    const key = normalizePathKey(workspaceKey);
-    if (!(key in map)) {
-      if (!isWindowsPlatform()) return;
-      const folded = foldWindowsKey(key);
-      const found = Object.keys(map).find((k) => foldWindowsKey(k) === folded);
-      if (!found) return;
-      delete map[found];
-    } else {
-      delete map[key];
-    }
-    if (Object.keys(map).length === 0) window.localStorage.removeItem(STORAGE_KEY);
-    else window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    // ignore
-  }
-}
