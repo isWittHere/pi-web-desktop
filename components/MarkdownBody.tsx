@@ -133,7 +133,10 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
       return (
         <div className="my-3 rounded-lg overflow-hidden border border-(--border)">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse [&_tr:last-child>td]:border-b-0">
+            {/* w-max lets wide tables overflow into the horizontal scroller
+                instead of squeezing cell text; min-w-full keeps narrow ones
+                stretched to the container. */}
+            <table className="w-max min-w-full text-sm border-collapse [&_tr:last-child>td]:border-b-0">
               {children}
             </table>
           </div>
