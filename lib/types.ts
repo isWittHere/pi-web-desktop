@@ -280,6 +280,14 @@ export type SessionEntry =
 
 export type FileEntry = SessionHeader | SessionEntry;
 
+export type SubagentSessionStatus =
+  | "starting"
+  | "running"
+  | "completed"
+  | "failed"
+  | "aborted"
+  | "interrupted";
+
 export interface SessionTreeNode {
   entry: SessionEntry;
   children: SessionTreeNode[];
