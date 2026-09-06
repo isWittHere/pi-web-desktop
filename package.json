@@ -70,6 +70,7 @@
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "semver": "^7.8.0",
     "undici": "8.10.0",
     "unist-util-visit": "^5.1.0"
   },
@@ -80,6 +81,7 @@
     "@types/proper-lockfile": "4.1.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/semver": "^7.8.0",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "eslint": "^9",

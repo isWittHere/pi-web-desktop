@@ -18,6 +18,7 @@ import type {
   PluginScope,
   PluginsResponse,
 } from "@/lib/api-types";
+import { isPluginSourceCheckable } from "@/lib/plugin-updates";
 import { getAllowedFileRoots, isFilePathAllowed } from "@/lib/file-access";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { getProjectTrustStatus } from "@/lib/project-trust";
@@ -254,6 +255,7 @@ async function readPlugins(cwd: string): Promise<PluginsResponse> {
     return {
       source: pkg.source,
       scope,
+      canCheckForUpdates: isPluginSourceCheckable(pkg.source),
       filtered: pkg.filtered,
       disabled,
       installedPath: pkg.installedPath,
@@ -339,6 +341,14 @@ export async function POST(req: Request) {
       if (!source) return NextResponse.json({ error: "source required" }, { status: 400 });
       await packageManager.removeAndPersist(source, { local });
     } else if (body.action === "update") {
+      // A batch update (no source) may touch project-scope packages; require
+      // the same trust the per-package project actions enforce.
+      if (!source && !projectTrust.trusted && packageManager.listConfiguredPackages().some((pkg) => pkg.scope === "project")) {
+        return NextResponse.json(
+          { error: "Project resources must be trusted before updating project plugins" },
+          { status: 403 },
+        );
+      }
       await packageManager.update(source);
     } else if (body.action === "disable") {
       if (!source) return NextResponse.json({ error: "source required" }, { status: 400 });

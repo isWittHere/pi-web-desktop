@@ -6,7 +6,7 @@ import { sendAgentCommand } from "@/lib/agent-client";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
 import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane } from "@/components/settings-ui";
-import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
+import type { PluginPackageInfo, PluginUpdateResult, PluginsResponse } from "@/lib/api-types";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 
@@ -323,7 +323,11 @@ function PackageDetail({
   actionError,
   actionMessage,
   sessionId,
+  updateStatus,
+  checkingUpdate,
+  updateError,
   onAction,
+  onCheckUpdate,
   onReloadSession,
 }: {
   pkg: PluginPackageInfo;
@@ -332,7 +336,11 @@ function PackageDetail({
   actionError: string | null;
   actionMessage: string | null;
   sessionId: string | null;
+  updateStatus?: PluginUpdateResult;
+  checkingUpdate: boolean;
+  updateError: string | null;
   onAction: (action: PluginAction, pkg: PluginPackageInfo) => void;
+  onCheckUpdate: () => void;
   onReloadSession: () => void;
 }) {
   const { t } = useI18n();
@@ -340,6 +348,8 @@ function PackageDetail({
   const busy = busyKey?.endsWith(key) ?? false;
   const reloadBusy = busyKey === "reload";
   const enabled = !pkg.disabled;
+  const canCheckForUpdates = pkg.canCheckForUpdates;
+  const updateAvailable = updateStatus?.state === "update-available";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 680 }}>
@@ -377,10 +387,20 @@ function PackageDetail({
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <SettingsButton
-            onClick={() => onAction("update", pkg)}
-            disabled={busy || reloadBusy}
+            variant={updateAvailable ? "primary" : undefined}
+            onClick={updateAvailable || !canCheckForUpdates
+              ? () => onAction("update", pkg)
+              : onCheckUpdate}
+            disabled={busy || reloadBusy || checkingUpdate}
+            title={updateAvailable ? t("desktop.updateAvailable") : undefined}
           >
-            {busyKey === `update:${key}` ? t("desktop.updating") : t("desktop.update")}
+            {busyKey === `update:${key}`
+              ? t("desktop.updating")
+              : checkingUpdate
+                ? t("desktop.checking")
+                : updateAvailable || !canCheckForUpdates
+                  ? t("desktop.update")
+                  : t("desktop.check")}
           </SettingsButton>
           <SettingsButton
             onClick={onReloadSession}
@@ -411,7 +431,41 @@ function PackageDetail({
         <div style={{ color: "var(--text-dim)" }}>{t("desktop.status")}</div>
         <div style={{ color: statusColor(pkg.status), textTransform: "capitalize" }}>{pkg.status}</div>
         <div style={{ color: "var(--text-dim)" }}>{t("desktop.version")}</div>
-        <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{versionSummary(pkg, t)}</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{versionSummary(pkg, t)}</span>
+            {updateAvailable && (
+              <span style={{ color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600 }} title={updateStatus?.displayName}>
+                {t("desktop.updateAvailable")}
+              </span>
+            )}
+            {canCheckForUpdates && (checkingUpdate || (updateStatus && !updateAvailable)) && (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: checkingUpdate
+                    ? "var(--text-dim)"
+                    : updateStatus?.state === "up-to-date"
+                      ? "var(--status-success)"
+                      : updateStatus?.state === "error"
+                        ? "var(--status-danger)"
+                        : "var(--text-dim)",
+                }}
+              >
+                {checkingUpdate
+                  ? t("desktop.checking")
+                  : updateStatus?.state === "up-to-date"
+                    ? t("desktop.upToDate")
+                    : updateStatus?.state === "unsupported"
+                      ? t("desktop.automaticChecksUnavailable")
+                      : updateStatus?.message || t("desktop.checkFailed")}
+              </span>
+            )}
+          </div>
+          {updateError && (
+            <span style={{ fontSize: 12, color: "var(--status-danger)" }}>{updateError}</span>
+          )}
+        </div>
         <div style={{ color: "var(--text-dim)" }}>{t("desktop.package")}</div>
         <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
           {pkg.packageName ?? t("desktop.unknown")}
@@ -475,6 +529,11 @@ export function PluginsConfig({
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [updateStatuses, setUpdateStatuses] = useState<Record<string, PluginUpdateResult>>({});
+  const [checkingUpdates, setCheckingUpdates] = useState<Set<string>>(new Set());
+  const [checkingAll, setCheckingAll] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updatingAll, setUpdatingAll] = useState(false);
 
   const packages = useMemo(() => data?.packages ?? [], [data?.packages]);
   const selectedPackage = packages.find((pkg) => packageKey(pkg) === selected) ?? null;
@@ -506,8 +565,77 @@ export function PluginsConfig({
   }, [cwd]);
 
   useEffect(() => {
+    setUpdateStatuses({});
+    setUpdateError(null);
     void loadPlugins();
-  }, [loadPlugins]);
+  }, [cwd]); // eslint-disable-line react-hooks/exhaustive-deps -- statuses reset per cwd
+
+  const checkForUpdates = useCallback(async (pkg?: PluginPackageInfo) => {
+    const targets = pkg ? [pkg] : packages.filter((item) => item.canCheckForUpdates);
+    const keys = targets.map(packageKey);
+    if (keys.length === 0) return;
+
+    setUpdateError(null);
+    setCheckingUpdates((current) => new Set([...current, ...keys]));
+    if (!pkg) setCheckingAll(true);
+    try {
+      const res = await fetch("/api/plugins/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cwd,
+          source: pkg?.source,
+          scope: pkg?.scope,
+        }),
+      });
+      const data = (await res.json()) as {
+        updates?: PluginUpdateResult[];
+        error?: string;
+      };
+      if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setUpdateStatuses((current) => {
+        const next = { ...current };
+        for (const update of data.updates ?? []) {
+          next[packageKey(update)] = update;
+        }
+        return next;
+      });
+    } catch (err) {
+      setUpdateError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCheckingUpdates((current) => {
+        const next = new Set(current);
+        for (const key of keys) next.delete(key);
+        return next;
+      });
+      if (!pkg) setCheckingAll(false);
+    }
+  }, [cwd, packages]);
+
+  const updateAllPluginsAction = useCallback(async () => {
+    setUpdatingAll(true);
+    setActionError(null);
+    setActionMessage(null);
+    setUpdateError(null);
+    try {
+      const res = await fetch("/api/plugins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", cwd }),
+      });
+      const next = (await res.json()) as PluginsResponse & { error?: string };
+      if (!res.ok || next.error) throw new Error(next.error ?? `HTTP ${res.status}`);
+      setData(next);
+      setUpdateStatuses({});
+      setActionMessage(sessionId
+        ? `${t("desktop.packagesUpdated")} ${t("desktop.reloadCurrentSession")}`
+        : t("desktop.packagesUpdated"));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUpdatingAll(false);
+    }
+  }, [cwd, sessionId, t]);
 
   const runAction = useCallback(async (action: PluginAction, pkg: PluginPackageInfo) => {
     const key = packageKey(pkg);
@@ -527,6 +655,11 @@ export function PluginsConfig({
         setSelected(next.packages[0] ? packageKey(next.packages[0]) : null);
         if (next.packages.length === 0) setAddMode(true);
         setActionMessage(t("desktop.packageRemoved"));
+        setUpdateStatuses((current) => {
+          const nextStatuses = { ...current };
+          delete nextStatuses[key];
+          return nextStatuses;
+        });
       } else {
         const messages: Record<Exclude<PluginAction, "remove">, string> = {
           install: t("desktop.packageInstalled"),
@@ -535,6 +668,13 @@ export function PluginsConfig({
           enable: t("desktop.packageEnabled"),
         };
         setActionMessage(messages[action]);
+        if (action === "update") {
+          setUpdateStatuses((current) => {
+            const nextStatuses = { ...current };
+            delete nextStatuses[key];
+            return nextStatuses;
+          });
+        }
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -589,6 +729,11 @@ export function PluginsConfig({
   }, [loadPlugins, onReloadedAction, sessionId, t]);
 
   const addBusy = busyKey?.startsWith("install:") ?? false;
+  const availableUpdateCount = Object.values(updateStatuses).filter(
+    (status) => status.state === "update-available",
+  ).length;
+  const hasCheckablePackages = packages.some((pkg) => pkg.canCheckForUpdates);
+  const sidebarBusy = loading || busyKey !== null || checkingUpdates.size > 0 || updatingAll;
 
   return (
     <SettingsPane
@@ -673,6 +818,19 @@ export function PluginsConfig({
                             >
                               {pkg.source}
                             </div>
+                            {updateStatuses[key]?.state === "update-available" && (
+                              <div
+                                title={t("desktop.updateAvailable")}
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  color: "var(--accent)",
+                                  marginTop: 2,
+                                }}
+                              >
+                                ↑ {t("desktop.updateAvailable")}
+                              </div>
+                            )}
                             <div
                               style={{
                                 fontSize: 10,
@@ -708,6 +866,43 @@ export function PluginsConfig({
               )}
             </div>
             <div style={{ padding: "8px 6px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+              {hasCheckablePackages && (
+                <button
+                  type="button"
+                  onClick={() => void (availableUpdateCount > 0 ? updateAllPluginsAction() : checkForUpdates())}
+                  disabled={sidebarBusy}
+                  title={availableUpdateCount > 0 ? t("desktop.updateAllPluginsHint") : undefined}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "7px 8px",
+                    borderRadius: 5,
+                    border: "none",
+                    width: "100%",
+                    cursor: sidebarBusy ? "wait" : "pointer",
+                    background: availableUpdateCount > 0 ? "color-mix(in srgb, var(--accent) 12%, var(--bg))" : "none",
+                    color: availableUpdateCount > 0 ? "var(--accent)" : "var(--text-dim)",
+                    fontSize: 12,
+                    fontWeight: availableUpdateCount > 0 ? 600 : 400,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (sidebarBusy) return;
+                    e.currentTarget.style.background = "var(--bg-hover)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = availableUpdateCount > 0 ? "color-mix(in srgb, var(--accent) 12%, var(--bg))" : "none";
+                  }}
+                >
+                  {updatingAll
+                    ? t("desktop.updating")
+                    : checkingAll
+                      ? t("desktop.checking")
+                      : availableUpdateCount > 0
+                        ? `${t("desktop.updateAllPlugins")} (${availableUpdateCount})`
+                        : t("desktop.checkUpdates")}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -763,7 +958,11 @@ export function PluginsConfig({
                 actionError={actionError}
                 actionMessage={actionMessage}
                 sessionId={sessionId}
+                updateStatus={updateStatuses[packageKey(selectedPackage)]}
+                checkingUpdate={checkingUpdates.has(packageKey(selectedPackage))}
+                updateError={updateError}
                 onAction={runAction}
+                onCheckUpdate={() => void checkForUpdates(selectedPackage)}
                 onReloadSession={reloadSession}
               />
             ) : (
