@@ -54,7 +54,7 @@ export function SessionSearch({ open, query, refreshKey, children, selectedSessi
       </div>
       {response?.truncated && (
         <div role="status" style={{ padding: "0 12px 8px", fontSize: 11, color: "var(--text-muted)" }}>
-          {t("sidebar.sessionSearchPartial")}
+          {t("desktop.sessionSearchPartial")}
         </div>
       )}
       {response?.results.map(({ session, entryId, blockIndex, before, match, after }) => (

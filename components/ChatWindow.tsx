@@ -463,9 +463,9 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       }
       if (controller.signal.aborted) return;
       if (found) {
+        // Cancel any pending scroll restore — the jump takes over the viewport.
         prevScrollDistanceRef.current = null;
         prevScrollHeightRef.current = null;
-        serverPrependRef.current = false;
         setVisibleCount((current) => Math.max(current, (searchHistoryRef.current.entryIds.length + 200) * 2));
         setPendingSearchScroll(searchTarget);
       } else {

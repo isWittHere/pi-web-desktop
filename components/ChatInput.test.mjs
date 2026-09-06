@@ -31,24 +31,20 @@ const handlerStubs = {
   COMPOSITION_END_ENTER_GRACE_MS: 100,
   isComposingRef: { current: false },
   lastCompositionEndAtRef: { current: 0 },
-  isStreaming: true, isMobile: false,
+  isStreaming: true,
   historyMenuOpen: false, inputHistory: ["previous"], historyActiveIndex: 0,
   setHistoryActiveIndex() {}, setHistoryHoverIndex() {}, setHistoryMenuOpen() {},
-  applyHistoryInput() {},
   slashMenuOpen: false, slashQuery: null, filteredSlashCommands: [{}], slashActiveIndex: 0,
-  setSlashActiveIndex() {}, setSlashMenuOpen() {}, applySlashCommand() {},
+  setSlashActiveIndex() {}, setSlashMenuOpen() {},
   atMenuOpen: false, atQuery: null, atMatches: [{}], atActiveIndex: 0,
-  setAtActiveIndex() {}, setAtMenuOpen() {}, applyAtCompletion() {},
-  openAtCompletion() {},
-  value: "", setValue() {}, valueRef: { current: "" },
+  setAtActiveIndex() {}, setAtMenuOpen() {},
+  value: "", setValue() {},
   cwd: "/project", inputShortcut: "enter",
   markdownListContinue: () => null,
   continueMarkdownList: () => null,
-  manualMode: false, exitManualHeight() {}, applyAutoHeight() {},
-  canQueueStreamingMessage: true,
+  applyAutoHeight() {},
   textareaRef: { current: null },
-  onSteer() {}, onFollowUp() {}, onAbort() {},
-  handleSend() {},
+  onSteer() {}, onFollowUp() {},
 };
 
 function makeEvent(overrides = {}) {
@@ -56,7 +52,7 @@ function makeEvent(overrides = {}) {
     key: "Enter",
     shiftKey: false, altKey: false, ctrlKey: false, metaKey: false,
     nativeEvent: { isComposing: false, keyCode: 13 },
-    preventDefault() { this.prevented = true; },
+    preventDefault() {},
     ...overrides,
   };
 }
@@ -67,44 +63,40 @@ function runKeydown(context, event) {
     ...handlerStubs,
     sendQueued(mode) { action = mode; },
     handleSend() { action = "send"; },
-    onAbort() { action = "abort"; },
     applySlashCommand() { action = "slash"; },
     applyAtCompletion() { action = "file"; },
-    applyHistoryInput() { action = "history"; },
-    openAtCompletion() { action = "file-menu"; },
     ...context,
   });
-  const wrapped = {
+  handler({
     ...event,
     preventDefault() {
       event.preventDefault();
       // Mirrors the upstream contract: a swallowed Enter surfaces as "prevented".
       if (action === "native") action = "prevented";
     },
-  };
-  handler(wrapped);
-  return { action, prevented: Boolean(event.prevented) };
+  });
+  return action;
 }
 
 test("Alt+Enter queues a follow-up while plain Enter keeps steering", () => {
   // Default Enter steers when both handlers exist.
-  assert.equal(runKeydown({}, makeEvent()).action, "steer");
+  assert.equal(runKeydown({}, makeEvent()), "steer");
   // Alt/Option+Enter queues a follow-up instead.
-  assert.equal(runKeydown({}, makeEvent({ altKey: true })).action, "followup");
+  assert.equal(runKeydown({}, makeEvent({ altKey: true })), "followup");
   // Without a steer handler, plain Enter falls back to follow-up...
-  assert.equal(runKeydown({ onSteer: undefined }, makeEvent()).action, "followup");
+  assert.equal(runKeydown({ onSteer: undefined }, makeEvent()), "followup");
   // ...and without a follow-up handler, Alt+Enter falls back to steer.
-  assert.equal(runKeydown({ onFollowUp: undefined }, makeEvent({ altKey: true })).action, "steer");
+  assert.equal(runKeydown({ onFollowUp: undefined }, makeEvent({ altKey: true })), "steer");
   // Idle sessions bypass the queue entirely.
-  assert.equal(runKeydown({ isStreaming: false }, makeEvent({ altKey: true })).action, "send");
+  assert.equal(runKeydown({ isStreaming: false }, makeEvent({ altKey: true })), "send");
   // Shift+Enter keeps native newline behavior.
-  assert.equal(runKeydown({}, makeEvent({ shiftKey: true })).action, "native");
+  assert.equal(runKeydown({}, makeEvent({ shiftKey: true })), "native");
   // Composition guards still block queued sends.
-  assert.equal(runKeydown({ isComposingRef: { current: true } }, makeEvent({ altKey: true })).action, "native");
-  assert.equal(runKeydown({ lastCompositionEndAtRef: { current: 950 } }, makeEvent({ altKey: true })).action, "prevented");
+  assert.equal(runKeydown({ isComposingRef: { current: true } }, makeEvent({ altKey: true })), "native");
+  assert.equal(runKeydown({ lastCompositionEndAtRef: { current: 950 } }, makeEvent({ altKey: true })), "prevented");
   // Menus keep priority over queued sends.
-  assert.equal(runKeydown({ slashMenuOpen: true, slashQuery: "help" }, makeEvent({ altKey: true })).action, "slash");
-  assert.equal(runKeydown({ atMenuOpen: true, atQuery: {} }, makeEvent({ altKey: true })).action, "file");
+  assert.equal(runKeydown({ slashMenuOpen: true, slashQuery: "help" }, makeEvent({ altKey: true })), "slash");
+  assert.equal(runKeydown({ atMenuOpen: true, atQuery: {} }, makeEvent({ altKey: true })), "file");
 });
 
 test("the follow-up button advertises the Alt+Enter shortcut", () => {
