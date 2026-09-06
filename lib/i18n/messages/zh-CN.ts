@@ -629,6 +629,7 @@ export const zhCNLocale = {
     "desktop.docxPreview": "DOCX 预览",
     "desktop.failedToLoadImage": "加载图片失败",
     "desktop.failedToLoadAudio": "加载音频失败",
+    "desktop.failedToLoadVideo": "加载视频失败",
     "desktop.docxTooLargeForPreview": "DOCX 文件过大，无法预览（超过 10MB）",
     "desktop.previewFile": "预览 {file}",
     "desktop.branches": "分支",

@@ -629,6 +629,7 @@ export const enLocale = {
     "desktop.docxPreview": "docx preview",
     "desktop.failedToLoadImage": "Failed to load image",
     "desktop.failedToLoadAudio": "Failed to load audio",
+    "desktop.failedToLoadVideo": "Failed to load video",
     "desktop.docxTooLargeForPreview": "DOCX too large for preview (>10MB)",
     "desktop.previewFile": "Preview {file}",
     "desktop.branches": "Branches",
