@@ -1,12 +1,11 @@
 import {
   SessionManager,
-  buildContextEntries as piBuildContextEntries,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { closeSync, openSync, readSync, statSync } from "fs";
 import { normalize as normalizePath } from "path";
 import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext, SessionMark } from "./types";
-import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
+import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
@@ -340,30 +339,23 @@ export function buildSessionContext(
   options: BuildSessionContextOptions = {},
 ): SessionContext {
   const { tail, excludeLeaf } = options;
-  // Restrict SDK conversion and the response payload to the requested page.
-  // Without `tail` the full chain is returned (legacy behavior).
-  const sliced = tail && tail > 0 ? sliceActiveBranch(entries, leafId ?? null, tail, excludeLeaf) : entries;
+  // History pages retain the original branch order, including compacted
+  // messages: SDK context filtering drops a page's messages whenever the
+  // compaction's firstKeptEntryId falls outside the window. Without `tail`
+  // the full active branch is returned (legacy behavior).
+  const sliced = leafId === null
+    ? []
+    : sliceActiveBranch(entries, leafId ?? null, tail && tail > 0 ? tail : entries.length, excludeLeaf);
   const hasMore = Boolean(tail && tail > 0 && sliced[0]?.parentId);
-  const byId = new Map<string, SessionEntry>();
-  for (const e of sliced) byId.set(e.id, e);
 
-  const piEntries = sliced as unknown as PiSessionEntry[];
-  const contextEntries = piBuildContextEntries(
-    piEntries,
-    leafId,
-    byId as unknown as Map<string, PiSessionEntry>,
-  );
-
-  // Convert the SDK-selected context entries and their IDs together. This keeps
-  // fork/navigation targets aligned while preserving pi's compaction ordering.
+  // Convert messages and their IDs together to keep fork/navigation targets aligned.
   const messages: AgentMessage[] = [];
   const entryIds: string[] = [];
-  for (const entry of contextEntries) {
-    const localEntry = entry as unknown as SessionEntry;
-    const m = entryToUiMessage(localEntry, options);
+  for (const entry of sliced) {
+    const m = entryToUiMessage(entry, options);
     if (m) {
       messages.push(m);
-      entryIds.push(localEntry.id);
+      entryIds.push(entry.id);
     }
   }
 
