@@ -362,8 +362,8 @@ function TreeNode({
         </span>
         {highlighted && (
           <span
-            title="Newly uploaded"
-            aria-label="Newly uploaded"
+            title={t("desktop.fileNewlyUploaded")}
+            aria-label={t("desktop.fileNewlyUploaded")}
             style={{ width: 6, height: 6, flexShrink: 0, borderRadius: "50%", background: "#3b82f6" }}
           />
         )}
@@ -376,7 +376,7 @@ function TreeNode({
               e.stopPropagation();
               onAtMention(getRelativeFilePath(node.fullPath, cwd), node.isDir);
             }}
-            title="Insert path into chat"
+            title={t("desktop.fileInsertPathIntoChat")}
             style={{
               position: "absolute",
               right: !node.isDir ? 28 : 4,
@@ -407,7 +407,7 @@ function TreeNode({
             href={`/api/files/${encodeFilePathForApi(node.fullPath)}?type=download`}
             download
             onClick={(e) => e.stopPropagation()}
-            title="Download file"
+            title={t("desktop.fileDownload")}
             style={{
               position: "absolute",
               right: 4,
@@ -471,6 +471,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   onAtMentions,
   onUploadBusyChange,
 }, ref) {
+  const { t } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>([]);
   const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -697,7 +698,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         {uploadError && (
           <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11, lineHeight: 1.35, color: "#f87171" }}>
             <span style={{ minWidth: 0, flex: 1, overflowWrap: "anywhere" }}>{uploadError}</span>
-            <DismissButton onClick={() => setUploadError(null)} title="Dismiss error" />
+            <DismissButton onClick={() => setUploadError(null)} title={t("desktop.fileDismissError")} />
           </div>
         )}
 
@@ -706,19 +707,19 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
             <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 22, fontSize: 11 }}>
               <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
                 {uploadSummary.uploaded.length > 0 && (
-                  <span title={`${uploadSummary.uploaded.length} uploaded`} aria-label={`${uploadSummary.uploaded.length} uploaded`} style={{ display: "flex", alignItems: "center", gap: 3, color: "#22c55e" }}>
+                  <span title={t("desktop.fileUploadedCount", { count: uploadSummary.uploaded.length })} aria-label={t("desktop.fileUploadedCount", { count: uploadSummary.uploaded.length })} style={{ display: "flex", alignItems: "center", gap: 3, color: "#22c55e" }}>
                     <Check size={13} weight="regular" aria-hidden="true" />
                     <span>{uploadSummary.uploaded.length}</span>
                   </span>
                 )}
                 {uploadSummary.skipped.length > 0 && (
-                  <span title={`${uploadSummary.skipped.length} skipped`} aria-label={`${uploadSummary.skipped.length} skipped`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--text-dim)" }}>
+                  <span title={t("desktop.fileSkippedCount", { count: uploadSummary.skipped.length })} aria-label={t("desktop.fileSkippedCount", { count: uploadSummary.skipped.length })} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--text-dim)" }}>
                     <MinusCircle size={13} weight="regular" aria-hidden="true" />
                     <span>{uploadSummary.skipped.length}</span>
                   </span>
                 )}
                 {uploadSummary.errors.length > 0 && (
-                  <span title={`${uploadSummary.errors.length} failed`} aria-label={`${uploadSummary.errors.length} failed`} style={{ display: "flex", alignItems: "center", gap: 3, color: "#f87171" }}>
+                  <span title={t("desktop.fileFailedCount", { count: uploadSummary.errors.length })} aria-label={t("desktop.fileFailedCount", { count: uploadSummary.errors.length })} style={{ display: "flex", alignItems: "center", gap: 3, color: "#f87171" }}>
                     <Warning size={13} weight="regular" aria-hidden="true" />
                     <span>{uploadSummary.errors.length}</span>
                   </span>
@@ -728,15 +729,15 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                 <button
                   type="button"
                   onClick={addUploadedFilesToChat}
-                  title={uploadSummary.uploaded.length === 1 ? "Add uploaded file to chat" : "Add all uploaded files to chat"}
-                  aria-label={uploadSummary.uploaded.length === 1 ? "Add uploaded file to chat" : "Add all uploaded files to chat"}
+                  title={uploadSummary.uploaded.length === 1 ? t("desktop.fileAddUploadedToChat") : t("desktop.fileAddAllUploadedToChat")}
+                  aria-label={uploadSummary.uploaded.length === 1 ? t("desktop.fileAddUploadedToChat") : t("desktop.fileAddAllUploadedToChat")}
                   style={{ height: 22, padding: "0 7px", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, flexShrink: 0, border: "1px solid var(--border)", borderRadius: 4, background: "var(--bg-panel)", color: "var(--accent)", cursor: "pointer", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}
                 >
                   <MentionIcon />
                   mention
                 </button>
               )}
-              <DismissButton onClick={() => setUploadSummary(null)} title="Dismiss upload results" />
+              <DismissButton onClick={() => setUploadSummary(null)} title={t("desktop.fileDismissUploadResults")} />
             </div>
             {uploadSummary.errors.map((item) => (
               <div key={item.name} title={item.error} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, minWidth: 0, fontSize: 10, color: "#f87171" }}>
