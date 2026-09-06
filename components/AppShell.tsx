@@ -147,6 +147,12 @@ export function AppShell() {
   }, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
+  // Pending full-text-search jump: the entry (and optional block) to reveal
+  // once the targeted session's ChatWindow has finished loading.
+  const [searchTarget, setSearchTarget] = useState<{ sessionId: string; entryId: string; blockIndex?: number } | null>(null);
+  const handleSearchTargetHandled = useCallback((target: { sessionId: string; entryId: string }) => {
+    setSearchTarget((current) => current === target ? null : current);
+  }, []);
   // Session id currently having its title regenerated (disables the sidebar
   // menu item and guards against double-triggering).
   const [titleGeneratingId, setTitleGeneratingId] = useState<string | null>(null);
@@ -810,7 +816,9 @@ export function AppShell() {
     document.title = name ? `${name} — Pi Agent Web` : "Pi Agent Web";
   }, [activeCwd]);
 
-  const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+  const handleSelectSession = useCallback((session: SessionInfo, isRestore = false, entryId?: string, blockIndex?: number) => {
+    // Full-text search hits carry the entry to jump to; plain selections clear any pending target.
+    setSearchTarget(entryId ? { sessionId: session.id, entryId, blockIndex } : null);
     // Re-clicking the already-open session must not remount the chat and
     // re-run the full load/positioning cycle. Only skip when the effective
     // cwd context already matches — otherwise the pending cwd move needs
@@ -1456,6 +1464,8 @@ export function AppShell() {
             <ChatWindow
               key={sessionKey}
               session={selectedSession}
+              searchTarget={searchTarget?.sessionId === selectedSession?.id ? searchTarget : null}
+              onSearchTargetHandled={handleSearchTargetHandled}
               sessionRunning={Boolean(selectedSession && runningSessionIds.has(selectedSession.id))}
               newSessionCwd={effectiveNewSessionCwd}
               newSessionDraftId={activeDraftId}

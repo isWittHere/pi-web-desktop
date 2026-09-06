@@ -93,3 +93,59 @@ test("live detail and state routes work without a persisted JSONL file", async (
     state: { isStreaming: true },
   });
 });
+
+test("list versions expose idle session creation, rename and deletion to other windows", async (t) => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { GET: getSessionList } = await jiti.import("./route.ts");
+  const { GET: getRunningSessions } = await jiti.import("../agent/running/route.ts");
+  const { PATCH: renameSession, DELETE: deleteSession } = await jiti.import("./[id]/route.ts");
+  const { invalidateSessionListCache } = await jiti.import("@/lib/session-reader");
+  const { SessionManager } = await jiti.import("@earendil-works/pi-coding-agent");
+
+  const dir = await mkdtemp(join(tmpdir(), "pi-web-list-sync-"));
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = dir;
+  invalidateSessionListCache();
+  let sessionId;
+  t.after(async () => {
+    if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    invalidateSessionListCache();
+    await rm(dir, { recursive: true, force: true });
+  });
+  const list = async () => {
+    const response = await getSessionList(new Request("http://localhost/api/sessions"));
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const initial = await list();
+  assert.deepEqual(initial.sessions, []);
+
+  const manager = SessionManager.create(dir);
+  manager.appendMessage({ role: "user", content: "Cross-window search fixture", timestamp: Date.now() });
+  manager.appendMessage({ role: "assistant", content: [{ type: "text", text: "Already finished" }], timestamp: Date.now() });
+  sessionId = manager.getSessionId();
+  invalidateSessionListCache();
+  const created = await list();
+  assert.ok(created.sessionListVersion > initial.sessionListVersion);
+  assert.equal(created.sessions[0].id, sessionId);
+
+  const context = { params: Promise.resolve({ id: sessionId }) };
+  const url = `http://localhost/api/sessions/${sessionId}`;
+  const renamed = await renameSession(new Request(url, { method: "PATCH", body: JSON.stringify({ name: "Renamed elsewhere" }) }), context);
+  assert.equal(renamed.status, 200);
+  const poll = await (await getRunningSessions()).json();
+  assert.ok(poll.sessionListVersion > created.sessionListVersion);
+  const updated = await list();
+  assert.equal(updated.sessionListVersion, poll.sessionListVersion);
+  assert.equal(updated.sessions[0].name, "Renamed elsewhere");
+  assert.equal((await list()).sessionListVersion, poll.sessionListVersion, "reads must not create a refresh loop");
+
+  assert.equal((await deleteSession(new Request(url, { method: "DELETE" }), context)).status, 200);
+  const deleted = await list();
+  assert.ok(deleted.sessionListVersion > updated.sessionListVersion);
+  assert.deepEqual(deleted.sessions, []);
+  assert.equal((await (await getRunningSessions()).json()).sessionListVersion, deleted.sessionListVersion);
+});

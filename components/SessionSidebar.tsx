@@ -20,6 +20,7 @@ import { formatRelativeTime } from "@/lib/format-relative-time";
 import { useI18n } from "@/hooks/useI18n";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
+import { SessionSearch } from "./SessionSearch";
 import { QuickChangesPanel } from "./QuickChangesPanel";
 import { WorkspacePickerMenu } from "./WorkspacePickerMenu";
 import { TitleBarDismissOverlay } from "./TitleBarDismissOverlay";
@@ -31,7 +32,7 @@ interface Props {
   /** Active draft id — draft rows highlight against this (they have no server
    *  session, so selectedSessionId alone never matches them). */
   selectedDraftId?: string | null;
-  onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
+  onSelectSession: (session: SessionInfo, isRestore?: boolean, entryId?: string, blockIndex?: number) => void;
   onNewSession?: (sessionId: string, cwd: string, projectRoot?: string | null) => void;
   /** Client-side unsent drafts rendered alongside real sessions. */
   draftSessions?: DraftSession[];
@@ -355,6 +356,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // and sessionSearch drives live filtering of the visible session rows.
   const [searchOpen, setSearchOpen] = useState(false);
   const [sessionSearch, setSessionSearch] = useState("");
+  // Server list generation for cross-window sync: when the lightweight
+  // running-state poll reports a newer version, the list reloads itself.
+  const [sessionListVersion, setSessionListVersion] = useState<number | null>(null);
+  const sessionListVersionRef = useRef<number | null>(null);
+  const sessionLoadIdRef = useRef(0);
   // null = show every mark; otherwise only sessions carrying this mark.
   const [markFilter, setMarkFilter] = useState<SessionMark | null>(null);
   // Collapsed state of the session-list time-group headers. "earlier" starts
@@ -406,11 +412,17 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
 
   const loadSessions = useCallback(async (showLoading = false, force = false) => {
+    const loadId = ++sessionLoadIdRef.current;
     try {
       if (showLoading) setLoading(true);
       // Shared cache: startup also fetches the list from the workspace-restore
       // path, so dedupe onto one request (force refreshes on explicit reload).
       const data = await getSessionList(force);
+      if (loadId !== sessionLoadIdRef.current) return;
+      if (typeof data.sessionListVersion === "number") {
+        sessionListVersionRef.current = data.sessionListVersion;
+        setSessionListVersion(data.sessionListVersion);
+      }
       setAllSessions(data.sessions);
       // The real list has now been scanned (mount's initial empty array does
       // not count) — the auto-select effect may make first-screen decisions.
@@ -437,9 +449,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       // after setAllSessions on the next render).
       onSessionsLoaded?.();
     } catch (e) {
-      setError(String(e));
+      if (loadId === sessionLoadIdRef.current) setError(String(e));
     } finally {
-      if (showLoading) setLoading(false);
+      if (loadId === sessionLoadIdRef.current && showLoading) setLoading(false);
     }
   }, [onSessionsLoaded]);
 
@@ -490,10 +502,16 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           signal: currentController.signal,
         });
         if (!response.ok || !active || controller !== currentController) return;
-        const data = await response.json() as { runningSessionIds?: string[] };
+        const data = await response.json() as { sessionListVersion?: number; runningSessionIds?: string[] };
         if (!active || controller !== currentController) return;
         runningSnapshotAuthoritativeRef.current = true;
         setRunningSessionIds(new Set(data.runningSessionIds ?? []));
+        // Cross-window sync: another window created/renamed/deleted a session
+        // since our last list fetch. Reuse the (now-invalidated) cache rather
+        // than forcing a scan, which would bump the version again.
+        if (typeof data.sessionListVersion === "number" && data.sessionListVersion !== sessionListVersionRef.current) {
+          void loadSessions();
+        }
       } catch (error) {
         if ((error as DOMException).name !== "AbortError") console.warn("Failed to poll running sessions", error);
       } finally {
@@ -521,7 +539,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, []);
+  }, [loadSessions]);
 
   useEffect(() => {
     onRunningSessionIdsChange?.(runningSessionIds);
@@ -1001,6 +1019,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     if (s.cwd) setSelectedCwd(s.cwd);
     onSelectSession(s);
   }, [onSelectSession, onSelectDraft, draftSessions]);
+
+  // A full-text search hit: open the session and jump to the matched entry.
+  const handleSelectSearchHit = useCallback((s: SessionInfo, entryId?: string, blockIndex?: number) => {
+    if (s.cwd) setSelectedCwd(s.cwd);
+    onSelectSession(s, false, entryId, blockIndex);
+  }, [onSelectSession]);
 
   const handleNewSession = useCallback(() => {
     if (!selectedCwd) return;
@@ -1992,6 +2016,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
            welcome state), expands to fill the remaining sidebar height so the
            all-workspaces list is never clipped by a stale explorer limit. */}
       {sessionsOpen && (
+        <SessionSearch open={searchOpen} query={sessionSearch} refreshKey={sessionListVersion} selectedSessionId={selectedSessionId} onSelectSession={handleSelectSearchHit}>
         <div style={{ flex: explorerOpen && hasSelectedCwd ? "0 1 auto" : "1 1 0", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: explorerOpen && hasSelectedCwd ? "min(40%, 360px)" : "none" }}>
           {loading && (
             <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
@@ -2020,6 +2045,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             </div>
           ))}
         </div>
+        </SessionSearch>
       )}
 
       {/* File Explorer section */}

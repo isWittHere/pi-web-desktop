@@ -137,6 +137,10 @@ export function invalidateSessionListCache(): void {
   globalThis.__piSessionListCache = undefined;
 }
 
+export function getSessionListVersion(): number {
+  return globalThis.__piSessionListGeneration ?? 0;
+}
+
 function getPathCache(): Map<string, string> {
   if (!globalThis.__piSessionPathCache) globalThis.__piSessionPathCache = new Map();
   return globalThis.__piSessionPathCache;

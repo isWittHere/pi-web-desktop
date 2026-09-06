@@ -30,6 +30,9 @@ import {
 
 interface Props {
   session: SessionInfo | null;
+  /** Pending full-text-search jump: entry (and block) to reveal in this session. */
+  searchTarget?: { sessionId: string; entryId: string; blockIndex?: number } | null;
+  onSearchTargetHandled?: (target: { sessionId: string; entryId: string }) => void;
   /** True when the sidebar reports this session currently running elsewhere. */
   sessionRunning?: boolean;
   newSessionCwd: string | null;
@@ -161,7 +164,7 @@ function withAssistantBlocks(
 
 
 
-export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, notificationsEnabled, onNotificationsToggle, sessionTitle, onContentReady }: Props) {
+export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessionRunning, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, notificationsEnabled, onNotificationsToggle, sessionTitle, onContentReady }: Props) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
 
@@ -220,7 +223,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
     loadSystemInfoOnDemand,
-    loadContext,
+    loadContext, scrollToMessage,
   } = useAgentSession({
     session, sessionRunning, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
@@ -424,6 +427,79 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
     serverPrependRef.current = false;
     setVisibleCount((current) => Math.max(current, messages.length));
   }, [messages.length]);
+
+  // ── Full-text search jump ───────────────────────────────────────────────
+  // When a search hit opens (or targets) this session, make sure the entry is
+  // loaded — pulling one extra page of history when needed — then scroll to
+  // it and flash the matched block.
+  const [pendingSearchScroll, setPendingSearchScroll] = useState<Props["searchTarget"]>(null);
+  const searchHistoryRef = useRef({ entryIds, historyCursor, hasEarlierMessages });
+  searchHistoryRef.current = { entryIds, historyCursor, hasEarlierMessages };
+  const onSearchTargetHandledRef = useRef(onSearchTargetHandled);
+  onSearchTargetHandledRef.current = onSearchTargetHandled;
+
+  useEffect(() => {
+    if (!searchTarget || loading) return;
+    const controller = new AbortController();
+    const locate = async () => {
+      const history = searchHistoryRef.current;
+      let found = history.entryIds.includes(searchTarget.entryId);
+      if (!found && !agentRunning && history.hasEarlierMessages && history.historyCursor && !loadingOlderRef.current) {
+        loadingOlderRef.current = true;
+        const container = scrollContainerRef.current;
+        if (container) {
+          prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
+          prevScrollHeightRef.current = container.scrollHeight;
+        }
+        // One extra page of 200 entries; deeper or other-branch hits just open
+        // the session without a jump.
+        const context = await loadContext(searchTarget.sessionId, branchActiveLeafId, history.historyCursor, {
+          tail: 200,
+          signal: controller.signal,
+        }).finally(() => {
+          loadingOlderRef.current = false;
+        });
+        found = Boolean(context?.entryIds.includes(searchTarget.entryId));
+      }
+      if (controller.signal.aborted) return;
+      if (found) {
+        prevScrollDistanceRef.current = null;
+        prevScrollHeightRef.current = null;
+        serverPrependRef.current = false;
+        setVisibleCount((current) => Math.max(current, (searchHistoryRef.current.entryIds.length + 200) * 2));
+        setPendingSearchScroll(searchTarget);
+      } else {
+        onSearchTargetHandledRef.current?.(searchTarget);
+      }
+    };
+    void locate();
+    return () => controller.abort();
+  }, [searchTarget, loading, agentRunning, branchActiveLeafId, loadContext, scrollContainerRef]);
+
+  const searchMessage = messages[entryIds.indexOf(pendingSearchScroll?.entryId ?? "")];
+  const searchBlock = searchMessage?.role === "assistant"
+    ? (pendingSearchScroll?.blockIndex === undefined
+      ? (searchMessage.content as AssistantContentBlock[]).find((block) => block.type === "text")
+      : (searchMessage.content as AssistantContentBlock[])[pendingSearchScroll.blockIndex])
+    : undefined;
+
+  useLayoutEffect(() => {
+    if (!pendingSearchScroll || pendingSearchScroll !== searchTarget) return;
+    const selector = `[data-entry-id="${CSS.escape(pendingSearchScroll.entryId)}"]`;
+    const element = scrollContainerRef.current?.querySelector<HTMLElement>(
+      searchMessage?.role === "user" ? selector : `${selector} [data-search-target]`,
+    );
+    if (element) {
+      scrollToMessage(element);
+      element.animate([
+        { backgroundColor: "var(--bg-selected)" },
+        { backgroundColor: "transparent" },
+      ], { duration: 2500 });
+    }
+    setPendingSearchScroll(null);
+    onSearchTargetHandledRef.current?.(pendingSearchScroll);
+  }, [pendingSearchScroll, searchTarget, searchMessage, scrollContainerRef, scrollToMessage]);
+
 
   // After the prepended page commits, restore the scroll position so the
   // viewport doesn't jump. Runs as a layout effect (before paint) and only
@@ -868,6 +944,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                     cwd={messageCwd}
                     onOpenFile={onOpenFile}
                     entryId={entryIds[idx]}
+                    searchBlock={entryIds[idx] === pendingSearchScroll?.entryId ? searchBlock : undefined}
                     onFork={agentRunning || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
                     forking={forkingEntryId === entryIds[idx]}
                     onNavigate={agentRunning ? undefined : handleNavigate}
@@ -881,7 +958,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                 );
                 if (!isVisible || options.attachRef === false || currentRefIdx === undefined) return view;
                 return (
-                  <div key={`${keyPrefix}-${idx}`} ref={attachVisibleRef(idx, currentRefIdx)}>
+                  <div key={`${keyPrefix}-${idx}`} data-entry-id={entryIds[idx]} ref={attachVisibleRef(idx, currentRefIdx)}>
                     {view}
                   </div>
                 );
@@ -1112,6 +1189,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
                         cwd={messageCwd}
                         onOpenFile={onOpenFile}
                         sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                        reveal={Boolean(pendingSearchScroll && (visibleProcessIndices.some((index) => entryIds[index] === pendingSearchScroll.entryId) || (searchBlock && (processBlocks as unknown[]).includes(searchBlock))))}
                       />
                     </div>,
                   );

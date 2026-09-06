@@ -592,18 +592,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [loadAgentState, applySessionData]);
 
-  const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null, opts?: { captureAnchor?: () => void }) => {
+  const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null, opts?: { captureAnchor?: () => void; tail?: number; signal?: AbortSignal }) => {
     try {
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       if (leafId) params.set("leafId", leafId);
       // Page upward: ask the server for the `tail` ancestors preceding `before`,
       // then prepend them. Omitting `before` fetches the most-recent page.
       if (before) params.set("before", before);
+      if (opts?.tail) params.set("tail", String(opts.tail));
       const url = `/api/sessions/${encodeURIComponent(sid)}/context?${params}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: opts?.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as { context: SessionData["context"] };
-      if (sessionIdRef.current !== sid) return;
+      if (sessionIdRef.current !== sid || opts?.signal?.aborted) return;
       setHistoryCursor(d.context.oldestEntryId);
       setHasEarlierMessages(d.context.hasMore);
       setData((prev) => {
@@ -630,8 +631,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setMessages(d.context.messages);
         setEntryIds(d.context.entryIds ?? []);
       }
+      return d.context;
     } catch (e) {
-      console.error("Failed to load context:", e);
+      if (!opts?.signal?.aborted) console.error("Failed to load context:", e);
     }
   }, []);
 
@@ -1886,6 +1888,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     container.scrollTo({ top: elAbsTop - 16, behavior: "smooth" });
   }, []);
 
+  // Jump the viewport to an arbitrary message element (e.g. a search hit) and
+  // stop any pending auto-scroll from fighting the jump.
+  const scrollToMessage = useCallback((element: HTMLElement) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
+    initialScrollDoneRef.current = true;
+    pendingScrollToUserRef.current = false;
+    const top = cssPx(element.getBoundingClientRect().top - container.getBoundingClientRect().top) + container.scrollTop;
+    container.scrollTo({ top: top - 16, behavior: "instant" });
+  }, []);
+
   const markUserScrollIntent = useCallback((event: Event) => {
     if (event instanceof KeyboardEvent) {
       if (!SCROLL_KEYS.has(event.key)) return;
@@ -2077,6 +2091,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
     loadSystemInfo, loadSystemInfoOnDemand,
     handleLeafChange,
-    loadContext,
+    loadContext, scrollToMessage,
   };
 }

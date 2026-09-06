@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MarkdownBody } from "./MarkdownBody";
 import { MessageView, ThinkingBlock, ToolCallBlock } from "./MessageView";
 import { useI18n } from "@/hooks/useI18n";
@@ -41,6 +41,8 @@ interface ProcessGroupProps {
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   sessionId?: string;
+  /** Force the group open (e.g. a search hit landed on one of its steps). */
+  reveal?: boolean;
 }
 
 type Step =
@@ -701,6 +703,7 @@ export function ProcessGroup({
   cwd,
   onOpenFile,
   sessionId,
+  reveal = false,
 }: ProcessGroupProps) {
   const { t } = useI18n();
   const ts: BuildLabelFn = useCallback((key: string) => t(key as Parameters<typeof t>[0]), [t]);
@@ -734,6 +737,13 @@ export function ProcessGroup({
     wasStreamingRef.current = false;
     return () => window.clearTimeout(timer);
   }, [isStreaming]);
+
+  // A search hit inside the process steps must reveal the group even though
+  // the user had it collapsed; the reveal stays latched until cleared.
+  useLayoutEffect(() => {
+    if (reveal) setAreaExpanded(true);
+  }, [reveal]);
+  const effectiveExpanded = areaExpanded || reveal;
 
   useEffect(() => {
     if (steps.length === 0) return;
@@ -909,10 +919,10 @@ export function ProcessGroup({
           type="button"
           onClick={() => setAreaExpanded((v) => !v)}
           className="group/summary flex min-w-0 items-center gap-1.5 text-left text-sm leading-relaxed text-text-muted transition-colors hover:text-text"
-          aria-expanded={areaExpanded}
+          aria-expanded={effectiveExpanded}
         >
           <span className="truncate">{summary}</span>
-          <span className={`opacity-40 transition-opacity group-hover/summary:opacity-80 ${areaExpanded ? "rotate-90" : ""}`}>
+          <span className={`opacity-40 transition-opacity group-hover/summary:opacity-80 ${effectiveExpanded ? "rotate-90" : ""}`}>
             <Caret />
           </span>
         </button>
@@ -932,7 +942,7 @@ export function ProcessGroup({
         )}
       </div>
 
-      {areaExpanded && (
+      {effectiveExpanded && (
         <div className="overflow-hidden">
           {singleThinking ? (
             <div className="relative mt-2">

@@ -14,6 +14,9 @@ import type { SessionInfo } from "@/lib/types";
 export interface SessionListData {
   sessions: SessionInfo[];
   runningSessionIds?: string[];
+  /** Monotonic server generation, bumped on every list mutation. Cross-window
+      sync compares this to detect changes made in another window. */
+  sessionListVersion?: number;
 }
 
 let cache: SessionListData | null = null;
