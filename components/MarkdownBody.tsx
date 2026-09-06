@@ -435,7 +435,7 @@ export function CodeBlock({ code, lang, headerAction, isStreaming }: { code: str
           customStyle={{
             margin: 0,
             padding: "10px 16px",
-            fontSize: 13,
+            fontSize: "calc(13px + var(--chat-font-size-offset, 0px))",
             lineHeight: 1.65,
             borderRadius: 0,
             border: "none",

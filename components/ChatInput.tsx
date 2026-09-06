@@ -23,6 +23,7 @@ import { filterThinkingLevelOptions } from "@/lib/thinking-levels";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { ToolsPanel } from "./ToolsPanel";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useChatAppearance } from "@/hooks/useChatAppearance";
 import { useResizableHeight } from "@/hooks/useResizableHeight";
 import { scrollRemaining, nextInputCompactState, COMPACT_RESTORE_TRIGGER, type InputCompactScrollDirection } from "@/lib/input-compact";
 import { useI18n } from "@/hooks/useI18n";
@@ -504,6 +505,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
+  const { fontSize } = useChatAppearance();
 
   // Step pill: measure its natural width so the independent status button can
   // animate its width when the label appears, changes, or disappears. The
@@ -1105,7 +1107,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   useEffect(() => {
     applyAutoHeight();
-  }, [applyAutoHeight, value]);
+  }, [applyAutoHeight, value, fontSize]);
+
+  // Font-size changes and panel resizes rewrap the text; only width changes
+  // need a remeasure (height updates also notify the observer).
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta || typeof ResizeObserver === "undefined") return;
+    let previousWidth = -1;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width === previousWidth) return;
+      previousWidth = entry.contentRect.width;
+      applyAutoHeight();
+    });
+    observer.observe(ta);
+    return () => observer.disconnect();
+  }, [applyAutoHeight]);
 
   // Mirror the textarea's internal scroll onto the highlight layer (auto
   // height cap / manual resize both make the textarea scroll). Also mirror
@@ -2031,7 +2048,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           e.target.value = "";
         }}
       />
-      <div style={{ maxWidth: 820, margin: "0 auto" }}>
+      <div style={{ maxWidth: "var(--chat-content-max-width, 820px)", margin: "0 auto" }}>
         {showImageUnsupportedWarning && (
           <div
             role="alert"

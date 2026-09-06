@@ -91,7 +91,7 @@ function SafeMarkdownBody({ children, className, ...props }: React.ComponentProp
     );
   }
   return (
-    <div className={className} style={{ maxHeight: 420, overflow: "auto", fontSize: 12, lineHeight: 1.5 }}>
+    <div className={className} style={{ maxHeight: 420, overflow: "auto", fontSize: "calc(12px + var(--chat-font-size-offset, 0px))", lineHeight: 1.5 }}>
       <pre
         style={{
           margin: 0,
@@ -1216,7 +1216,7 @@ function SplitPatchView({ text }: { text: string }) {
             minWidth: 0,
             borderTop: fileIndex === 0 ? "none" : "1px solid var(--border)",
             fontFamily: "var(--font-mono)",
-            fontSize: 12,
+            fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
             lineHeight: 1.55,
           }}
         >
@@ -1344,7 +1344,7 @@ function PatchTextView({ text }: { text: string }) {
   const lines = text.split(/\r?\n/);
 
   return (
-    <div style={{ maxHeight: 520, overflowY: "auto", overflowX: "hidden", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, minWidth: 0 }}>
+    <div style={{ maxHeight: 520, overflowY: "auto", overflowX: "hidden", fontFamily: "var(--font-mono)", fontSize: "calc(12px + var(--chat-font-size-offset, 0px))", lineHeight: 1.55, minWidth: 0 }}>
       {lines.map((line, i) => {
         const kind =
           line.startsWith("@@") ? "hunk" :
@@ -1441,7 +1441,7 @@ function PairedResult({ text, isEmpty, isError, processStyle = false }: {
           margin: 0,
           padding: "8px 10px",
           color: isError ? "#f87171" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
-          fontSize: 12,
+          fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
           lineHeight: 1.5,
           overflow: "auto",
           maxHeight: 400,
@@ -1624,7 +1624,7 @@ function CustomMessageView({ message, isStreaming, cwd, onOpenFile }: { message:
               borderTop: "1px solid var(--border)",
               background: "var(--bg)",
               color: "var(--text-muted)",
-              fontSize: 12,
+              fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
               lineHeight: 1.5,
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",

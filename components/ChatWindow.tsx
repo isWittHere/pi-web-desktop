@@ -645,7 +645,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
 
   return (
     <div
-      className="relative flex h-full min-w-0 flex-col overflow-hidden"
+      className="chat-content relative flex h-full min-w-0 flex-col overflow-hidden"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -681,7 +681,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
 
       {isEmptyNew ? (
         <div className="chat-welcome relative z-0 flex flex-1 flex-col items-center justify-center overflow-y-auto">
-          <div className="w-full max-w-[820px]">
+          <div className="w-full" style={{ maxWidth: "var(--chat-content-max-width, 820px)" }}>
             {/* Pi Logo */}
             <div
               style={{
@@ -803,7 +803,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
             pointerEvents: "none",
           }}
         >
-          <div style={{ maxWidth: 820, margin: "0 auto" }}>
+          <div style={{ maxWidth: "var(--chat-content-max-width, 820px)", margin: "0 auto" }}>
             <NoticeShelf notices={notices} floating align="right" />
           </div>
         </div>
@@ -813,7 +813,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
               leaving the first message flush against the top). */}
           <div ref={scrollContainerRef} className={`chat-scroll-container h-full min-w-0 overflow-x-hidden overflow-y-auto pt-4 ${openPositioning ? " invisible" : ""}`} style={{ scrollbarWidth: "none" }}>
             <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
-            <div style={{ width: "100%", minWidth: 0, maxWidth: 820, margin: "0 auto" }}>
+            <div style={{ width: "100%", minWidth: 0, maxWidth: "var(--chat-content-max-width, 820px)", margin: "0 auto" }}>
               <ExtensionStatusBar statuses={extensionStatuses} />
               <ExtensionWidgets widgets={aboveEditorWidgets} />
 
@@ -1223,7 +1223,7 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
             paddingRight: isMobile ? CHAT_COLUMN_PADDING : CHAT_INPUT_RIGHT_PADDING
           }}
         >
-          <div style={{ maxWidth: 820, margin: "0 auto" }}>
+          <div style={{ maxWidth: "var(--chat-content-max-width, 820px)", margin: "0 auto" }}>
             <ExtensionWidgets widgets={belowEditorWidgets} />
           </div>
         </div>

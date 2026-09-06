@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowSquareOut, Check, Link, Monitor, Moon, Rows, SquaresFour, Sun } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, type ThemeMode } from "@/hooks/useTheme";
+import {
+  CHAT_CONTENT_FONT_SIZE_MAX,
+  CHAT_CONTENT_FONT_SIZE_MIN,
+  CHAT_CONTENT_WIDTH_MAX,
+  CHAT_CONTENT_WIDTH_MIN,
+  useChatAppearance,
+} from "@/hooks/useChatAppearance";
 import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { resolveWallpaperUrl } from "@/lib/wallpaper";
@@ -73,6 +80,7 @@ const underlineOnHover = {
 
 export function DisplayConfig() {
   const { mode, themeName, setMode, setTheme, borderDepth, setBorderDepth, fontScale, setFontScale } = useTheme();
+  const { width: chatContentWidth, setWidth: setChatContentWidth, fontSize: chatFontSize, setFontSize: setChatFontSize } = useChatAppearance();
   const { locale: language, setLocale: setLanguage, t } = useI18n();
   const { viewMode, setViewMode } = useViewMode();
   const [themeSets, setThemeSets] = useState<ThemeSetInfo[]>([]);
@@ -304,6 +312,39 @@ export function DisplayConfig() {
                 );
               })}
             </div>
+          }
+        />
+
+        <SettingsRow
+          label={`${t("desktop.chatContentWidth")} (${chatContentWidth}px)`}
+          description={t("desktop.chatContentWidthDescription")}
+          control={
+            <input
+              type="range"
+              min={CHAT_CONTENT_WIDTH_MIN}
+              max={CHAT_CONTENT_WIDTH_MAX}
+              step={10}
+              value={chatContentWidth}
+              onChange={(e) => setChatContentWidth(Number(e.target.value))}
+              style={{ width: 220, maxWidth: "100%", accentColor: "var(--accent)", cursor: "pointer" }}
+              aria-label={t("desktop.chatContentWidth")}
+            />
+          }
+        />
+
+        <SettingsRow
+          label={`${t("desktop.chatContentFontSize")} (${chatFontSize}px)`}
+          control={
+            <input
+              type="range"
+              min={CHAT_CONTENT_FONT_SIZE_MIN}
+              max={CHAT_CONTENT_FONT_SIZE_MAX}
+              step={1}
+              value={chatFontSize}
+              onChange={(e) => setChatFontSize(Number(e.target.value))}
+              style={{ width: 220, maxWidth: "100%", accentColor: "var(--accent)", cursor: "pointer" }}
+              aria-label={t("desktop.chatContentFontSize")}
+            />
           }
         />
 
