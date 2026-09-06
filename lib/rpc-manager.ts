@@ -16,7 +16,14 @@ import {
 } from "./project-command-env";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
 import { resolveShellTools } from "./powershell-settings";
-import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
+import {
+  createSubagentExtension,
+  preferPiWebSubagentExtension,
+} from "./subagent-extension";
+import { createSubagentController } from "./subagent-runtime";
+import { isBuiltInSubagentsEnabled } from "./subagent-settings";
+import { listSubagentProfiles } from "./subagents";
+import { cacheSessionPath, invalidateSessionListCache, resolveSessionPath } from "./session-reader";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import { rememberThinkingLevel } from "./thinking-level-memory";
@@ -185,6 +192,8 @@ export class AgentSessionWrapper {
   private extensionBindingPromise: Promise<void> | null = null;
   private extensionBindingError: unknown = null;
   private forceEmptySystemPrompt = false;
+  private exactSystemPrompt: (() => string) | null = null;
+  private exactSystemPromptInstalled = false;
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
@@ -235,6 +244,46 @@ export class AgentSessionWrapper {
   setForceEmptySystemPrompt(force: boolean): void {
     this.forceEmptySystemPrompt = force;
     this.applyForcedEmptySystemPrompt();
+  }
+
+  /**
+   * Pin the system prompt for sessions whose prompt is owned by code rather
+   * than resource discovery (chat-only subagent profiles). The SDK rebuilds
+   * the system prompt on later turns, so a per-turn continuation hook keeps
+   * the exact prompt in place.
+   */
+  setExactSystemPrompt(getter: () => string): void {
+    this.exactSystemPrompt = getter;
+    this.installExactSystemPromptContinuation();
+    this.applyForcedEmptySystemPrompt();
+  }
+
+  private installExactSystemPromptContinuation(): void {
+    if (this.exactSystemPromptInstalled) return;
+    const agent = this.inner.agent as {
+      prepareNextTurnWithContext?: (
+        turn: unknown,
+        signal: AbortSignal,
+      ) => Promise<{ context?: { systemPrompt?: string } } | undefined> | undefined;
+    };
+    if (typeof agent.prepareNextTurnWithContext !== "function") return;
+    this.exactSystemPromptInstalled = true;
+    const previous = agent.prepareNextTurnWithContext.bind(agent);
+    agent.prepareNextTurnWithContext = async (turn, signal) => {
+      const prepared = await previous(turn, signal);
+      return {
+        ...prepared,
+        context: {
+          ...(prepared?.context ?? (turn as { context?: { systemPrompt?: string } }).context),
+          systemPrompt: this.exactSystemPrompt!(),
+        },
+      };
+    };
+  }
+
+  /** Await extension binding so a prompt cannot race session_start dispatch. */
+  async waitUntilReady(): Promise<void> {
+    await this.waitForExtensionsBound();
   }
 
   beginExtensionBinding(options: ExtensionBindingOptions = {}): void {
@@ -313,9 +362,12 @@ export class AgentSessionWrapper {
   }
 
   private applyForcedEmptySystemPrompt(): void {
-    if (this.forceEmptySystemPrompt && this.inner.agent.state) {
-      this.inner.agent.state.systemPrompt = "";
+    if (!this.inner.agent.state) return;
+    if (this.exactSystemPrompt) {
+      this.inner.agent.state.systemPrompt = this.exactSystemPrompt();
+      return;
     }
+    if (this.forceEmptySystemPrompt) this.inner.agent.state.systemPrompt = "";
   }
 
   private emit(event: AgentEvent): void {
@@ -1287,6 +1339,45 @@ export function getRunningRpcSessionIds(): string[] {
   return [...ids];
 }
 
+// ============================================================================
+// Subagents
+// ============================================================================
+
+const SUBAGENT_CONTROLLER = createSubagentController({
+  getSession: (sessionId) => getRpcSession(sessionId),
+  registerSession: (inner, options) => {
+    const wrapper = new AgentSessionWrapper(inner, inner.sessionManager.getCwd());
+    const exactSystemPrompt = options?.exactSystemPrompt;
+    if (exactSystemPrompt !== undefined) wrapper.setExactSystemPrompt(() => exactSystemPrompt);
+    const registry = getRegistry();
+    const realSessionId = wrapper.sessionId;
+    if (wrapper.sessionFile) cacheSessionPath(realSessionId, wrapper.sessionFile);
+    wrapper.onDestroy(() => registry.delete(realSessionId));
+    registry.set(realSessionId, wrapper);
+    wrapper.start();
+    // Chat-only subagents load no extensions; dispatching session_start to an
+    // empty runner would only re-run the exact-prompt policy after binding.
+    if (!options?.chatOnly) wrapper.beginExtensionBinding();
+  },
+  reopenSession: async (sessionId, sessionFile) =>
+    (await startRpcSession(sessionId, sessionFile, undefined)).session,
+  resolveSessionPath,
+  invalidateSessionList: invalidateSessionListCache,
+  isBuiltInSubagentsEnabled,
+});
+
+export function getSubagentRun(sessionId: string) {
+  return SUBAGENT_CONTROLLER.get(sessionId);
+}
+
+export function steerSubagent(sessionId: string, message: string) {
+  return SUBAGENT_CONTROLLER.steer(sessionId, message);
+}
+
+export function abortSubagent(sessionId: string) {
+  return SUBAGENT_CONTROLLER.abort(sessionId);
+}
+
 /**
  * Get or create an AgentSession for the given session.
  * For new sessions (sessionFile === ""), pi generates its own id.
@@ -1358,9 +1449,16 @@ export async function startRpcSession(
           ...(process.platform === "win32"
             ? [createProjectCommandPowerShellExtension({ cwd: sessionCwd })]
             : []),
+          // Host-side subagent control tools (Agent / get_subagent_result /
+          // steer_subagent); a no-op factory while the toggle is disabled.
+          createSubagentExtension(
+            SUBAGENT_CONTROLLER.extensionRuntime,
+            () => listSubagentProfiles(sessionCwd),
+            isBuiltInSubagentsEnabled,
+          ),
         ],
         extensionsOverride: (base) =>
-          preferUserPowerShellExtension(preferUserBashExtension(base)),
+          preferUserPowerShellExtension(preferUserBashExtension(preferPiWebSubagentExtension(base))),
       },
       ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
     });

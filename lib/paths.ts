@@ -7,3 +7,9 @@ const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
 export function isWindowsAbsolutePath(filePath: string): boolean {
   return WINDOWS_ABSOLUTE_RE.test(filePath) || filePath.startsWith("\\\\") || filePath.startsWith("//");
 }
+
+/** Convert a path to forward slashes for separator-insensitive keys and display. */
+export function toSlashPath(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
