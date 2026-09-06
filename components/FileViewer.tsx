@@ -13,9 +13,9 @@ import {
   isImagePath,
 } from "@/lib/file-types";
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
-import { resolveLocalFileHref } from "@/lib/file-links";
+import { resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { resolveMarkdownImageSrc } from "@/lib/markdown-images";
-import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { headingId, markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
 import { prismTheme } from "@/lib/prism-theme";
 import { CodeBlock, MarkdownCodeContext, MermaidBlock } from "@/components/MarkdownBody";
 import { parseUnifiedPatch } from "@/lib/patch";
@@ -1101,6 +1101,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
             <ReactMarkdown
               remarkPlugins={markdownRemarkPlugins}
               rehypePlugins={markdownRehypePlugins}
+              urlTransform={onOpenFile ? markdownUrlTransform : undefined}
               components={{
                 h1({ children }: React.ComponentProps<'h1'>) {
                   return <h1 id={headingId(children)}>{children}</h1>
@@ -1152,8 +1153,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
                   }
 
                   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-                    if (event.defaultPrevented || event.button !== 0) return;
-                    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    if (!shouldOpenLocalFileInApp(event)) return;
                     const target = event.currentTarget.getAttribute("target");
                     if (target && target !== "_self") return;
                     event.preventDefault();

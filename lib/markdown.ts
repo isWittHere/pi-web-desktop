@@ -1,4 +1,4 @@
-import type { Options as ReactMarkdownOptions } from "react-markdown";
+import { defaultUrlTransform, type Options as ReactMarkdownOptions } from "react-markdown";
 import type { Root, RootContent } from "mdast";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
@@ -44,6 +44,11 @@ const markdownSanitizeSchema = {
   },
   protocols: {
     ...defaultSchema.protocols,
+    // `file:` hrefs must survive sanitization so Ctrl/Cmd-click on local file
+    // links can resolve to the in-app preview; clicks are intercepted by
+    // shouldOpenLocalFileInApp, and without onOpenFile the urlTransform keeps
+    // stripping them.
+    href: [...(defaultSchema.protocols?.href ?? []), "file"],
     // Let `img src` through untouched so local filesystem paths (relative,
     // absolute, file:) reach the render component for rewriting to /api/files.
     // The img component (lib/markdown-images.ts) is the security gate now: it
@@ -53,6 +58,12 @@ const markdownSanitizeSchema = {
   },
   strip: [...(defaultSchema.strip || []), "iframe", "object", "style", "form"],
 };
+
+// react-markdown's default urlTransform strips file: URLs before sanitization.
+// Allow file: through only when the host provides an in-app file opener.
+export function markdownUrlTransform(value: string): string {
+  return /^file:/i.test(value) ? value : defaultUrlTransform(value);
+}
 
 // singleTilde:false requires ~~double~~ tildes for strikethrough. A single `~`
 // is the standard CJK numeric-range separator (e.g. "5~7U", "100~200倍"), and

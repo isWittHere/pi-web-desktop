@@ -7,10 +7,10 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { copyText } from "@/lib/clipboard";
-import { resolveLocalFileHref } from "@/lib/file-links";
+import { resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { resolveMarkdownImageSrc } from "@/lib/markdown-images";
 import { splitStableParts } from "@/lib/markdown-incremental";
-import { headingId, markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { headingId, markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
 import { mentionRemarkPlugin, type MentionValidators } from "@/lib/mention-tokens";
 import { prismTheme } from "@/lib/prism-theme";
 
@@ -98,8 +98,7 @@ function buildMarkdownComponents({ isStreaming, cwd, onOpenFile }: MarkdownCompo
       }
 
       const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-        if (event.defaultPrevented || event.button !== 0) return;
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (!shouldOpenLocalFileInApp(event)) return;
         const target = event.currentTarget.getAttribute("target");
         if (target && target !== "_self") return;
         event.preventDefault();
@@ -169,6 +168,7 @@ const MarkdownPart = memo(function MarkdownPart({ text, isStreaming, cwd, onOpen
     <ReactMarkdown
       remarkPlugins={remarkPlugins}
       rehypePlugins={markdownRehypePlugins}
+      urlTransform={onOpenFile ? markdownUrlTransform : undefined}
       components={components}
     >
       {normalized}
@@ -216,6 +216,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
         <ReactMarkdown
           remarkPlugins={remarkPlugins}
           rehypePlugins={markdownRehypePlugins}
+          urlTransform={onOpenFile ? markdownUrlTransform : undefined}
           components={components}
         >
           {normalizedMarkdown}
