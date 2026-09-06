@@ -16,7 +16,12 @@ test("agent SSE starts sessions asynchronously and disables response buffering",
 });
 
 test("agent SSE wire omits unconsumed events and keeps desktop fields", () => {
-  assert.match(wireSource, /OMITTED_EVENT_TYPES = new Set\(\[\s*"turn_start",\s*"turn_end",\s*"tool_execution_update",?\s*\]\)/);
+  assert.match(wireSource, /OMITTED_EVENT_TYPES = new Set\(\[\s*"turn_start",\s*"turn_end",?\s*\]\)/);
+  // tool_execution_update is forwarded, but projected to the progress payload
+  // only — the repeated tool arguments are never serialized per chunk.
+  assert.match(wireSource, /event\.type === "tool_execution_update"/);
+  assert.match(wireSource, /partialResult: event\.partialResult/);
+  assert.doesNotMatch(wireSource, /arguments: event\.arguments/);
   // The desktop client streams from the cumulative `message` snapshot, so the
   // Pi 0.84 delta payload is dropped rather than serialized per chunk.
   assert.match(wireSource, /assistantMessageEvent/);
