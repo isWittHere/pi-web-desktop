@@ -12,6 +12,7 @@ import {
   readSessionHeader,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
+import { readSubagentRun, SUBAGENT_META_TYPE } from "@/lib/subagents";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
 import { computeSessionStats } from "@/lib/session-stats";
 import type { SessionEntry, SessionMark } from "@/lib/types";
@@ -181,6 +182,9 @@ export async function GET(
     const parentSessionId = header?.parentSession
       ? await resolveSessionIdByPath(header.parentSession)
       : undefined;
+    const subagent = header
+      ? readSubagentRun(entries as never, header.id, filePath)
+      : null;
     // messageCount/firstMessage describe the whole session, so derive them from
     // the full entries — the tail-sliced context only carries the last page.
     const firstUserMessage = findFirstUserMessage(entries as never);
@@ -199,6 +203,15 @@ export async function GET(
           })()
         : "(no messages)",
       parentSessionId,
+      ...(subagent ? {
+        relation: {
+          kind: "subagent" as const,
+          parentSessionId: subagent.parentSessionId,
+          profile: subagent.profile,
+          description: subagent.description,
+          status: liveRpc?.isRunning() ? "running" as const : subagent.status,
+        },
+      } : {}),
       transient: !filePath || !existsSync(filePath),
     } : null;
 
@@ -275,6 +288,15 @@ export async function DELETE(
 
     // Read only the bounded header before deleting.
     const parentSessionPath = readSessionHeader(filePath)?.parentSession;
+    let parentSessionId: string | undefined;
+    if (parentSessionPath) {
+      try {
+        // The parent may have been deleted or moved already; treat it as absent.
+        parentSessionId = readSessionHeader(parentSessionPath)?.id;
+      } catch {
+        parentSessionId = undefined;
+      }
+    }
 
     // Re-attach all direct children to this session's parent (cascade re-parent)
     // Scan sibling files in the same directory
@@ -291,6 +313,33 @@ export async function DELETE(
             // Rewrite header with new parentSession
             header.parentSession = parentSessionPath;
             lines[0] = JSON.stringify(header);
+            // Keep a reparented subagent's metadata entry pointing at the new
+            // parent, or its relation and completion notification would follow
+            // the deleted file.
+            if (parentSessionPath && parentSessionId) {
+              for (let index = 1; index < lines.length; index += 1) {
+                let entry: { type?: string; customType?: string; data?: unknown };
+                try {
+                  entry = JSON.parse(lines[index]);
+                } catch {
+                  continue;
+                }
+                if (
+                  entry.type !== "custom"
+                  || entry.customType !== SUBAGENT_META_TYPE
+                  || typeof entry.data !== "object"
+                  || entry.data === null
+                  || Array.isArray(entry.data)
+                ) continue;
+                entry.data = {
+                  ...entry.data,
+                  parentSessionId,
+                  parentSessionPath,
+                };
+                lines[index] = JSON.stringify(entry);
+                break;
+              }
+            }
             writeFileSync(childPath, lines.join("\n"));
           }
         } catch { /* skip malformed */ }

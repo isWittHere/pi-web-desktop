@@ -22,7 +22,7 @@ import {
 } from "./subagent-extension";
 import { createSubagentController } from "./subagent-runtime";
 import { isBuiltInSubagentsEnabled } from "./subagent-settings";
-import { listSubagentProfiles } from "./subagents";
+import { listSubagentProfiles, readSubagentRun } from "./subagents";
 import { cacheSessionPath, invalidateSessionListCache, resolveSessionPath } from "./session-reader";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
@@ -30,7 +30,7 @@ import { rememberThinkingLevel } from "./thinking-level-memory";
 import { modelKey } from "./thinking-levels";
 import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
-import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem, SessionInfo, SessionMessageEntry } from "./types";
+import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem, SessionEntry, SessionInfo, SessionMessageEntry } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
 
 // ============================================================================
@@ -1301,6 +1301,7 @@ export function getRpcSessionInfos(): SessionInfo[] {
     const firstUserMessage = messages.find((entry) => entry.message.role === "user");
     const sessionFile = manager.getSessionFile() ?? session.sessionFile;
     const persisted = Boolean(sessionFile && existsSync(sessionFile));
+    const subagent = readSubagentRun(entries as unknown as SessionEntry[], header?.id ?? session.sessionId, sessionFile ?? "");
 
     // An ensure_session call creates an idle, empty runtime while the composer
     // loads commands. Do not leak it into history before a prompt is accepted.
@@ -1325,6 +1326,16 @@ export function getRpcSessionInfos(): SessionInfo[] {
       modified: new Date(lastActivityMs).toISOString(),
       messageCount: messages.length,
       firstMessage: firstUserMessage ? runtimeMessageText(firstUserMessage) || "(no messages)" : "(no messages)",
+      ...(subagent ? {
+        parentSessionId: subagent.parentSessionId,
+        relation: {
+          kind: "subagent" as const,
+          parentSessionId: subagent.parentSessionId,
+          profile: subagent.profile,
+          description: subagent.description,
+          status: session.isRunning() ? "running" as const : subagent.status,
+        },
+      } : {}),
       transient: !persisted,
     });
   }

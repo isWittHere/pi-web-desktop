@@ -316,7 +316,18 @@ export interface SessionInfo {
   modified: string;
   messageCount: number;
   firstMessage: string;
-  parentSessionId?: string; // set if this session was forked from another
+  parentSessionId?: string; // source session for a fork, or parent session for a subagent
+  /** How this session relates to another session. Forks remain top-level in the
+   *  UI; only subagent relations form a visible parent/child tree. */
+  relation?:
+    | { kind: "fork"; originSessionId?: string }
+    | {
+        kind: "subagent";
+        parentSessionId: string;
+        profile: string;
+        description: string;
+        status: SubagentSessionStatus;
+      };
   /** User-assigned status mark (完成/讨论/待定/废弃), persisted in the session file. */
   mark?: SessionMark;
   /** True when the user pinned the session to the top of the list.

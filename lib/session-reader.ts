@@ -2,14 +2,109 @@ import {
   SessionManager,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
-import { closeSync, openSync, readSync, statSync } from "fs";
+import { closeSync, fstatSync, openSync, readSync, statSync } from "fs";
 import { normalize as normalizePath } from "path";
 import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext, SessionMark } from "./types";
 import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize";
+import { readSubagentRun, SUBAGENT_META_TYPE } from "./subagents";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
 export { getAgentDir };
+
+// Relation reads must not reopen whole session files: a subagent child's
+// metadata sits right after the header and its result entry at the tail, so
+// two bounded reads answer "who is this and how did it end" for any file size.
+const SESSION_RELATION_MAX_BYTES = 256 * 1024;
+const SESSION_RELATION_MAX_LINES = 2;
+const SESSION_RESULT_MAX_BYTES = 256 * 1024;
+
+function parseSessionEntries(lines: readonly string[]): SessionEntry[] {
+  return lines.flatMap((line) => {
+    try {
+      const entry = JSON.parse(line) as SessionEntry;
+      return [entry];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function readBoundedLines(filePath: string, maxBytes: number, maxLines: number): string[] {
+  const fd = openSync(filePath, "r");
+  try {
+    const chunks: Buffer[] = [];
+    let position = 0;
+    let newlineCount = 0;
+    let reachedEof = false;
+
+    while (position < maxBytes && newlineCount < maxLines) {
+      const buffer = Buffer.allocUnsafe(Math.min(4096, maxBytes - position));
+      const bytesRead = readSync(fd, buffer, 0, buffer.length, position);
+      if (bytesRead === 0) {
+        reachedEof = true;
+        break;
+      }
+      position += bytesRead;
+      const data = buffer.subarray(0, bytesRead);
+      let end = data.length;
+      for (let index = 0; index < data.length; index += 1) {
+        if (data[index] !== 0x0a) continue;
+        newlineCount += 1;
+        if (newlineCount === maxLines) {
+          end = index + 1;
+          break;
+        }
+      }
+      chunks.push(data.subarray(0, end));
+    }
+
+    const source = Buffer.concat(chunks).toString("utf8");
+    const lines = source.split("\n");
+    if (!reachedEof && !source.endsWith("\n")) lines.pop();
+    if (lines.at(-1) === "") lines.pop();
+    return lines.map((line) => line.endsWith("\r") ? line.slice(0, -1) : line);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function readBoundedTailLines(filePath: string, maxBytes: number): string[] {
+  const fd = openSync(filePath, "r");
+  try {
+    const fileSize = fstatSync(fd).size;
+    const start = Math.max(0, fileSize - maxBytes);
+    const buffer = Buffer.allocUnsafe(fileSize - start);
+    const bytesRead = readSync(fd, buffer, 0, buffer.length, start);
+    if (bytesRead === 0) return [];
+
+    const lines = buffer.subarray(0, bytesRead).toString("utf8").split("\n");
+    if (start > 0) {
+      const previousByte = Buffer.allocUnsafe(1);
+      readSync(fd, previousByte, 0, 1, start - 1);
+      if (previousByte[0] !== 0x0a) lines.shift();
+    }
+    if (lines.at(-1) === "") lines.pop();
+    return lines.map((line) => line.endsWith("\r") ? line.slice(0, -1) : line);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function readSessionRelationEntries(filePath: string): SessionEntry[] {
+  const prefixEntries = parseSessionEntries(
+    readBoundedLines(filePath, SESSION_RELATION_MAX_BYTES, SESSION_RELATION_MAX_LINES).slice(1),
+  );
+  const isSubagent = prefixEntries.some((entry) => (
+    entry.type === "custom" && entry.customType === SUBAGENT_META_TYPE
+  ));
+  if (!isSubagent) return prefixEntries;
+
+  return [
+    ...prefixEntries,
+    ...parseSessionEntries(readBoundedTailLines(filePath, SESSION_RESULT_MAX_BYTES)),
+  ];
+}
 
 async function loadAllSessions(): Promise<SessionInfo[]> {
   const piSessions: PiSessionInfo[] = await SessionManager.listAll();
@@ -27,6 +122,13 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   return piSessions.map((s) => {
     cacheSessionPath(s.id, s.path);
     const project = s.cwd ? projectByCwd.get(s.cwd) : undefined;
+    const originSessionId = s.parentSessionPath ? pathToId.get(normalizePath(s.parentSessionPath)) : undefined;
+    let subagent: ReturnType<typeof readSubagentRun> = null;
+    if (s.parentSessionPath) {
+      try {
+        subagent = readSubagentRun(readSessionRelationEntries(s.path), s.id, s.path);
+      } catch { /* malformed or concurrently removed session */ }
+    }
     return {
       path: s.path,
       id: s.id,
@@ -36,7 +138,12 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
       messageCount: s.messageCount,
       firstMessage: s.firstMessage || "(no messages)",
-      parentSessionId: s.parentSessionPath ? pathToId.get(normalizePath(s.parentSessionPath)) : undefined,
+      parentSessionId: originSessionId,
+      ...(subagent
+        ? { relation: { kind: "subagent" as const, parentSessionId: subagent.parentSessionId, profile: subagent.profile, description: subagent.description, status: subagent.status } }
+        : s.parentSessionPath
+          ? { relation: { kind: "fork" as const, ...(originSessionId ? { originSessionId } : {}) } }
+          : {}),
       projectRoot: project?.projectRoot ?? s.cwd,
       ...(project?.branch ? { branch: project.branch } : {}),
       ...(project?.isWorktree ? { isWorktree: true } : {}),
