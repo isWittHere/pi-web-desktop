@@ -226,17 +226,32 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
   );
 }
 
-export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boolean }) {
-  const { t } = useI18n();
+// Mermaid's HTML serialization can leave void tags such as <br> unclosed, so
+// the download always goes through XMLSerializer rather than the innerHTML string.
+export function downloadMermaidSvg(svg: SVGSVGElement): void {
+  const xml = new XMLSerializer().serializeToString(svg);
+  const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "mermaid-diagram.svg";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boolean }) {  const { t } = useI18n();
   const { isDark } = useTheme();
-  const [showPreview, setShowPreview] = useState(false);
+  // Completed diagrams preview by default; the toggle is the user's escape
+  // hatch back to source. Streaming still shows source until it finishes.
+  const [showPreview, setShowPreview] = useState(true);
   const [svg, setSvg] = useState<string | null>(null);
   const [renderedKey, setRenderedKey] = useState("");
   const [failedKey, setFailedKey] = useState<string | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const currentKey = `${isDark ? "dark" : "light"}\n${code}`;
+  const previewVisible = showPreview && !isStreaming;
 
   useEffect(() => {
-    if (!showPreview || isStreaming) return;
+    if (!previewVisible) return;
 
     let cancelled = false;
     setFailedKey(null);
@@ -271,7 +286,7 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
     return () => {
       cancelled = true;
     };
-  }, [code, currentKey, isDark, isStreaming, showPreview]);
+  }, [code, currentKey, isDark, previewVisible]);
 
   const previewButton = (
     <button
@@ -279,16 +294,21 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
       disabled={isStreaming}
       title={isStreaming
               ? t("desktop.markdownPreviewAvailableAfterStreaming")
-              : (showPreview ? t("desktop.source") : t("desktop.markdownPreviewMermaidDiagram"))}
-      className={["markdown-code-action", showPreview ? "is-active" : ""].filter(Boolean).join(" ")}
+              : (previewVisible ? t("desktop.source") : t("desktop.markdownPreviewMermaidDiagram"))}
+      className={["markdown-code-action", previewVisible ? "is-active" : ""].filter(Boolean).join(" ")}
     >
-      {showPreview ? t("desktop.source") : t("desktop.preview")}
+      {previewVisible ? t("desktop.source") : t("desktop.preview")}
     </button>
   );
 
-  if (!showPreview || isStreaming) {
+  if (!previewVisible) {
     return <CodeBlock code={code} lang="mermaid" headerAction={previewButton} isStreaming={isStreaming} />;
   }
+
+  const downloadSvg = () => {
+    const svgEl = previewRef.current?.querySelector("svg");
+    if (svgEl) downloadMermaidSvg(svgEl);
+  };
 
   const body =
     failedKey === currentKey ? (
@@ -297,13 +317,43 @@ export function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?
       <div className="mermaid-block mermaid-block-loading" aria-label={t("desktop.markdownRenderingMermaidDiagram")} />
     ) : (
       <div
+        ref={previewRef}
         className="mermaid-block"
         dangerouslySetInnerHTML={{ __html: svg }}
       />
     );
 
+  const renderSvgReady = svg && renderedKey === currentKey;
+  const actionButtonStyle = {
+    padding: "2px 7px",
+    border: "none",
+    borderRadius: 5,
+    background: "var(--bg-hover)",
+    color: "var(--text-dim)",
+    cursor: "pointer",
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: "0.06em",
+    fontFamily: "var(--font-mono)",
+  } as const;
+
   return (
     <div className="markdown-code-block">
+      <div style={{ position: "absolute", top: 6, right: 8, zIndex: 1, display: "flex", gap: 5 }}>
+        {renderSvgReady && (
+          <button
+            onClick={downloadSvg}
+            title={`${t("desktop.downloadFile")} (SVG)`}
+            aria-label={`${t("desktop.downloadFile")} (SVG)`}
+            style={actionButtonStyle}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
+          >
+            SVG
+          </button>
+        )}
+        {previewButton}
+      </div>
       {body}
     </div>
   );

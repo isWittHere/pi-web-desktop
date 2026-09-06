@@ -1413,7 +1413,10 @@ pre, code {
 
 .mermaid-block {
   padding: 12px;
-  overflow-x: auto;
+  /* Bound inline previews so very tall diagrams scroll instead of stretching
+     the whole conversation column. */
+  max-height: min(600px, 60dvh);
+  overflow: auto;
   background: "var(--bg-secondary)",
 }
 .mermaid-block svg {

@@ -139,3 +139,62 @@ test("Prism token colors follow theme CSS variables", async () => {
     assert.doesNotMatch(source, /react-syntax-highlighter\/dist\/cjs\/styles\/prism/);
   }
 });
+
+test("previews completed Mermaid diagrams by default", () => {
+  const html = renderMarkdown("```mermaid\ngraph TD\n  A --> B\n```");
+
+  assert.match(html, /mermaid-block-loading/);
+  assert.match(html, />desktop\.source</);
+  assert.doesNotMatch(html, /A --&gt; B/);
+});
+
+test("keeps Mermaid source visible while the response is streaming", () => {
+  const html = renderMarkdown("```mermaid\ngraph TD\n  A --> B\n```", true);
+
+  assert.doesNotMatch(html, /mermaid-block-loading/);
+  assert.match(html, />desktop\.preview</);
+  assert.match(html, /A --&gt; B/);
+});
+
+test("downloadMermaidSvg downloads XML-serialized SVG and releases its URL", async () => {
+  const { downloadMermaidSvg } = await jiti.import("./MarkdownBody.tsx");
+  const originals = {
+    document: globalThis.document,
+    XMLSerializer: globalThis.XMLSerializer,
+    createObjectURL: URL.createObjectURL,
+    revokeObjectURL: URL.revokeObjectURL,
+  };
+  const svgElement = { nodeName: "svg" };
+  const serializedSvg = '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><div xmlns="http://www.w3.org/1999/xhtml">first<br />second</div></foreignObject></svg>';
+  const link = { href: "", download: "", clicked: false, click() { this.clicked = true; } };
+  let downloadedBlob;
+  globalThis.document = { createElement: () => link };
+  globalThis.XMLSerializer = class {
+    serializeToString(element) {
+      assert.equal(element, svgElement);
+      return serializedSvg;
+    }
+  };
+  URL.createObjectURL = (blob) => {
+    assert.equal(blob.type, "image/svg+xml;charset=utf-8");
+    downloadedBlob = blob;
+    return "blob:mermaid";
+  };
+  let revoked = null;
+  URL.revokeObjectURL = (url) => { revoked = url; };
+
+  try {
+    downloadMermaidSvg(svgElement);
+    assert.equal(await downloadedBlob.text(), serializedSvg);
+    assert.equal(link.href, "blob:mermaid");
+    assert.equal(link.download, "mermaid-diagram.svg");
+    assert.equal(link.clicked, true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(revoked, "blob:mermaid");
+  } finally {
+    globalThis.document = originals.document;
+    globalThis.XMLSerializer = originals.XMLSerializer;
+    URL.createObjectURL = originals.createObjectURL;
+    URL.revokeObjectURL = originals.revokeObjectURL;
+  }
+});
