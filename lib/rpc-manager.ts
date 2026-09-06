@@ -17,6 +17,7 @@ import {
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
 import { resolveShellTools } from "./powershell-settings";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
+import { hasActiveSessionLivenessProvider } from "./session-liveness";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import { rememberThinkingLevel } from "./thinking-level-memory";
 import { modelKey } from "./thinking-levels";
@@ -328,7 +329,12 @@ export class AgentSessionWrapper {
     if (SESSION_IDLE_TIMEOUT_MS === 0) return;
     if (!this.isRunning()) this.forceShutdownOnIdle = false;
     this.idleTimer = setTimeout(() => {
-      if (this.isRunning() && !this.forceShutdownOnIdle) {
+      // Extension-owned background work (session-liveness providers) keeps the
+      // session alive across idle eviction; explicit shutdown still wins.
+      if (!this.forceShutdownOnIdle && (this.isRunning() || hasActiveSessionLivenessProvider({
+        sessionId: this.sessionId,
+        sessionFile: this.sessionFile || undefined,
+      }))) {
         this.resetIdleTimer();
         return;
       }

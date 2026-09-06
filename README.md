@@ -80,6 +80,25 @@ This repository is a desktop-focused derivative of upstream pi-web `v0.7.16`, no
 - **Git worktrees**: see [Worktrees in pi-web](./docs/worktrees.md) for when the switcher appears, how new worktrees are created, and what removal does.
 - **Forks vs in-session branches**: Fork creates a new `.jsonl` file. "Edit from here" creates another branch inside the same session file.
 - **Network access**: pi-web listens on `127.0.0.1` by default. If you bind it to a LAN address, set `PI_WEB_PASSWORD` and use HTTPS or a trusted VPN; HTTP Basic Auth does not encrypt credentials.
+- **Idle sessions**: server-side sessions are evicted after 10 minutes of inactivity. Set `PI_WEB_IDLE_TIMEOUT_MS` to change the timeout (milliseconds), or `0` to disable idle eviction entirely.
+
+### Extension Session Liveness
+
+Server-side Pi extensions with detached work can prevent automatic idle session eviction through the versioned global registry:
+
+```js
+const liveness = globalThis[Symbol.for("@agegr/pi-web/session-liveness/v1")];
+const release = liveness?.version === 1
+  ? liveness.register({
+      name: "my-extension",
+      sessionId,
+      sessionFile: sessionFile || undefined,
+      isActive: () => detachedJobs.size > 0,
+    })
+  : () => {};
+```
+
+Register once per active extension session and call the returned idempotent `release` function on session shutdown, replacement, or reload. `isActive` must be synchronous, cheap, and scoped to the supplied exact session id or file. Provider errors fail safe by preserving that session. This lease only affects automatic idle eviction; explicit shutdown and Stop fallback cleanup still take precedence.
 
 ## Development
 
