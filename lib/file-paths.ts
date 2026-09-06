@@ -41,3 +41,19 @@ export function getRelativeFilePath(filePath: string, cwd?: string): string {
 export function joinFilePath(parent: string, child: string): string {
   return `${normalizeFilePathSlashes(parent).replace(/\/$/, "")}/${child}`;
 }
+
+const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
+
+/**
+ * Reassemble an API catch-all path into a filesystem path. A bare drive
+ * letter ("C:") is the drive root, but the absolute-path check requires a
+ * separator after the colon, so it must be normalized to "C:/" explicitly —
+ * otherwise it degrades into the POSIX-looking "/C:" and every stat/readdir
+ * under it fails with ENOENT.
+ */
+export function filePathFromSegments(segments: string[]): string {
+  const slashJoined = normalizeFilePathSlashes(segments.join("/"));
+  if (WINDOWS_ABSOLUTE_RE.test(slashJoined)) return slashJoined;
+  if (/^[a-zA-Z]:$/.test(slashJoined)) return `${slashJoined}/`;
+  return "/" + slashJoined.replace(/^\/+/, "");
+}
