@@ -30,23 +30,18 @@ function script(text) {
 const retryDelayTable = script(schedule.initializer.getText(source)).runInNewContext();
 
 function setup(loadModels) {
-  const calls = [];
   const delays = [];
   const context = {
     Error, DOMException,
     controller: new AbortController(),
-    loadModels: async (...args) => {
-      calls.push(args);
-      return loadModels(...args);
-    },
+    loadModels,
     MODELS_RETRY_DELAYS_MS: retryDelayTable,
     delay: async (ms) => { delays.push(ms); },
   };
-  context.run = () => retryScript.runInNewContext(context);
   // Strip the `void` so the script evaluates to the loop's promise and `run`
   // can be awaited through the full retry sequence.
   const retryScript = script(`(${retry.getText(source).replace(/^void\s*/, "")})`);
-  return { context, calls, delays, run: () => retryScript.runInNewContext(context) };
+  return { context, delays, run: () => retryScript.runInNewContext(context) };
 }
 
 test("model-load failures retry with bounded backoff", async () => {
