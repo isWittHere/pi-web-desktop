@@ -4,8 +4,6 @@ import path from "path";
 import {
   getAllowedFileRoots,
   isFilePathAllowed,
-  isWindowsAbsolutePath,
-  normalizeSlashes,
 } from "@/lib/file-access";
 import { filePathFromSegments } from "@/lib/file-paths";
 import {
