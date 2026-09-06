@@ -1399,10 +1399,27 @@ function ExtensionDialog({
 }) {
   const { t } = useI18n();
   const [value, setValue] = useState(request.method === "editor" ? request.prefill ?? "" : "");
+  const [collapsed, setCollapsed] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     setValue(request.method === "editor" ? request.prefill ?? "" : "");
   }, [request]);
+
+  const remainingSeconds = request.expiresAt === undefined
+    ? null
+    : Math.max(0, Math.ceil((request.expiresAt - now) / 1000));
+  useEffect(() => {
+    if (request.expiresAt === undefined) return;
+    // The server closes expired requests via extension_ui_closed.
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [request.expiresAt]);
+  const countdown = remainingSeconds !== null && (
+    <span style={{ fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
+      {t("desktop.extensionExpiresIn", { seconds: remainingSeconds })}
+    </span>
+  );
 
   const submitValue = () => {
     if (request.method === "confirm") {
@@ -1412,8 +1429,50 @@ function ExtensionDialog({
     }
   };
 
+  // Collapsed: a small non-blocking pill that keeps the request reachable
+  // without covering the composer (#612 behavior).
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          right: 16,
+          bottom: 16,
+          zIndex: 80,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          maxWidth: "min(360px, calc(100% - 32px))",
+          padding: "7px 10px",
+          border: "1px solid var(--border)",
+          borderRadius: 7,
+          background: "var(--bg-card)",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
+        }}
+      >
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-muted)", fontSize: 12 }}>
+          {request.title}
+        </span>
+        {countdown}
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", cursor: "pointer", fontSize: 12 }}
+        >
+          {t("desktop.extensionExpand")}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onRespond(request, { cancelled: true });
+      }}
       style={{
         position: "absolute",
         inset: 0,
@@ -1428,6 +1487,7 @@ function ExtensionDialog({
       <div
         role="dialog"
         aria-modal="true"
+        aria-label={request.title}
         style={{
           width: "min(560px, 100%)",
           maxHeight: "min(760px, 100%)",
@@ -1440,9 +1500,23 @@ function ExtensionDialog({
           overflow: "hidden",
         }}
       >
-        <div style={{ flexShrink: 0, padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 650 }}>{request.title}</div>
-          <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>{t("desktop.extensionRequest")}</div>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 8, padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 650 }}>{request.title}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>
+              <span>{t("desktop.extensionRequest")}</span>
+              {countdown}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            aria-label={t("desktop.extensionCollapse")}
+            title={t("desktop.extensionCollapse")}
+            style={{ flexShrink: 0, background: "none", border: "none", padding: "0 2px", cursor: "pointer", color: "var(--text-dim)", fontSize: 14, lineHeight: 1 }}
+          >
+            —
+          </button>
         </div>
 
         <div
@@ -1457,10 +1531,27 @@ function ExtensionDialog({
             <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{request.message}</div>
           )}
           {request.method === "select" && (
-            <div style={{ display: "grid", gap: 8 }}>
-              {request.options.map((option) => (
+            <div
+              style={{ display: "grid", gap: 8 }}
+              onKeyDown={(event) => {
+                // Roving navigation across the option buttons; Enter/Space
+                // already activate through the native button semantics.
+                if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+                const buttons = Array.from(event.currentTarget.querySelectorAll("button"));
+                const index = buttons.indexOf(event.target as HTMLButtonElement);
+                if (index < 0) return;
+                event.preventDefault();
+                const next = event.key === "Home" ? 0
+                  : event.key === "End" ? buttons.length - 1
+                  : event.key === "ArrowDown" || event.key === "ArrowRight" ? (index + 1) % buttons.length
+                  : (index - 1 + buttons.length) % buttons.length;
+                buttons[next]?.focus();
+              }}
+            >
+              {request.options.map((option, optionIndex) => (
                 <button
                   key={option}
+                  autoFocus={optionIndex === 0}
                   onClick={() => onRespond(request, { value: option })}
                   style={{
                     width: "100%",
