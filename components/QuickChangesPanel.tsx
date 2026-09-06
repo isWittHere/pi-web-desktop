@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowClockwise, CaretRight, ListChecks, Spinner } from "@phosphor-icons/react";
+import { ArrowClockwise, CaretRight, GitDiff, GitMerge, Spinner } from "@phosphor-icons/react";
 import { getFileIcon } from "./FileIcons";
 import { getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
@@ -13,6 +13,8 @@ interface Props {
   onOpenFile: (filePath: string, fileName: string, options?: { initialDisplayMode?: "diff" }) => void;
   /** Open the full-surface changes review tab in the right panel. */
   onOpenChangesView?: (cwd: string) => void;
+  /** Open the git graph tab in the right panel. */
+  onOpenGitGraph?: (cwd: string) => void;
 }
 
 const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
@@ -80,7 +82,7 @@ export function ChangeRow({ status, cwd, onOpenFile }: {
   );
 }
 
-export function QuickChangesPanel({ cwd, refreshKey, onOpenFile, onOpenChangesView }: Props) {
+export function QuickChangesPanel({ cwd, refreshKey, onOpenFile, onOpenChangesView, onOpenGitGraph }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
@@ -145,17 +147,30 @@ export function QuickChangesPanel({ cwd, refreshKey, onOpenFile, onOpenChangesVi
           {changes.added > 0 && <span className="git-changes-indicator-part git-changes-indicator-added">{changes.added}</span>}
           {changes.deleted > 0 && <span className="git-changes-indicator-part git-changes-indicator-deleted">{changes.deleted}</span>}
         </div>
-        <span style={{ marginLeft: 6, color: "var(--git-status-added)", fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
-        <span style={{ marginLeft: 5, color: "var(--git-status-deleted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
+        <span style={{ marginLeft: 6, flexShrink: 0, color: "var(--git-status-added)", fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
+        <span style={{ marginLeft: 5, flexShrink: 0, color: "var(--git-status-deleted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
         {onOpenChangesView && (
           <button
             type="button"
             onClick={() => onOpenChangesView(cwd)}
             title={t("desktop.changesOpenReview")}
             aria-label={t("desktop.changesOpenReview")}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, border: "none", borderRadius: 5, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
+            className="panel-icon-btn"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, marginLeft: 5, border: "none", borderRadius: 5, cursor: "pointer", flexShrink: 0 }}
           >
-            <ListChecks size={13} weight="regular" aria-hidden="true" />
+            <GitDiff size={13} weight="regular" aria-hidden="true" />
+          </button>
+        )}
+        {onOpenGitGraph && (
+          <button
+            type="button"
+            onClick={() => onOpenGitGraph(cwd)}
+            title={t("desktop.gitGraphOpenView")}
+            aria-label={t("desktop.gitGraphOpenView")}
+            className="panel-icon-btn"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, border: "none", borderRadius: 5, cursor: "pointer", flexShrink: 0 }}
+          >
+            <GitMerge size={13} weight="regular" aria-hidden="true" style={{ transform: "scaleY(-1)" }} />
           </button>
         )}
         <button
@@ -164,7 +179,8 @@ export function QuickChangesPanel({ cwd, refreshKey, onOpenFile, onOpenChangesVi
           disabled={gitLoading}
           title={t("desktop.refresh")}
           aria-label={t("desktop.refresh")}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, marginLeft: 4, marginRight: 6, border: "none", borderRadius: 5, background: "none", color: "var(--text-dim)", cursor: gitLoading ? "wait" : "pointer", opacity: gitLoading ? 0.55 : 1 }}
+          className="panel-icon-btn"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, marginRight: 6, border: "none", borderRadius: 5, cursor: gitLoading ? "wait" : "pointer", opacity: gitLoading ? 0.55 : 1, flexShrink: 0 }}
         >
           {gitLoading ? <Spinner size={12} style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true" /> : <ArrowClockwise size={13} weight="regular" aria-hidden="true" />}
         </button>

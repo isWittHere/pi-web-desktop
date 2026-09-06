@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { GitDiff, TreeStructure, X } from "@phosphor-icons/react";
+import { GitDiff, GitMerge, X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { getFileIcon } from "./FileIcons";
 import { isFileTab, type Tab } from "./tab-model";
@@ -15,6 +15,7 @@ interface Props {
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
   const { t } = useI18n();
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
   const tabRefs = useRef(new Map<string, HTMLDivElement | null>());
 
@@ -37,47 +38,55 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
       aria-label={t("desktop.panelTabs")}
       style={{
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
+        gap: 2,
+        padding: "0 6px",
         background: "var(--bg-panel)",
         overflowX: "auto",
         flexShrink: 0,
         height: 36,
+        scrollbarWidth: "none",
       }}
+      className="right-panel-tab-strip"
     >
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
+        const isHovered = tab.id === hoveredTab;
         const label = isFileTab(tab) ? tab.label : tab.kind === "changes" ? t("desktop.changesTab") : t("desktop.gitGraphTab");
         const icon = isFileTab(tab)
           ? getFileIcon(tab.label, 13)
           : tab.kind === "changes"
             ? <GitDiff size={13} aria-hidden="true" />
-            : <TreeStructure size={13} aria-hidden="true" />;
+            : <GitMerge size={13} aria-hidden="true" style={{ transform: "scaleY(-1)" }} />;
         return (
           <div
             key={tab.id}
-            ref={(el) => { tabRefs.current.set(tab.id, el); }}
             role="tab"
             id={`right-panel-tab-${tab.id}`}
             aria-selected={isActive}
             aria-controls="right-panel-content"
             tabIndex={isActive ? 0 : -1}
+            ref={(el) => { tabRefs.current.set(tab.id, el); }}
             onClick={() => onSelectTab(tab.id)}
             onKeyDown={(event) => handleTabKeyDown(event, index)}
+            onMouseEnter={() => setHoveredTab(tab.id)}
+            onMouseLeave={() => setHoveredTab(null)}
+            className="right-panel-tab"
             style={{
               display: "flex",
               alignItems: "center",
               gap: 6,
-              height: 36,
-              paddingLeft: 12,
-              paddingRight: 6,
-              borderRight: "1px solid var(--border)",
-              background: isActive ? "var(--bg)" : "var(--bg-panel)",
+              height: 26,
+              paddingLeft: 10,
+              paddingRight: 5,
+              borderRadius: 6,
+              background: isActive ? "var(--bg-selected)" : isHovered ? "var(--bg-hover)" : "transparent",
               cursor: "pointer",
               fontSize: 12,
-              color: isActive ? "var(--text)" : "var(--text-muted)",
+              color: isActive || isHovered ? "var(--text)" : "var(--text-muted)",
               whiteSpace: "nowrap",
+              minWidth: 64,
               maxWidth: 180,
-              minWidth: 80,
               flexShrink: 0,
               userSelect: "none",
               outline: "none",
@@ -104,7 +113,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               onMouseLeave={() => setHoveredClose(null)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                width: 24, height: 24,
+                width: 20, height: 20,
                 background: hoveredClose === tab.id ? "var(--bg-hover)" : "transparent",
                 border: "none",
                 borderRadius: 4,

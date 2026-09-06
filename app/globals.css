@@ -24,6 +24,7 @@
   display: inline-flex;
   overflow: hidden;
   margin-left: 4px;
+  flex-shrink: 0;
   border-radius: 999px;
   font-size: 11px;
   line-height: 1.4;
@@ -51,6 +52,22 @@
 .git-changes-indicator-deleted {
   color: var(--git-status-deleted);
   background: var(--git-status-deleted-bg);
+}
+
+/* Shared hover affordance for 26x26 icon buttons in panel headers.
+   color/background live here (not inline) so :hover can override them. */
+.panel-icon-btn {
+  color: var(--text-dim);
+  background: none;
+  transition: color 0.12s, background 0.12s;
+}
+.panel-icon-btn:hover {
+  color: var(--text-muted);
+  background: var(--bg-hover);
+}
+.panel-icon-btn:disabled:hover {
+  color: var(--text-dim);
+  background: none;
 }
 
 /* Font fallbacks — reduce CLS by matching Arial metrics to the custom fonts */
@@ -488,6 +505,21 @@ html {
 }
 .chat-scroll-container::-webkit-scrollbar {
   display: none;
+}
+
+/* Right panel tab strip: tabs scroll horizontally when many files are open,
+   but the strip's own scrollbar is hidden — a scrollbar sitting directly above
+   the strip's 1px bottom border reads as a doubled/thicker border line.
+   Same Turbopack caveat as .chat-scroll-container above. */
+.right-panel-tab-strip {
+  scrollbar-width: none;
+}
+.right-panel-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+.right-panel-tab:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
 }
 
 :root {

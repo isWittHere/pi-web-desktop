@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ArrowClockwise, Spinner, X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
@@ -8,6 +8,7 @@ import { getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { type GitCommitFile, type GitLogResponse } from "@/lib/git-graph";
 import { buildGitGraphLayout, type GitGraphEdge, type GitGraphLayout } from "@/lib/git-graph-lanes";
 import { deriveLanePalette } from "@/lib/git-graph-palette";
+import { parseGitRefTags, type GitRefTag, type GitRefTagKind } from "@/lib/git-graph-refs";
 
 interface Props {
   /** Repository/worktree directory whose history the tab shows. */
@@ -20,15 +21,78 @@ const DEFAULT_LIMIT = 400;
 const LIMIT_STEP = 400;
 const MAX_LIMIT = 2000;
 
-// Geometry (px): row height per commit, lane column width, node radius,
-// elbow corner radius, and the gap between graph and text columns.
-const ROW_H = 30;
-const COL_W = 22;
+// Geometry (px): lane column width, node radii, and elbow corner radius. Rows
+// have individual heights — only the newest commit (row 0) carries a second
+// info line, so it is taller and its node is drawn as a slightly larger ring
+// marking HEAD. The graph and the commit text are separate side-by-side
+// columns joined by a draggable divider: the graph column hugs the drawn lanes
+// (last lane center + node allowance) and scrolls horizontally on its own when
+// dragged narrower than the drawn width.
+const ROW_H = 26;
+const FIRST_ROW_H = 44;
+const COL_W = 18;
 const NODE_R = 4;
+const HEAD_NODE_R = 6;
 const CORNER_R = 7;
-const GRAPH_PAD = 12;
+const GRAPH_PAD_LEFT = 8;
+const GRAPH_PAD_RIGHT = 8;
 const TEXT_GAP = 10;
-const TEXT_WIDTH = 520;
+const MIN_TEXT_WIDTH = 140;
+const GRAPH_COL_MIN = 28;
+const GRAPH_COL_MAX = 480;
+// The divider is a 5px hit strip with a 1px line centered inside it.
+const DIVIDER_W = 5;
+// Best-effort divider-position memory, following the desktop localStorage
+// conventions (silently ignored when storage is unavailable).
+const GRAPH_COL_WIDTH_KEY = "pi-git-graph-col-width";
+// How close to the bottom edge (px) the scroll view must get before the
+// floating "load more" button fades in.
+const BOTTOM_THRESHOLD = 32;
+
+const rowHeightOf = (row: number) => (row === 0 ? FIRST_ROW_H : ROW_H);
+
+/** Cumulative top offset of each row; rows are not uniformly tall. */
+function computeRowTops(rowCount: number): number[] {
+  const tops: number[] = [];
+  let top = 0;
+  for (let row = 0; row < rowCount; row += 1) {
+    tops.push(top);
+    top += rowHeightOf(row);
+  }
+  return tops;
+}
+
+const laneX = (lane: number) => GRAPH_PAD_LEFT + lane * COL_W + COL_W / 2;
+
+/**
+ * Clamp a requested graph-column width. The upper bound is additionally
+ * limited by the visible body width so the text column always keeps
+ * MIN_TEXT_WIDTH; when the body is not measurable yet (first paint) only the
+ * absolute cap applies.
+ */
+function clampGraphColWidth(value: number, bodyWidth: number): number {
+  const absoluteMax = bodyWidth > 0
+    ? Math.min(GRAPH_COL_MAX, bodyWidth - MIN_TEXT_WIDTH)
+    : GRAPH_COL_MAX;
+  return Math.round(Math.min(Math.max(value, GRAPH_COL_MIN), Math.max(absoluteMax, GRAPH_COL_MIN)));
+}
+
+function loadStoredGraphColWidth(): number | null {
+  try {
+    const parsed = Number(window.localStorage.getItem(GRAPH_COL_WIDTH_KEY));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeGraphColWidth(value: number): void {
+  try {
+    window.localStorage.setItem(GRAPH_COL_WIDTH_KEY, String(value));
+  } catch {
+    // Storage unavailable (private mode, quota) — the divider just won't persist.
+  }
+}
 
 // Commit file status letters → the git status colors the rest of the UI uses.
 const COMMIT_CODE_COLORS: Record<string, string> = {
@@ -41,14 +105,72 @@ const COMMIT_CODE_COLORS: Record<string, string> = {
   U: "var(--git-status-deleted)",
 };
 
-const laneX = (lane: number) => GRAPH_PAD + lane * COL_W + COL_W / 2;
-const rowY = (row: number) => row * ROW_H + ROW_H / 2;
+// Ref decoration chips share the lane color of the commit they decorate, so a
+// tag visually reads as sitting on its branch line. HEAD is solid; the other
+// kinds are tinted outlines of the same lane color. All colors reference the
+// lane CSS custom properties — no literal color values here.
+function refChipStyle(kind: GitRefTagKind, laneColor: string): CSSProperties {
+  if (kind === "head") {
+    return { background: laneColor, color: "var(--bg)" };
+  }
+  return {
+    color: laneColor,
+    borderColor: `color-mix(in srgb, ${laneColor} 40%, transparent)`,
+    background: `color-mix(in srgb, ${laneColor} 10%, transparent)`,
+  };
+}
 
-function edgePath(edge: GitGraphEdge): string {
+function RefChip({ tag, laneColor }: { tag: GitRefTag; laneColor: string }) {
+  return (
+    <span
+      title={tag.ref}
+      style={{ display: "inline-flex", alignItems: "center", minWidth: 0, maxWidth: 180, height: 17, padding: "0 6px", borderRadius: 4, border: "1px solid transparent", fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap", flexShrink: 0, ...refChipStyle(tag.kind, laneColor) }}
+    >
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{tag.label}</span>
+    </span>
+  );
+}
+
+// "HEAD -> main" parses as two adjacent tags (solid HEAD + outlined branch);
+// they render fused into one pill so the decoration reads as a single tag.
+// Each segment keeps its original treatment and the shared lane color.
+function FusedRefChip({ head, branch, laneColor }: { head: GitRefTag; branch: GitRefTag; laneColor: string }) {
+  return (
+    <span
+      title={branch.ref}
+      style={{ display: "inline-flex", alignItems: "center", height: 17, borderRadius: 4, border: `1px solid color-mix(in srgb, ${laneColor} 40%, transparent)`, background: `color-mix(in srgb, ${laneColor} 10%, transparent)`, fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap", flexShrink: 0, overflow: "hidden" }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", height: "100%", padding: "0 6px", background: laneColor, color: "var(--bg)" }}>
+        {head.label}
+      </span>
+      <span style={{ minWidth: 0, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", padding: "0 6px", color: laneColor }}>
+        {branch.label}
+      </span>
+    </span>
+  );
+}
+
+function RefTagList({ tags, laneColor }: { tags: GitRefTag[]; laneColor: string }) {
+  const items: ReactNode[] = [];
+  for (let index = 0; index < tags.length; index += 1) {
+    const tag = tags[index];
+    const next = tags[index + 1];
+    const key = `${tag.kind}:${tag.ref}:${index}`;
+    if (tag.kind === "head" && next?.kind === "branch" && next.ref.startsWith("HEAD -> ")) {
+      items.push(<FusedRefChip key={key} head={tag} branch={next} laneColor={laneColor} />);
+      index += 1;
+    } else {
+      items.push(<RefChip key={key} tag={tag} laneColor={laneColor} />);
+    }
+  }
+  return <>{items}</>;
+}
+
+function edgePath(edge: GitGraphEdge, rowTops: number[]): string {
   const x1 = laneX(edge.fromLane);
-  const y1 = rowY(edge.fromRow);
+  const y1 = rowTops[edge.fromRow] + rowHeightOf(edge.fromRow) / 2;
   const x2 = laneX(edge.toLane);
-  const y2 = rowY(edge.toRow);
+  const y2 = rowTops[edge.toRow] + rowHeightOf(edge.toRow) / 2;
   if (edge.fromLane === edge.toLane) {
     return `M ${x1} ${y1} L ${x2} ${y2}`;
   }
@@ -106,6 +228,10 @@ export function GitGraphTab({ cwd, onOpenFile }: Props) {
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [commitFiles, setCommitFiles] = useState<GitCommitFile[] | null>(null);
   const [commitLoading, setCommitLoading] = useState(false);
+  // null = "hug the drawn lanes"; a number means the user picked a width.
+  const [graphColWidth, setGraphColWidth] = useState<number | null>(loadStoredGraphColWidth);
+  const [hoveredHash, setHoveredHash] = useState<string | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
 
   const load = useCallback(async (requestedLimit: number) => {
     setLoading(true);
@@ -145,6 +271,19 @@ export function GitGraphTab({ cwd, onOpenFile }: Props) {
     [locale],
   );
 
+  // The derived palette is published as CSS custom properties on the tab root,
+  // so every visible color (edges, nodes, ref chips) resolves from a var() and
+  // stays overridable from the theme layer.
+  const laneVars = useMemo(() => {
+    const vars: Record<string, string> = {};
+    palette.forEach((color, index) => {
+      vars[`--git-graph-lane-${index}`] = color;
+    });
+    // CSS custom properties are valid style keys but not in React's CSSProperties index.
+    return vars as CSSProperties;
+  }, [palette]);
+  const laneVar = (colorIndex: number) => `var(--git-graph-lane-${colorIndex % palette.length})`;
+
   const selectedNode = layout?.nodes.find((node) => node.hash === selectedHash) ?? null;
   const selectedCommit = selectedNode ? data?.commits[selectedNode.row] ?? null : null;
 
@@ -168,12 +307,86 @@ export function GitGraphTab({ cwd, onOpenFile }: Props) {
     setCommitFiles(null);
   }, []);
 
-  const graphWidth = layout ? layout.laneCount * COL_W + GRAPH_PAD * 2 : 0;
-  const svgWidth = graphWidth + TEXT_GAP + TEXT_WIDTH;
-  const svgHeight = layout ? layout.nodes.length * ROW_H + 12 : 0;
+  // The "load more" button lives inside the scroll view as a sticky footer and
+  // only appears once the list is scrolled to (near) its bottom, so it does
+  // not permanently occupy space under the graph.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [atListBottom, setAtListBottom] = useState(false);
+  const updateAtListBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAtListBottom(el.scrollTop + el.clientHeight >= el.scrollHeight - BOTTOM_THRESHOLD);
+  }, []);
+
+  useEffect(() => {
+    updateAtListBottom();
+  }, [data, layout, updateAtListBottom]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => updateAtListBottom());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateAtListBottom]);
+
+  const graphWidth = layout
+    ? GRAPH_PAD_LEFT + Math.max(layout.laneCount - 1, 0) * COL_W + COL_W / 2 + GRAPH_PAD_RIGHT
+    : 0;
+  // While the user has not picked a width, the graph column hugs the drawn
+  // lanes so sparse histories never waste text space.
+  const graphColW = clampGraphColWidth(graphColWidth ?? graphWidth, scrollRef.current?.clientWidth ?? 0);
+  const rowTops = useMemo(() => computeRowTops(data?.commits.length ?? 0), [data]);
+  const svgHeight = rowTops.length > 0 ? rowTops[rowTops.length - 1] + rowHeightOf(rowTops.length - 1) + 8 : 0;
+
+  const applyGraphColWidth = useCallback((value: number) => {
+    const next = clampGraphColWidth(value, scrollRef.current?.clientWidth ?? 0);
+    setGraphColWidth(next);
+    storeGraphColWidth(next);
+  }, []);
+
+  // Pointer-capture drag: move/up keep firing on the divider even when the
+  // cursor leaves it, so no window-level listeners are needed.
+  const dividerDragRef = useRef<{ startX: number; startWidth: number; width: number } | null>(null);
+
+  const startDividerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dividerDragRef.current = { startX: event.clientX, startWidth: graphColW, width: graphColW };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsResizing(true);
+  };
+
+  const moveDividerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dividerDragRef.current;
+    if (!drag) return;
+    drag.width = clampGraphColWidth(drag.startWidth + event.clientX - drag.startX, scrollRef.current?.clientWidth ?? 0);
+    setGraphColWidth(drag.width);
+  };
+
+  const endDividerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dividerDragRef.current;
+    if (!drag) return;
+    dividerDragRef.current = null;
+    setIsResizing(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    storeGraphColWidth(drag.width);
+  };
+
+  // Both columns render one hit-row per commit; sharing the hover state keeps
+  // the highlight continuous across the divider. Hover is only cleared when
+  // the pointer leaves the whole body, so crossing the 5px divider does not
+  // blink the band off.
+  const rowBackground = (hash: string) =>
+    hash === selectedHash ? "var(--bg-selected)" : hash === hoveredHash ? "var(--bg-hover)" : "transparent";
+  const rowHitProps = (hash: string) => ({
+    onClick: () => void selectCommit(hash),
+    onMouseEnter: () => setHoveredHash(hash),
+  });
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ ...laneVars, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", userSelect: isResizing ? "none" : undefined }}>
       <div style={{ display: "flex", alignItems: "center", flexShrink: 0, padding: "6px 10px", borderBottom: "1px solid var(--border)" }}>
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-muted)", textAlign: "left" }}>
           {t("desktop.gitGraphTab")}
@@ -192,13 +405,180 @@ export function GitGraphTab({ cwd, onOpenFile }: Props) {
         </button>
       </div>
 
+      <div
+        ref={scrollRef}
+        onScroll={updateAtListBottom}
+        style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}
+      >
+        {data === null ? null : !data.isGitRepository ? (
+          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
+            {t("desktop.gitNotRepository")}
+          </div>
+        ) : data.commits.length === 0 ? (
+          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
+            {t("desktop.gitGraphEmpty")}
+          </div>
+        ) : layout && (
+          <div
+            style={{ position: "relative", display: "flex", alignItems: "stretch", height: svgHeight }}
+            onMouseLeave={() => setHoveredHash(null)}
+          >
+            {/* Row highlight layer spans the full body width behind both
+                columns and the divider, so hover/selection reads as one
+                continuous band instead of breaking at the divider. The
+                columns and the divider stay transparent above it. */}
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+              {layout.nodes.map((node) => (
+                <div
+                  key={`hl-${node.hash}`}
+                  style={{ position: "absolute", left: 0, right: 0, top: rowTops[node.row], height: rowHeightOf(node.row), background: rowBackground(node.hash) }}
+                />
+              ))}
+            </div>
+            {/* Graph column: it owns the horizontal scrolling, so dragging it
+                narrower than the drawn lanes scrolls instead of truncating.
+                The SVG sits above the row hit-areas but ignores pointer
+                events, so the highlight band stays behind the lines. */}
+            <div style={{ width: graphColW, flexShrink: 0, overflowX: "auto", overflowY: "hidden" }}>
+              <div
+                style={{ position: "relative", width: "100%", minWidth: graphWidth, height: svgHeight }}
+                role="img"
+                aria-label={t("desktop.gitGraphTab")}
+              >
+                <svg
+                  width={graphWidth}
+                  height={svgHeight}
+                  style={{ position: "absolute", top: 0, left: 0, zIndex: 1, pointerEvents: "none", display: "block" }}
+                  aria-hidden="true"
+                >
+                  {layout.edges.map((edge, index) => (
+                    <path
+                      key={`edge-${index}`}
+                      d={edgePath(edge, rowTops)}
+                      fill="none"
+                      stroke={laneVar(edge.colorIndex)}
+                      strokeWidth={1.5}
+                    />
+                  ))}
+                  {layout.nodes.map((node) => {
+                    const isHeadRow = node.row === 0;
+                    return (
+                      <circle
+                        key={`node-${node.hash}`}
+                        cx={laneX(node.lane)}
+                        cy={rowTops[node.row] + rowHeightOf(node.row) / 2}
+                        r={isHeadRow ? HEAD_NODE_R : NODE_R}
+                        fill={isHeadRow ? "var(--bg)" : laneVar(node.colorIndex)}
+                        stroke={isHeadRow ? laneVar(node.colorIndex) : "var(--bg)"}
+                        strokeWidth={isHeadRow ? 2 : 1.5}
+                      />
+                    );
+                  })}
+                </svg>
+                {layout.nodes.map((node) => (
+                  <div
+                    key={`hit-${node.hash}`}
+                    {...rowHitProps(node.hash)}
+                    title={data.commits[node.row].subject}
+                    style={{ position: "absolute", left: 0, right: 0, top: rowTops[node.row], height: rowHeightOf(node.row), cursor: "pointer" }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Draggable divider between graph and text columns. */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t("desktop.gitGraphResizeGraph")}
+              aria-valuemin={GRAPH_COL_MIN}
+              aria-valuemax={GRAPH_COL_MAX}
+              aria-valuenow={graphColW}
+              tabIndex={0}
+              onPointerDown={startDividerDrag}
+              onPointerMove={moveDividerDrag}
+              onPointerUp={endDividerDrag}
+              onPointerCancel={endDividerDrag}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                event.preventDefault();
+                applyGraphColWidth(graphColW + (event.key === "ArrowLeft" ? -COL_W : COL_W));
+              }}
+              style={{ flexShrink: 0, width: DIVIDER_W, display: "flex", justifyContent: "center", cursor: "col-resize", touchAction: "none" }}
+            >
+              <div style={{ width: 1, height: "100%", background: "color-mix(in srgb, var(--border) 55%, transparent)" }} />
+            </div>
+
+            {/* Text column: takes whatever width the divider leaves. */}
+            <div style={{ flex: 1, minWidth: 0, position: "relative", height: svgHeight, overflow: "hidden" }}>
+              {layout.nodes.map((node) => {
+                const commit = data.commits[node.row];
+                const isHeadRow = node.row === 0;
+                return (
+                  <div
+                    key={`row-${node.hash}`}
+                    {...rowHitProps(node.hash)}
+                    title={commit.subject}
+                    style={{ position: "absolute", left: 0, right: 0, top: rowTops[node.row], height: rowHeightOf(node.row), display: "flex", alignItems: "center", cursor: "pointer" }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0, paddingLeft: TEXT_GAP, paddingRight: 10, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                        <RefTagList tags={parseGitRefTags(commit.refs)} laneColor={laneVar(node.colorIndex)} />
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5, fontWeight: 500, color: "var(--text)" }}>
+                          {commit.subject}
+                        </span>
+                      </div>
+                      {isHeadRow && (
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-muted)" }}>
+                          {commit.author} · {timeFormat.format(new Date(commit.timestamp * 1000))} · {commit.hash.slice(0, 10)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {data?.isGitRepository && data.truncated && (
+          <div
+            style={{
+              position: "sticky",
+              bottom: 0,
+              zIndex: 2,
+              display: "flex",
+              justifyContent: "center",
+              padding: "6px 0 8px",
+              // Opaque backing so pinned graph rows/text don't show through.
+              background: "var(--bg)",
+              pointerEvents: atListBottom ? "auto" : "none",
+              opacity: atListBottom ? 1 : 0,
+              visibility: atListBottom ? "visible" : "hidden",
+              transition: "opacity 0.15s ease, visibility 0.15s ease",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setLimit((current) => Math.min(current + LIMIT_STEP, MAX_LIMIT))}
+              disabled={loading}
+              style={{ padding: "4px 14px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: loading ? "wait" : "pointer" }}
+            >
+              {t("desktop.gitGraphLoadMore")}
+            </button>
+          </div>
+        )}
+      </div>
+
       {selectedCommit && (
-        <div style={{ flexShrink: 0, maxHeight: "45%", overflowY: "auto", overflowX: "hidden", borderBottom: "1px solid var(--border)", padding: "8px 10px" }}>
+        <div style={{ flexShrink: 0, maxHeight: "45%", overflowY: "auto", overflowX: "hidden", borderTop: "1px solid var(--border)", padding: "8px 10px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
             <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: "var(--text)", wordBreak: "break-word" }}>
               {selectedCommit.subject}
-              {selectedCommit.refs.length > 0 && (
-                <span style={{ color: "var(--accent)", fontWeight: 600, marginLeft: 6 }}>({selectedCommit.refs.join(", ")})</span>
+              {selectedCommit.refs.length > 0 && selectedNode && (
+                <span style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: 4, marginLeft: 6, verticalAlign: "middle" }}>
+                  <RefTagList tags={parseGitRefTags(selectedCommit.refs)} laneColor={laneVar(selectedNode.colorIndex)} />
+                </span>
               )}
             </span>
             <button
@@ -230,91 +610,6 @@ export function GitGraphTab({ cwd, onOpenFile }: Props) {
               <div style={{ padding: "4px 5px", color: "var(--text-dim)", fontSize: 12 }}>-</div>
             )}
           </div>
-        </div>
-      )}
-
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-        {data === null ? null : !data.isGitRepository ? (
-          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            {t("desktop.gitNotRepository")}
-          </div>
-        ) : data.commits.length === 0 ? (
-          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            {t("desktop.gitGraphEmpty")}
-          </div>
-        ) : layout && (
-          <svg width={svgWidth} height={svgHeight} style={{ display: "block", fontFamily: "var(--font-mono)" }} role="img" aria-label={t("desktop.gitGraphTab")}>
-            {layout.nodes.map((node) => {
-              const isSelected = node.hash === selectedHash;
-              return (
-                <rect
-                  key={`row-${node.hash}`}
-                  x={0}
-                  y={node.row * ROW_H}
-                  width={svgWidth}
-                  height={ROW_H}
-                  fill={isSelected ? "var(--bg-selected)" : "transparent"}
-                  style={{ cursor: "pointer" }}
-                  onMouseEnter={(event) => { if (!isSelected) event.currentTarget.setAttribute("fill", "var(--bg-hover)"); }}
-                  onMouseLeave={(event) => { event.currentTarget.setAttribute("fill", isSelected ? "var(--bg-selected)" : "transparent"); }}
-                  onClick={() => void selectCommit(node.hash)}
-                />
-              );
-            })}
-            {layout.edges.map((edge, index) => (
-              <path
-                key={`edge-${index}`}
-                d={edgePath(edge)}
-                fill="none"
-                stroke={palette[edge.colorIndex % palette.length]}
-                strokeWidth={2}
-                pointerEvents="none"
-              />
-            ))}
-            {layout.nodes.map((node) => (
-              <circle
-                key={`node-${node.hash}`}
-                cx={laneX(node.lane)}
-                cy={rowY(node.row)}
-                r={NODE_R}
-                fill={palette[node.colorIndex % palette.length]}
-                stroke="var(--bg)"
-                strokeWidth={1.5}
-                pointerEvents="none"
-              />
-            ))}
-            {layout.nodes.map((node) => {
-              const commit = data.commits[node.row];
-              const tx = graphWidth + TEXT_GAP;
-              const cy = rowY(node.row);
-              return (
-                <g key={`label-${node.hash}`} pointerEvents="none">
-                  <text x={tx} y={cy + 1} fill="var(--text)" fontSize={12.5} fontWeight={500} fontFamily="system-ui, sans-serif">
-                    {commit.subject}
-                    {commit.refs.length > 0 && (
-                      <tspan fill="var(--accent)" fontWeight={600}> ({commit.refs.join(", ")})</tspan>
-                    )}
-                  </text>
-                  <text x={tx} y={cy + 15} fill="var(--text-muted)" fontSize={10.5}>
-                    {commit.author} · {timeFormat.format(new Date(commit.timestamp * 1000))} · {commit.hash.slice(0, 10)}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        )}
-      </div>
-
-      {data?.truncated && (
-        <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", padding: "6px 0", borderTop: "1px solid var(--border)" }}>
-          <button
-            type="button"
-            onClick={() => setLimit((current) => Math.min(current + LIMIT_STEP, MAX_LIMIT))}
-            disabled={loading}
-            style={{ padding: "4px 14px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: loading ? "wait" : "pointer" }}
-          >
-            {t("desktop.gitGraphLoadMore")}
-          </button>
         </div>
       )}
     </div>

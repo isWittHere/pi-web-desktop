@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowClockwise, GitBranch, Spinner } from "@phosphor-icons/react";
+import { ArrowClockwise, GitMerge, Spinner } from "@phosphor-icons/react";
 import type { GitStatusResponse } from "@/lib/git-types";
 import { useI18n } from "@/hooks/useI18n";
 import { ChangeRow, fetchGitStatus } from "./QuickChangesPanel";
@@ -52,8 +52,8 @@ export function ChangesTabView({ cwd, onOpenFile, onOpenGraph }: Props) {
         </span>
         {hasFiles && (
           <>
-            <span style={{ marginLeft: 6, color: "var(--git-status-added)", fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
-            <span style={{ marginLeft: 5, color: "var(--git-status-deleted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
+            <span style={{ marginLeft: 6, flexShrink: 0, color: "var(--git-status-added)", fontFamily: "var(--font-mono)", fontSize: 11 }}>+{gitStatus.additions}</span>
+            <span style={{ marginLeft: 5, flexShrink: 0, color: "var(--git-status-deleted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>-{gitStatus.deletions}</span>
           </>
         )}
         {onOpenGraph && (
@@ -62,9 +62,10 @@ export function ChangesTabView({ cwd, onOpenFile, onOpenGraph }: Props) {
             onClick={() => onOpenGraph(cwd)}
             title={t("desktop.gitGraphOpenView")}
             aria-label={t("desktop.gitGraphOpenView")}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, border: "none", borderRadius: 5, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
+            className="panel-icon-btn"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, marginLeft: 5, border: "none", borderRadius: 5, cursor: "pointer", flexShrink: 0 }}
           >
-            <GitBranch size={13} weight="regular" aria-hidden="true" />
+            <GitMerge size={13} weight="regular" aria-hidden="true" style={{ transform: "scaleY(-1)" }} />
           </button>
         )}
         <button
@@ -73,7 +74,8 @@ export function ChangesTabView({ cwd, onOpenFile, onOpenGraph }: Props) {
           disabled={loading}
           title={t("desktop.refresh")}
           aria-label={t("desktop.refresh")}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, marginLeft: 6, border: "none", borderRadius: 5, background: "none", color: "var(--text-dim)", cursor: loading ? "wait" : "pointer", opacity: loading ? 0.55 : 1 }}
+          className="panel-icon-btn"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, border: "none", borderRadius: 5, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.55 : 1, flexShrink: 0 }}
         >
           {loading
             ? <Spinner size={12} style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true" />

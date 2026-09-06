@@ -10,6 +10,7 @@ import { WallpaperLayer } from "./WallpaperLayer";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar } from "./TabBar";
+import { RightPanelEmptyState } from "./RightPanelEmptyState";
 import { WorkspaceTabBar } from "./WorkspaceTabBar";
 import { fileTabId, changesTabId, gitGraphTabId, isFileTab, openFileTab, openViewTab, type Tab } from "./tab-model";
 import { ChangesTabView } from "./ChangesTabView";
@@ -1256,6 +1257,7 @@ export function AppShell() {
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
         onOpenChangesView={(cwd) => handleOpenViewTab("changes", cwd)}
+        onOpenGitGraph={(cwd) => handleOpenViewTab("git-graph", cwd)}
         draftSessions={draftSessions}
         onSelectDraft={handleSelectDraft}
         onDeleteDraft={handleDeleteDraft}
@@ -1511,18 +1513,21 @@ export function AppShell() {
           background: "var(--bg)",
         }}
       >
-        {/* Right panel tab bar */}
-        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "var(--bg-panel)", borderBottom: "1px solid var(--border)", height: 36 }}>
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <TabBar
-              tabs={fileTabs}
-              activeTabId={activeFileTabId ?? ""}
-              onSelectTab={setActiveFileTabId}
-              onCloseTab={handleCloseFileTab}
-            />
-          </div>
+        {/* Right panel tab bar — nothing to list while the panel is empty,
+            so the strip is dropped and the empty state owns the full panel. */}
+        {fileTabs.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "var(--bg-panel)", borderBottom: "1px solid var(--border)", height: 36 }}>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <TabBar
+                tabs={fileTabs}
+                activeTabId={activeFileTabId ?? ""}
+                onSelectTab={setActiveFileTabId}
+                onCloseTab={handleCloseFileTab}
+              />
+            </div>
 
-        </div>
+          </div>
+        )}
 
         {/* Tab content — keep-alive: every mounted tab stays in the DOM and is
             hidden while inactive, so switching never re-fetches or resets it. */}
@@ -1533,9 +1538,10 @@ export function AppShell() {
           style={{ flex: 1, overflow: "hidden" }}
         >
           {fileTabs.length === 0 ? (
-            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-              {t("desktop.noFileOpen")}
-            </div>
+            <RightPanelEmptyState
+              cwd={selectedSession?.cwd ?? activeCwd ?? null}
+              onOpenViewTab={handleOpenViewTab}
+            />
           ) : (
             fileTabs.map((tab) => {
               if (!mountedTabIds.has(tab.id)) return null;
