@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Script } from "node:vm";
-import { createJiti } from "jiti";
 import ts from "typescript";
-
-const jiti = createJiti(import.meta.url, { jsx: { runtime: "automatic" }, tsconfigPaths: true });
 
 // Execute the component's actual keydown callback without mounting the rest
 // of the UI, so queued-send routing can be exercised end to end.
