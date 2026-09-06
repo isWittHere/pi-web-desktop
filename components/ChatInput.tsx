@@ -1763,6 +1763,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       ?? model.modelId)
     : "";
 
+  // Warn when images are attached but the selected model is known not to accept
+  // image input. Unknown modality info (missing map entry) and auto model
+  // selection stay silent; the warning is dismissible and re-arms per batch.
+  const [imageWarningDismissed, setImageWarningDismissed] = useState(false);
+  const showImageUnsupportedWarning = attachedImages.length > 0
+    && !isAutoModelSelection
+    && !modelSupportsImages
+    && !imageWarningDismissed;
+  useEffect(() => {
+    if (attachedImages.length === 0) setImageWarningDismissed(false);
+  }, [attachedImages.length]);
+
   const compactSavedTokens = compactResult
     ? Math.max(0, compactResult.tokensBefore - compactResult.estimatedTokensAfter)
     : 0;
@@ -1973,6 +1985,37 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }}
       />
       <div style={{ maxWidth: 820, margin: "0 auto" }}>
+        {showImageUnsupportedWarning && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: 8,
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid color-mix(in srgb, var(--accent-orange) 45%, var(--border))",
+              background: "color-mix(in srgb, var(--accent-orange) 9%, var(--bg-panel))",
+              color: "var(--text-muted)",
+              fontSize: 12,
+              lineHeight: 1.45,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+            }}
+          >
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ fontWeight: 600, display: "block" }}>{t("desktop.imageNotSupportedTitle")}</span>
+              {t("desktop.imageNotSupportedBody", { model: activeModelName })}
+            </span>
+            <button
+              type="button"
+              onClick={() => setImageWarningDismissed(true)}
+              aria-label={t("desktop.close")}
+              style={{ flexShrink: 0, background: "none", border: "none", padding: "0 2px", cursor: "pointer", color: "inherit", opacity: 0.7, fontSize: 13, lineHeight: 1 }}
+            >
+              ×
+            </button>
+          </div>
+        )}
         {modelError && (
           <div
             role="alert"

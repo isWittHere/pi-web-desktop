@@ -145,6 +145,8 @@ export const enLocale = {
     "desktop.fileFailedCount": "{count} failed",
     "desktop.fileAddUploadedToChat": "Add uploaded file to chat",
     "desktop.fileAddAllUploadedToChat": "Add all uploaded files to chat",
+    "desktop.imageNotSupportedTitle": "Images may not be sent",
+    "desktop.imageNotSupportedBody": "The selected model ({model}) does not support image input. The attached images will likely be ignored.",
     "desktop.compactInputWhileReading": "Compact input while reading",
     "desktop.compactInputWhileReadingDescription": "While you scroll up to read, the composer shrinks to a single line and the toolbar hides. It restores when you return to the bottom or focus the input.",
     "desktop.compactInputWhileReadingLabel": "Collapse while reading",

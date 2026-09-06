@@ -145,6 +145,8 @@ export const zhCNLocale = {
     "desktop.fileFailedCount": "失败 {count} 个",
     "desktop.fileAddUploadedToChat": "将上传的文件添加到聊天",
     "desktop.fileAddAllUploadedToChat": "将所有上传的文件添加到聊天",
+    "desktop.imageNotSupportedTitle": "图片可能无法发送",
+    "desktop.imageNotSupportedBody": "当前选择的模型（{model}）不支持图片输入，附加的图片可能会被忽略。",
     "desktop.compactInputWhileReading": "阅读时收缩输入栏",
     "desktop.compactInputWhileReadingDescription": "上滚阅读时，输入栏收缩为单行并隐藏工具行；回到对话底部或聚焦输入框时自动还原。",
     "desktop.compactInputWhileReadingLabel": "阅读时收缩",
