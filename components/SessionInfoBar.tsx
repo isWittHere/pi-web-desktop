@@ -171,6 +171,8 @@ export function SessionInfoBar({
 
   const hasBranching = hasSession && onBranchLeafChange && (() => {
     const tree = branchTree ?? [];
+    // Sessions branched from the very first message have multiple root nodes.
+    if (tree.length > 1) return true;
     function check(nodes: SessionTreeNode[]): boolean {
       return nodes.some((node) => node.children.length > 1 || check(node.children));
     }
