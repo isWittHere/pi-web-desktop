@@ -186,6 +186,8 @@ const AGENT_STATE_RECONCILE_MS = 15_000;
 // or a session with several extensions.
 const EVENT_STREAM_READY_TIMEOUT_MS = 60_000;
 const EVENT_STREAM_RECONNECT_DELAY_MS = 1_000;
+// Retry temporary model-list failures without requiring a page refresh.
+const MODELS_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
 const MAX_NOTICES = 5;
 const NOTICE_VISIBLE_MS = 5000;
 const NOTICE_EXIT_ANIMATION_MS = 180;
@@ -329,6 +331,8 @@ type ModelsResponse = {
   /** `provider:modelId` → whether the model accepts image input. */
   imageInput?: Record<string, boolean>;
   modelScopeWarnings?: string[];
+  /** Upstream contract: a registry-level error that must surface even on HTTP 200. */
+  modelError?: string | null;
 };
 
 type SlashCommandsResponse = {
@@ -364,6 +368,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [globalDefaultThinkingLevel, setGlobalDefaultThinkingLevel] = useState<ThinkingLevelOption | undefined>(undefined);
   const [thinkingLevelMemory, setThinkingLevelMemory] = useState<Record<string, string>>({});
   const [modelScopeWarnings, setModelScopeWarnings] = useState<string[]>([]);
+  const [modelError, setModelError] = useState<string | null>(null);
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
   const [newSessionDefaultModel, setNewSessionDefaultModel] = useState<SelectedModel | null>(null);
   const [toolPreset, setToolPreset] = useState<ToolPreset>("default");
@@ -1598,10 +1603,32 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const loadModels = useCallback(async (signal?: AbortSignal) => {
     const modelCwd = newSessionCwd ?? session?.cwd ?? "";
     const modelsUrl = modelCwd ? `/api/models?cwd=${encodeURIComponent(modelCwd)}` : "/api/models";
-    const res = await fetch(modelsUrl, signal ? { signal } : undefined);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const d = await res.json() as ModelsResponse;
+    let d: ModelsResponse;
+    try {
+      const res = await fetch(modelsUrl, signal ? { signal } : undefined);
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const body: unknown = await res.json();
+          if (body && typeof body === "object" && "error" in body && typeof body.error === "string") {
+            detail = body.error;
+          }
+        } catch (e) {
+          if (e instanceof DOMException && e.name === "AbortError") throw e;
+          // Non-JSON error responses fall back to the HTTP status.
+        }
+        throw new Error(detail || `Failed to load models (HTTP ${res.status})`);
+      }
+      d = await res.json() as ModelsResponse;
+      signal?.throwIfAborted();
+    } catch (e) {
+      if (!signal?.aborted && !(e instanceof DOMException && e.name === "AbortError")) {
+        setModelError(e instanceof Error ? e.message : String(e));
+      }
+      throw e;
+    }
     setModelNames(d.models);
+    setModelError(d.modelError ?? null);
     setModelImageInput(d.imageInput ?? {});
     setModelThinkingProfiles(d.thinkingProfiles ?? {});
     setModelThinkingLevelPins(d.thinkingLevelPins ?? {});
@@ -1970,12 +1997,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [messages.length, agentRunning, scrollToBottom, scrollUserMsgToTop]);
 
-  // Load model list
+  // Load the model list with bounded retries; loadModels exposes each failure.
   useEffect(() => {
     const controller = new AbortController();
-    loadModels(controller.signal).catch((e) => {
-      if (e instanceof DOMException && e.name === "AbortError") return;
-    });
+    void (async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await loadModels(controller.signal);
+          return;
+        } catch (e) {
+          if (controller.signal.aborted) return;
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          if (attempt >= MODELS_RETRY_DELAYS_MS.length) return;
+          await delay(MODELS_RETRY_DELAYS_MS[attempt]);
+          if (controller.signal.aborted) return;
+        }
+      }
+    })();
     return () => controller.abort();
   }, [loadModels, modelsRefreshKey]);
 
@@ -2018,7 +2056,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     loading, error, activeLeafId, messages, entryIds, historyCursor, hasEarlierMessages, streamState,
-    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, modelError, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,

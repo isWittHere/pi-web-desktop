@@ -86,6 +86,8 @@ interface Props {
   /** `provider:modelId` → whether the model accepts image input. */
   imageInputByModel?: Record<string, boolean>;
   modelScopeWarnings?: string[];
+  /** Set when the model list failed to load; keeps the selector visible with the error surfaced. */
+  modelError?: string | null;
   onModelChange?: (provider: string, modelId: string) => void;
   compactResult?: CompactResultInfo | null;
   toolPreset?: ToolPreset;
@@ -430,7 +432,7 @@ function NextTurnBanner() {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, isCompacting, onAbortCompaction, stepLabel, model, isAutoModelSelection, modelNames, modelList, imageInputByModel, modelScopeWarnings, onModelChange,
+  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, isCompacting, onAbortCompaction, stepLabel, model, isAutoModelSelection, modelNames, modelList, imageInputByModel, modelScopeWarnings, modelError, onModelChange,
   compactResult, toolPreset, onToolPresetChange,
   tools, toolsLoading = false, onLoadTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
@@ -1971,6 +1973,23 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }}
       />
       <div style={{ maxWidth: 820, margin: "0 auto" }}>
+        {modelError && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: 8,
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid color-mix(in srgb, var(--accent-red) 45%, var(--border))",
+              background: "color-mix(in srgb, var(--accent-red) 9%, var(--bg-panel))",
+              color: "var(--text-muted)",
+              fontSize: 12,
+              lineHeight: 1.45,
+            }}
+          >
+            {modelError}
+          </div>
+        )}
         {modelScopeWarnings && modelScopeWarnings.length > 0 && (
           <div
             role="status"
@@ -3202,8 +3221,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             )}
 
-            {/* Model selector — always interactive; changes apply from the next turn while streaming */}
-            {modelOptions.length > 0 && currentName && onModelChange && (
+            {/* Model selector — always interactive; changes apply from the next turn while streaming.
+                A failed model-list load must not hide the selector: keep it mounted with the
+                current (possibly stale) name and surface the error through the banner above. */}
+            {(modelOptions.length > 0 || modelError) && currentName && onModelChange && (
                 <div ref={dropdownRef} className="chat-input-toolbar-model" style={{ position: "relative", flex: isMobile ? "1 1 auto" : undefined, minWidth: 0 }}>
                   <button
                     onClick={(e) => {
