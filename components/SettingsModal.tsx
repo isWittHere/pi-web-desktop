@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChatCenteredText, Cpu, Monitor, Plug, Stack, TextT, X } from "@phosphor-icons/react";
+import { ChatCenteredText, Cpu, Monitor, Plug, Stack, TextT, UsersThree, X } from "@phosphor-icons/react";
 import { ChatConfig } from "./ChatConfig";
 import { DisplayConfig } from "./DisplayConfig";
 import { ModelsConfig } from "./ModelsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { PromptsConfig } from "./PromptsConfig";
+import { AgentsConfig } from "./AgentsConfig";
 import { SettingsPane } from "./settings-ui";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
@@ -42,13 +43,14 @@ const tabIcons: Record<SettingsTab, typeof Cpu> = {
   chat: ChatCenteredText,
   models: Cpu,
   skills: Stack,
+  agents: UsersThree,
   plugins: Plug,
   prompts: TextT,
 };
 
 /** Manager pages render their own list+detail panes; the SettingsPane body
  * then stops scrolling so the manager's columns scroll independently. */
-const MANAGER_TABS: SettingsTab[] = ["models", "skills", "plugins", "prompts"];
+const MANAGER_TABS: SettingsTab[] = ["models", "skills", "agents", "plugins", "prompts"];
 
 export function SettingsModal({
   initialTab = "models",
@@ -60,7 +62,7 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const isMobile = useIsMobile();  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    initialTab === "skills" || initialTab === "plugins" ? (cwd ? initialTab : "display") : initialTab,
+    initialTab === "skills" || initialTab === "plugins" || initialTab === "agents" ? (cwd ? initialTab : "display") : initialTab,
   );
   const [navStats, setNavStats] = useState<SettingsNavStats>(EMPTY_NAV_STATS);
   const dialogRef = useRef<HTMLElement>(null);
@@ -277,6 +279,7 @@ export function SettingsModal({
           {activeTab === "chat" && <ChatConfig cwd={cwd} sessionId={sessionId} onSessionReloaded={onSessionReloadedAction} />}
           {activeTab === "models" && <ModelsConfig cwd={cwd} onSavedAction={onModelsSavedAction} />}
           {cwd && activeTab === "skills" && <SkillsConfig cwd={cwd} />}
+          {cwd && activeTab === "agents" && <AgentsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
           {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
           {cwd && activeTab === "prompts" && <PromptsConfig cwd={cwd} />}
         </SettingsPane>

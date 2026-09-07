@@ -4,7 +4,7 @@
  * sidebar layout; each labelKey must exist in both i18n catalogs.
  */
 
-export type SettingsTab = "display" | "chat" | "models" | "skills" | "plugins" | "prompts";
+export type SettingsTab = "display" | "chat" | "models" | "skills" | "agents" | "plugins" | "prompts";
 
 export interface SettingsNavItem {
   id: SettingsTab;
@@ -41,6 +41,7 @@ export const SETTINGS_NAV: SettingsNavSection[] = [
     scope: "workspace",
     items: [
       { id: "skills", labelKey: "desktop.skills" },
+      { id: "agents", labelKey: "desktop.agents" },
       { id: "plugins", labelKey: "desktop.plugins" },
       { id: "prompts", labelKey: "desktop.prompts" },
     ],
@@ -53,6 +54,7 @@ export const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTab, string> = {
   chat: "desktop.settingsPageChat",
   models: "desktop.settingsPageModels",
   skills: "desktop.settingsPageSkills",
+  agents: "desktop.settingsPageAgents",
   plugins: "desktop.settingsPagePlugins",
   prompts: "desktop.settingsPagePrompts",
 };

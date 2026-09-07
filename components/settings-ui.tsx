@@ -349,6 +349,7 @@ export function SettingsInput({
   onPaste,
   id,
   inputRef,
+  disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -361,6 +362,7 @@ export function SettingsInput({
   onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void;
   id?: string;
   inputRef?: React.Ref<HTMLInputElement>;
+  disabled?: boolean;
 }) {
   return (
     <input
@@ -373,7 +375,8 @@ export function SettingsInput({
       onBlur={onBlur}
       onPaste={onPaste}
       placeholder={placeholder}
-      style={{ ...inputStyle, fontFamily: mono ? "var(--font-mono)" : "inherit", ...style }}
+      disabled={disabled}
+      style={{ ...inputStyle, fontFamily: mono ? "var(--font-mono)" : "inherit", opacity: disabled ? 0.55 : 1, ...style }}
     />
   );
 }
