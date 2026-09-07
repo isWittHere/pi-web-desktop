@@ -1495,6 +1495,10 @@ function CustomMessageView({ message, isStreaming, cwd, onOpenFile }: { message:
   const detailsText = hasDetails ? safeJson(message.details) : "";
   const title = formatCustomType(message.customType, t("desktop.extension"));
   const time = formatTime(message.timestamp);
+  // Subagent-related custom messages (task metadata, result, and the parent-side
+  // completion notification) get a friendly title and a status chip instead of
+  // the raw customType string.
+  const subagent = subagentMessageView(message, t);
 
   const copyContent = () => {
     copyText(text || detailsText).then(() => {
@@ -1527,8 +1531,23 @@ function CustomMessageView({ message, isStreaming, cwd, onOpenFile }: { message:
           }}
         >
           <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>
-            {title}
+            {subagent ? subagent.title : title}
           </span>
+          {subagent?.status && (
+            <span style={{
+              padding: "1px 7px",
+              borderRadius: 999,
+              fontSize: 10,
+              fontWeight: 600,
+              color: subagent.statusTone === "ok" ? "var(--status-success)" : subagent.statusTone === "bad" ? "var(--status-danger)" : "var(--text-muted)",
+              border: "1px solid var(--border)",
+            }}>
+              {subagent.status}
+            </span>
+          )}
+          {subagent?.profile && (
+            <span style={{ color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>{subagent.profile}</span>
+          )}
           {isHiddenDisplay && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{t("desktop.hiddenExtensionMessage")}</span>}
           {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
         </div>
@@ -1744,6 +1763,41 @@ function safeJson(value: unknown): string {
 
 function formatCustomType(type: string, fallback: string): string {
   return type || fallback;
+}
+
+const SUBAGENT_CUSTOM_TITLES: Record<string, string> = {
+  // Mirror the SUBAGENT_META_TYPE / SUBAGENT_RESULT_TYPE / notification
+  // customType constants in lib/subagents.ts + lib/subagent-runtime.ts —
+  // not imported because that module is server-only (fs / pi SDK).
+  "pi-web:subagent": "agents.metaTitle",
+  "pi-web:subagent-result": "agents.resultTitle",
+  "pi-web:subagent-notification": "agents.notificationTitle",
+};
+
+const SUBAGENT_OK_STATUSES = new Set(["completed"]);
+const SUBAGENT_BAD_STATUSES = new Set(["failed", "aborted", "interrupted"]);
+
+/** Localized title + status chip info for subagent custom messages, or null
+ *  for anything that is not subagent-related. */
+function subagentMessageView(
+  message: CustomMessage,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): { title: string; status?: string; statusTone?: "ok" | "bad" | "muted"; profile?: string } | null {
+  const titleKey = SUBAGENT_CUSTOM_TITLES[message.customType];
+  if (!titleKey) return null;
+  const details = (message.details ?? {}) as {
+    status?: string;
+    profile?: string;
+  };
+  const status = typeof details.status === "string" ? details.status : undefined;
+  return {
+    title: t(titleKey),
+    ...(status ? {
+      status: t(`agents.status.${status}`),
+      statusTone: SUBAGENT_OK_STATUSES.has(status) ? "ok" as const : SUBAGENT_BAD_STATUSES.has(status) ? "bad" as const : "muted" as const,
+    } : {}),
+    ...(typeof details.profile === "string" && details.profile ? { profile: details.profile } : {}),
+  };
 }
 
 function previewText(text: string, fallback: string): string {

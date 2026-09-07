@@ -7,7 +7,7 @@ import { normalize as normalizePath } from "path";
 import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext, SessionMark } from "./types";
 import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize";
-import { readSubagentRun, SUBAGENT_META_TYPE } from "./subagents";
+import { readSubagentRun, SUBAGENT_META_TYPE, SUBAGENT_RESULT_TYPE, type SubagentMetadata, type SubagentResultMetadata } from "./subagents";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
 export { getAgentDir };
@@ -661,6 +661,30 @@ function entryToUiMessage(
         details: entry.details,
         timestamp: parseEntryTimestamp(entry.timestamp),
       };
+    case "custom": {
+      // Subagent sessions carry their task definition and outcome as plain
+      // custom entries (appendCustomEntry), not custom_message entries. Map
+      // them to custom UI messages so opening a subagent session shows what
+      // it was asked to do and what it returned. Unknown custom entry types
+      // stay hidden, matching the pre-subagent behavior.
+      if (entry.customType !== SUBAGENT_META_TYPE && entry.customType !== SUBAGENT_RESULT_TYPE) return null;
+      const data = entry.data as Partial<SubagentMetadata> & Partial<SubagentResultMetadata> | undefined;
+      const isMeta = entry.customType === SUBAGENT_META_TYPE;
+      const task = typeof data?.task === "string" ? data.task : "";
+      const result = typeof data?.result === "string" ? data.result : "";
+      const error = typeof data?.error === "string" ? data.error : "";
+      const content = isMeta
+        ? task || (typeof data?.description === "string" ? data.description : "")
+        : result || error;
+      return {
+        role: "custom",
+        customType: entry.customType,
+        content,
+        display: true,
+        details: data,
+        timestamp: parseEntryTimestamp(entry.timestamp),
+      };
+    }
     default:
       return null;
   }
