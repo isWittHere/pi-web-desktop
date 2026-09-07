@@ -323,13 +323,6 @@ export function deleteSubagentProfile(cwd: string, scope: SubagentWritableScope,
   if (existsSync(filePath)) unlinkSync(filePath);
 }
 
-export function saveProjectSubagentProfile(cwd: string, profile: Omit<SubagentProfile, "scope" | "filePath">): SubagentProfile {
-  return saveSubagentProfile(cwd, "project", profile);
-}
-
-export function deleteProjectSubagentProfile(cwd: string, name: string): void {
-  deleteSubagentProfile(cwd, "project", name);
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
