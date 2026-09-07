@@ -563,7 +563,7 @@ export function AgentsConfig({
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(0, 1fr)", gap: 14 }}>
             <SettingsField label={t("agents.name")}>
               {creating ? (
-                <SettingsInput value={draft.name} onChange={(value) => update("name", value)} disabled={disabled ? true : undefined} mono />
+                <SettingsInput value={draft.name} onChange={(value) => update("name", value)} disabled={disabled} mono />
               ) : (
                 <div style={{ height: "var(--control-height)", display: "flex", alignItems: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {draft.name}
