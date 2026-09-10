@@ -410,11 +410,19 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
+  // Count in-flight showLoading calls: loading is true iff at least one is
+  // pending. A loadId guard cannot clear the indicator here — a later
+  // showLoading=false reload (refreshKey bump) invalidates the call that
+  // opened it, and neither call would ever turn loading off again.
+  const loadingCallsRef = useRef(0);
 
   const loadSessions = useCallback(async (showLoading = false, force = false) => {
     const loadId = ++sessionLoadIdRef.current;
+    if (showLoading) {
+      loadingCallsRef.current += 1;
+      setLoading(true);
+    }
     try {
-      if (showLoading) setLoading(true);
       // Shared cache: startup also fetches the list from the workspace-restore
       // path, so dedupe onto one request (force refreshes on explicit reload).
       const data = await getSessionList(force);
@@ -451,7 +459,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
     } catch (e) {
       if (loadId === sessionLoadIdRef.current) setError(String(e));
     } finally {
-      if (loadId === sessionLoadIdRef.current && showLoading) setLoading(false);
+      if (showLoading) {
+        loadingCallsRef.current = Math.max(0, loadingCallsRef.current - 1);
+        if (loadingCallsRef.current === 0) setLoading(false);
+      }
     }
   }, [onSessionsLoaded]);
 
