@@ -770,6 +770,7 @@ export const enLocale = {
     "agents.maxTurns": "Max turns",
     "agents.inheritContext": "Inherit parent context",
     "agents.background": "Run in background",
+    "agents.behavior": "Behavior",
     "agents.enable": "Enable",
     "agents.disable": "Disable",
     "agents.scope.project": "Project",

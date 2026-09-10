@@ -12,6 +12,7 @@ import { Toggle } from "./Toggle";
 import {
   SettingsBadge,
   SettingsButton,
+  SettingsChipGroup,
   SettingsField,
   SettingsInput,
   SettingsNumInput,
@@ -605,24 +606,30 @@ export function AgentsConfig({
           </SettingsField>
 
           <SettingsField label={t("agents.tools")}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px" }}>
-              {TOOL_OPTIONS.map((tool) => (
-                <Toggle
-                  key={tool}
-                  label={tool}
-                  disabled={disabled}
-                  checked={draft.tools.includes(tool)}
-                  onChange={(checked) => update("tools", checked ? [...draft.tools, tool] : draft.tools.filter((item) => item !== tool))}
-                />
-              ))}
-            </div>
+            <SettingsChipGroup
+              label={t("agents.tools")}
+              mono
+              disabled={disabled}
+              options={TOOL_OPTIONS.map((tool) => ({ value: tool, label: tool }))}
+              selected={draft.tools}
+              onToggle={(tool, checked) => update("tools", checked ? [...draft.tools, tool] : draft.tools.filter((item) => item !== tool))}
+            />
           </SettingsField>
 
           <SettingsField label={t("agents.resources")}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
-              <Toggle label={t("agents.loadSkills")} disabled={disabled} checked={draft.loadSkills} onChange={(checked) => update("loadSkills", checked)} />
-              <Toggle label={t("agents.loadExtensions")} disabled={disabled} checked={draft.loadExtensions} onChange={(checked) => update("loadExtensions", checked)} />
-            </div>
+            <SettingsChipGroup
+              label={t("agents.resources")}
+              disabled={disabled}
+              options={[
+                { value: "loadSkills", label: t("agents.loadSkills") },
+                { value: "loadExtensions", label: t("agents.loadExtensions") },
+              ]}
+              selected={[
+                ...(draft.loadSkills ? ["loadSkills"] : []),
+                ...(draft.loadExtensions ? ["loadExtensions"] : []),
+              ]}
+              onToggle={(value, checked) => update(value as "loadSkills" | "loadExtensions", checked)}
+            />
           </SettingsField>
 
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.5fr) minmax(120px, 0.75fr) minmax(100px, 0.5fr)", gap: 14 }}>
@@ -654,10 +661,21 @@ export function AgentsConfig({
             </SettingsField>
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 20px" }}>
-            <Toggle label={t("agents.inheritContext")} disabled={disabled} checked={draft.inheritContext} onChange={(checked) => update("inheritContext", checked)} />
-            <Toggle label={t("agents.background")} disabled={disabled} checked={draft.runInBackground} onChange={(checked) => update("runInBackground", checked)} />
-          </div>
+          <SettingsField label={t("agents.behavior")}>
+            <SettingsChipGroup
+              label={t("agents.behavior")}
+              disabled={disabled}
+              options={[
+                { value: "inheritContext", label: t("agents.inheritContext") },
+                { value: "background", label: t("agents.background") },
+              ]}
+              selected={[
+                ...(draft.inheritContext ? ["inheritContext"] : []),
+                ...(draft.runInBackground ? ["background"] : []),
+              ]}
+              onToggle={(value, checked) => update(value === "inheritContext" ? "inheritContext" : "runInBackground", checked)}
+            />
+          </SettingsField>
 
           {selected && !editing && (
             <div style={{ ...labelValueGrid, ...detailGridStyle }}>

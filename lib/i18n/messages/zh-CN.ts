@@ -770,6 +770,7 @@ export const zhCNLocale = {
     "agents.maxTurns": "最大轮数",
     "agents.inheritContext": "继承父会话上下文",
     "agents.background": "后台运行",
+    "agents.behavior": "行为",
     "agents.enable": "启用",
     "agents.disable": "停用",
     "agents.scope.project": "项目",

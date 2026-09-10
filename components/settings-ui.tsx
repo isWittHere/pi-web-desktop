@@ -337,6 +337,66 @@ export function SettingsField({ label, children }: { label: string; children: Re
   );
 }
 
+/**
+ * Multi-select chip group: labelled toggle buttons that stay readable at a
+ * glance. Used where the switch itself carries no visible text (tool
+ * allow-lists, resource flags) — each chip is a `aria-pressed` toggle button
+ * inside a labelled group, so the selection state is both visible and
+ * announced.
+ */
+export function SettingsChipGroup({
+  options,
+  selected,
+  onToggle,
+  disabled,
+  mono,
+  label,
+}: {
+  options: ReadonlyArray<{ value: string; label: string; title?: string }>;
+  selected: readonly string[];
+  onToggle: (value: string, checked: boolean) => void;
+  disabled?: boolean;
+  /** Render chip text in the mono face (tool identifiers, model names). */
+  mono?: boolean;
+  /** Accessible group name. */
+  label?: string;
+}) {
+  return (
+    <div role="group" aria-label={label} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {options.map((option) => {
+        const checked = selected.includes(option.value);
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={checked}
+            disabled={disabled}
+            title={option.title ?? option.label}
+            onClick={() => onToggle(option.value, !checked)}
+            style={{
+              height: 26,
+              padding: "0 10px",
+              borderRadius: "var(--control-radius)",
+              border: `1px solid ${checked ? "color-mix(in srgb, var(--accent) 55%, transparent)" : "var(--border)"}`,
+              background: checked ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "none",
+              color: checked ? "var(--text)" : "var(--text-muted)",
+              fontSize: 12,
+              fontWeight: checked ? 600 : 500,
+              fontFamily: mono ? "var(--font-mono)" : undefined,
+              cursor: disabled ? "not-allowed" : "pointer",
+              opacity: disabled ? 0.5 : 1,
+              whiteSpace: "nowrap",
+              transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease",
+            }}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SettingsInput({
   value,
   onChange,
