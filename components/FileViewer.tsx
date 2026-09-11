@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useContext, useMemo, type MouseEvent } from "react";
+import { useEffect, useState, useRef, useCallback, useContext, useMemo, type MouseEvent, type ReactNode } from "react";
 import { At, DownloadSimple } from "@phosphor-icons/react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import ReactMarkdown from "react-markdown";
@@ -116,6 +116,20 @@ function MentionButton({ filePath, cwd, onAtMention }: { filePath: string; cwd?:
     >
       <At size={11} aria-hidden="true" />
     </button>
+  );
+}
+
+/** Shared status bar for every file viewer. The path ellipsizes instead of
+ *  pushing the controls; on narrow panels the controls wrap onto their own
+ *  rows (see .file-viewer-toolbar CSS), so the buttons are never squeezed. */
+function FileViewerToolbar({ filePath, cwd, children }: { filePath: string; cwd?: string; children?: ReactNode }) {
+  return (
+    <div className="file-viewer-toolbar">
+      <span className="file-viewer-toolbar-path" title={filePath}>
+        {getRelativeFilePath(filePath, cwd)}
+      </span>
+      {children && <div className="file-viewer-toolbar-controls">{children}</div>}
+    </div>
   );
 }
 
@@ -523,27 +537,12 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span>
-        <span style={{ marginLeft: "auto" }}>{ext || t("desktop.image")}</span>
+      <FileViewerToolbar filePath={filePath} cwd={cwd}>
+        <span>{ext || t("desktop.image")}</span>
         {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
         {formatSizeStr && <span>{formatSizeStr}</span>}
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-      </div>
+      </FileViewerToolbar>
       <div
         style={{
           flex: 1,
@@ -636,27 +635,12 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span>
-        <span style={{ marginLeft: "auto" }}>{ext || t("desktop.audio")}</span>
+      <FileViewerToolbar filePath={filePath} cwd={cwd}>
+        <span>{ext || t("desktop.audio")}</span>
         {duration != null && <span>{formatDuration(duration)}</span>}
         {size != null && <span>{formatSize(size)}</span>}
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-      </div>
+      </FileViewerToolbar>
       <div
         style={{
           flex: 1,
@@ -732,27 +716,12 @@ function VideoViewer({ filePath, cwd, sourceSessionId }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span>
-        <span style={{ marginLeft: "auto" }}>{ext || "video"}</span>
+      <FileViewerToolbar filePath={filePath} cwd={cwd}>
+        <span>{ext || "video"}</span>
         {duration != null && <span>{formatDuration(duration)}</span>}
         {size != null && <span>{formatSize(size)}</span>}
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-      </div>
+      </FileViewerToolbar>
       <div
         style={{
           flex: 1,
@@ -850,26 +819,11 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span>
-        <span style={{ marginLeft: "auto" }}>{ext === "docx" ? t("desktop.docxPreview") : "pdf"}</span>
+      <FileViewerToolbar filePath={filePath} cwd={cwd}>
+        <span>{ext === "docx" ? t("desktop.docxPreview") : "pdf"}</span>
         {size != null && <span>{formatSize(size)}</span>}
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-      </div>
+      </FileViewerToolbar>
       <div style={{ flex: 1, minHeight: 0, background: "var(--bg-panel)" }}>
         {error ? (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, color: "#f87171", fontSize: 13, textAlign: "center" }}>
@@ -1030,9 +984,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
   if (isDeletedGitDiff && !data) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-        <div style={{ padding: "5px 16px", borderBottom: "1px solid var(--border)", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11 }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </div>
+        <FileViewerToolbar filePath={filePath} cwd={cwd} />
         <div style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}><GitDiffView patch={gitDiff.patch!} /></div>
       </div>
     );
@@ -1058,23 +1010,8 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Status bar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span>
-        <span style={{ marginLeft: "auto" }}>{data.language}</span>
+      <FileViewerToolbar filePath={filePath} cwd={cwd}>
+        <span>{data.language}</span>
         {viewMode === "source" && <span>{t("desktop.lines", { count: lines.length })}</span>}
         <span>{formatSize(data.size)}</span>
 
@@ -1180,7 +1117,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
         )}
         <MentionButton filePath={filePath} cwd={cwd} onAtMention={onAtMention} />
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-      </div>
+      </FileViewerToolbar>
 
       {/* Content area */}
       <div

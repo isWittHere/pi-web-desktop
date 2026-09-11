@@ -283,6 +283,10 @@ export function AppShell() {
   // Right panel — tabs of different kinds (files, changes review, git graph)
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
+  // Bumped whenever a tab is opened explicitly (file open / view-tab open)
+  // so the right-panel TabBar reveals the newly active tab; programmatic
+  // switches (close fallback, workspace restore) never bump it.
+  const [rightTabsFocusToken, setRightTabsFocusToken] = useState(0);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   // Tabs whose content is (or was) mounted. Keep-alive rendering: a tab's
   // component stays mounted once activated and is merely hidden while
@@ -1155,6 +1159,7 @@ export function AppShell() {
     }));
     setActiveFileTabId(tabId);
     setRightPanelOpen(true);
+    setRightTabsFocusToken((n) => n + 1);
     // On mobile the file panel is full-screen; close the drawer so it shows.
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
@@ -1182,6 +1187,7 @@ export function AppShell() {
     setFileTabs((prev) => openViewTab(prev, { kind, cwd }));
     setActiveFileTabId(kind === "changes" ? changesTabId(cwd) : gitGraphTabId(cwd));
     setRightPanelOpen(true);
+    setRightTabsFocusToken((n) => n + 1);
   }, []);
 
   const sessionTitle = selectedSession
@@ -1531,6 +1537,7 @@ export function AppShell() {
               <TabBar
                 tabs={fileTabs}
                 activeTabId={activeFileTabId ?? ""}
+                focusToken={rightTabsFocusToken}
                 onSelectTab={setActiveFileTabId}
                 onCloseTab={handleCloseFileTab}
               />
@@ -1545,6 +1552,7 @@ export function AppShell() {
           role="tabpanel"
           id="right-panel-content"
           aria-labelledby={activeTab ? `right-panel-tab-${activeTab.id}` : undefined}
+          className="right-panel-tabpanel"
           style={{ flex: 1, overflow: "hidden" }}
         >
           {fileTabs.length === 0 ? (
