@@ -377,6 +377,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
+  const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
@@ -2100,6 +2101,29 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             </button>
             {explorerOpen && (
               <button
+                onClick={() => setFileSearchOpen((open) => !open)}
+                title={t("desktop.searchFiles")}
+                aria-label={t("desktop.searchFiles")}
+                aria-pressed={fileSearchOpen}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26, padding: 0,
+                  background: fileSearchOpen ? "var(--bg-selected)" : "none",
+                  border: "none",
+                  color: fileSearchOpen ? "var(--accent)" : "var(--text-dim)",
+                  cursor: "pointer",
+                  borderRadius: 5,
+                  flexShrink: 0,
+                  transition: "color 0.3s, background 0.3s",
+                }}
+                onMouseEnter={(e) => { if (fileSearchOpen) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (fileSearchOpen) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+              >
+                <MagnifyingGlass size={13} weight="regular" aria-hidden="true" />
+              </button>
+            )}
+            {explorerOpen && (
+              <button
                 onClick={() => fileExplorerRef.current?.openUploadPicker()}
                 disabled={explorerUploadBusy}
                 title={t("desktop.uploadFilesToProjectRoot")}
@@ -2161,6 +2185,8 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 onAtMention={onAtMention}
                 onAtMentions={onAtMentions}
                 onUploadBusyChange={setExplorerUploadBusy}
+                fileSearchOpen={fileSearchOpen}
+                onFileSearchOpenChange={setFileSearchOpen}
               />
             </div>
           )}
