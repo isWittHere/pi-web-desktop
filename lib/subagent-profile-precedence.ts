@@ -20,17 +20,10 @@ export function isSubagentProfileOverridden(
 }
 
 /**
- * Counts behind the agents settings badge: how many profiles win their scope
- * (shadowed sources excluded) and how many of those can actually run. Built-in
- * subagents are gated by the master switch, so it zeroes the enabled count.
+ * Nav-badge count for the agents settings page: how many profiles win their
+ * scope. Shadowed sources still show up in the list (marked as overridden), but
+ * counting them would inflate the number of distinct agents.
  */
-export function countEffectiveSubagentProfiles(
-  profiles: readonly SubagentProfile[],
-  masterEnabled: boolean,
-): { enabled: number; total: number } {
-  const effective = profiles.filter((profile) => !isSubagentProfileOverridden(profile, profiles));
-  return {
-    enabled: masterEnabled ? effective.filter((profile) => profile.enabled).length : 0,
-    total: effective.length,
-  };
+export function countEffectiveSubagentProfiles(profiles: readonly SubagentProfile[]): number {
+  return profiles.filter((profile) => !isSubagentProfileOverridden(profile, profiles)).length;
 }

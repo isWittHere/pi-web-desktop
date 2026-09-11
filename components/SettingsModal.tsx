@@ -32,11 +32,11 @@ interface SettingsModalProps {
   onSessionReloadedAction: () => void;
 }
 
-/** Counts shown on the nav badges (skills total, agents enabled/total,
- * plugins loaded/configured). */
+/** Counts shown on the nav badges (skills total, agents total, plugins
+ * loaded/configured). */
 interface SettingsNavStats {
   skills: number | null;
-  agents: { enabled: number; total: number } | null;
+  agents: number | null;
   plugins: { loaded: number; configured: number } | null;
 }
 
@@ -107,24 +107,14 @@ export function SettingsModal({
       })
       .catch(() => {});
     // Shadowed profiles are listed as separate sources, so count only the ones
-    // that actually win their scope, and gate on the built-in master switch.
-    void Promise.all([
-      fetch(`/api/subagents/profiles?cwd=${encodeURIComponent(cwd)}`),
-      fetch("/api/subagents/settings"),
-    ])
-      .then(async ([profilesRes, settingsRes]) => {
-        const profilesData = profilesRes.ok
-          ? (await profilesRes.json()) as { profiles?: SubagentProfile[] }
-          : null;
-        const settingsData = settingsRes.ok
-          ? (await settingsRes.json()) as { enabled?: boolean }
-          : null;
-        const all = profilesData?.profiles;
-        if (cancelled || !all) return;
-        setNavStats((prev) => ({
-          ...prev,
-          agents: countEffectiveSubagentProfiles(all, settingsData?.enabled === true),
-        }));
+    // that actually win their scope.
+    void fetch(`/api/subagents/profiles?cwd=${encodeURIComponent(cwd)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { profiles?: SubagentProfile[] } | null) => {
+        const all = data?.profiles;
+        if (!cancelled && all) {
+          setNavStats((prev) => ({ ...prev, agents: countEffectiveSubagentProfiles(all) }));
+        }
       })
       .catch(() => {});
     void fetch(`/api/plugins?cwd=${encodeURIComponent(cwd)}`)
@@ -284,10 +274,8 @@ export function SettingsModal({
                           {item.id === "skills" && navStats.skills !== null && (
                             <span className="settings-nav-badge" aria-hidden="true">{navStats.skills}</span>
                           )}
-                          {item.id === "agents" && navStats.agents && (
-                            <span className="settings-nav-badge" aria-hidden="true">
-                              {navStats.agents.enabled}/{navStats.agents.total}
-                            </span>
+                          {item.id === "agents" && navStats.agents !== null && (
+                            <span className="settings-nav-badge" aria-hidden="true">{navStats.agents}</span>
                           )}
                           {item.id === "plugins" && navStats.plugins && (
                             <span className="settings-nav-badge" aria-hidden="true">

@@ -98,10 +98,11 @@ test("the agents sidebar keeps the shared list and footer shape", () => {
 });
 
 // Regression: the agents nav entry rendered no badge while skills and plugins
-// both had one.
+// both had one, and the first attempt showed "0/3" whenever the built-in master
+// switch was off.
 test("the settings nav gives the agents tab its own badge", () => {
   const source = readComponent("SettingsModal.tsx");
-  assert.match(source, /item\.id === "agents" && navStats\.agents/);
-  assert.match(source, /countEffectiveSubagentProfiles/);
-  assert.match(source, /\/api\/subagents\/settings/);
+  assert.match(source, /item\.id === "agents" && navStats\.agents !== null/);
+  assert.match(source, /agents: countEffectiveSubagentProfiles\(all\)/);
+  assert.doesNotMatch(source, /\/api\/subagents\/settings/);
 });
