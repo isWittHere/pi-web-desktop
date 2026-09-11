@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { jsx: { runtime: "automatic" }, tsconfigPaths: true });
-const { SettingsChipGroup, sidebarGroupStyle } = await jiti.import("./settings-ui.tsx");
+const { SettingsChipGroup, settingsSidebarFooterStyle, sidebarGroupStyle } = await jiti.import("./settings-ui.tsx");
 
 function readComponent(name) {
   return readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
@@ -87,12 +87,23 @@ test("every manager sidebar builds its group headers from the shared style", () 
   }
 });
 
+test("every manager sidebar shares the footer band style", () => {
+  assert.equal(settingsSidebarFooterStyle.padding, "8px 6px");
+  assert.equal(settingsSidebarFooterStyle.borderTop, "1px solid var(--border)");
+  assert.equal(settingsSidebarFooterStyle.flexShrink, 0);
+  for (const file of ["AgentsConfig.tsx", "SkillsConfig.tsx", "PluginsConfig.tsx"]) {
+    const source = readComponent(file);
+    assert.match(source, /settingsSidebarFooterStyle/, `${file} must use the shared footer style`);
+    assert.doesNotMatch(source, /borderTop: "1px solid var\(--border\)"/, `${file} must not re-hardcode the footer band`);
+  }
+});
+
 test("the agents sidebar keeps the shared list and footer shape", () => {
   const source = readComponent("AgentsConfig.tsx");
   // No pinned header band and no widened column — both broke parity with the
   // skills/plugins managers.
   assert.doesNotMatch(source, /sidebarWidth=\{240\}/);
-  assert.match(source, /padding: "8px 6px", borderTop: "1px solid var\(--border\)", flexShrink: 0/);
+  assert.match(source, /settingsSidebarFooterStyle/);
   // The add action is the same flat, icon-led row the other managers use.
   assert.match(source, /<PlusIcon size=\{13\} \/>/);
 });

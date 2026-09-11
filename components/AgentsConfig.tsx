@@ -19,6 +19,7 @@ import {
   SettingsNumInput,
   SettingsPane,
   SettingsSelect,
+  settingsSidebarFooterStyle,
   sidebarGroupStyle,
 } from "./settings-ui";
 
@@ -33,7 +34,7 @@ const EMPTY_PROFILE: EditableProfile = {
   displayName: "Custom agent",
   description: "",
   systemPrompt: "",
-  tools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+  tools: [...TOOL_OPTIONS],
   loadSkills: false,
   loadExtensions: false,
   inheritContext: false,
@@ -364,7 +365,7 @@ export function AgentsConfig({
     return options;
   }, [modelOptions, draft.model, t]);
 
-  const scopedGroupOrder = ["project", "global", "workspace", "builtin"] as const;
+  const scopedGroupOrder = ["project", "global", "workspace"] as const;
 
   const renderProfileRow = (profile: SubagentProfile) => {
     const overridden = isSubagentProfileOverridden(profile, profiles);
@@ -462,7 +463,7 @@ export function AgentsConfig({
                 </div>
               )}
             </div>
-            {!loading && scopedGroupOrder.filter((scope) => scope !== "builtin").map((scope) => {
+            {!loading && scopedGroupOrder.map((scope) => {
               const scopedProfiles = profiles.filter((profile) => profile.scope === scope);
               if (scopedProfiles.length === 0) return null;
               return (
@@ -475,7 +476,7 @@ export function AgentsConfig({
               );
             })}
           </div>
-          <div style={{ padding: "8px 6px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+          <div style={settingsSidebarFooterStyle}>
             <button
               type="button"
               onClick={beginCreate}

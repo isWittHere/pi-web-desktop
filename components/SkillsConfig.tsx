@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { PlusIcon } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane, sidebarGroupStyle } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane, settingsSidebarFooterStyle, sidebarGroupStyle } from "@/components/settings-ui";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -955,13 +955,7 @@ export function SkillsConfig({
               )}
             </div>
             {/* Add skill button */}
-            <div
-              style={{
-                padding: "8px 6px",
-                borderTop: "1px solid var(--border)",
-                flexShrink: 0,
-              }}
-            >
+            <div style={settingsSidebarFooterStyle}>
               <div
                 onClick={() => setAddMode(true)}
                 style={{

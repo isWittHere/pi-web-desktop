@@ -91,8 +91,8 @@ export function SettingsModal({
     contentScrollRef.current?.scrollTo(0, 0);
   }, [activeTab]);
 
-  // Nav badges: skill count, subagent availability and plugin load status for
-  // the current workspace.
+  // Nav badges: skill count, subagent count and plugin load status for the
+  // current workspace.
   useEffect(() => {
     if (!cwd) {
       setNavStats(EMPTY_NAV_STATS);

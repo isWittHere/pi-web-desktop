@@ -5,7 +5,7 @@ import { PlusIcon } from "@phosphor-icons/react";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane, sidebarGroupStyle } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane, settingsSidebarFooterStyle, sidebarGroupStyle } from "@/components/settings-ui";
 import type { PluginPackageInfo, PluginUpdateResult, PluginsResponse } from "@/lib/api-types";
 
 type Translate = ReturnType<typeof useI18n>["t"];
@@ -858,7 +858,7 @@ export function PluginsConfig({
                 ))
               )}
             </div>
-            <div style={{ padding: "8px 6px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+            <div style={settingsSidebarFooterStyle}>
               {hasCheckablePackages && (
                 <button
                   type="button"

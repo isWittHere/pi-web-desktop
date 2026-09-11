@@ -40,6 +40,13 @@ export const sidebarGroupStyle: CSSProperties = {
   letterSpacing: "0.06em",
 };
 
+/** Fixed footer band under a manager list (add / bulk actions). */
+export const settingsSidebarFooterStyle: CSSProperties = {
+  padding: "8px 6px",
+  borderTop: "1px solid var(--border)",
+  flexShrink: 0,
+};
+
 /**
  * Settings section: title + description + controls as a flat full-width
  * block separated from the next section by a hairline divider. This is the
