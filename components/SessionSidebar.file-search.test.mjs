@@ -54,3 +54,25 @@ test("adds matching en and zh-CN search strings under the desktop namespace", ()
     assert.match(zhMessages, new RegExp(`"${key}"`));
   }
 });
+
+test("session search stays a dedicated top row instead of replacing the header", () => {
+  // The sessions header is always rendered; the search input lives in its
+  // own pinned row between the header and the session list.
+  assert.match(sidebarSource, /\{\/\* Header \*\//);
+  assert.match(sidebarSource, /\{\/\* Session search row/);
+  assert.match(sidebarSource, /\{sessionsOpen && searchOpen && \(/);
+  assert.doesNotMatch(sidebarSource, /searchOpen \? \(/);
+  assert.doesNotMatch(sidebarSource, /desktop\.exitSearch/);
+});
+
+test("session search matches the file search panel style and interaction", () => {
+  // Toggle from the header magnifier (active highlight), same input styling
+  // (border/bg/radius-5/11px mono), clear button, and Escape closes directly.
+  assert.match(sidebarSource, /setSearchOpen\(\(open\) => !open\)/);
+  assert.match(sidebarSource, /aria-pressed=\{searchOpen\}/);
+  assert.match(sidebarSource, /searchOpen \? "var\(--accent\)" : "var\(--text-dim\)"/);
+  assert.match(sidebarSource, /border: "1px solid var\(--border\)", borderRadius: 5/);
+  assert.match(sidebarSource, /fontSize: 11/);
+  assert.match(sidebarSource, /desktop\.clearSearch/);
+  assert.match(sidebarSource, /if \(e\.key === "Escape"\) setSearchOpen\(false\)/);
+});
