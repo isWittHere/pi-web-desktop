@@ -370,71 +370,74 @@ function PackageDetail({
   const updateAvailable = updateStatus?.state === "update-available";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 680 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, minWidth: 0, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 180, flex: 1 }}>
-          <Toggle
-            checked={enabled}
-            loading={busy || reloadBusy}
-            onChange={() => onAction(pkg.disabled ? "enable" : "disable", pkg)}
-            label={pkg.disabled ? t("desktop.enablePackage") : t("desktop.disablePackage")}
-          />
-          <ScopeTag scope={pkg.scope} />
-          {pkg.disabled ? (
-            <SettingsBadge tone="muted">
-              {t("desktop.disabled")}
-            </SettingsBadge>
-          ) : pkg.filtered && (
-            <SettingsBadge tone="warning">
-              {t("desktop.filtered")}
-            </SettingsBadge>
-          )}
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 12,
-              color: "var(--text)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {pkg.source}
-          </span>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+        <ScopeTag scope={pkg.scope} />
+        {pkg.disabled ? (
+          <SettingsBadge tone="muted">
+            {t("desktop.disabled")}
+          </SettingsBadge>
+        ) : pkg.filtered && (
+          <SettingsBadge tone="warning">
+            {t("desktop.filtered")}
+          </SettingsBadge>
+        )}
+        <span
+          title={pkg.source}
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--text-dim)",
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {shortenPath(pkg.installedPath ?? pkg.source)}
+        </span>
+        <Toggle
+          checked={enabled}
+          loading={busy || reloadBusy}
+          onChange={() => onAction(pkg.disabled ? "enable" : "disable", pkg)}
+          label={pkg.disabled ? t("desktop.enablePackage") : t("desktop.disablePackage")}
+        />
+      </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <SettingsButton
-            variant={updateAvailable ? "primary" : undefined}
-            onClick={updateAvailable || !canCheckForUpdates
-              ? () => onAction("update", pkg)
-              : onCheckUpdate}
-            disabled={busy || reloadBusy || checkingUpdate}
-            title={updateAvailable ? t("desktop.updateAvailable") : undefined}
-          >
-            {busyKey === `update:${key}`
-              ? t("desktop.updating")
-              : checkingUpdate
-                ? t("desktop.checking")
-                : updateAvailable || !canCheckForUpdates
-                  ? t("desktop.update")
-                  : t("desktop.check")}
-          </SettingsButton>
-          <SettingsButton
-            onClick={onReloadSession}
-            disabled={!sessionId || reloadBusy || busy}
-            title={sessionId ? t("desktop.reloadCurrentSession") : t("desktop.openSessionToReload")}
-          >
-            {reloadBusy ? t("desktop.reloading") : t("desktop.reloadSession")}
-          </SettingsButton>
-          <SettingsButton
-            variant="danger"
-            onClick={() => onAction("remove", pkg)}
-            disabled={busy || reloadBusy}
-          >
-            {busyKey === `remove:${key}` ? t("desktop.removing") : t("desktop.remove")}
-          </SettingsButton>
-        </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <SettingsButton
+          size="sm"
+          variant={updateAvailable ? "primary" : undefined}
+          onClick={updateAvailable || !canCheckForUpdates
+            ? () => onAction("update", pkg)
+            : onCheckUpdate}
+          disabled={busy || reloadBusy || checkingUpdate}
+          title={updateAvailable ? t("desktop.updateAvailable") : undefined}
+        >
+          {busyKey === `update:${key}`
+            ? t("desktop.updating")
+            : checkingUpdate
+              ? t("desktop.checking")
+              : updateAvailable || !canCheckForUpdates
+                ? t("desktop.update")
+                : t("desktop.check")}
+        </SettingsButton>
+        <SettingsButton
+          size="sm"
+          onClick={onReloadSession}
+          disabled={!sessionId || reloadBusy || busy}
+          title={sessionId ? t("desktop.reloadCurrentSession") : t("desktop.openSessionToReload")}
+        >
+          {reloadBusy ? t("desktop.reloading") : t("desktop.reloadSession")}
+        </SettingsButton>
+        <SettingsButton
+          size="sm"
+          variant="danger"
+          onClick={() => onAction("remove", pkg)}
+          disabled={busy || reloadBusy}
+        >
+          {busyKey === `remove:${key}` ? t("desktop.removing") : t("desktop.remove")}
+        </SettingsButton>
       </div>
 
       <div
