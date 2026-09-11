@@ -352,8 +352,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sessionsOpen, setSessionsOpen] = useState(true);
-  // Session-list quick-search: searchOpen swaps the header for a filter box,
-  // and sessionSearch drives live filtering of the visible session rows.
+  // Session-list full-text search: the header magnifier toggles a dedicated
+  // search row whose query feeds the SessionSearch full-text search while
+  // open. Closing the row clears the query so the list returns to the full
+  // view (no hidden title-filter state).
   const [searchOpen, setSearchOpen] = useState(false);
   const [sessionSearch, setSessionSearch] = useState("");
   // Server list generation for cross-window sync: when the lightweight
@@ -1105,22 +1107,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Live quick-search: filters against the exact title shown in the list
   // (a user-set name, else the first-message preview, else a short id).
-  // Applied after the project scope so search only ever narrows the currently
-  // visible project's sessions, never crosses into other workspaces.
-  const searchQuery = sessionSearch.trim().toLowerCase();
-  const searchScopedSessions = searchQuery
-    ? markFilteredSessions.filter((s) => {
-        const title = s.name
-          || (s.isDraft
-              ? (getSessionDisplayFirstMessage(s.firstMessage).slice(0, 50) || t("desktop.newSessionDraft"))
-              : getSessionDisplayFirstMessage(s.firstMessage).slice(0, 50))
-          || s.id.slice(0, 12);
-        return title.toLowerCase().includes(searchQuery);
-      })
-    : markFilteredSessions;
-
-  // Build parent-child tree within the filtered set
-  const sessionTree = buildSessionTree(searchScopedSessions);
+  // Visible rows are the mark-filtered set only. Title quick-filtering was
+  // removed: while the search row is open, SessionSearch runs full-text
+  // search across sessions; closing the row clears the query, so this list
+  // always renders the unfiltered (or mark-filtered) view.
+  const sessionTree = buildSessionTree(markFilteredSessions);
 
   // Time-group the tree roots. Root nodes are bucketed by their own `modified`
   // time (pinned rows first); fork children always stay inside their parent's
@@ -1128,7 +1119,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // the same grouped view (groups are force-expanded while filtering so the
   // narrowed results stay visible); pinning still floats to the top because it
   // is an explicit user intent.
-  const isFilteredView = Boolean(searchQuery || markFilter);
+  const isFilteredView = Boolean(markFilter);
   const sessionGroups = (() => {
     const byBucket = new Map<TimeBucket, SessionTreeNode[]>();
     for (const bucket of TIME_BUCKET_ORDER) byBucket.set(bucket, []);
@@ -1471,7 +1462,12 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           <button
             onClick={() => {
               setSessionsOpen(true);
-              setSearchOpen((open) => !open);
+              if (searchOpen) {
+                setSearchOpen(false);
+                setSessionSearch("");
+              } else {
+                setSearchOpen(true);
+              }
             }}
             title={t("desktop.searchSessions")}
             aria-label={t("desktop.searchSessions")}
@@ -1960,7 +1956,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             <input
               value={sessionSearch}
               onChange={(e) => setSessionSearch(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Escape") setSearchOpen(false); }}
+              onKeyDown={(e) => { if (e.key === "Escape") { setSearchOpen(false); setSessionSearch(""); } }}
               placeholder={t("desktop.searchSessionsPlaceholder")}
               aria-label={t("desktop.searchSessions")}
               autoFocus
@@ -2006,9 +2002,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               {error}
             </div>
           )}
-          {!loading && !error && searchScopedSessions.length === 0 && (
+          {!loading && !error && markFilteredSessions.length === 0 && (
             <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-              {searchQuery || markFilter ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
+              {markFilter ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
             </div>
           )}
           {sessionGroups.map(({ bucket, nodes }) => (

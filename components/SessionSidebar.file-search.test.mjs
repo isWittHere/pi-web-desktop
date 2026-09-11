@@ -68,11 +68,20 @@ test("session search stays a dedicated top row instead of replacing the header",
 test("session search matches the file search panel style and interaction", () => {
   // Toggle from the header magnifier (active highlight), same input styling
   // (border/bg/radius-5/11px mono), clear button, and Escape closes directly.
-  assert.match(sidebarSource, /setSearchOpen\(\(open\) => !open\)/);
   assert.match(sidebarSource, /aria-pressed=\{searchOpen\}/);
   assert.match(sidebarSource, /searchOpen \? "var\(--accent\)" : "var\(--text-dim\)"/);
   assert.match(sidebarSource, /border: "1px solid var\(--border\)", borderRadius: 5/);
   assert.match(sidebarSource, /fontSize: 11/);
   assert.match(sidebarSource, /desktop\.clearSearch/);
-  assert.match(sidebarSource, /if \(e\.key === "Escape"\) setSearchOpen\(false\)/);
+});
+
+test("session search is single-semantics: closing clears the query", () => {
+  // Escape and the header toggle both clear the search text on close, so the
+  // list always returns to the full (mark-filtered) view — no hidden title
+  // quick-filter state. The removed quick-filter branch must not reappear.
+  assert.match(sidebarSource, /if \(e\.key === "Escape"\) \{ setSearchOpen\(false\); setSessionSearch\(""\); \}/);
+  assert.match(sidebarSource, /if \(searchOpen\) \{\s*setSearchOpen\(false\);\s*setSessionSearch\(""\);\s*\} else \{\s*setSearchOpen\(true\);\s*\}/);
+  assert.match(sidebarSource, /buildSessionTree\(markFilteredSessions\)/);
+  assert.doesNotMatch(sidebarSource, /searchScopedSessions/);
+  assert.doesNotMatch(sidebarSource, /searchQuery = sessionSearch/);
 });
