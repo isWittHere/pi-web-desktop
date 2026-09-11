@@ -96,3 +96,12 @@ test("the agents sidebar keeps the shared list and footer shape", () => {
   // The add action is the same flat, icon-led row the other managers use.
   assert.match(source, /<PlusIcon size=\{13\} \/>/);
 });
+
+// Regression: the agents nav entry rendered no badge while skills and plugins
+// both had one.
+test("the settings nav gives the agents tab its own badge", () => {
+  const source = readComponent("SettingsModal.tsx");
+  assert.match(source, /item\.id === "agents" && navStats\.agents/);
+  assert.match(source, /countEffectiveSubagentProfiles/);
+  assert.match(source, /\/api\/subagents\/settings/);
+});

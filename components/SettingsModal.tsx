@@ -12,6 +12,8 @@ import { AgentsConfig } from "./AgentsConfig";
 import { SettingsPane } from "./settings-ui";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
+import { countEffectiveSubagentProfiles } from "@/lib/subagent-profile-precedence";
+import type { SubagentProfile } from "@/lib/subagents";
 import {
   SETTINGS_NAV,
   settingsNavItems,
@@ -30,13 +32,15 @@ interface SettingsModalProps {
   onSessionReloadedAction: () => void;
 }
 
-/** Counts shown on the nav badges (skills total, plugins loaded/configured). */
+/** Counts shown on the nav badges (skills total, agents enabled/total,
+ * plugins loaded/configured). */
 interface SettingsNavStats {
   skills: number | null;
+  agents: { enabled: number; total: number } | null;
   plugins: { loaded: number; configured: number } | null;
 }
 
-const EMPTY_NAV_STATS: SettingsNavStats = { skills: null, plugins: null };
+const EMPTY_NAV_STATS: SettingsNavStats = { skills: null, agents: null, plugins: null };
 
 const tabIcons: Record<SettingsTab, typeof Cpu> = {
   display: Monitor,
@@ -87,18 +91,40 @@ export function SettingsModal({
     contentScrollRef.current?.scrollTo(0, 0);
   }, [activeTab]);
 
-  // Nav badges: skill count and plugin load status for the current workspace.
+  // Nav badges: skill count, subagent availability and plugin load status for
+  // the current workspace.
   useEffect(() => {
     if (!cwd) {
       setNavStats(EMPTY_NAV_STATS);
       return;
     }
     let cancelled = false;
-    setNavStats((prev) => ({ ...prev, plugins: null, skills: null }));
+    setNavStats((prev) => ({ ...prev, plugins: null, skills: null, agents: null }));
     void fetch(`/api/skills?cwd=${encodeURIComponent(cwd)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { skills?: unknown[] } | null) => {
         if (!cancelled && data) setNavStats((prev) => ({ ...prev, skills: data.skills?.length ?? null }));
+      })
+      .catch(() => {});
+    // Shadowed profiles are listed as separate sources, so count only the ones
+    // that actually win their scope, and gate on the built-in master switch.
+    void Promise.all([
+      fetch(`/api/subagents/profiles?cwd=${encodeURIComponent(cwd)}`),
+      fetch("/api/subagents/settings"),
+    ])
+      .then(async ([profilesRes, settingsRes]) => {
+        const profilesData = profilesRes.ok
+          ? (await profilesRes.json()) as { profiles?: SubagentProfile[] }
+          : null;
+        const settingsData = settingsRes.ok
+          ? (await settingsRes.json()) as { enabled?: boolean }
+          : null;
+        const all = profilesData?.profiles;
+        if (cancelled || !all) return;
+        setNavStats((prev) => ({
+          ...prev,
+          agents: countEffectiveSubagentProfiles(all, settingsData?.enabled === true),
+        }));
       })
       .catch(() => {});
     void fetch(`/api/plugins?cwd=${encodeURIComponent(cwd)}`)
@@ -257,6 +283,11 @@ export function SettingsModal({
                           <span>{t(item.labelKey)}</span>
                           {item.id === "skills" && navStats.skills !== null && (
                             <span className="settings-nav-badge" aria-hidden="true">{navStats.skills}</span>
+                          )}
+                          {item.id === "agents" && navStats.agents && (
+                            <span className="settings-nav-badge" aria-hidden="true">
+                              {navStats.agents.enabled}/{navStats.agents.total}
+                            </span>
                           )}
                           {item.id === "plugins" && navStats.plugins && (
                             <span className="settings-nav-badge" aria-hidden="true">
