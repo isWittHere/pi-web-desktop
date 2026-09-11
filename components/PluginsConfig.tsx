@@ -26,6 +26,24 @@ function packageKey(pkg: Pick<PluginPackageInfo, "source" | "scope">): string {
   return `${pkg.scope}\0${pkg.source}`;
 }
 
+function pluginDisplayName(pkg: PluginPackageInfo): string {
+  if (pkg.packageName) return pkg.packageName;
+  const source = pkg.source;
+  // Strip protocol prefixes: npm:, git:, and any scheme:// URL.
+  const withoutPrefix = source
+    .replace(/^(?:npm|git):/, "")
+    .replace(/^[a-z]+:\/\//, "");
+  // Strip trailing version/ref suffixes (@version for npm/git, #commit for git URLs).
+  const base = withoutPrefix.split(/[?#]/)[0].replace(/@[^/]+$/, "");
+  const segments = base.split(/[/\\]/).filter(Boolean);
+  const last = segments[segments.length - 1] ?? source;
+  // Scoped npm packages keep the scope so the folder name stays recognizable.
+  if (segments.length >= 2 && segments[0].startsWith("@")) {
+    return `${segments[0]}/${last}`;
+  }
+  return last.replace(/\.git$/, "");
+}
+
 function resourceSummary(pkg: PluginPackageInfo, t: Translate): string {
   if (pkg.disabled) return t("desktop.disabled");
   const parts = [
@@ -794,63 +812,42 @@ export function PluginsConfig({
                               width: 7,
                               height: 7,
                               borderRadius: "50%",
-                              background: statusColor(pkg.status),
+                              background: pkg.disabled
+                                ? "var(--border)"
+                                : "var(--accent)",
+                              transition: "background 0.15s",
                             }}
                           />
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div
+                          <span
+                            title={pkg.source}
+                            style={{
+                              fontSize: 12,
+                              fontWeight: isSelected ? 600 : 400,
+                              color: pkg.disabled
+                                ? "var(--text-dim)"
+                                : "var(--text)",
+                              fontFamily: "var(--font-mono)",
+                              flex: 1,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {pluginDisplayName(pkg)}
+                          </span>
+                          {updateStatuses[key]?.state === "update-available" && (
+                            <span
+                              title={t("desktop.updateAvailable")}
                               style={{
-                                fontSize: 12,
-                                fontWeight: isSelected ? 600 : 400,
-                                color: "var(--text)",
-                                fontFamily: "var(--font-mono)",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
+                                color: "var(--status-warning)",
+                                fontSize: 13,
+                                lineHeight: 1,
+                                flexShrink: 0,
                               }}
                             >
-                              {pkg.source}
-                            </div>
-                            {updateStatuses[key]?.state === "update-available" && (
-                              <div
-                                title={t("desktop.updateAvailable")}
-                                style={{
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  color: "var(--accent)",
-                                  marginTop: 2,
-                                }}
-                              >
-                                ↑ {t("desktop.updateAvailable")}
-                              </div>
-                            )}
-                            <div
-                              style={{
-                                fontSize: 10,
-                                color: "var(--text-dim)",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                                marginTop: 2,
-                              }}
-                            >
-                              {resourceSummary(pkg, t)}
-                            </div>
-                            {(pkg.version || pkg.configuredVersion) && (
-                              <div
-                                style={{
-                                  fontSize: 10,
-                                  color: "var(--text-dim)",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                  marginTop: 2,
-                                }}
-                              >
-                                {versionSummary(pkg, t)}
-                              </div>
-                            )}
-                          </div>
+                              ↑
+                            </span>
+                          )}
                         </div>
                       );
                     })}
