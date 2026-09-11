@@ -352,8 +352,10 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sessionsOpen, setSessionsOpen] = useState(true);
-  // Session-list quick-search: searchOpen swaps the header for a filter box,
-  // and sessionSearch drives live filtering of the visible session rows.
+  // Session-list full-text search: the header magnifier toggles a dedicated
+  // search row whose query feeds the SessionSearch full-text search while
+  // open. Closing the row clears the query so the list returns to the full
+  // view (no hidden title-filter state).
   const [searchOpen, setSearchOpen] = useState(false);
   const [sessionSearch, setSessionSearch] = useState("");
   // Server list generation for cross-window sync: when the lightweight
@@ -377,6 +379,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
+  const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
@@ -1104,22 +1107,11 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
   // Live quick-search: filters against the exact title shown in the list
   // (a user-set name, else the first-message preview, else a short id).
-  // Applied after the project scope so search only ever narrows the currently
-  // visible project's sessions, never crosses into other workspaces.
-  const searchQuery = sessionSearch.trim().toLowerCase();
-  const searchScopedSessions = searchQuery
-    ? markFilteredSessions.filter((s) => {
-        const title = s.name
-          || (s.isDraft
-              ? (getSessionDisplayFirstMessage(s.firstMessage).slice(0, 50) || t("desktop.newSessionDraft"))
-              : getSessionDisplayFirstMessage(s.firstMessage).slice(0, 50))
-          || s.id.slice(0, 12);
-        return title.toLowerCase().includes(searchQuery);
-      })
-    : markFilteredSessions;
-
-  // Build parent-child tree within the filtered set
-  const sessionTree = buildSessionTree(searchScopedSessions);
+  // Visible rows are the mark-filtered set only. Title quick-filtering was
+  // removed: while the search row is open, SessionSearch runs full-text
+  // search across sessions; closing the row clears the query, so this list
+  // always renders the unfiltered (or mark-filtered) view.
+  const sessionTree = buildSessionTree(markFilteredSessions);
 
   // Time-group the tree roots. Root nodes are bucketed by their own `modified`
   // time (pinned rows first); fork children always stay inside their parent's
@@ -1127,7 +1119,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // the same grouped view (groups are force-expanded while filtering so the
   // narrowed results stay visible); pinning still floats to the top because it
   // is an explicit user intent.
-  const isFilteredView = Boolean(searchQuery || markFilter);
+  const isFilteredView = Boolean(markFilter);
   const sessionGroups = (() => {
     const byBucket = new Map<TimeBucket, SessionTreeNode[]>();
     for (const bucket of TIME_BUCKET_ORDER) byBucket.set(bucket, []);
@@ -1444,79 +1436,6 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
 
       {/* Header */}
       <div style={{ flexShrink: 0 }}>
-        {searchOpen ? (
-          /* ── Search mode: the header becomes a quick-filter box ── */
-          /* height matches the natural section-header row (11px text at the
-             inherited line-height 1.5 + 6px padding) so toggling does not jump. */
-          <div style={{ display: "flex", alignItems: "center", gap: 4, height: 28.5, boxSizing: "border-box", padding: "0 8px" }}>
-            <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
-              <MagnifyingGlass size={13} color="var(--text-dim)" style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} aria-hidden="true" />
-              <input
-                value={sessionSearch}
-                onChange={(e) => setSessionSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    if (sessionSearch) setSessionSearch("");
-                    else setSearchOpen(false);
-                  }
-                }}
-                placeholder={t("desktop.searchSessionsPlaceholder")}
-                aria-label={t("desktop.searchSessions")}
-                autoFocus
-                style={{
-                  width: "100%", height: 24, boxSizing: "border-box",
-                  padding: "0 8px 0 27px", background: "var(--bg-hover)",
-                  border: "1px solid var(--accent)", borderRadius: 6,
-                  outline: "none", color: "var(--text)", fontSize: 12,
-                  fontFamily: "var(--font-mono)",
-                }}
-              />
-            </div>
-            <button
-              onClick={openMarkFilterMenu}
-              title={t("desktop.markFilter")}
-              aria-label={t("desktop.markFilter")}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 24, height: 24, padding: 0,
-                background: "none", border: "none",
-                color: markFilter ? SESSION_MARK_COLORS[markFilter] : "var(--text-dim)",
-                cursor: "pointer", borderRadius: 5, flexShrink: 0,
-                transition: "color 0.12s, background 0.12s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-            >
-              {markFilter ? (
-                (() => {
-                  const Icon = SESSION_MARK_ICONS[markFilter];
-                  return (
-                    <Icon size={13} weight={markFilter === "completed" ? "fill" : "regular"} aria-hidden="true" />
-                  );
-                })()
-              ) : (
-                <FunnelSimple size={13} weight="regular" aria-hidden="true" />
-              )}
-            </button>
-            <button
-              onClick={() => { setSearchOpen(false); setSessionSearch(""); }}
-              title={t("desktop.exitSearch")}
-              aria-label={t("desktop.exitSearch")}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 24, height: 24, padding: 0,
-                background: "none", border: "none",
-                color: "var(--text-dim)", cursor: "pointer",
-                borderRadius: 5, flexShrink: 0,
-                transition: "color 0.12s, background 0.12s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
-            >
-              <X size={13} weight="regular" aria-hidden="true" />
-            </button>
-          </div>
-        ) : (
         <div style={{ display: "flex", alignItems: "center" }}>
           <button
             onClick={() => setSessionsOpen((v) => !v)}
@@ -1543,23 +1462,29 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           <button
             onClick={() => {
               setSessionsOpen(true);
-              setSearchOpen(true);
+              if (searchOpen) {
+                setSearchOpen(false);
+                setSessionSearch("");
+              } else {
+                setSearchOpen(true);
+              }
             }}
             title={t("desktop.searchSessions")}
             aria-label={t("desktop.searchSessions")}
+            aria-pressed={searchOpen}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 26, height: 26, padding: 0,
-              background: "none",
+              background: searchOpen ? "var(--bg-selected)" : "none",
               border: "none",
-              color: "var(--text-dim)",
+              color: searchOpen ? "var(--accent)" : "var(--text-dim)",
               cursor: "pointer",
               borderRadius: 5,
               flexShrink: 0,
               transition: "color 0.3s, background 0.3s",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+            onMouseEnter={(e) => { if (searchOpen) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { if (searchOpen) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
           >
             <MagnifyingGlass size={13} weight="regular" aria-hidden="true" />
           </button>
@@ -1639,7 +1564,6 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
             )}
           </button>
         </div>
-        )}
 
         {/* CWD picker */}
         {viewMode === "classic" && !hasWorkspaceControlsHosts && <div ref={dropdownRef} style={{ position: "relative" }}>
@@ -2022,6 +1946,45 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         )}
       </div>
 
+      {/* Session search row — same visual language as the explorer file
+          search: a dedicated top row outside the scroll container, so it
+          stays pinned while the session list scrolls underneath. */}
+      {sessionsOpen && searchOpen && (
+        <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)", background: "var(--bg-panel)", flexShrink: 0 }}>
+          <div style={{ position: "relative" }}>
+            <MagnifyingGlass size={12} color="var(--text-dim)" weight="regular" style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} aria-hidden="true" />
+            <input
+              value={sessionSearch}
+              onChange={(e) => setSessionSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") { setSearchOpen(false); setSessionSearch(""); } }}
+              placeholder={t("desktop.searchSessionsPlaceholder")}
+              aria-label={t("desktop.searchSessions")}
+              autoFocus
+              style={{
+                width: "100%", boxSizing: "border-box",
+                padding: "6px 24px", background: "var(--bg)",
+                border: "1px solid var(--border)", borderRadius: 5,
+                outline: "none", color: "var(--text)", fontSize: 11,
+                fontFamily: "var(--font-mono)",
+              }}
+            />
+            {sessionSearch && (
+              <button
+                type="button"
+                onClick={() => setSessionSearch("")}
+                title={t("desktop.clearSearch")}
+                aria-label={t("desktop.clearSearch")}
+                style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, padding: 0, border: "none", borderRadius: 4, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-dim)"; }}
+              >
+                <X size={10} weight="bold" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Session list — when both panels open, uses intelligent max-height;
            when explorer is collapsed OR not rendered (no workspace selected,
            welcome state), expands to fill the remaining sidebar height so the
@@ -2039,9 +2002,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               {error}
             </div>
           )}
-          {!loading && !error && searchScopedSessions.length === 0 && (
+          {!loading && !error && markFilteredSessions.length === 0 && (
             <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
-              {searchQuery || markFilter ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
+              {markFilter ? t("desktop.noMatchingSessions") : t("desktop.noSessionsFound")}
             </div>
           )}
           {sessionGroups.map(({ bucket, nodes }) => (
@@ -2098,6 +2061,29 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               <CaretRight size={9} weight="regular" style={{ transform: explorerOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
               {t("desktop.explorer")}
             </button>
+            {explorerOpen && (
+              <button
+                onClick={() => setFileSearchOpen((open) => !open)}
+                title={t("desktop.searchFiles")}
+                aria-label={t("desktop.searchFiles")}
+                aria-pressed={fileSearchOpen}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26, padding: 0,
+                  background: fileSearchOpen ? "var(--bg-selected)" : "none",
+                  border: "none",
+                  color: fileSearchOpen ? "var(--accent)" : "var(--text-dim)",
+                  cursor: "pointer",
+                  borderRadius: 5,
+                  flexShrink: 0,
+                  transition: "color 0.3s, background 0.3s",
+                }}
+                onMouseEnter={(e) => { if (fileSearchOpen) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (fileSearchOpen) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+              >
+                <MagnifyingGlass size={13} weight="regular" aria-hidden="true" />
+              </button>
+            )}
             {explorerOpen && (
               <button
                 onClick={() => fileExplorerRef.current?.openUploadPicker()}
@@ -2161,6 +2147,8 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                 onAtMention={onAtMention}
                 onAtMentions={onAtMentions}
                 onUploadBusyChange={setExplorerUploadBusy}
+                fileSearchOpen={fileSearchOpen}
+                onFileSearchOpenChange={setFileSearchOpen}
               />
             </div>
           )}
