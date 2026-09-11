@@ -102,9 +102,19 @@ test("custom model config exposes headers and compat compatibility flags", async
   assert.match(source, /headers=\{model\.headers\}/);
   assert.match(source, /set\("headers", headers\)/);
 
-  // Model-level compat toggle reads the effective (provider+model) value so
-  // hand-edited models.json settings are reflected, while writes stay on the
-  // model entry as an explicit per-model override.
-  assert.match(source, /effectiveCompat\(provider, model\)\["supportsDeveloperRole"\] !== false/);
-  assert.match(source, /setCompatBool\(model, "supportsDeveloperRole", v\)/);
+  // Model-level compat is resolved provider+model so hand-edited models.json
+  // settings are reflected, and written back to the model entry as an explicit
+  // override (or removed to inherit again).
+  assert.match(source, /resolveCompatFlag\(model\.compat, provider\.compat, "supportsAdditionalTools"\)/);
+  assert.match(source, /writeCompatFlag\(model\.compat, "supportsAdditionalTools", v\)/);
+
+  // The developer-role setting is tri-state (inherit / developer / system): an
+  // explicit `false` must be persisted, so selecting "system" cannot fall back
+  // to pi's default-true detection through a deleted key.
+  assert.match(source, /resolveCompatFlag\(model\.compat, provider\.compat, "supportsDeveloperRole"\)/);
+  assert.match(source, /writeCompatFlag\(model\.compat, "supportsDeveloperRole", v === "inherit" \? undefined : v === "developer"\)/);
+  assert.match(source, /value: "inherit"/);
+  assert.match(source, /value: "developer"/);
+  assert.match(source, /value: "system"/);
+  assert.match(source, /desktop\.modelsRoleEffectiveAuto/);
 });

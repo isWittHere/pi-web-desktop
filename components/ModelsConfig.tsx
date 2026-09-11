@@ -33,6 +33,8 @@ import {
   hasModelCostDraftValue,
   modelCostToDraft,
   parseCompleteModelCost,
+  resolveCompatFlag,
+  writeCompatFlag,
   type ModelCostDraft,
   type ModelCostKey,
 } from "./models-config-helpers";
@@ -881,23 +883,6 @@ function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
   return { ...model, compat: Object.keys(rest).length ? rest : undefined };
 }
 
-// Generic helper for boolean compat flags. An empty compat map is collapsed to
-// `undefined` so the saved models.json stays free of `{}` noise.
-function setCompatBool(model: ModelEntry, key: string, value: boolean): ModelEntry {
-  const next = { ...(model.compat ?? {}) };
-  if (value) next[key] = true;
-  else delete next[key];
-  return { ...model, compat: Object.keys(next).length ? next : undefined };
-}
-
-// Compat can be configured at the provider or model level; provider-composer
-// merges them (model wins) at runtime. The UI reads the effective value so
-// hand-edited models.json settings are reflected correctly, while toggles
-// write to the model entry so a per-model override is explicit.
-function effectiveCompat(provider: ProviderEntry, model: ModelEntry): Record<string, unknown> {
-  return { ...(provider.compat ?? {}), ...(model.compat ?? {}) };
-}
-
 // Editable key/value header list for a provider or model entry. Rebuilds a
 // fresh object on each edit so empty keys/values are dropped instead of being
 // persisted as noise.
@@ -1061,6 +1046,22 @@ function ModelDetail({
     }
   }, [model, provider, providerName, testState.phase]);
 
+  // Tri-state developer-role control: the runtime never sends the developer
+  // role when the flag is explicitly false, so "inherit" and "system" must be
+  // distinct choices instead of one checkbox that could not write false.
+  const developerRole = resolveCompatFlag(model.compat, provider.compat, "supportsDeveloperRole");
+  const developerRoleLabel = (value: boolean): string => (
+    value ? t("desktop.modelsRoleDeveloper") : t("desktop.modelsRoleSystem")
+  );
+  const developerRoleChoice = developerRole.origin === "model"
+    ? (developerRole.value === true ? "developer" : "system")
+    : "inherit";
+  const developerRoleHint = developerRole.origin === "model"
+    ? t("desktop.modelsRoleEffectiveModel", { role: developerRoleLabel(developerRole.value === true) })
+    : developerRole.origin === "provider"
+      ? t("desktop.modelsRoleEffectiveProvider", { role: developerRoleLabel(developerRole.value === true) })
+      : t("desktop.modelsRoleEffectiveAuto");
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1161,8 +1162,8 @@ function ModelDetail({
         {(model.api ?? provider.api ?? "openai-completions") === "openai-responses" && (
           <Check
             label={t("desktop.modelsSupportsAdditionalTools")}
-            checked={effectiveCompat(provider, model)["supportsAdditionalTools"] === true}
-            onChange={(v) => onChange(setCompatBool(model, "supportsAdditionalTools", v))}
+            checked={resolveCompatFlag(model.compat, provider.compat, "supportsAdditionalTools").value === true}
+            onChange={(v) => onChange({ ...model, compat: writeCompatFlag(model.compat, "supportsAdditionalTools", v) })}
           />
         )}
       </div>
@@ -1174,11 +1175,30 @@ function ModelDetail({
             checked={hasDeepseekCompat(model)}
             onChange={(v) => onChange(setDeepseekCompat(model, v))}
           />
-          <Check
-            label={t("desktop.modelsSupportsDeveloperRole")}
-            checked={effectiveCompat(provider, model)["supportsDeveloperRole"] !== false}
-            onChange={(v) => onChange(setCompatBool(model, "supportsDeveloperRole", v))}
-          />
+          {/* Compat lives on the provider or the model; pi resolves model first,
+              then provider, then its own endpoint detection. The select keeps
+              "inherit" distinct from an explicit choice so a false override is
+              actually written (and pi's default-true flags can be turned off). */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("desktop.modelsSystemRole")}</span>
+              <SegmentedControl
+                size="sm"
+                ariaLabel={t("desktop.modelsSystemRole")}
+                value={developerRoleChoice}
+                onChange={(v) => onChange({
+                  ...model,
+                  compat: writeCompatFlag(model.compat, "supportsDeveloperRole", v === "inherit" ? undefined : v === "developer"),
+                })}
+                options={[
+                  { value: "inherit", label: t("desktop.modelsRoleInherit"), title: t("desktop.modelsRoleInheritHelp") },
+                  { value: "developer", label: t("desktop.modelsRoleDeveloper") },
+                  { value: "system", label: t("desktop.modelsRoleSystem") },
+                ]}
+              />
+            </div>
+            <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{developerRoleHint}</span>
+          </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <SectionTitle>{t("desktop.modelsThinkingLevelMap")}</SectionTitle>

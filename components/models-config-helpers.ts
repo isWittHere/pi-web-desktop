@@ -45,3 +45,63 @@ export function parseCompleteModelCost(draft: ModelCostDraft): ModelCostRates | 
 export function hasModelCostDraftValue(draft: ModelCostDraft): boolean {
   return MODEL_COST_KEYS.some((key) => draft[key].trim() !== "");
 }
+
+/**
+ * Tri-state compat flag: an explicit `true`/`false`, or `undefined` meaning
+ * "inherit" (fall through to the provider-level compat, then to pi's own
+ * endpoint auto-detection).
+ */
+export type CompatFlag = boolean | undefined;
+
+/** Read a boolean compat flag; non-boolean values from hand-edited JSON count as unset. */
+export function readCompatFlag(compat: Record<string, unknown> | undefined, key: string): CompatFlag {
+  const value = compat?.[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+/**
+ * Write a compat flag while keeping the three states distinct.
+ *
+ * `undefined` drops the model-level override so the provider value (or pi's
+ * default) applies again. An explicit boolean is always persisted: pi resolves
+ * flags as `model.compat[key] ?? fallback`, so deleting the key would silently
+ * turn a default-true flag (e.g. supportsDeveloperRole) back on. An emptied
+ * compat map collapses to `undefined` so models.json keeps no `{}` noise.
+ */
+export function writeCompatFlag(
+  compat: Record<string, unknown> | undefined,
+  key: string,
+  value: CompatFlag,
+): Record<string, unknown> | undefined {
+  const next = { ...(compat ?? {}) };
+  if (value === undefined) delete next[key];
+  else next[key] = value;
+  return Object.keys(next).length ? next : undefined;
+}
+
+/** Where the effective value of a compat flag comes from. */
+export type CompatOrigin = "model" | "provider" | "auto";
+
+export interface ResolvedCompatFlag {
+  origin: CompatOrigin;
+  /** The effective value; absent only for `"auto"`, which pi resolves per request. */
+  value?: boolean;
+}
+
+/**
+ * Resolve the value pi will use, mirroring its composition order for
+ * models.json providers: explicit model compat wins, then provider compat, then
+ * pi's endpoint auto-detection. The UI cannot observe the auto-detected value,
+ * so it reports `"auto"` rather than guessing.
+ */
+export function resolveCompatFlag(
+  modelCompat: Record<string, unknown> | undefined,
+  providerCompat: Record<string, unknown> | undefined,
+  key: string,
+): ResolvedCompatFlag {
+  const modelValue = readCompatFlag(modelCompat, key);
+  if (modelValue !== undefined) return { origin: "model", value: modelValue };
+  const providerValue = readCompatFlag(providerCompat, key);
+  if (providerValue !== undefined) return { origin: "provider", value: providerValue };
+  return { origin: "auto" };
+}
