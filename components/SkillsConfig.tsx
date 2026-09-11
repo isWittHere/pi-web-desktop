@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { PlusIcon } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane, sidebarGroupStyle } from "@/components/settings-ui";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -862,14 +862,7 @@ export function SkillsConfig({
                       return (
                       <div key={groupKey} style={{ marginBottom: 6 }}>
                         <div
-                          style={{
-                            padding: "4px 8px 3px",
-                            fontSize: 10,
-                            fontWeight: 600,
-                            color: "var(--text-dim)",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
-                          }}
+                          style={sidebarGroupStyle}
                         >
                           {grpLabel}
                         </div>

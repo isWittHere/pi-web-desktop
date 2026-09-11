@@ -27,6 +27,20 @@ export const inputStyle: CSSProperties = {
 };
 
 /**
+ * Manager list group header (scope labels: project / global / workspace …).
+ * Shared so the skills, plugins and agents sidebars keep one rhythm instead of
+ * drifting apart as each page is written.
+ */
+export const sidebarGroupStyle: CSSProperties = {
+  padding: "4px 8px 3px",
+  fontSize: 10,
+  fontWeight: 600,
+  color: "var(--text-dim)",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
+
+/**
  * Settings section: title + description + controls as a flat full-width
  * block separated from the next section by a hairline divider. This is the
  * classic settings-page rhythm — sections stack with a `borderBottom` line.

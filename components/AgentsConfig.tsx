@@ -1,5 +1,6 @@
 "use client";
 
+import { PlusIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -18,6 +19,7 @@ import {
   SettingsNumInput,
   SettingsPane,
   SettingsSelect,
+  sidebarGroupStyle,
 } from "./settings-ui";
 
 const TOOL_OPTIONS = ["read", "bash", "edit", "write", "grep", "find", "ls"];
@@ -364,117 +366,144 @@ export function AgentsConfig({
 
   const scopedGroupOrder = ["project", "global", "workspace", "builtin"] as const;
 
+  const renderProfileRow = (profile: SubagentProfile) => {
+    const overridden = isSubagentProfileOverridden(profile, profiles);
+    const isSelected = selectedKey === profileKey(profile) && !creating;
+    return (
+      <div
+        key={profileKey(profile)}
+        role="button"
+        tabIndex={0}
+        onClick={() => selectProfile(profile)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            selectProfile(profile);
+          }
+        }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          padding: "7px 8px",
+          borderRadius: 5,
+          cursor: "pointer",
+          background: isSelected ? "var(--bg-selected)" : "none",
+        }}
+        onMouseEnter={(e) => {
+          if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = isSelected ? "var(--bg-selected)" : "none";
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            flexShrink: 0,
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            background: profile.enabled ? "var(--status-success)" : "var(--text-dim)",
+          }}
+        />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 12,
+            fontWeight: isSelected ? 600 : 400,
+            color: profile.enabled ? "var(--text)" : "var(--text-dim)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {profile.displayName}
+        </span>
+        {overridden && <SettingsBadge tone="muted">{t("agents.overridden")}</SettingsBadge>}
+      </div>
+    );
+  };
+
   return (
     <SettingsPane
-      sidebarWidth={240}
       sidebar={
         <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
-          <div style={{ padding: "12px 10px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{t("agents.builtInTitle")}</span>
-              <Toggle
-                checked={builtInEnabled}
-                disabled={settingsLoading || reloading}
-                loading={settingsSaving}
-                label={t("agents.builtInTitle")}
-                onChange={(enabled) => void toggleBuiltInSubagents(enabled)}
-              />
-            </div>
-            <span style={{ fontSize: 11, lineHeight: 1.45, color: "var(--text-muted)" }}>{t("agents.builtInDescription")}</span>
-            {reloadNeeded && sessionId && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <span style={{ fontSize: 11, color: "var(--status-warning)" }}>{t("agents.reloadRequired")}</span>
-                <SettingsButton size="sm" onClick={() => void reloadSession()} disabled={reloading || settingsSaving}>
-                  {reloading ? t("agents.reloading") : t("agents.reloadSession")}
-                </SettingsButton>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 6px" }}>
+            {loading && <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("agents.loading")}</div>}
+            {/* The built-in group owns the master switch, so it always renders. */}
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ ...sidebarGroupStyle, paddingBottom: 0 }}>{t("agents.scope.builtin")}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 8px 8px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "var(--text)" }}>{t("agents.builtInTitle")}</span>
+                  <Toggle
+                    checked={builtInEnabled}
+                    disabled={settingsLoading || reloading}
+                    loading={settingsSaving}
+                    label={t("agents.builtInTitle")}
+                    onChange={(enabled) => void toggleBuiltInSubagents(enabled)}
+                  />
+                </div>
+                <span style={{ fontSize: 11, lineHeight: 1.45, color: "var(--text-muted)" }}>{t("agents.builtInDescription")}</span>
+                {reloadNeeded && sessionId && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ fontSize: 11, color: "var(--status-warning)" }}>{t("agents.reloadRequired")}</span>
+                    <SettingsButton size="sm" onClick={() => void reloadSession()} disabled={reloading || settingsSaving}>
+                      {reloading ? t("agents.reloading") : t("agents.reloadSession")}
+                    </SettingsButton>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 8px" }}>
-            {loading ? (
-              <div style={{ padding: 6, color: "var(--text-dim)", fontSize: 12 }}>{t("agents.loading")}</div>
-            ) : scopedGroupOrder.map((scope) => {
+              {!loading && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {profiles.filter((profile) => profile.scope === "builtin").map(renderProfileRow)}
+                </div>
+              )}
+            </div>
+            {!loading && scopedGroupOrder.filter((scope) => scope !== "builtin").map((scope) => {
               const scopedProfiles = profiles.filter((profile) => profile.scope === scope);
               if (scopedProfiles.length === 0) return null;
               return (
-                <div key={scope} style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                    {t(`agents.scope.${scope}`)}
-                  </div>
+                <div key={scope} style={{ marginBottom: 6 }}>
+                  <div style={sidebarGroupStyle}>{t(`agents.scope.${scope}`)}</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {scopedProfiles.map((profile) => {
-                      const overridden = isSubagentProfileOverridden(profile, profiles);
-                      const isSelected = selectedKey === profileKey(profile) && !creating;
-                      return (
-                        <div
-                          key={profileKey(profile)}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => selectProfile(profile)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              selectProfile(profile);
-                            }
-                          }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 7,
-                            padding: "7px 8px",
-                            borderRadius: 5,
-                            cursor: "pointer",
-                            background: isSelected ? "var(--bg-selected)" : "none",
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = isSelected ? "var(--bg-selected)" : "none";
-                          }}
-                        >
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              flexShrink: 0,
-                              width: 7,
-                              height: 7,
-                              borderRadius: "50%",
-                              background: profile.enabled ? "var(--status-success)" : "var(--text-dim)",
-                            }}
-                          />
-                          <span
-                            style={{
-                              flex: 1,
-                              minWidth: 0,
-                              fontSize: 12,
-                              fontWeight: isSelected ? 600 : 400,
-                              color: profile.enabled ? "var(--text)" : "var(--text-dim)",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {profile.displayName}
-                          </span>
-                          {overridden && <SettingsBadge tone="muted">{t("agents.overridden")}</SettingsBadge>}
-                        </div>
-                      );
-                    })}
+                    {scopedProfiles.map(renderProfileRow)}
                   </div>
                 </div>
               );
             })}
           </div>
           <div style={{ padding: "8px 6px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-            <SettingsButton
-              variant={creating ? "primary" : "default"}
+            <button
+              type="button"
               onClick={beginCreate}
               disabled={loading}
-              style={{ width: "100%" }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "7px 8px",
+                borderRadius: 5,
+                border: "none",
+                width: "100%",
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.5 : 1,
+                background: creating ? "var(--bg-selected)" : "none",
+                color: creating ? "var(--accent)" : "var(--text-dim)",
+                fontSize: 12,
+              }}
+              onMouseEnter={(e) => {
+                if (!creating && !loading) e.currentTarget.style.background = "var(--bg-hover)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = creating ? "var(--bg-selected)" : "none";
+              }}
             >
+              <PlusIcon size={13} />
               {t("agents.new")}
-            </SettingsButton>
+            </button>
           </div>
         </div>
       }
