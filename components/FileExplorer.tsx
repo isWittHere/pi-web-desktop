@@ -705,6 +705,11 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       setUploadSummary(null);
       setPendingConflict(null);
       setUploadError(null);
+      // Drop stale search results from the previous project; the debounced
+      // fetch effect re-runs against the new cwd.
+      setSearchPaths([]);
+      setSearchLoading(false);
+      setSearchError(false);
     }
 
     setLoading(cwdChanged);

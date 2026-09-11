@@ -389,7 +389,6 @@ export const enLocale = {
     "desktop.sessionSearchCount": "{count} session{suffix} with matches",
     "desktop.sessionSearchPartial": "Results may be incomplete (time or size limits reached)",
     "desktop.searchSessionsPlaceholder": "Search sessions…",
-    "desktop.exitSearch": "Exit search",
     "desktop.noMatchingSessions": "No matching sessions",
     "desktop.explorer": "Explorer",
     "desktop.uploadFiles": "Upload files",
