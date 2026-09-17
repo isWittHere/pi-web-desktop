@@ -6,11 +6,15 @@ export function normalizeFilePathSlashes(filePath: string): string {
 }
 
 export function encodeFilePathForApi(filePath: string): string {
-  return normalizeFilePathSlashes(filePath)
-    .split("/")
-    .filter(Boolean)
-    .map(encodeURIComponent)
-    .join("/");
+  const normalized = normalizeFilePathSlashes(filePath);
+  const segments = normalized.split("/").filter(Boolean);
+  // A literal "//" prefix is normalized away by URL routing before it reaches
+  // the catch-all handler, so a UNC root must live inside the first segment:
+  // "//host" encodes as "%2F%2Fhost" and decodes back as a single segment.
+  if (normalized.startsWith("//") && segments.length > 0) {
+    segments[0] = `//${segments[0]}`;
+  }
+  return segments.map(encodeURIComponent).join("/");
 }
 
 export function getFileName(filePath: string): string {
@@ -49,11 +53,14 @@ const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
  * letter ("C:") is the drive root, but the absolute-path check requires a
  * separator after the colon, so it must be normalized to "C:/" explicitly —
  * otherwise it degrades into the POSIX-looking "/C:" and every stat/readdir
- * under it fails with ENOENT.
+ * under it fails with ENOENT. A UNC root ("//host") survives as the first
+ * segment (encoded %2F%2F on the wire, decoded back to a literal "//host"
+ * here); keep it so stat/readdir see the shared path rather than a POSIX one.
  */
 export function filePathFromSegments(segments: string[]): string {
   const slashJoined = normalizeFilePathSlashes(segments.join("/"));
   if (WINDOWS_ABSOLUTE_RE.test(slashJoined)) return slashJoined;
   if (/^[a-zA-Z]:$/.test(slashJoined)) return `${slashJoined}/`;
+  if (slashJoined.startsWith("//")) return slashJoined;
   return "/" + slashJoined.replace(/^\/+/, "");
 }
