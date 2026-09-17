@@ -6,6 +6,7 @@ import {
   mergeSessionLists,
 } from "@/lib/session-reader";
 import { getRpcSessionInfos, getRunningRpcSessionIds } from "@/lib/rpc-manager";
+import { jsonResponse } from "@/lib/json-response";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,8 @@ export async function GET(req: Request) {
       attachSessionProjectInfo(getRpcSessionInfos()),
     ]);
     const sessions = mergeSessionLists(persistedSessions, runtimeSessions);
-    return NextResponse.json(
+    return jsonResponse(
+      req,
       { sessions, sessionListVersion, runningSessionIds: getRunningRpcSessionIds() },
       { headers: { "Cache-Control": "no-store" } },
     );
