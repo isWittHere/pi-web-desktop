@@ -51,6 +51,20 @@ function hasGlob(pattern: string): boolean {
   return pattern.includes("*") || pattern.includes("?") || pattern.includes("[");
 }
 
+/**
+ * A leftover enabledModels glob after a model was retired/deleted is not a
+ * chat-level problem when other entries still matched. Keep exact and malformed
+ * pattern warnings, and keep no-match warnings for a total miss (where the UI
+ * falls back to every model and must know the scope did not apply).
+ * Mirrors upstream f607816.
+ */
+function isSuppressibleUnmatchedGlob(pattern: string): boolean {
+  if (!hasGlob(pattern)) return false;
+  const colonIndex = pattern.lastIndexOf(":");
+  return colonIndex < 0
+    || THINKING_LEVEL_SUFFIXES.has(pattern.slice(colonIndex + 1) as ThinkingLevel);
+}
+
 function exactReferenceMatches(pattern: string, models: readonly Model<Api>[]): Model<Api>[] {
   const normalized = pattern.toLowerCase();
   const canonical = models.filter(
@@ -108,7 +122,16 @@ export async function resolveVisibleModels(
     getAvailable: async () => available,
   } as ModelRuntime;
   const { scopedModels, diagnostics } = await resolveModelScopeWithDiagnostics(cleanedPatterns, snapshotRuntime);
-  const warnings = diagnostics.map((diagnostic) => diagnostic.message);
+  // A leftover valid glob after a model removal is not a chat-level problem when
+  // other enabledModels entries still matched; keep exact/malformed warnings and
+  // all no-match warnings on a total miss. (f607816)
+  const warnings = diagnostics
+    .filter((diagnostic) => (
+      diagnostic.code !== "no-match"
+      || scopedModels.length === 0
+      || !isSuppressibleUnmatchedGlob(diagnostic.pattern)
+    ))
+    .map((diagnostic) => diagnostic.message);
   if (scopedModels.length === 0) {
     return {
       visible: available,
