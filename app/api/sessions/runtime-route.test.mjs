@@ -149,3 +149,12 @@ test("list versions expose idle session creation, rename and deletion to other w
   assert.deepEqual(deleted.sessions, []);
   assert.equal((await (await getRunningSessions()).json()).sessionListVersion, deleted.sessionListVersion);
 });
+
+test("DELETE tolerates an unpersisted runtime session without a file on disk", async () => {
+  const deleteSource = detailRoute.slice(detailRoute.indexOf("export async function DELETE"));
+  // Reading the header for an empty runtime session may ENOENT; fall through.
+  assert.match(deleteSource, /code !== "ENOENT"\) throw error/);
+  // Shutting down an unpersisted session must not hard-fail unlink.
+  assert.match(deleteSource, /unlinkSync\(filePath\)/);
+  assert.match(deleteSource, /code !== "ENOENT"\) throw error/);
+});
