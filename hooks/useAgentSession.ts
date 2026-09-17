@@ -56,6 +56,7 @@ interface StreamingState {
 
 type StreamAction =
   | { type: "start" }
+  | { type: "resume" }
   | { type: "update"; message: Partial<AgentMessage> }
   | { type: "end" }
   | { type: "reset" };
@@ -64,6 +65,10 @@ function streamReducer(state: StreamingState, action: StreamAction): StreamingSt
   switch (action.type) {
     case "start":
       return { isStreaming: true, streamingMessage: null };
+    // Re-attaching to an already-streaming session: keep whatever streaming
+    // snapshot is already in flight so the UI does not flash blank on reopen.
+    case "resume":
+      return { ...state, isStreaming: true };
     case "update":
       return { isStreaming: true, streamingMessage: action.message };
     case "end":
@@ -1933,7 +1938,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             agentRunningRef.current = true;
             setAgentRunning(true);
             setAgentPhase(agentState.state.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
-            dispatch({ type: "start" });
+            dispatch({ type: "resume" });
             void maintainEventsConnected(session.id);
             if (!agentState.state.isStreaming && agentState.state.isPromptRunning) {
               void waitForPromptSettlement(session.id);

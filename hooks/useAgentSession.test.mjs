@@ -119,6 +119,25 @@ test("coalesces streaming message snapshots and drops stale queued updates", () 
   assert.match(updatesSource, /resetStreamUpdates\(\);\s*dispatch\(\{ type: "reset"/s);
 });
 
+test("reopening a streaming session resumes rather than blanks the snapshot", () => {
+  const restorePath = source.slice(
+    source.indexOf("if (agentState.state?.isStreaming || agentState.state?.isPromptRunning)"),
+    source.indexOf("if (agentState?.state) {"),
+  );
+  const reducerSource = source.slice(
+    source.indexOf("function streamReducer"),
+    source.indexOf("interface CompactCommandResult"),
+  );
+
+  // The reducer has a resume action that preserves the in-flight snapshot.
+  assert.match(reducerSource, /case "resume":/);
+  assert.match(reducerSource, /return \{ \.\.\.state, isStreaming: true \};/);
+  // The get_state restore path (reopening an actively streaming session)
+  // must use resume, not start, so already-streamed content is not blanked.
+  assert.match(restorePath, /dispatch\(\{ type: "resume" \}\)/);
+  assert.doesNotMatch(restorePath, /dispatch\(\{ type: "start" \}\)/);
+});
+
 test("shows the latest streamed tool execution progress in the running phase", async () => {
   const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
   const updateSource = source.slice(
