@@ -65,6 +65,17 @@ export function markdownUrlTransform(value: string): string {
   return /^file:/i.test(value) ? value : defaultUrlTransform(value);
 }
 
+const escapedInlineCodePattern = /(?<![\\`])`((?:[^`\n]|\\`)+?)(?<![\\`])`(?!`)/g;
+
+function rewriteEscapedInlineCodeBackticks(line: string): string {
+  return line.replace(escapedInlineCodePattern, (match, content: string) => {
+    const code = content.replace(/\\`/g, "`");
+    if (code === content) return match;
+    const marker = "`".repeat(Math.max(...(code.match(/`+/g)?.map((run) => run.length) ?? [0])) + 1);
+    return `${marker}${code}${marker}`;
+  });
+}
+
 // singleTilde:false requires ~~double~~ tildes for strikethrough. A single `~`
 // is the standard CJK numeric-range separator (e.g. "5~7U", "100~200倍"), and
 // GFM's default single-tilde strikethrough silently mangled such ranges.
@@ -104,7 +115,7 @@ export function normalizeDisplayMath(markdown: string): string {
   const unmatchedDisplayMathUntil = new Map<string, number>();
 
   for (let index = 0; index < lines.length; index++) {
-    const line = lines[index];
+    let line = lines[index];
 
     if (rawCodeTag) {
       normalized.push(line);
@@ -143,6 +154,8 @@ export function normalizeDisplayMath(markdown: string): string {
       normalized.push(line);
       continue;
     }
+
+    if (!inlineCodeMarkerSize) line = rewriteEscapedInlineCodeBackticks(line);
 
     if (inlineCodeMarkerSize || line.includes("`")) {
       inlineCodeMarkerSize = updateInlineCodeMarker(line, inlineCodeMarkerSize);
