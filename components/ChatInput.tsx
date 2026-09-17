@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
+import React, { useMemo, useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent, useSyncExternalStore } from "react";
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
@@ -8,6 +8,12 @@ import { continueMarkdownList } from "@/lib/markdown-list";
 import type { ToolPreset } from "@/lib/tool-presets";
 import type { ToolEntry } from "@/lib/tool-presets";
 import { isBase64ImageWithinLimits } from "@/lib/image-attachments";
+import {
+  getFavoriteModelsServerSnapshot,
+  getFavoriteModelsSnapshot,
+  subscribeFavoriteModels,
+  toggleFavoriteModel,
+} from "@/lib/favorite-models";
 import type { TextContent, UserMessage } from "@/lib/types";
 import {
   buildEntriesFromFiles, buildAtInsertText, buildFileAtMentionsText, extractAtQuery, filterFileEntries,
@@ -597,12 +603,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [modelSearch, setModelSearch] = useState("");
-  const [favorites, setFavorites] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem("pi-favorite-models");
-      return stored ? new Set<string>(JSON.parse(stored)) : new Set<string>();
-    } catch { return new Set<string>(); }
-  });
+  const favorites = useSyncExternalStore(subscribeFavoriteModels, getFavoriteModelsSnapshot, getFavoriteModelsServerSnapshot);
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [toolDropdownRect, setToolDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -1015,16 +1016,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       applyAutoHeight();
     });
   }, [value, applyAutoHeight]);
-
-  const toggleFavorite = useCallback((provider: string, modelId: string) => {
-    setFavorites((prev) => {
-      const key = `${provider}:${modelId}`;
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      localStorage.setItem("pi-favorite-models", JSON.stringify([...next]));
-      return next;
-    });
-  }, []);
 
   const toggleProviderExpand = useCallback((provider: string) => {
     setExpandedProviders((prev) => {
@@ -3026,7 +3017,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 >
                   <ThinkingLevelIcon level={thinkingLevel ?? "auto"} />
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
-                  {isStreaming && <ClockIcon size={11} weight="bold" color="var(--accent)" aria-hidden="true" />}
                   <CaretDownIcon
                     size={11}
                     weight="bold"
@@ -3264,7 +3254,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       }}
                     >
                       {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
-                      {isStreaming && <ClockIcon size={11} weight="bold" color="var(--accent)" aria-hidden="true" />}
                       <CaretDownIcon
                         size={11}
                         weight="bold"
@@ -3370,7 +3359,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   >
                     <ProviderIcon id={model?.provider ?? "unknown"} api={currentModelOption?.api} size={14} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
-                    {isStreaming && <ClockIcon size={11} weight="bold" color="var(--accent)" aria-hidden="true" />}
                     <CaretDownIcon
                       size={11}
                       weight="bold"
@@ -3527,7 +3515,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
                                   {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                                   <span
-                                    onClick={(e) => { e.stopPropagation(); toggleFavorite(opt.provider, opt.modelId); }}
+                                    onClick={(e) => { e.stopPropagation(); toggleFavoriteModel(opt.provider, opt.modelId); }}
                                     className="model-star"
                                     style={{
                                       display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -3608,7 +3596,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{opt.name}</span>
                                   {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                                   <span
-                                    onClick={(e) => { e.stopPropagation(); toggleFavorite(opt.provider, opt.modelId); }}
+                                    onClick={(e) => { e.stopPropagation(); toggleFavoriteModel(opt.provider, opt.modelId); }}
                                     className="model-star"
                                     style={{
                                       display: "inline-flex", alignItems: "center", justifyContent: "center",

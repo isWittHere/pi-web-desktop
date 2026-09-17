@@ -48,6 +48,12 @@ import {
   subscribeProviderIconModes,
   type ProviderIconMode,
 } from "@/lib/provider-icon";
+import {
+  getFavoriteModelsServerSnapshot,
+  getFavoriteModelsSnapshot,
+  subscribeFavoriteModels,
+  toggleFavoriteModelKey,
+} from "@/lib/favorite-models";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -133,38 +139,6 @@ function useModelTranslation() {
     (key: string, values?: Record<string, string | number>) => t(key, values),
     [t],
   );
-}
-
-const FAVORITE_MODELS_KEY = "pi-favorite-models";
-
-function readFavoriteModels(): Set<string> {
-  try {
-    const stored = localStorage.getItem(FAVORITE_MODELS_KEY);
-    return stored ? new Set<string>(JSON.parse(stored)) : new Set<string>();
-  } catch {
-    return new Set<string>();
-  }
-}
-
-/** Favorite state shared with the ChatInput model selector (`provider:modelId`). */
-function useFavoriteModels(): { favorites: Set<string>; toggleFavorite: (key: string) => void } {
-  const [favorites, setFavorites] = useState<Set<string>>(() => readFavoriteModels());
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === FAVORITE_MODELS_KEY) setFavorites(readFavoriteModels());
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-  const toggleFavorite = useCallback((key: string) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      try { localStorage.setItem(FAVORITE_MODELS_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
-      return next;
-    });
-  }, []);
-  return { favorites, toggleFavorite };
 }
 
 // ── Form field helpers ────────────────────────────────────────────────────────
@@ -1839,7 +1813,7 @@ export function ModelsConfig({
   cwd?: string | null;
 }) {
   const t = useModelTranslation();
-  const { favorites: favoriteModels, toggleFavorite } = useFavoriteModels();
+  const favoriteModels = useSyncExternalStore(subscribeFavoriteModels, getFavoriteModelsSnapshot, getFavoriteModelsServerSnapshot);
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
   const [profiles, setProfiles] = useState<Record<string, ModelThinkingProfile>>({});
   const [thinkingLevelMemory, setThinkingLevelMemory] = useState<Record<string, string>>({});
@@ -2076,7 +2050,7 @@ export function ModelsConfig({
         provider={provider}
         model={model}
         isFavorite={favoriteModels.has(`${selection.providerName}:${model.id}`)}
-        onToggleFavorite={() => toggleFavorite(`${selection.providerName}:${model.id}`)}
+        onToggleFavorite={() => toggleFavoriteModelKey(`${selection.providerName}:${model.id}`)}
         onChange={(m) => updateModel(selection.providerName, selection.index, m)}
         onDelete={() => removeModel(selection.providerName, selection.index)}
         profile={profiles[`${selection.providerName}:${model.id}`]}
