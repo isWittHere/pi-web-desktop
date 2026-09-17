@@ -151,6 +151,35 @@ test("shows the latest streamed tool execution progress in the running phase", a
   assert.match(chatWindowSource, /desktop\.runningToolProgress[\s\S]*latest\.progress/);
 });
 
+test("caches live shell output across SSE reconnects", async () => {
+  const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
+  const updateSource = source.slice(
+    source.indexOf('case "tool_execution_update"'),
+    source.indexOf('case "tool_execution_end"'),
+  );
+  const endSource = source.slice(
+    source.indexOf('case "tool_execution_end"'),
+    source.indexOf('case "queue_update"'),
+  );
+  const settleSource = source.slice(
+    source.indexOf("const settleUiStage = useCallback"),
+    source.indexOf("const notifyPromptStage"),
+  );
+
+  // The hook keeps a side Map of active shell results.
+  assert.match(source, /const \[activeToolResults, setActiveToolResults\]/);
+  // bash/powershell updates with content populate it.
+  assert.match(updateSource, /\(name === "bash" \|\| name === "powershell"\) && Array\.isArray\(content\)/);
+  assert.match(updateSource, /setActiveToolResults\(/);
+  // tool_execution_end removes the finished tool's cache entry.
+  assert.match(endSource, /setActiveToolResults\(/);
+  // A settled run resets the cache so it cannot leak into the next run.
+  assert.match(settleSource, /setActiveToolResults\(new Map\(\)\)/);
+  // ChatWindow seeds its toolResultsMap from the cached results.
+  assert.match(chatWindowSource, /const map = new Map\(activeToolResults\);/);
+  assert.match(chatWindowSource, /activeToolResults, messages\]\);/);
+});
+
 test("uses server pagination state when active and client paging otherwise", async () => {
   const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
   const loadContextSource = source.slice(

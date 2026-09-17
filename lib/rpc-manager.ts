@@ -184,6 +184,7 @@ export class AgentSessionWrapper {
   private listeners: EventListener[] = [];
   private pendingUiResponses = new Map<string, PendingUiResponse>();
   private pendingUiRequests = new Map<string, AgentEvent>();
+  private activeToolEvents = new Map<string, AgentEvent>();
   private activeCustomUis = new Map<string, ActiveCustomUi>();
   private extensionStatuses = new Map<string, string>();
   private extensionWidgets = new Map<string, ExtensionWidgetItem>();
@@ -232,6 +233,16 @@ export class AgentSessionWrapper {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       if (event.type === "agent_end") {
         invalidateSessionListCache();
+      }
+      // Track live bash/powershell tool events so a reconnected SSE stream can
+      // replay them and keep the in-flight output rendering (mirrors def1478).
+      const toolCallId = event.toolCallId as string | undefined;
+      if (typeof toolCallId === "string") {
+        if (event.type === "tool_execution_start" || event.type === "tool_execution_update") {
+          this.activeToolEvents.set(toolCallId, event);
+        } else if (event.type === "tool_execution_end") {
+          this.activeToolEvents.delete(toolCallId);
+        }
       }
       if (event.type === "agent_end" || event.type === "agent_settled" || event.type === "auto_compaction_end" || event.type === "compaction_end") {
         this.resetIdleTimer();
@@ -450,6 +461,7 @@ export class AgentSessionWrapper {
   onEvent(listener: EventListener): () => void {
     this.listeners.push(listener);
     for (const event of this.pendingUiRequests.values()) listener(event);
+    for (const event of this.activeToolEvents.values()) listener(event);
     return () => {
       const i = this.listeners.indexOf(listener);
       if (i !== -1) this.listeners.splice(i, 1);
@@ -793,6 +805,7 @@ export class AgentSessionWrapper {
     for (const id of Array.from(this.activeCustomUis.keys())) this.closeCustomUi(id, undefined);
     this.pendingUiResponses.clear();
     this.pendingUiRequests.clear();
+    this.activeToolEvents.clear();
 
     const finishDispose = () => {
       try {

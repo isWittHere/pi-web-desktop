@@ -8,6 +8,7 @@ import type {
   ExtensionWidgetItem,
   SessionInfo,
   SessionTreeNode,
+  ToolResultMessage,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { cssPx } from "@/lib/ui-scale";
@@ -358,6 +359,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [error, setError] = useState<string | null>(null);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
+  // Live bash/powershell tool results cached outside `messages` so they survive
+  // an SSE reconnect while the run is still active; ChatWindow seeds its
+  // toolResultsMap from here (mirrors upstream def1478).
+  const [activeToolResults, setActiveToolResults] = useState<Map<string, ToolResultMessage>>(new Map());
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [hasEarlierMessages, setHasEarlierMessages] = useState(false);
@@ -905,6 +910,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentRunning(false);
     setAgentPhase(null);
     setRetryInfo(null);
+    setActiveToolResults(new Map());
     dispatch({ type: "end" });
     return wasRunning;
   }, [resetStreamUpdates]);
@@ -1256,6 +1262,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "tool_execution_update": {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
+        const partialResult = event.partialResult as Partial<ToolResultMessage> | undefined;
+        const content = partialResult?.content;
+        // Cache live shell output so an SSE reconnect doesn't lose it mid-run.
+        if ((name === "bash" || name === "powershell") && Array.isArray(content)) {
+          setActiveToolResults((prev) => {
+            const next = new Map(prev);
+            next.set(id, {
+              role: "toolResult",
+              toolCallId: id,
+              toolName: name,
+              content,
+              isError: partialResult?.isError,
+              details: partialResult?.details,
+            } as ToolResultMessage);
+            return next;
+          });
+        }
         const progress = getToolExecutionProgress(event.partialResult);
         setAgentPhase((prev) => {
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
@@ -1274,6 +1297,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       case "tool_execution_end": {
         const id = event.toolCallId as string;
+        setActiveToolResults((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Map(prev);
+          next.delete(id);
+          return next;
+        });
         setAgentPhase((prev) => {
           if (prev?.kind !== "running_tools") return prev;
           const tools = prev.tools.filter((t) => t.id !== id);
@@ -2074,7 +2103,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     // State
-    loading, error, activeLeafId, messages, entryIds, historyCursor, hasEarlierMessages, streamState,
+    loading, error, activeLeafId, messages, entryIds, historyCursor, hasEarlierMessages, streamState, activeToolResults,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, modelError, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel, sessionStats,

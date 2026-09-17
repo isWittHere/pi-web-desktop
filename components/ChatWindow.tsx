@@ -204,7 +204,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
   }, [chatInputRef]);
 
   const {
-    loading, error, messages, entryIds, historyCursor, hasEarlierMessages, streamState,
+    loading, error, messages, entryIds, historyCursor, hasEarlierMessages, streamState, activeToolResults,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, modelError, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
@@ -591,14 +591,16 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
   // in the render IIFE below used to defeat MessageView's memo() on each
   // streamed chunk by handing it a fresh identity every render.
   const toolResultsMap = useMemo(() => {
-    const map = new Map<string, ToolResultMessage>();
+    // Seed from live shell results cached across SSE reconnects so the
+    // streaming assistant's tool blocks keep their output while a run is active.
+    const map = new Map(activeToolResults);
     for (const msg of messages) {
       if (msg.role === "toolResult") {
         map.set((msg as ToolResultMessage).toolCallId, msg as ToolResultMessage);
       }
     }
     return map;
-  }, [messages]);
+  }, [activeToolResults, messages]);
   const messageRefs = useMessageRefs(visibleMessages.length);
 
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
