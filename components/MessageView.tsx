@@ -228,7 +228,7 @@ interface Props {
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
-  onNavigate?: (entryId: string) => void;
+  onNavigate?: (entryId: string) => Promise<boolean>;
   prevAssistantEntryId?: string;
   onEditContent?: (message: UserMessage) => void;
   showTimestamp?: boolean;
@@ -325,7 +325,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
-  onNavigate?: (entryId: string) => void;
+  onNavigate?: (entryId: string) => Promise<boolean>;
   prevAssistantEntryId?: string;
   onEditContent?: (message: UserMessage) => void;
 }) {
@@ -612,7 +612,11 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             }}>
               {canNavigate && (
                 <button
-                  onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(editTarget); }}
+                  onClick={() => void onNavigate!(prevAssistantEntryId!).then((navigated) => {
+                    // Only enter edit mode once the target turn is actually active,
+                    // so an aborted/rerouted navigation cannot half-enter editing.
+                    if (navigated) onEditContent?.(editTarget);
+                  })}
                   title={t("desktop.editFromHere")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",

@@ -1546,12 +1546,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [onSessionForked]);
 
-  const handleNavigate = useCallback(async (entryId: string) => {
+  const handleNavigate = useCallback(async (entryId: string): Promise<boolean> => {
     const sid = sessionIdRef.current;
-    if (!sid) return;
-    sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }).catch(() => {});
-    setActiveLeafId(entryId);
-    await loadContext(sid, entryId);
+    if (!sid) return false;
+    try {
+      const result = await sendAgentCommand<{ cancelled?: boolean }>(sid, {
+        type: "navigate_tree",
+        targetId: entryId,
+      });
+      if (result?.cancelled || sessionIdRef.current !== sid) return false;
+      setActiveLeafId(entryId);
+      await loadContext(sid, entryId);
+      return sessionIdRef.current === sid;
+    } catch (error) {
+      console.error("Failed to navigate:", error);
+      return false;
+    }
   }, [loadContext]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {

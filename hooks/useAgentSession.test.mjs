@@ -223,3 +223,15 @@ test("scroll anchoring captures at prepend time and restores only after the DOM 
   // Anchors must not leak across sessions.
   assert.match(chatWindowSource, /prevScrollDistanceRef\.current = null;\s*\n\s*prevScrollHeightRef\.current = null;\s*\n\s*\}, \[session\?\.id\]\)/);
 });
+
+test("navigate_tree reports success before the session reloads", () => {
+  const navigateSource = source.slice(
+    source.indexOf("const handleNavigate = useCallback"),
+    source.indexOf("const handleLeafChange"),
+  );
+
+  assert.match(navigateSource, /: Promise<boolean>/);
+  assert.match(navigateSource, /sendAgentCommand<\{ cancelled\?: boolean \}>\(sid, \{\s*type: "navigate_tree",\s*targetId: entryId,\s*\}\)/s);
+  assert.match(navigateSource, /if \(result\?\.cancelled \|\| sessionIdRef\.current !== sid\) return false/);
+  assert.match(navigateSource, /return sessionIdRef\.current === sid/);
+});
