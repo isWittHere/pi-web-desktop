@@ -7,11 +7,14 @@ import type { SessionInfo } from "@/lib/types";
 import type { SessionSearchResponse } from "@/lib/session-search";
 
 // Sidebar session-search overlay: while active it replaces the session list
-// with literal-text hits across all indexed sessions. Selecting a hit opens
-// the session and jumps to the matched entry/block.
-export function SessionSearch({ open, query, refreshKey, children, selectedSessionId, onSelectSession }: {
+// with literal-text hits across the current project's indexed sessions
+// (scoped by the optional `project` root, same grouping as the sidebar list).
+// Selecting a hit opens the session and jumps to the matched entry/block.
+export function SessionSearch({ open, query, project, refreshKey, children, selectedSessionId, onSelectSession }: {
   open: boolean;
   query: string;
+  /** Project-root scope; unset (no workspace) searches every workspace. */
+  project?: string | null;
   refreshKey: number | null;
   children: ReactNode;
   selectedSessionId: string | null;
@@ -29,7 +32,7 @@ export function SessionSearch({ open, query, refreshKey, children, selectedSessi
     setState({ query: search });
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/sessions/search?${new URLSearchParams({ q: search })}`, { signal: controller.signal });
+        const res = await fetch(`/api/sessions/search?${new URLSearchParams({ q: search, ...(project ? { project } : {}) })}`, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json() as SessionSearchResponse;
         if (!controller.signal.aborted) setState({ query: search, response: data });
@@ -41,7 +44,7 @@ export function SessionSearch({ open, query, refreshKey, children, selectedSessi
       clearTimeout(timer);
       controller.abort();
     };
-  }, [open, search, refreshKey]);
+  }, [open, search, project, refreshKey]);
 
   if (!open || !search) return <>{children}</>;
 

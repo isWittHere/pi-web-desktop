@@ -85,3 +85,15 @@ test("session search is single-semantics: closing clears the query", () => {
   assert.doesNotMatch(sidebarSource, /searchScopedSessions/);
   assert.doesNotMatch(sidebarSource, /searchQuery = sessionSearch/);
 });
+
+test("full-text search is scoped to the selected project like the sidebar list", async () => {
+  // The sidebar passes its resolved project root; the overlay forwards it and
+  // the route filters the shared catalog by the same workspace key.
+  assert.match(sidebarSource, /<SessionSearch open=\{searchOpen\} query=\{sessionSearch\} project=\{selectedProject\}/);
+  const searchComponent = await readFile(new URL("./SessionSearch.tsx", import.meta.url), "utf8");
+  assert.match(searchComponent, /project\?: string \| null/);
+  assert.match(searchComponent, /\.\.\.\(project \? \{ project \} : \{\}\)/);
+  const routeSource = await readFile(new URL("../app/api/sessions/search/route.ts", import.meta.url), "utf8");
+  assert.match(routeSource, /url\.searchParams\.get\("project"\)/);
+  assert.match(routeSource, /samePath\(workspaceKeyOf\(s\), project\)/);
+});

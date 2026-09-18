@@ -1990,7 +1990,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
            welcome state), expands to fill the remaining sidebar height so the
            all-workspaces list is never clipped by a stale explorer limit. */}
       {sessionsOpen && (
-        <SessionSearch open={searchOpen} query={sessionSearch} refreshKey={sessionListVersion} selectedSessionId={selectedSessionId} onSelectSession={handleSelectSearchHit}>
+        <SessionSearch open={searchOpen} query={sessionSearch} project={selectedProject} refreshKey={sessionListVersion} selectedSessionId={selectedSessionId} onSelectSession={handleSelectSearchHit}>
         <div style={{ flex: explorerOpen && hasSelectedCwd ? "0 1 auto" : "1 1 0", overflowY: "auto", padding: "0", minHeight: 0, maxHeight: explorerOpen && hasSelectedCwd ? "min(40%, 360px)" : "none" }}>
           {loading && (
             <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
