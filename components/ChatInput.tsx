@@ -16,11 +16,17 @@ import {
 } from "@/lib/favorite-models";
 import type { TextContent, UserMessage } from "@/lib/types";
 import {
+  AT_RESULT_LIMIT,
   buildEntriesFromFiles, buildAtInsertText, buildFileAtMentionsText, extractAtQuery, filterFileEntries,
   type AtQueryMatch, type FileIndexEntry,
 } from "@/lib/file-fuzzy";
 import { toCwdRelativeMentions } from "@/lib/file-mentions";
 import { tokenizeMentions } from "@/lib/mention-tokens";
+import {
+  buildAtMenuItems, buildCommentMentionText, buildCommentPrefixInsertion, commentShortSha, parseCommentQuery,
+  type AtMenuItem,
+} from "@/lib/comment-mentions";
+import type { GitLogCommit } from "@/lib/git-graph-parser";
 import { useFileIndex, useSkillNames } from "@/hooks/useProjectContext";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { cssPx, getUiScale } from "@/lib/ui-scale";
@@ -40,6 +46,7 @@ import { ArrowElbowUpLeftIcon } from "@phosphor-icons/react/ArrowElbowUpLeft";
 import { ArrowsInIcon } from "@phosphor-icons/react/ArrowsIn";
 import { ArrowsOutIcon } from "@phosphor-icons/react/ArrowsOut";
 import { AtIcon } from "@phosphor-icons/react/At";
+import { GitCommitIcon } from "@phosphor-icons/react/GitCommit";
 import { ImageIcon } from "@phosphor-icons/react/Image";
 import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
 
@@ -676,6 +683,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [fileIndex, setFileIndex] = useState<{ cwd: string; entries: FileIndexEntry[]; truncated: boolean } | null>(null);
   const [fileIndexLoading, setFileIndexLoading] = useState(false);
   const [atServerResult, setAtServerResult] = useState<{ cwd: string; query: string; matches: FileIndexEntry[] } | null>(null);
+  // Recent commits for the @comment: autocomplete — mirrors the file-index
+  // pattern: per-cwd state, 10s TTL revalidate on menu open, in-flight dedupe.
+  const [commitsState, setCommitsState] = useState<{ cwd: string; isGitRepository: boolean; commits: GitLogCommit[] } | null>(null);
+  const commitsMetaRef = useRef<{ cwd: string; fetchedAt: number } | null>(null);
+  const commitsFetchingRef = useRef<string | null>(null);
   // Shared project-index / skill-name caches for mention highlighting (the
   // autocomplete menu keeps its own index state above — untouched).
   const fileIndexSnapshot = useFileIndex(cwd);
@@ -978,6 +990,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const separator = before && !/[\s@]$/.test(before) ? " " : "";
     const nextValue = `${before}${separator}@${after}`;
     const cursor = before.length + separator.length + 1;
+    setValue(nextValue);
+    setAtQuery(extractAtQuery(nextValue.slice(0, cursor)));
+    setAtMenuOpen(true);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(cursor, cursor);
+    });
+  }, [cwd, value]);
+
+  // Attach-menu entry for git commits: drop a complete @comment: token at the
+  // caret and open the menu — extractAtQuery re-derives the (routed) token so
+  // the commit list shows right away.
+  const openCommentCompletion = useCallback(() => {
+    if (!cwd) return;
+    const ta = textareaRef.current;
+    const start = ta?.selectionStart ?? value.length;
+    const end = ta?.selectionEnd ?? start;
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const separator = before && !/[\s@]$/.test(before) ? " " : "";
+    const nextValue = `${before}${separator}@comment:${after}`;
+    const cursor = before.length + separator.length + "@comment:".length;
     setValue(nextValue);
     setAtQuery(extractAtQuery(nextValue.slice(0, cursor)));
     setAtMenuOpen(true);
@@ -1340,12 +1376,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       : []
   ), [atQueryText, fileIndex, cwd]);
 
+  // "comment:" routes the whole menu to git commit references; quoted tokens
+  // (@"…) stay file-only — shas never contain spaces, so quoting is noise.
+  const commentFilter = atQueryText !== null && !atQuery?.quoted
+    ? parseCommentQuery(atQueryText)
+    : null;
+  const commentRouted = commentFilter !== null;
+
   // When the client index is truncated (repo larger than the index cap),
   // local filtering cannot see deep files, so queries are also ranked
   // server-side against the full listing. Local matches render immediately
   // and are replaced when the (debounced) server result for the current
   // query arrives; stale responses are ignored via the query/cwd tag.
-  const needsServerSearch = Boolean(atQueryText && fileIndex?.truncated && fileIndex.cwd === cwd);
+  const needsServerSearch = Boolean(atQueryText && commentFilter === null && fileIndex?.truncated && fileIndex.cwd === cwd);
   useEffect(() => {
     if (!needsServerSearch || !cwd || !atQueryText) return;
     const fetchCwd = cwd;
@@ -1368,7 +1411,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     && atServerResult !== null
     && atServerResult.cwd === cwd
     && atServerResult.query === atQueryText;
-  const atMatches: FileIndexEntry[] = serverResultInUse ? atServerResult.matches : atLocalMatches;
+  const commitsForCwd = commitsState && commitsState.cwd === cwd ? commitsState : null;
+  // Unified, flat menu list: prefix suggestion + files normally, commits only
+  // when the query routes to comment: mode. Keyboard navigation and rendering
+  // treat it as one list; empty routed results mean "no match" (the loading /
+  // not-a-repo hints are derived in the render from commitsForCwd).
+  const atItems: AtMenuItem[] = useMemo(() => buildAtMenuItems({
+    query: atQueryText,
+    quoted: atQuery?.quoted ?? false,
+    commits: commitsForCwd && commitsForCwd.isGitRepository ? commitsForCwd.commits : commitsForCwd ? [] : null,
+    fileMatches: commentRouted ? [] : (serverResultInUse ? atServerResult.matches : atLocalMatches),
+    limit: AT_RESULT_LIMIT,
+  }), [atQueryText, atQuery, commitsForCwd, commentRouted, serverResultInUse, atServerResult, atLocalMatches]);
 
   // Open/reset the menu whenever the @token appears or changes (mirrors the
   // slash menu: Escape closes it, the next keystroke re-opens it).
@@ -1414,7 +1468,36 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       });
   }, [atTokenActive, cwd]);
 
-  const applyAtCompletion = useCallback((entry: FileIndexEntry) => {
+  // Fetch recent commits when the @ menu opens. The server runs a bounded
+  // git log; the 10s TTL + in-flight dedupe mirror the file-index effect so
+  // typing inside a token never refetches, and re-opening revalidates so
+  // commits the agent created mid-session show up.
+  useEffect(() => {
+    if (!atTokenActive || !cwd) return;
+    const meta = commitsMetaRef.current;
+    if (meta && meta.cwd === cwd && Date.now() - meta.fetchedAt < 10_000) return;
+    if (commitsFetchingRef.current === cwd) return;
+    commitsFetchingRef.current = cwd;
+    const fetchCwd = cwd;
+    fetch(`/api/git/log?cwd=${encodeURIComponent(fetchCwd)}&limit=50`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`git log failed: ${res.status}`);
+        return res.json() as Promise<{ isGitRepository?: boolean; commits?: GitLogCommit[] }>;
+      })
+      .then((data) => {
+        setCommitsState({ cwd: fetchCwd, isGitRepository: data.isGitRepository !== false, commits: data.commits ?? [] });
+        commitsMetaRef.current = { cwd: fetchCwd, fetchedAt: Date.now() };
+      })
+      .catch(() => {
+        // Leave any previous commit list in place; next open retries.
+        commitsMetaRef.current = null;
+      })
+      .finally(() => {
+        commitsFetchingRef.current = null;
+      });
+  }, [atTokenActive, cwd]);
+
+  const applyAtCompletion = useCallback((item: AtMenuItem) => {
     if (!atQuery) return;
     const ta = textareaRef.current;
     const cursor = ta?.selectionStart ?? value.length;
@@ -1426,13 +1509,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (atQuery.quoted && after.startsWith('"')) {
       after = after.slice(1);
     }
-    const insert = buildAtInsertText(entry.path, entry.isDir, atQuery.quoted);
+    // Files end with a space (token closes, menu hides); directories end with
+    // "/" before the caret (token stays open for drill-down). The comment:
+    // prefix keeps the token open so the menu switches to commit results; a
+    // completed commit ends with a space (after the subject) and closes it.
+    const insert = item.kind === "file"
+      ? buildAtInsertText(item.entry.path, item.entry.isDir, atQuery.quoted)
+      : item.kind === "prefix"
+        ? buildCommentPrefixInsertion()
+        : buildCommentMentionText(item.commit);
     const newValue = before + insert.text + after;
     const newPos = before.length + insert.cursorOffset;
     setValue(newValue);
-    // setValue alone does not fire onChange — re-derive the token here. Files
-    // end with a space (token closes, menu hides); directories end with "/"
-    // before the caret (token stays open for drill-down into the directory).
+    // setValue alone does not fire onChange — re-derive the token here.
     setAtQuery(extractAtQuery(newValue.slice(0, newPos)));
     requestAnimationFrame(() => {
       const el = textareaRef.current;
@@ -1444,15 +1533,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [applyAutoHeight, atQuery, value]);
 
   useEffect(() => {
-    if (atActiveIndex >= atMatches.length) {
+    if (atActiveIndex >= atItems.length) {
       atSuppressScrollRef.current = true;
-      setAtActiveIndex(Math.max(0, atMatches.length - 1));
+      setAtActiveIndex(Math.max(0, atItems.length - 1));
     }
-  }, [atMatches.length, atActiveIndex]);
+  }, [atItems.length, atActiveIndex]);
 
   useEffect(() => {
-    atItemRefs.current.length = atMatches.length;
-  }, [atMatches.length]);
+    atItemRefs.current.length = atItems.length;
+  }, [atItems.length]);
 
   useEffect(() => {
     if (!atMenuOpen) return;
@@ -1598,7 +1687,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (atMenuOpen && atQuery !== null && !isComposing) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
-          setAtActiveIndex((i) => Math.min(Math.max(0, atMatches.length - 1), i + 1));
+          setAtActiveIndex((i) => Math.min(Math.max(0, atItems.length - 1), i + 1));
           return;
         }
         if (e.key === "ArrowUp") {
@@ -1611,9 +1700,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           setAtMenuOpen(false);
           return;
         }
-        if ((e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) && atMatches[atActiveIndex]) {
+        if ((e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) && atItems[atActiveIndex]) {
           e.preventDefault();
-          applyAtCompletion(atMatches[atActiveIndex]);
+          applyAtCompletion(atItems[atActiveIndex]);
           return;
         }
       }
@@ -1676,7 +1765,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
     },
-    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, inputShortcut, markdownListContinue, cwd, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, openAtCompletion, applyAutoHeight]
+    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, filteredSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, atMenuOpen, atQuery, atItems, atActiveIndex, applyAtCompletion, inputShortcut, markdownListContinue, cwd, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, openAtCompletion, applyAutoHeight]
   );
 
   const handleInput = useCallback(() => {
@@ -2410,17 +2499,127 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 }}
               >
                 <div style={{ maxHeight: atMenuHeightCap, overflowY: "auto", padding: "6px 6px 8px" }}>
-                  {indexLoading ? (
+                  {commentRouted ? (
+                    commitsForCwd === null ? (
+                      <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>
+                        {t("desktop.loadingCommits")}
+                      </div>
+                    ) : !commitsForCwd.isGitRepository ? (
+                      <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>
+                        {t("desktop.gitNotRepository")}
+                      </div>
+                    ) : commitsForCwd.commits.length === 0 ? (
+                      <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>
+                        {t("desktop.gitGraphEmpty")}
+                      </div>
+                    ) : atItems.length === 0 ? (
+                      <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>
+                        {t("desktop.noMatchingCommits")}
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ padding: "2px 6px 4px", fontSize: 10, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-dim)" }}>
+                          {t("desktop.gitCommitGroupTitle")}
+                        </div>
+                        {atItems.map((item, index) => {
+                          if (item.kind !== "commit") return null;
+                          const active = index === atActiveIndex;
+                          const commit = item.commit;
+                          return (
+                            <button
+                              key={`c:${commit.hash}`}
+                              ref={(node) => {
+                                atItemRefs.current[index] = node;
+                              }}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                applyAtCompletion(item);
+                              }}
+                              onMouseEnter={() => setAtHoverIndex(index)}
+                              onMouseLeave={() => setAtHoverIndex(null)}
+                              style={{
+                                width: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 5,
+                                padding: "3px 6px",
+                                border: "none",
+                                borderRadius: 5,
+                                background: active ? "var(--bg-selected)" : atHoverIndex === index ? "var(--bg-hover)" : "none",
+                                color: "var(--text)",
+                                cursor: "pointer",
+                                textAlign: "left",
+                                fontSize: 12.5,
+                              }}
+                            >
+                              <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
+                                <GitCommitIcon size={14} weight="regular" aria-hidden="true" />
+                              </span>
+                              <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)" }}>
+                                {commentShortSha(commit.hash)}
+                              </span>
+                              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {commit.subject}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </>
+                    )
+                  ) : indexLoading ? (
                     <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>
                       {t("desktop.loadingFiles")}
                     </div>
-                  ) : atMatches.length === 0 ? (
+                  ) : atItems.length === 0 ? (
                     <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>
                       {needsServerSearch && !serverResultInUse ? t("desktop.searching") : t("desktop.noMatchingFiles")}
                     </div>
                   ) : (
-                    atMatches.map((entry, index) => {
+                    atItems.map((item, index) => {
                       const active = index === atActiveIndex;
+                      if (item.kind !== "file") {
+                        // comment: prefix suggestion — completing it keeps the
+                        // token open, so the menu immediately lists commits.
+                        return (
+                          <button
+                            key="comment-prefix"
+                            ref={(node) => {
+                              atItemRefs.current[index] = node;
+                            }}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              applyAtCompletion(item);
+                            }}
+                            onMouseEnter={() => setAtHoverIndex(index)}
+                            onMouseLeave={() => setAtHoverIndex(null)}
+                            style={{
+                              width: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "3px 6px",
+                              border: "none",
+                              borderRadius: 5,
+                              background: active ? "var(--bg-selected)" : atHoverIndex === index ? "var(--bg-hover)" : "none",
+                              color: "var(--text)",
+                              cursor: "pointer",
+                              textAlign: "left",
+                              fontSize: 12.5,
+                            }}
+                          >
+                            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
+                              <GitCommitIcon size={14} weight="regular" aria-hidden="true" />
+                            </span>
+                            <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontWeight: 600 }}>comment:</span>
+                            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-muted)" }}>
+                              {t("desktop.atCommentPrefixHint")}
+                            </span>
+                          </button>
+                        );
+                      }
+                      const entry = item.entry;
                       const name = entry.path.split("/").pop() ?? entry.path;
                       const dirPrefix = entry.path.slice(0, entry.path.length - name.length);
                       return (
@@ -2432,7 +2631,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           type="button"
                           onMouseDown={(e) => {
                             e.preventDefault();
-                            applyAtCompletion(entry);
+                            applyAtCompletion(item);
                           }}
                           onMouseEnter={() => setAtHoverIndex(index)}
                           onMouseLeave={() => setAtHoverIndex(null)}
@@ -2464,7 +2663,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       );
                     })
                   )}
-                  {truncatedHint && (
+                  {!commentRouted && truncatedHint && (
                     <div style={{ padding: "4px 6px 0", fontSize: 10, color: "var(--text-dim)" }}>
                       {truncatedHint}
                     </div>
@@ -2944,6 +3143,27 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     >
                       <AtIcon size={14} weight="regular" aria-hidden="true" />
                       <span style={{ flex: 1 }}>{t("desktop.attachFileReference")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAttachMenuOpen(false); openCommentCompletion(); }}
+                      disabled={!cwd}
+                      title={cwd ? t("desktop.atCommentPrefixHint") : undefined}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: 8,
+                        padding: "4px 10px", borderRadius: 4,
+                        background: "none", border: "none",
+                        color: cwd ? "var(--text)" : "var(--text-dim)",
+                        cursor: cwd ? "pointer" : "not-allowed",
+                        fontSize: 12, textAlign: "left",
+                        opacity: cwd ? 1 : 0.6,
+                        transition: "background 0.1s ease",
+                      }}
+                      onMouseEnter={(e) => { if (cwd) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                    >
+                      <GitCommitIcon size={14} weight="regular" aria-hidden="true" />
+                      <span style={{ flex: 1 }}>{t("desktop.attachGitCommit")}</span>
                     </button>
                     <button
                       type="button"

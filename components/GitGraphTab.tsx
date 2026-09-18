@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowClockwise, Spinner, X } from "@phosphor-icons/react";
+import { ArrowClockwise, GitCommit, Spinner, X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { type GitCommitFile, type GitLogResponse } from "@/lib/git-graph";
+import type { GitLogCommit } from "@/lib/git-graph-parser";
 import { buildGitGraphLayout, type GitGraphEdge, type GitGraphLayout } from "@/lib/git-graph-lanes";
 import { deriveLanePalette } from "@/lib/git-graph-palette";
 import { parseGitRefTags, type GitRefTag, type GitRefTagKind } from "@/lib/git-graph-refs";
@@ -15,6 +16,8 @@ interface Props {
   cwd: string;
   /** Open a file mentioned in a commit's changed-file list (source mode). */
   onOpenFile: (filePath: string, fileName: string) => void;
+  /** Insert an @comment: reference to the selected commit into the composer. */
+  onMentionCommit?: (commit: GitLogCommit) => void;
 }
 
 const DEFAULT_LIMIT = 400;
@@ -219,7 +222,7 @@ function CommitFileRow({ file, cwd, onOpenFile }: {
   );
 }
 
-export function GitGraphTab({ cwd, onOpenFile }: Props) {
+export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
   const { t, locale } = useI18n();
   const { isDark } = useTheme();
   const [data, setData] = useState<GitLogResponse | null>(null);
@@ -581,6 +584,15 @@ export function GitGraphTab({ cwd, onOpenFile }: Props) {
                 </span>
               )}
             </span>
+            <button
+              type="button"
+              onClick={() => onMentionCommit?.(selectedCommit)}
+              title={t("desktop.mentionInChat")}
+              aria-label={t("desktop.mentionInChat")}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, padding: 0, flexShrink: 0, border: "none", borderRadius: 4, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
+            >
+              <GitCommit size={13} aria-hidden="true" />
+            </button>
             <button
               type="button"
               onClick={closeDetail}

@@ -41,6 +41,8 @@ import {
 import { copyText } from "@/lib/clipboard";
 import { getFileName, encodeFilePathForApi } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
+import { buildCommentMentionText } from "@/lib/comment-mentions";
+import type { GitLogCommit } from "@/lib/git-graph-parser";
 import { clearDraft, getDraft } from "@/lib/draft-store";
 import { cssPx } from "@/lib/ui-scale";
 import {
@@ -459,6 +461,12 @@ export function AppShell() {
   const handleAtMentions = useCallback((relativePaths: string[]) => {
     const mentions = buildFileAtMentionsText(relativePaths);
     if (mentions) chatInputRef.current?.insertText(mentions);
+  }, []);
+
+  // Same @comment: format as the composer's comment: autocomplete, so the
+  // model receives a self-describing commit reference (sha + subject).
+  const handleMentionCommit = useCallback((commit: GitLogCommit) => {
+    chatInputRef.current?.insertText(buildCommentMentionText(commit).text);
   }, []);
 
   const [initialSessionId] = useState<string | null>(() => searchParams.get("session"));
@@ -1597,6 +1605,7 @@ export function AppShell() {
                   <GitGraphTab
                     cwd={tab.cwd}
                     onOpenFile={(filePath, fileName) => handleOpenFile(filePath, fileName, selectedSession?.id ?? null)}
+                    onMentionCommit={handleMentionCommit}
                   />
                 </div>
               );

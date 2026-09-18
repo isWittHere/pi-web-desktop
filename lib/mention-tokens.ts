@@ -1,12 +1,14 @@
 // Tokenization shared by the chat input's highlight overlay and the rendered
-// user-message bodies: @file mentions and /skill: commands are marked with
-// accent + dotted underline styling, but only when they resolve to something
-// real (a file/dir in the project index, a loaded skill). Unknown or
-// in-progress tokens stay plain text.
+// user-message bodies: @file mentions, @comment: git-commit mentions and
+// /skill: commands are marked with accent + dotted underline styling, but only
+// when they resolve to something real (a file/dir in the project index, a
+// sha-shaped @comment: value, a loaded skill). Unknown or in-progress tokens
+// stay plain text.
 
 import type { Root } from "mdast";
+import { isCommentShaValue } from "./comment-mentions";
 
-export type MentionKind = "file" | "skill";
+export type MentionKind = "file" | "skill" | "comment";
 
 export interface MentionValidators {
   /**
@@ -44,10 +46,12 @@ export type InputSegment = TextSegment | MentionSegment;
  * @ triggers only at line start or after whitespace — the same boundary rule
  * as the TUI autocomplete, so emails (foo@bar.com) never match. The quoted
  * form must be closed ("@\"my dir/file\"") — an unclosed quote means the
- * token is still being typed. /skill: needs the same boundary; the name runs
- * to the next whitespace.
+ * token is still being typed. The @comment: alternative must precede the
+ * generic @ token or it would be swallowed as a (bogus) file path; the
+ * full-width colon is accepted for IME layouts. /skill: needs the same
+ * boundary; the name runs to the next whitespace.
  */
-const MENTION_RE = /(?<=^|[\s\u00A0])(@"[^"\n]*"|@[^\s"]+|\/skill:[^\s]+)/g;
+const MENTION_RE = /(?<=^|[\s\u00A0])(@"[^"\n]*"|@comment[：:][^\s"]+|@[^\s"]+|\/skill:[^\s]+)/g;
 
 function stripFileToken(raw: string): string {
   if (raw.startsWith('@"') && raw.endsWith('"')) return raw.slice(2, -1);
@@ -62,6 +66,13 @@ function classifyToken(raw: string, validators: MentionValidators): MentionToken
       value: name,
       valid: validators.isSkill?.(name) === true,
     };
+  }
+  if (raw.startsWith("@comment:") || raw.startsWith("@comment：")) {
+    // Validity is intrinsic to the token format (sha-shaped value) — no
+    // validator data needed, so @comment: references highlight everywhere,
+    // including rendered history without a commit cache.
+    const value = raw.slice("@comment:".length);
+    return { kind: "comment", value, valid: isCommentShaValue(value) };
   }
   const value = stripFileToken(raw).replace(/\/+$/, "");
   return {

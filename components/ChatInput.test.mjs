@@ -36,7 +36,7 @@ const handlerStubs = {
   setHistoryActiveIndex() {}, setHistoryHoverIndex() {}, setHistoryMenuOpen() {},
   slashMenuOpen: false, slashQuery: null, filteredSlashCommands: [{}], slashActiveIndex: 0,
   setSlashActiveIndex() {}, setSlashMenuOpen() {},
-  atMenuOpen: false, atQuery: null, atMatches: [{}], atActiveIndex: 0,
+  atMenuOpen: false, atQuery: null, atItems: [{}], atActiveIndex: 0,
   setAtActiveIndex() {}, setAtMenuOpen() {},
   value: "", setValue() {},
   cwd: "/project", inputShortcut: "enter",
