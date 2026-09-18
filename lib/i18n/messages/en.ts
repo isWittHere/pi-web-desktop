@@ -752,6 +752,8 @@ export const enLocale = {
     "agents.builtInDescription": "Enable the built-in general-purpose, explore and plan subagents that the main agent can delegate tasks to.",
     "agents.reloadRequired": "Reload the session to apply",
     "agents.reloadSession": "Reload session",
+    "agents.maxConcurrent": "Concurrent sub-agents",
+    "agents.maxConcurrentDescription": "Maximum prompts running at once per parent session.",
     "agents.reloading": "Reloading…",
     "agents.loading": "Loading…",
     "agents.empty": "No agent profiles found.",

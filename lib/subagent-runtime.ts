@@ -21,6 +21,7 @@ import {
   resolveSubagentProfile,
   SUBAGENT_CONTROL_TOOL_NAMES,
   SUBAGENT_META_TYPE,
+  SUBAGENT_STATUS_TYPE,
   SUBAGENT_RESULT_TYPE,
   withSubagentExtensionTools,
   type SubagentMetadata,
@@ -32,7 +33,8 @@ import { buildSubagentPromptPlan } from "./subagent-prompt";
 import { appendSubagentInputFiles, loadSubagentInputFiles } from "./subagent-input";
 import { projectTrustReloadOptions } from "./project-trust";
 import { resolveShellTools } from "./powershell-settings";
-import { isBuiltInSubagentsEnabled } from "./subagent-settings";
+import { isBuiltInSubagentsEnabled, readSubagentSettings } from "./subagent-settings";
+import { SubagentQueue } from "./subagent-queue";
 
 interface HostSession {
   readonly inner: AgentSessionLike;
@@ -66,14 +68,13 @@ type StoredSubagentExecution = {
   run: SubagentRunInfo;
   completion: Promise<SubagentRunInfo>;
   abortRequested: boolean;
+  cancelQueued?: () => boolean;
 };
 
 declare global {
   var __piSubagentRuns: Map<string, StoredSubagentExecution> | undefined;
-  var __piSubagentStartingCounts: Map<string, number> | undefined;
+  var __piSubagentQueue: SubagentQueue<SubagentRunInfo> | undefined;
 }
-
-const MAX_CONCURRENT_SUBAGENTS = 4;
 const SUBAGENT_CONTEXT_LIMIT = 50_000;
 const THINKING_LEVELS = new Set<ThinkingLevel>(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
@@ -82,9 +83,9 @@ function getSubagentRuns(): Map<string, StoredSubagentExecution> {
   return globalThis.__piSubagentRuns;
 }
 
-function getSubagentStartingCounts(): Map<string, number> {
-  if (!globalThis.__piSubagentStartingCounts) globalThis.__piSubagentStartingCounts = new Map();
-  return globalThis.__piSubagentStartingCounts;
+function getSubagentQueue(): SubagentQueue<SubagentRunInfo> {
+  if (!globalThis.__piSubagentQueue) globalThis.__piSubagentQueue = new SubagentQueue();
+  return globalThis.__piSubagentQueue;
 }
 
 function parseSubagentModel(runtime: ModelRuntime, value: string | undefined) {
@@ -111,24 +112,6 @@ function parentContextText(parent: HostSession): string {
   return `${serialized.slice(0, SUBAGENT_CONTEXT_LIMIT)}\n[Parent context truncated]`;
 }
 
-function reserveSubagentSlot(parentSessionId: string): () => void {
-  const starting = getSubagentStartingCounts();
-  const active = [...getSubagentRuns().values()].filter((item) =>
-    item.run.parentSessionId === parentSessionId
-      && (item.run.status === "starting" || item.run.status === "running")
-  ).length;
-  const startingCount = starting.get(parentSessionId) ?? 0;
-  if (active + startingCount >= MAX_CONCURRENT_SUBAGENTS) {
-    throw new Error(`A session can run at most ${MAX_CONCURRENT_SUBAGENTS} subagents at once`);
-  }
-  starting.set(parentSessionId, startingCount + 1);
-  return () => {
-    const remaining = (starting.get(parentSessionId) ?? 1) - 1;
-    if (remaining > 0) starting.set(parentSessionId, remaining);
-    else starting.delete(parentSessionId);
-  };
-}
-
 export function createSubagentController(
   dependencies: SubagentRuntimeDependencies,
 ): SubagentController {
@@ -140,8 +123,7 @@ export function createSubagentController(
     if (!parent?.isAlive()) throw new Error("Parent session is no longer available");
     if (!parent.sessionFile) throw new Error("Parent session must be persisted before starting a subagent");
 
-    const releaseSlot = reserveSubagentSlot(parentSessionId);
-    try {
+    {
       const profile = resolveSubagentProfile(parent.cwd, request.profile);
       if (!profile) throw new Error(`Unknown or disabled subagent profile: ${request.profile}`);
 
@@ -255,7 +237,7 @@ export function createSubagentController(
         description: metadata.description,
         task: request.task,
         runInBackground,
-        status: "running",
+        status: "queued",
         createdAt,
       };
 
@@ -275,9 +257,11 @@ export function createSubagentController(
             }
           })
         : () => {};
+      let resolveCompletion!: (run: SubagentRunInfo) => void;
+      const completion = new Promise<SubagentRunInfo>((resolve) => { resolveCompletion = resolve; });
       const stored: StoredSubagentExecution = {
         run: initialRun,
-        completion: Promise.resolve(initialRun),
+        completion,
         abortRequested: false,
       };
       getSubagentRuns().set(initialRun.sessionId, stored);
@@ -286,11 +270,25 @@ export function createSubagentController(
 
       const handleParentAbort = () => {
         stored.abortRequested = true;
-        void inner.abort();
+        if (stored.run.status === "queued") stored.cancelQueued?.();
+        else void inner.abort();
       };
       if (!runInBackground) request.signal?.addEventListener("abort", handleParentAbort, { once: true });
 
-      stored.completion = (async () => {
+      const execute = async (): Promise<SubagentRunInfo> => {
+        if (stored.abortRequested) {
+          const result: SubagentRunInfo = { ...initialRun, status: "aborted", completedAt: new Date().toISOString() };
+          sessionManager.appendCustomEntry(SUBAGENT_RESULT_TYPE, { version: 1, status: "aborted", completedAt: result.completedAt });
+          stored.run = result;
+          request.onUpdate?.(result);
+          getSubagentRuns().delete(initialRun.sessionId);
+          dependencies.invalidateSessionList();
+          return result;
+        }
+        stored.run = { ...stored.run, status: "running" };
+        sessionManager.appendCustomEntry(SUBAGENT_STATUS_TYPE, { version: 1, status: "running" });
+        request.onUpdate?.(stored.run);
+        dependencies.invalidateSessionList();
         let result: SubagentRunInfo;
         try {
           await inner.prompt(delegatedTask, {
@@ -343,11 +341,38 @@ export function createSubagentController(
         getSubagentRuns().delete(initialRun.sessionId);
         dependencies.invalidateSessionList();
         return result;
-      })();
+      };
 
-      return { run: initialRun, completion: stored.completion };
-    } finally {
-      releaseSlot();
+      const finishQueuedAbort = () => {
+        if (stored.run.status !== "queued") return;
+        const result: SubagentRunInfo = { ...initialRun, status: "aborted", completedAt: new Date().toISOString() };
+        sessionManager.appendCustomEntry(SUBAGENT_RESULT_TYPE, { version: 1, status: "aborted", completedAt: result.completedAt });
+        stored.run = result;
+        request.onUpdate?.(result);
+        getSubagentRuns().delete(initialRun.sessionId);
+        dependencies.invalidateSessionList();
+        resolveCompletion(result);
+      };
+      const queued = getSubagentQueue().enqueue(
+        parentSessionId,
+        readSubagentSettings().maxConcurrent,
+        execute,
+        (state) => {
+          if (state === "queued") {
+            sessionManager.appendCustomEntry(SUBAGENT_STATUS_TYPE, { version: 1, status: "queued" });
+          }
+          request.onUpdate?.({ ...stored.run, status: state });
+          stored.run = { ...stored.run, status: state };
+          dependencies.invalidateSessionList();
+        },
+        finishQueuedAbort,
+      );
+      stored.cancelQueued = queued.cancel;
+      void queued.promise.then(resolveCompletion, (error) => {
+        resolveCompletion({ ...initialRun, status: "failed", completedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error) });
+      });
+
+      return { run: stored.run, completion: stored.completion };
     }
   }
 
@@ -396,8 +421,13 @@ export function createSubagentController(
 
   async function abort(sessionId: string): Promise<void> {
     const wrapper = dependencies.getSession(sessionId);
-    if (!wrapper?.isAlive() || !wrapper.isRunning()) throw new Error("Subagent is not running");
     const stored = getSubagentRuns().get(sessionId);
+    if (stored?.run.status === "queued") {
+      stored.abortRequested = true;
+      if (!stored.cancelQueued?.()) throw new Error("Subagent is no longer queued");
+      return;
+    }
+    if (!wrapper?.isAlive() || !wrapper.isRunning()) throw new Error("Subagent is not running");
     if (stored) stored.abortRequested = true;
     await wrapper.inner.abort();
   }

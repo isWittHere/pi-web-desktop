@@ -282,6 +282,7 @@ export type FileEntry = SessionHeader | SessionEntry;
 
 export type SubagentSessionStatus =
   | "starting"
+  | "queued"
   | "running"
   | "completed"
   | "failed"

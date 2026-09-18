@@ -752,6 +752,8 @@ export const zhCNLocale = {
     "agents.builtInDescription": "启用内置的通用、探索与规划子 agent，主 agent 可将任务委派给它们。",
     "agents.reloadRequired": "需要重载会话以生效",
     "agents.reloadSession": "重载会话",
+    "agents.maxConcurrent": "并发子代理数",
+    "agents.maxConcurrentDescription": "每个父会话同时运行的最大任务数",
     "agents.reloading": "重载中…",
     "agents.loading": "加载中…",
     "agents.empty": "未找到 agent 配置。",

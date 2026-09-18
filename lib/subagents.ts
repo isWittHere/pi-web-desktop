@@ -10,6 +10,7 @@ import { PRESET_READ_ONLY } from "./tool-presets";
 import type { SessionEntry, SubagentSessionStatus } from "./types";
 
 export const SUBAGENT_META_TYPE = "pi-web:subagent";
+export const SUBAGENT_STATUS_TYPE = "pi-web:subagent-status";
 export const SUBAGENT_RESULT_TYPE = "pi-web:subagent-result";
 export const SUBAGENT_CONTROL_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"] as const;
 
@@ -65,10 +66,15 @@ export interface SubagentSessionResources {
 
 export interface SubagentResultMetadata {
   version: 1;
-  status: Exclude<SubagentStatus, "starting" | "running" | "interrupted">;
+  status: Exclude<SubagentStatus, "starting" | "running" | "queued" | "interrupted">;
   completedAt: string;
   result?: string;
   error?: string;
+}
+
+export interface SubagentStatusMetadata {
+  version: 1;
+  status: Extract<SubagentStatus, "queued" | "running">;
 }
 
 export interface SubagentRunInfo {
@@ -389,9 +395,13 @@ export function readSubagentRun(entries: readonly SessionEntry[], sessionId: str
   if (!data) return null;
   const resultEntry = [...entries].reverse().find((entry) => entry.type === "custom" && entry.customType === SUBAGENT_RESULT_TYPE);
   const result = resultEntry?.type === "custom" && isRecord(resultEntry.data) ? resultEntry.data : undefined;
+  const statusEntry = [...entries].reverse().find((entry) => entry.type === "custom" && entry.customType === SUBAGENT_STATUS_TYPE);
+  const statusData = statusEntry?.type === "custom" && isRecord(statusEntry.data) ? statusEntry.data : undefined;
   const persistedStatus = result && (result.status === "completed" || result.status === "failed" || result.status === "aborted")
     ? result.status
-    : "interrupted";
+    : statusData?.version === 1 && (statusData.status === "queued" || statusData.status === "running")
+      ? statusData.status
+      : "interrupted";
   return {
     sessionId,
     sessionPath,

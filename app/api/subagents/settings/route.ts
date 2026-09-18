@@ -3,6 +3,7 @@ import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security"
 import {
   readSubagentSettings,
   writeBuiltInSubagentsEnabled,
+  writeSubagentMaxConcurrent,
 } from "@/lib/subagent-settings";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export async function GET(req: Request) {
   }
   try {
     const settings = readSubagentSettings();
-    return NextResponse.json({ enabled: settings.builtInEnabled });
+    return NextResponse.json({ enabled: settings.builtInEnabled, maxConcurrent: settings.maxConcurrent });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
@@ -31,12 +32,20 @@ export async function PUT(req: Request) {
   }
 
   try {
-    const body = await req.json() as { enabled?: unknown };
-    if (typeof body.enabled !== "boolean") {
+    const body = await req.json() as { enabled?: unknown; maxConcurrent?: unknown };
+    if (body.enabled === undefined && body.maxConcurrent === undefined) {
+      return NextResponse.json({ error: "enabled or maxConcurrent is required" }, { status: 400 });
+    }
+    if (body.enabled !== undefined && typeof body.enabled !== "boolean") {
       return NextResponse.json({ error: "enabled must be a boolean" }, { status: 400 });
     }
-    const settings = writeBuiltInSubagentsEnabled(body.enabled);
-    return NextResponse.json({ enabled: settings.builtInEnabled });
+    if (body.maxConcurrent !== undefined && typeof body.maxConcurrent !== "number") {
+      return NextResponse.json({ error: "maxConcurrent must be a number" }, { status: 400 });
+    }
+    let settings = readSubagentSettings();
+    if (body.enabled !== undefined) settings = writeBuiltInSubagentsEnabled(body.enabled);
+    if (body.maxConcurrent !== undefined) settings = writeSubagentMaxConcurrent(body.maxConcurrent);
+    return NextResponse.json({ enabled: settings.builtInEnabled, maxConcurrent: settings.maxConcurrent });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
