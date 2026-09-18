@@ -45,6 +45,17 @@ export interface StartSubagentRequest {
   onUpdate?: (run: SubagentRunInfo) => void;
 }
 
+export interface ResumeSubagentRequest {
+  parentContext: ExtensionContext;
+  parentToolCallId: string;
+  sessionId: string;
+  task: string;
+  description: string;
+  runInBackground?: boolean;
+  signal?: AbortSignal;
+  onUpdate?: (run: SubagentRunInfo) => void;
+}
+
 export interface SubagentExecution {
   run: SubagentRunInfo;
   completion: Promise<SubagentRunInfo>;
@@ -52,6 +63,7 @@ export interface SubagentExecution {
 
 export interface SubagentExtensionRuntime {
   start(request: StartSubagentRequest): Promise<SubagentExecution>;
+  resume(request: ResumeSubagentRequest): Promise<SubagentExecution>;
   get(sessionId: string): Promise<SubagentRunInfo | null>;
   steer(sessionId: string, message: string): Promise<void>;
   notifyParent(run: SubagentRunInfo): Promise<void>;
@@ -121,6 +133,7 @@ export function createSubagentExtension(
         parameters: Type.Object({
           subagent_type: Type.Optional(Type.String({ description: `Configured agent profile. Available types: ${availableTypes}. Default: general-purpose.` })),
           prompt: Type.String({ description: "The complete task for the subagent." }),
+          resume: Type.Optional(Type.String({ description: "Existing subagent session ID to continue instead of creating a new session." })),
           input_files: Type.Optional(Type.Array(Type.String(), {
             description: "UTF-8 text files under the session cwd to include with the task.",
             maxItems: MAX_SUBAGENT_INPUT_FILES,
@@ -134,7 +147,22 @@ export function createSubagentExtension(
         }),
         async execute(toolCallId, params, signal, onUpdate, ctx) {
           try {
-            const execution = await runtime.start({
+            const resume = params.resume?.trim();
+            const execution = resume
+              ? await runtime.resume({
+                  parentContext: ctx,
+                  parentToolCallId: toolCallId,
+                  sessionId: resume,
+                  task: params.prompt,
+                  description: params.description,
+                  ...(params.run_in_background !== undefined ? { runInBackground: params.run_in_background } : {}),
+                  signal,
+                  onUpdate: (run) => onUpdate?.({
+                    content: [{ type: "text", text: `${run.profile}: ${run.description} (${run.status})` }],
+                    details: subagentToolDetails(run),
+                  }),
+                })
+              : await runtime.start({
               parentContext: ctx,
               parentToolCallId: toolCallId,
               profile: params.subagent_type ?? "general-purpose",
@@ -151,7 +179,7 @@ export function createSubagentExtension(
                 content: [{ type: "text", text: `${run.profile}: ${run.description} (${run.status})` }],
                 details: subagentToolDetails(run),
               }),
-            });
+                });
 
             if (execution.run.runInBackground) {
               void execution.completion

@@ -12,6 +12,7 @@ import type { AgentSessionLike } from "./pi-types";
 import {
   subagentFinalText,
   subagentToolDetails,
+  type ResumeSubagentRequest,
   type StartSubagentRequest,
   type SubagentExecution,
   type SubagentExtensionRuntime,
@@ -376,6 +377,110 @@ export function createSubagentController(
     }
   }
 
+  async function resume(request: ResumeSubagentRequest): Promise<SubagentExecution> {
+    const enabled = dependencies.isBuiltInSubagentsEnabled ?? isBuiltInSubagentsEnabled;
+    if (!enabled()) throw new Error("Pi Web built-in sub-agents are disabled");
+    const parentSessionId = request.parentContext.sessionManager.getSessionId();
+    const existing = await get(request.sessionId);
+    if (!existing) throw new Error(`Subagent not found: ${request.sessionId}`);
+    if (existing.parentSessionId !== parentSessionId) throw new Error("Subagent does not belong to this parent session");
+    if (existing.status === "running" || existing.status === "queued") throw new Error("Subagent is already running");
+    const parent = dependencies.getSession(parentSessionId);
+    if (!parent?.isAlive()) throw new Error("Parent session is no longer available");
+    const sessionPath = existing.sessionPath || await dependencies.resolveSessionPath(request.sessionId);
+    if (!sessionPath) throw new Error(`Subagent session file not found: ${request.sessionId}`);
+    let wrapper = dependencies.getSession(request.sessionId);
+    if (!wrapper?.isAlive()) wrapper = await dependencies.reopenSession(request.sessionId, sessionPath);
+    if (!wrapper.isAlive()) throw new Error("Subagent session is no longer available");
+    if (wrapper.isRunning()) throw new Error("Subagent is already running");
+
+    const runInBackground = request.runInBackground ?? existing.runInBackground;
+    const initialRun: SubagentRunInfo = {
+      ...existing,
+      parentToolCallId: request.parentToolCallId,
+      task: request.task,
+      description: request.description.trim() || existing.description,
+      runInBackground,
+      status: "queued",
+      completedAt: undefined,
+      result: undefined,
+      error: undefined,
+    };
+    const manager = wrapper.inner.sessionManager;
+    let resolveCompletion!: (run: SubagentRunInfo) => void;
+    const completion = new Promise<SubagentRunInfo>((resolve) => { resolveCompletion = resolve; });
+    const stored: StoredSubagentExecution = { run: initialRun, completion, abortRequested: false };
+    getSubagentRuns().set(request.sessionId, stored);
+    request.onUpdate?.(initialRun);
+    dependencies.invalidateSessionList();
+    const handleParentAbort = () => {
+      stored.abortRequested = true;
+      if (stored.run.status === "queued") stored.cancelQueued?.();
+      else void wrapper!.inner.abort();
+    };
+    if (!runInBackground) request.signal?.addEventListener("abort", handleParentAbort, { once: true });
+
+    const execute = async (): Promise<SubagentRunInfo> => {
+      if (stored.abortRequested) {
+        const result: SubagentRunInfo = { ...initialRun, status: "aborted", completedAt: new Date().toISOString() };
+        manager.appendCustomEntry(SUBAGENT_RESULT_TYPE, { version: 1, status: "aborted", completedAt: result.completedAt });
+        stored.run = result;
+        getSubagentRuns().delete(request.sessionId);
+        resolveCompletion(result);
+        return result;
+      }
+      stored.run = { ...stored.run, status: "running" };
+      manager.appendCustomEntry(SUBAGENT_STATUS_TYPE, { version: 1, status: "running" });
+      request.onUpdate?.(stored.run);
+      let result: SubagentRunInfo;
+      try {
+        await wrapper!.inner.prompt(request.task, { source: "rpc" });
+        const text = wrapper!.inner.getLastAssistantText()?.trim();
+        result = { ...initialRun, status: stored.abortRequested ? "aborted" : "completed", completedAt: new Date().toISOString(), ...(text ? { result: text } : {}) };
+      } catch (error) {
+        result = {
+          ...initialRun,
+          status: stored.abortRequested || request.signal?.aborted ? "aborted" : "failed",
+          completedAt: new Date().toISOString(),
+          ...(!stored.abortRequested && !request.signal?.aborted ? { error: error instanceof Error ? error.message : String(error) } : {}),
+        };
+      } finally {
+        request.signal?.removeEventListener("abort", handleParentAbort);
+      }
+      manager.appendCustomEntry(SUBAGENT_RESULT_TYPE, {
+        version: 1,
+        status: result.status as "completed" | "failed" | "aborted",
+        completedAt: result.completedAt!,
+        ...(result.result ? { result: result.result } : {}),
+        ...(result.error ? { error: result.error } : {}),
+      });
+      stored.run = result;
+      request.onUpdate?.(result);
+      getSubagentRuns().delete(request.sessionId);
+      dependencies.invalidateSessionList();
+      return result;
+    };
+    const finishQueuedAbort = () => {
+      if (stored.run.status !== "queued") return;
+      const result: SubagentRunInfo = { ...initialRun, status: "aborted", completedAt: new Date().toISOString() };
+      manager.appendCustomEntry(SUBAGENT_RESULT_TYPE, { version: 1, status: "aborted", completedAt: result.completedAt });
+      stored.run = result;
+      request.onUpdate?.(result);
+      getSubagentRuns().delete(request.sessionId);
+      dependencies.invalidateSessionList();
+      resolveCompletion(result);
+    };
+    const queued = getSubagentQueue().enqueue(parentSessionId, readSubagentSettings().maxConcurrent, execute, (state) => {
+      if (state === "queued") manager.appendCustomEntry(SUBAGENT_STATUS_TYPE, { version: 1, status: "queued" });
+      stored.run = { ...stored.run, status: state };
+      request.onUpdate?.(stored.run);
+      dependencies.invalidateSessionList();
+    }, finishQueuedAbort);
+    stored.cancelQueued = queued.cancel;
+    void queued.promise.then(resolveCompletion, (error) => resolveCompletion({ ...initialRun, status: "failed", completedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error) }));
+    return { run: stored.run, completion };
+  }
+
   async function get(sessionId: string): Promise<SubagentRunInfo | null> {
     const stored = getSubagentRuns().get(sessionId);
     if (stored) return stored.run;
@@ -433,7 +538,7 @@ export function createSubagentController(
   }
 
   return {
-    extensionRuntime: { start, get, steer, notifyParent },
+    extensionRuntime: { start, resume, get, steer, notifyParent },
     get,
     steer,
     abort,
