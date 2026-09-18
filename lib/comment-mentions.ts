@@ -28,10 +28,12 @@ export const COMMENT_PREFIX_INSERTION = `@${COMMENT_AT_PREFIX}`;
  *  starting at 7 so a bare word like "cafe" never styles as a commit. */
 const COMMENT_SHA_RE = /^[0-9a-f]{7,40}$/i;
 
-/** Structural subset of GitLogCommit — keeps this module dependency-free. */
+/** Structural subset of GitLogCommit — keeps this module dependency-free.
+ *  refs rides along when the caller has it (menu rows show branch/tag chips). */
 export interface CommentCommitRef {
   hash: string;
   subject: string;
+  refs?: string[];
 }
 
 export type AtMenuItem =

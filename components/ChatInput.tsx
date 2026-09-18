@@ -36,6 +36,8 @@ import type { ThinkingLevelOption } from "@/lib/thinking-levels";
 import { filterThinkingLevelOptions } from "@/lib/thinking-levels";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { MINI_ROW_H, MiniLaneGraph, miniLaneGraphWidth } from "./MiniLaneGraph";
+import { RefTagList } from "./GitRefChips";
+import { parseGitRefTags } from "@/lib/git-graph-refs";
 import { ToolsPanel } from "./ToolsPanel";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useTheme } from "@/hooks/useTheme";
@@ -2596,6 +2598,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)" }}>
                               {commentShortSha(commit.hash)}
                             </span>
+                              {commit.refs && commit.refs.length > 0 && (
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                                  <RefTagList tags={parseGitRefTags(commit.refs)} laneColor={laneColor} />
+                                </span>
+                              )}
                               <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {commit.subject}
                               </span>
