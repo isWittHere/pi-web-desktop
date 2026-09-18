@@ -273,6 +273,7 @@ export const zhCNLocale = {
     "desktop.gitGraphEmpty": "暂无提交",
     "desktop.gitGraphLoadMore": "加载更多",
     "desktop.gitGraphOpenView": "打开 Git 图谱",
+    "desktop.gitGraphViewDetails": "前往 Git 图谱查看详情",
     "desktop.gitGraphCommitFiles": "变更文件",
     "desktop.gitGraphResizeGraph": "调整图谱列宽度",
     "desktop.injectMessageNow": "中断当前运行并立即注入此消息",

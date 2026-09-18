@@ -53,6 +53,7 @@ import { ArrowsInIcon } from "@phosphor-icons/react/ArrowsIn";
 import { ArrowsOutIcon } from "@phosphor-icons/react/ArrowsOut";
 import { AtIcon } from "@phosphor-icons/react/At";
 import { GitCommitIcon } from "@phosphor-icons/react/GitCommit";
+import { GraphIcon } from "@phosphor-icons/react/Graph";
 import { ImageIcon } from "@phosphor-icons/react/Image";
 import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
 
@@ -134,6 +135,9 @@ interface Props {
   draftKey?: string;
   /** Session working directory — enables the @ file autocomplete menu */
   cwd?: string | null;
+  /** Opens the git graph view tab for the given cwd — the trailing row of the
+   *  commit list (commits beyond the fetched window are reachable there). */
+  onOpenGitGraph?: (cwd: string) => void;
   /** Messages scroll container — the popup menus cap their height at its top edge */
   messagesScrollRef?: React.RefObject<HTMLDivElement | null>;
 }
@@ -520,6 +524,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onPromptWithStreamingBehavior,
   draftKey,
   cwd,
+  onOpenGitGraph,
   messagesScrollRef,
 }: Props, ref) {
   const isMobile = useIsMobile();
@@ -2608,6 +2613,40 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         })}
                         {showMiniGraph && laneLayout && (
                           <MiniLaneGraph layout={laneLayout} palette={lanePalette} />
+                        )}
+                        {onOpenGitGraph && cwd
+                          && commitsForCwd?.isGitRepository && commitsForCwd.commits.length > 0 && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setAtMenuOpen(false);
+                              onOpenGitGraph(cwd);
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                              height: showMiniGraph ? MINI_ROW_H : undefined,
+                              padding: showMiniGraph ? `0 6px 0 ${miniGraphW + 6}px` : "3px 6px",
+                              border: "none",
+                              borderRadius: 5,
+                              background: "none",
+                              color: "var(--text)",
+                              cursor: "pointer",
+                              textAlign: "left",
+                              fontSize: 12.5,
+                            }}
+                          >
+                            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
+                              <GraphIcon size={14} weight="regular" aria-hidden="true" />
+                            </span>
+                            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {t("desktop.gitGraphViewDetails")}
+                            </span>
+                          </button>
                         )}
                       </div>
                     )

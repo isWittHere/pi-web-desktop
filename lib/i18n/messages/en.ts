@@ -273,6 +273,7 @@ export const enLocale = {
     "desktop.gitGraphEmpty": "No commits",
     "desktop.gitGraphLoadMore": "Load more",
     "desktop.gitGraphOpenView": "Open Git graph",
+    "desktop.gitGraphViewDetails": "Open git graph for details",
     "desktop.gitGraphCommitFiles": "Changed files",
     "desktop.gitGraphResizeGraph": "Resize graph column",
     "desktop.injectMessageNow": "Interrupt the current run and inject this message now",

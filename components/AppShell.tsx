@@ -1494,6 +1494,7 @@ export function AppShell() {
               onContextUsageChange={handleContextUsageChange}
               onContentReady={contentDone}
               onOpenFile={handleOpenLinkedFile}
+              onOpenGitGraph={(graphCwd) => handleOpenViewTab("git-graph", graphCwd)}
               onWorkspaceControlsHostChange={setWelcomeWorkspaceControlsHost}
               onViewFullHistory={handleViewFullHistory}
               systemPrompt={systemPrompt}

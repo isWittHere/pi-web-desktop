@@ -32,6 +32,8 @@ interface Props {
   session: SessionInfo | null;
   /** Pending full-text-search jump: entry (and block) to reveal in this session. */
   searchTarget?: { sessionId: string; entryId: string; blockIndex?: number } | null;
+  /** Opens the git graph view tab — surfaced as the commit list's trailing row. */
+  onOpenGitGraph?: (cwd: string) => void;
   onSearchTargetHandled?: (target: { sessionId: string; entryId: string }) => void;
   /** True when the sidebar reports this session currently running elsewhere. */
   sessionRunning?: boolean;
@@ -164,7 +166,7 @@ function withAssistantBlocks(
 
 
 
-export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessionRunning, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, notificationsEnabled, onNotificationsToggle, sessionTitle, onContentReady }: Props) {
+export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessionRunning, newSessionCwd, newSessionDraftId, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onOpenGitGraph, onWorkspaceControlsHostChange, onViewFullHistory, systemPrompt, soundEnabled = true, onSoundToggle, playDoneSound, unlockAudio, notificationsEnabled, onNotificationsToggle, sessionTitle, onContentReady }: Props) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
 
@@ -695,6 +697,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       onLoadSlashCommands={loadSlashCommands}
       onBuiltinCommand={handleBuiltinSlashCommand}
       onAudioUnlock={unlockAudio}
+      onOpenGitGraph={onOpenGitGraph}
       draftKey={session?.id ?? newSessionDraftId ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined)}
       cwd={session?.cwd ?? newSessionCwd}
       messagesScrollRef={scrollContainerRef}
