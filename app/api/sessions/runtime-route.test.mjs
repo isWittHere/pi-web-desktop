@@ -152,9 +152,9 @@ test("list versions expose idle session creation, rename and deletion to other w
 
 test("DELETE tolerates an unpersisted runtime session without a file on disk", async () => {
   const deleteSource = detailRoute.slice(detailRoute.indexOf("export async function DELETE"));
-  // Reading the header for an empty runtime session may ENOENT; fall through.
-  assert.match(deleteSource, /code !== "ENOENT"\) throw error/);
-  // Shutting down an unpersisted session must not hard-fail unlink.
+  // Reading the header for an empty runtime session may ENOENT, and so may the
+  // unlink for a session never written to disk — both must fall through.
+  const enoentGuards = (deleteSource.match(/code !== "ENOENT"\) throw error/g) ?? []).length;
+  assert.equal(enoentGuards, 2, "expected one ENOENT guard for the header probe and one for unlink");
   assert.match(deleteSource, /unlinkSync\(filePath\)/);
-  assert.match(deleteSource, /code !== "ENOENT"\) throw error/);
 });

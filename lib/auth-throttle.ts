@@ -33,10 +33,6 @@ function freshState(): AuthThrottleState {
   return { failures: 0, lastFailureAt: 0, blockedUntil: 0 };
 }
 
-export function createAuthThrottleState(): AuthThrottleState {
-  return freshState();
-}
-
 /** Stored on `globalThis` so the counter survives Next.js hot reloads. */
 function getGlobalState(): AuthThrottleState {
   const store = globalThis as Record<PropertyKey, unknown>;
