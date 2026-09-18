@@ -24,11 +24,13 @@ export interface SessionSearchResponse {
   truncated: boolean;
 }
 
-/** Title hit = the user-set session name matches. firstMessage is message
- *  content: when it matches, the content scan already surfaces the session
- *  with a visible snippet, so it needs no title special-casing. */
+/** Title hit = the query appears in the title the row actually renders:
+ *  the user-set session name when present, else the first-message preview
+ *  (which is the rendered title for unnamed sessions). No prefix bounds —
+ *  the full rendered title counts, even where the list ellipsizes it. */
 function titleMatches(session: SessionInfo, needleLower: string): boolean {
-  return Boolean(session.name?.toLowerCase().includes(needleLower));
+  const title = session.name || session.firstMessage;
+  return Boolean(title?.toLowerCase().includes(needleLower));
 }
 
 // Scan recent files without an index; add indexing if measured latency warrants it.
