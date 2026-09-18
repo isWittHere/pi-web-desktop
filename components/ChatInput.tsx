@@ -53,7 +53,7 @@ import { ArrowsInIcon } from "@phosphor-icons/react/ArrowsIn";
 import { ArrowsOutIcon } from "@phosphor-icons/react/ArrowsOut";
 import { AtIcon } from "@phosphor-icons/react/At";
 import { GitCommitIcon } from "@phosphor-icons/react/GitCommit";
-import { GraphIcon } from "@phosphor-icons/react/Graph";
+import { GitMergeIcon } from "@phosphor-icons/react/GitMerge";
 import { ImageIcon } from "@phosphor-icons/react/Image";
 import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
 
@@ -2642,7 +2642,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             }}
                           >
                             <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
-                              <GraphIcon size={14} weight="regular" aria-hidden="true" />
+                              {/* Same glyph as the git-graph tab (flipped GitMerge). */}
+                              <GitMergeIcon size={14} weight="regular" aria-hidden="true" style={{ transform: "scaleY(-1)" }} />
                             </span>
                             <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {t("desktop.gitGraphViewDetails")}
