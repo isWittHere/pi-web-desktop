@@ -23,9 +23,10 @@ import {
 import { toCwdRelativeMentions } from "@/lib/file-mentions";
 import { tokenizeMentions } from "@/lib/mention-tokens";
 import {
-  buildAtMenuItems, buildCommentMentionText, buildCommentPrefixInsertion, commentShortSha, COMMENT_FETCH_LIMIT,
-  parseCommentQuery, type AtMenuItem,
+  buildAtMenuItems, buildCommitLaneColors, buildCommentMentionText, buildCommentPrefixInsertion, commentShortSha,
+  COMMENT_FETCH_LIMIT, parseCommentQuery, type AtMenuItem,
 } from "@/lib/comment-mentions";
+import { deriveLanePalette } from "@/lib/git-graph-palette";
 import type { GitLogCommit } from "@/lib/git-graph-parser";
 import { useFileIndex, useSkillNames } from "@/hooks/useProjectContext";
 import { encodeFilePathForApi } from "@/lib/file-paths";
@@ -35,6 +36,7 @@ import { filterThinkingLevelOptions } from "@/lib/thinking-levels";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { ToolsPanel } from "./ToolsPanel";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useTheme } from "@/hooks/useTheme";
 import { useChatAppearance } from "@/hooks/useChatAppearance";
 import { useResizableHeight } from "@/hooks/useResizableHeight";
 import { scrollRemaining, nextInputCompactState, COMPACT_RESTORE_TRIGGER, type InputCompactScrollDirection } from "@/lib/input-compact";
@@ -518,6 +520,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
+  const { isDark } = useTheme();
   const { fontSize } = useChatAppearance();
 
   // Step pill: measure its natural width so the independent status button can
@@ -1412,6 +1415,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     && atServerResult.cwd === cwd
     && atServerResult.query === atQueryText;
   const commitsForCwd = commitsState && commitsState.cwd === cwd ? commitsState : null;
+  // Lane colors mirror the git-graph tab: accent-derived palette recomputed on
+  // theme switches, lane indexes from the same machine over the full fetched
+  // window so the "same color = same branch line" signal survives filtering.
+  const lanePalette = useMemo(() => {
+    try {
+      const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+      return deriveLanePalette(accent);
+    } catch {
+      return deriveLanePalette("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDark]);
+  const commitLaneColors = useMemo(
+    () => (commitsForCwd && commitsForCwd.isGitRepository ? buildCommitLaneColors(commitsForCwd.commits) : null),
+    [commitsForCwd],
+  );
   // Unified, flat menu list: prefix suggestion + files normally, commits only
   // when the query routes to comment: mode. Keyboard navigation and rendering
   // treat it as one list; empty routed results mean "no match" (the loading /
@@ -2521,6 +2540,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         if (item.kind !== "commit") return null;
                         const active = index === atActiveIndex;
                         const commit = item.commit;
+                        const laneColorIndex = commitLaneColors?.get(commit.hash);
+                        const laneColor = laneColorIndex === undefined
+                          ? "var(--text-dim)"
+                          : lanePalette[laneColorIndex % lanePalette.length];
                         return (
                           <button
                             key={`c:${commit.hash}`}
@@ -2549,7 +2572,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                               fontSize: 12.5,
                             }}
                           >
-                            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
+                            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: laneColor }}>
                               <GitCommitIcon size={14} weight="regular" aria-hidden="true" />
                             </span>
                             <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)" }}>

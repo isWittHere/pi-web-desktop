@@ -10,6 +10,8 @@
 // text following the styled mention).
 
 import type { FileIndexEntry } from "./file-fuzzy";
+import type { GitLogCommit } from "./git-graph-parser";
+import { buildGitGraphLayout } from "./git-graph-lanes";
 
 /** Trigger prefix inside an @ token (after the @). */
 export const COMMENT_AT_PREFIX = "comment:";
@@ -90,6 +92,16 @@ export function filterCommentCommits(
 /** Short display/insert sha — matches the git-graph UI's slice(0, 10). */
 export function commentShortSha(hash: string): string {
   return hash.slice(0, 10);
+}
+
+/**
+ * hash -> lane colorIndex over the fetched commit window, mirroring the
+ * git-graph tab's lane machine so the menu's commit rows can carry the same
+ * "same color = same branch line" signal. Colors derive from the full list
+ * once — filtering rows later never re-shuffles them.
+ */
+export function buildCommitLaneColors(commits: GitLogCommit[]): Map<string, number> {
+  return new Map(buildGitGraphLayout(commits, "compact").nodes.map((node) => [node.hash, node.colorIndex]));
 }
 
 /**
