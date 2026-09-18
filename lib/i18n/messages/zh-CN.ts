@@ -388,7 +388,6 @@ export const zhCNLocale = {
     "desktop.sessionSearchEmpty": "没有匹配的消息",
     "desktop.sessionSearchCount": "{count} 个会话包含匹配",
     "desktop.sessionSearchPartial": "结果可能不完整（已达时间或大小限制）",
-    "desktop.sessionSearchTitleHit": "标题匹配",
     "desktop.searchSessionsPlaceholder": "搜索会话…",
     "desktop.noMatchingSessions": "没有匹配的会话",
     "desktop.explorer": "资源管理器",

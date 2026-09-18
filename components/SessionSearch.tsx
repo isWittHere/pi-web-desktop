@@ -104,11 +104,7 @@ export function SessionSearch({ open, query, project, refreshKey, children, sele
             <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={session.cwd}>{session.cwd}</span>
             <span style={{ flexShrink: 0 }}>{formatRelativeTime(session.modified, t)}</span>
           </span>
-          {titleHit ? (
-            <span style={{ marginTop: 3, display: "inline-block", fontSize: 10, color: "var(--text-dim)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 6px" }}>
-              {t("desktop.sessionSearchTitleHit")}
-            </span>
-          ) : (
+          {!titleHit && (
             <span style={{ marginTop: 3, display: "block", fontSize: 11, lineHeight: 1.5, overflowWrap: "anywhere", color: "var(--text-muted)" }}>
               {before}<mark style={markStyle}>{match}</mark>{after}
             </span>
