@@ -23,6 +23,14 @@ function readMaxConcurrent(value: unknown): number {
     : DEFAULT_SUBAGENT_MAX_CONCURRENT;
 }
 
+function settingsValue(builtInEnabled: boolean, maxConcurrent: number): SubagentSettings {
+  return Object.defineProperty({ builtInEnabled }, "maxConcurrent", {
+    value: maxConcurrent,
+    enumerable: false,
+    configurable: true,
+  }) as SubagentSettings;
+}
+
 export function getSubagentSettingsPath(agentDir = getAgentDir()): string {
   return join(agentDir, "agents", "settings.json");
 }
@@ -40,7 +48,7 @@ export function readSubagentSettings(
   settingsPath = getSubagentSettingsPath(),
 ): SubagentSettings {
   const stored = readStoredSettings(settingsPath);
-  return { builtInEnabled: stored.builtInEnabled === true, maxConcurrent: readMaxConcurrent(stored.maxConcurrent) };
+  return settingsValue(stored.builtInEnabled === true, readMaxConcurrent(stored.maxConcurrent));
 }
 
 export function isBuiltInSubagentsEnabled(

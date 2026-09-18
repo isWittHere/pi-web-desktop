@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import {
   readSubagentSettings,
+  MAX_SUBAGENT_MAX_CONCURRENT,
   writeBuiltInSubagentsEnabled,
   writeSubagentMaxConcurrent,
 } from "@/lib/subagent-settings";
@@ -39,8 +40,13 @@ export async function PUT(req: Request) {
     if (body.enabled !== undefined && typeof body.enabled !== "boolean") {
       return NextResponse.json({ error: "enabled must be a boolean" }, { status: 400 });
     }
-    if (body.maxConcurrent !== undefined && typeof body.maxConcurrent !== "number") {
-      return NextResponse.json({ error: "maxConcurrent must be a number" }, { status: 400 });
+    if (body.maxConcurrent !== undefined && (
+      typeof body.maxConcurrent !== "number"
+      || !Number.isInteger(body.maxConcurrent)
+      || body.maxConcurrent < 1
+      || body.maxConcurrent > MAX_SUBAGENT_MAX_CONCURRENT
+    )) {
+      return NextResponse.json({ error: `maxConcurrent must be an integer between 1 and ${MAX_SUBAGENT_MAX_CONCURRENT}` }, { status: 400 });
     }
     let settings = readSubagentSettings();
     if (body.enabled !== undefined) settings = writeBuiltInSubagentsEnabled(body.enabled);

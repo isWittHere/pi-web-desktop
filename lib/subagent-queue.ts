@@ -3,7 +3,7 @@ export type SubagentQueueState = "queued" | "running";
 interface QueueItem<T> {
   run: () => Promise<T>;
   onState: (state: SubagentQueueState) => void;
-  onCancel?: () => void;
+  onCancel?: () => void | Promise<void>;
   resolve: (value: T) => void;
   reject: (error: unknown) => void;
   state: SubagentQueueState;
@@ -47,8 +47,10 @@ export class SubagentQueue<T> {
       cancel: () => {
         if (item.state !== "queued" || item.cancelled) return false;
         item.cancelled = true;
-        item.onCancel?.();
-        item.resolve(undefined as T);
+        Promise.resolve(item.onCancel?.()).then(
+          () => item.resolve(undefined as T),
+          (error) => item.reject(error),
+        );
         this.pump(parentId, parent);
         return true;
       },

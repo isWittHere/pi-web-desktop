@@ -51,6 +51,8 @@ export interface SubagentMetadata {
   runInBackground: boolean;
   createdAt: string;
   resourceSnapshot: SubagentResourceSnapshot;
+  worktreePath?: string;
+  worktreeBranch?: string;
 }
 
 export interface SubagentResourceSnapshot {
@@ -76,6 +78,7 @@ export interface SubagentResultMetadata {
   completedAt: string;
   result?: string;
   error?: string;
+  worktreeCleanupError?: string;
 }
 
 export interface SubagentStatusMetadata {
@@ -97,6 +100,9 @@ export interface SubagentRunInfo {
   completedAt?: string;
   result?: string;
   error?: string;
+  worktreePath?: string;
+  worktreeBranch?: string;
+  worktreeCleanupError?: string;
 }
 
 const DEFAULT_TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls"];
@@ -421,9 +427,16 @@ export function withSubagentExtensionTools(
 export function readSubagentRun(entries: readonly SessionEntry[], sessionId: string, sessionPath: string): SubagentRunInfo | null {
   const data = subagentMetadataData(entries);
   if (!data) return null;
-  const resultEntry = [...entries].reverse().find((entry) => entry.type === "custom" && entry.customType === SUBAGENT_RESULT_TYPE);
+  const lifecycleEntry = [...entries].reverse().find((entry) =>
+    entry.type === "custom" && (entry.customType === SUBAGENT_RESULT_TYPE || entry.customType === SUBAGENT_STATUS_TYPE)
+  );
+  const resultEntry = lifecycleEntry?.type === "custom" && lifecycleEntry.customType === SUBAGENT_RESULT_TYPE
+    ? lifecycleEntry
+    : undefined;
   const result = resultEntry?.type === "custom" && isRecord(resultEntry.data) ? resultEntry.data : undefined;
-  const statusEntry = [...entries].reverse().find((entry) => entry.type === "custom" && entry.customType === SUBAGENT_STATUS_TYPE);
+  const statusEntry = lifecycleEntry?.type === "custom" && lifecycleEntry.customType === SUBAGENT_STATUS_TYPE
+    ? lifecycleEntry
+    : undefined;
   const statusData = statusEntry?.type === "custom" && isRecord(statusEntry.data) ? statusEntry.data : undefined;
   const persistedStatus = result && (result.status === "completed" || result.status === "failed" || result.status === "aborted")
     ? result.status
@@ -444,5 +457,8 @@ export function readSubagentRun(entries: readonly SessionEntry[], sessionId: str
     ...(result && typeof result.completedAt === "string" ? { completedAt: result.completedAt } : {}),
     ...(result && typeof result.result === "string" ? { result: result.result } : {}),
     ...(result && typeof result.error === "string" ? { error: result.error } : {}),
+    ...(typeof data.worktreePath === "string" ? { worktreePath: data.worktreePath } : {}),
+    ...(typeof data.worktreeBranch === "string" ? { worktreeBranch: data.worktreeBranch } : {}),
+    ...(result && typeof result.worktreeCleanupError === "string" ? { worktreeCleanupError: result.worktreeCleanupError } : {}),
   };
 }

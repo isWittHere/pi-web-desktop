@@ -64,6 +64,6 @@ test("settings route validates and persists concurrency", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { enabled: false, maxConcurrent: 2 });
   response = await PUT(request({ maxConcurrent: 0 }));
-  assert.equal(response.status, 500);
+  assert.equal(response.status, 400);
   assert.match((await response.json()).error, /between 1 and 32/);
 });

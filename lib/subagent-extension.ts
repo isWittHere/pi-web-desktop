@@ -27,6 +27,9 @@ export interface SubagentToolDetails {
   createdAt: string;
   completedAt?: string;
   error?: string;
+  worktreePath?: string;
+  worktreeBranch?: string;
+  worktreeCleanupError?: string;
 }
 
 export interface StartSubagentRequest {
@@ -41,6 +44,7 @@ export interface StartSubagentRequest {
   thinking?: string;
   maxTurns?: number;
   inheritContext?: boolean;
+  isolation?: "worktree";
   signal?: AbortSignal;
   onUpdate?: (run: SubagentRunInfo) => void;
 }
@@ -93,6 +97,9 @@ export function subagentToolDetails(run: SubagentRunInfo): SubagentToolDetails {
     createdAt: run.createdAt,
     ...(run.completedAt ? { completedAt: run.completedAt } : {}),
     ...(run.error ? { error: run.error } : {}),
+    ...(run.worktreePath ? { worktreePath: run.worktreePath } : {}),
+    ...(run.worktreeBranch ? { worktreeBranch: run.worktreeBranch } : {}),
+    ...(run.worktreeCleanupError ? { worktreeCleanupError: run.worktreeCleanupError } : {}),
   };
 }
 
@@ -144,6 +151,7 @@ export function createSubagentExtension(
           thinking: Type.Optional(Type.String({ description: "Optional thinking level override." })),
           max_turns: Type.Optional(Type.Number({ description: "Optional positive agent turn limit." })),
           inherit_context: Type.Optional(Type.Boolean({ description: "Include the parent session's active conversation context." })),
+          isolation: Type.Optional(Type.String({ description: "Run the subagent in an isolated git worktree." })),
         }),
         async execute(toolCallId, params, signal, onUpdate, ctx) {
           try {
@@ -174,6 +182,7 @@ export function createSubagentExtension(
               ...(params.thinking ? { thinking: params.thinking } : {}),
               ...(params.max_turns ? { maxTurns: params.max_turns } : {}),
               ...(params.inherit_context !== undefined ? { inheritContext: params.inherit_context } : {}),
+              ...(params.isolation === "worktree" ? { isolation: "worktree" as const } : {}),
               signal,
               onUpdate: (run) => onUpdate?.({
                 content: [{ type: "text", text: `${run.profile}: ${run.description} (${run.status})` }],
