@@ -152,6 +152,7 @@ export function createSubagentController(
         tools: profile.tools,
         loadSkills: profile.loadSkills,
         loadExtensions: profile.loadExtensions,
+        promptMode: profile.promptMode,
         task: appendSubagentInputFiles(request.task, inputFiles),
         inheritedParentContext,
       });
@@ -168,7 +169,7 @@ export function createSubagentController(
           noPromptTemplates: true,
           noThemes: true,
           noContextFiles: true,
-          ...(chatOnly
+          ...(chatOnly || promptPlan.exactSystemPrompt !== undefined
             ? {
                 systemPrompt: " ",
                 systemPromptOverride: () => undefined,
@@ -206,7 +207,8 @@ export function createSubagentController(
           appendSystemPrompt: [...appendSystemPrompt],
           tools: [...activeTools],
           loadSkills: profile.loadSkills,
-          loadExtensions: profile.loadExtensions,
+        loadExtensions: profile.loadExtensions,
+        ...(promptPlan.exactSystemPrompt !== undefined ? { exactSystemPrompt: promptPlan.exactSystemPrompt } : {}),
         },
       };
       sessionManager.appendCustomEntry(SUBAGENT_META_TYPE, metadata);

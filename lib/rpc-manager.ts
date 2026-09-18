@@ -1612,9 +1612,13 @@ export async function startRpcSession(
     // When all tools are disabled, clear the system prompt entirely.
     // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
     // keep this forced after extension resource discovery and reloads as well.
-    // A chat-only subagent instead pins its profile prompt verbatim.
+    // A chat-only subagent pins its profile prompt verbatim (exactSystemPrompt when
+    // a tintinweb replace-mode profile supplies one, else the append prompt).
     if (subagentChatOnly && subagentResources) {
-      wrapper.setExactSystemPrompt(() => subagentResources.appendSystemPrompt[0] ?? "");
+      const exact = subagentResources.exactSystemPrompt;
+      wrapper.setExactSystemPrompt(exact !== undefined
+        ? () => exact
+        : () => subagentResources.appendSystemPrompt[0] ?? "");
     } else if (!subagentResources && toolNames?.length === 0) {
       wrapper.setForceEmptySystemPrompt(true);
     }

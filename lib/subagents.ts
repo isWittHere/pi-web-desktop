@@ -31,6 +31,10 @@ export interface SubagentProfile {
   maxTurns?: number;
   inheritContext: boolean;
   runInBackground: boolean;
+  promptMode: "replace" | "append";
+  color?: string;
+  isolation?: "worktree" | "off";
+  persistSession?: boolean;
   enabled: boolean;
   scope: SubagentScope;
   filePath?: string;
@@ -55,6 +59,7 @@ export interface SubagentResourceSnapshot {
   tools: string[];
   loadSkills: boolean;
   loadExtensions: boolean;
+  exactSystemPrompt?: string;
 }
 
 export interface SubagentSessionResources {
@@ -62,6 +67,7 @@ export interface SubagentSessionResources {
   tools: string[];
   loadSkills: boolean;
   loadExtensions: boolean;
+  exactSystemPrompt?: string;
 }
 
 export interface SubagentResultMetadata {
@@ -107,6 +113,7 @@ const BUILTIN_PROFILES: SubagentProfile[] = [
     tools: DEFAULT_TOOLS,
     loadSkills: false,
     loadExtensions: false,
+    promptMode: "append",
     inheritContext: false,
     runInBackground: false,
     enabled: true,
@@ -120,6 +127,7 @@ const BUILTIN_PROFILES: SubagentProfile[] = [
     tools: [...PRESET_READ_ONLY],
     loadSkills: false,
     loadExtensions: false,
+    promptMode: "append",
     inheritContext: false,
     runInBackground: false,
     enabled: true,
@@ -133,6 +141,7 @@ const BUILTIN_PROFILES: SubagentProfile[] = [
     tools: [...PRESET_READ_ONLY],
     loadSkills: false,
     loadExtensions: false,
+    promptMode: "append",
     inheritContext: false,
     runInBackground: false,
     enabled: true,
@@ -146,6 +155,11 @@ function stringValue(value: unknown): string | undefined {
 
 function booleanValue(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function resourceBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  return Array.isArray(value) || typeof value === "string" ? true : fallback;
 }
 
 function parseTools(value: unknown, fallback: string[]): string[] {
@@ -165,7 +179,7 @@ function parseProfileFile(filePath: string, scope: SubagentScope): SubagentProfi
   try {
     const source = readFileSync(filePath, "utf8");
     const { data, rest } = parseFrontmatter(source);
-    const name = basename(filePath, ".md");
+    const name = stringValue(data?.name) ?? basename(filePath, ".md");
     const thinkingValue = stringValue(data?.thinking) as ThinkingLevel | undefined;
     const maxTurnsValue = typeof data?.max_turns === "number" ? Math.floor(data.max_turns) : undefined;
     const tools = parseTools(data?.tools, DEFAULT_TOOLS);
@@ -176,13 +190,17 @@ function parseProfileFile(filePath: string, scope: SubagentScope): SubagentProfi
       description: stringValue(data?.description) ?? name,
       systemPrompt: rest.trim(),
       tools: tools.filter((tool) => !disallowedTools.has(tool)),
-      loadSkills: booleanValue(data?.load_skills, false),
-      loadExtensions: booleanValue(data?.load_extensions, false),
+      loadSkills: resourceBoolean(data?.load_skills ?? data?.skills, false),
+      loadExtensions: resourceBoolean(data?.load_extensions ?? data?.extensions, false),
       ...(stringValue(data?.model) ? { model: stringValue(data?.model) } : {}),
       ...(thinkingValue && THINKING_LEVELS.has(thinkingValue) ? { thinking: thinkingValue } : {}),
       ...(maxTurnsValue && maxTurnsValue > 0 ? { maxTurns: maxTurnsValue } : {}),
       inheritContext: booleanValue(data?.inherit_context, false),
       runInBackground: booleanValue(data?.run_in_background, false),
+      promptMode: data?.prompt_mode === "replace" ? "replace" : "append",
+      ...(stringValue(data?.color) ? { color: stringValue(data?.color) } : {}),
+      ...(data?.isolation === "worktree" || data?.isolation === "off" ? { isolation: data.isolation } : {}),
+      ...(typeof data?.persist_session === "boolean" ? { persistSession: data.persist_session } : {}),
       enabled: booleanValue(data?.enabled, true),
       scope,
       filePath,
@@ -286,6 +304,7 @@ export function saveSubagentProfile(
   const model = profile.model?.trim() || undefined;
   const loadSkills = profile.loadSkills === true;
   const loadExtensions = profile.loadExtensions === true;
+  const promptMode = profile.promptMode === "replace" ? "replace" : "append";
   const dir = assertWritableProfileDirectory(cwd, scope);
   mkdirSync(dir, { recursive: true });
   if (scope === "project" && !isProjectProfilePathAllowed(cwd, dir)) {
@@ -301,10 +320,14 @@ export function saveSubagentProfile(
     enabled: profile.enabled,
     inherit_context: profile.inheritContext,
     run_in_background: profile.runInBackground,
+    prompt_mode: promptMode,
   };
   if (model) frontmatter.model = model;
   if (profile.thinking) frontmatter.thinking = profile.thinking;
   if (maxTurns) frontmatter.max_turns = maxTurns;
+  if (profile.color?.trim()) frontmatter.color = profile.color.trim();
+  if (profile.isolation) frontmatter.isolation = profile.isolation;
+  if (profile.persistSession !== undefined) frontmatter.persist_session = profile.persistSession;
   const yaml = stringifyYaml(frontmatter, { noRefs: true, lineWidth: 1000 }).trimEnd();
   writePrivateFileAtomicSync(filePath, `---\n${yaml}\n---\n\n${systemPrompt}\n`);
   return {
@@ -318,6 +341,10 @@ export function saveSubagentProfile(
     loadExtensions,
     ...(model ? { model } : { model: undefined }),
     ...(maxTurns ? { maxTurns } : { maxTurns: undefined }),
+    promptMode,
+    ...(profile.color ? { color: profile.color } : {}),
+    ...(profile.isolation ? { isolation: profile.isolation } : {}),
+    ...(profile.persistSession !== undefined ? { persistSession: profile.persistSession } : {}),
     scope,
     filePath,
   };
@@ -375,6 +402,7 @@ export function readSubagentSessionResources(
       tools: [...new Set(snapshot.tools)],
       loadSkills,
       loadExtensions,
+      ...(typeof snapshot.exactSystemPrompt === "string" ? { exactSystemPrompt: snapshot.exactSystemPrompt } : {}),
     };
   }
   return null;
