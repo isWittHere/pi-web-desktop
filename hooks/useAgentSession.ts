@@ -422,6 +422,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
   const completionScrollAllowedRef = useRef(true);
+  // Set in the compaction handlers right before `loadSession`; transferred to
+  // `justCompactedRef` inside `applySessionData` so the flag is armed exactly
+  // when the rebuilt message list is committed to state (not earlier, when an
+  // intervening state commit such as `setIsCompacting(false)` still shows the
+  // old DOM and would otherwise clear the layout-effect latch prematurely).
+  const compactReloadPendingRef = useRef(false);
+  // Consumed by the layout effect below to pin the viewport back to the
+  // (now shorter) bottom before paint, instead of letting the browser clamp
+  // it to the top and then animating back down.
+  const justCompactedRef = useRef(false);
   const userScrollIntentUntilRef = useRef(0);
   const ignoreProgrammaticScrollUntilRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -496,6 +506,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // Apply a loaded session snapshot (messages, tree, leaf, metadata) to the
   // hook state. Shared by the full load path and the cache fast path.
   const applySessionData = useCallback((d: SessionData) => {
+    if (compactReloadPendingRef.current) {
+      compactReloadPendingRef.current = false;
+      justCompactedRef.current = true;
+    }
     setData(d);
     setActiveLeafId(d.leafId);
     setMessages(d.context.messages);
@@ -1337,6 +1351,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           setCompactResult(null);
         } else if (!event.aborted) {
           setCompactResult(readCompactResult(event.result, (event.reason as string | undefined) ?? "auto"));
+          compactReloadPendingRef.current = true;
           if (sessionIdRef.current) loadSession(sessionIdRef.current);
         }
         break;
@@ -1637,6 +1652,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     try {
       const result = await sendAgentCommand<CompactCommandResult>(sid, { type: "compact" });
       setCompactResult(readCompactResult(result, "manual"));
+      compactReloadPendingRef.current = true;
       await loadSession(sid, true);
     } catch (e) {
       setCompactError(e instanceof Error ? e.message : String(e));
@@ -1923,6 +1939,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
 
+  // Compaction reloads shrink the whole message list: the rebuilt DOM is
+  // shorter than the current scrollTop, so the browser clamps the viewport
+  // back to the top before any smooth scroll can run — leaving the user
+  // staring at the head of the session. When a compaction has just reloaded,
+  // anchor the viewport straight to the bottom (where the compaction summary
+  // now lives). This runs as a layout effect before paint, so it beats the
+  // clamp flash entirely; we set scrollTop directly rather than scrolling
+  // smoothly to avoid animating from the clamped top position.
+  const alignToCompactionBottom = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
+    initialScrollDoneRef.current = true;
+    pendingScrollToUserRef.current = false;
+    container.scrollTop = container.scrollHeight - container.clientHeight;
+  }, []);
+
   const scrollUserMsgToTop = useCallback(() => {
     const container = scrollContainerRef.current;
     const el = lastUserMsgRef.current;
@@ -2038,6 +2071,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
   }, [messages.length, loading, handleScrollPositionChange, markUserScrollIntent]);
 
+  // After a compaction reload the rebuilt list is much shorter; both the
+  // layout-effect below (before paint) and this effect must not run the usual
+  // smooth scroll-from-top-to-bottom, which would visibly animate from the
+  // clamped top position. Row 1 executes before paint (pin to bottom, keeping
+  // the latch); row 2 skips the run-end smooth scroll and clears the latch.
+  useLayoutEffect(() => {
+    if (justCompactedRef.current) {
+      alignToCompactionBottom();
+    }
+  });
+
   useEffect(() => {
     if (messages.length > 0) {
       if (pendingScrollToUserRef.current) {
@@ -2049,6 +2093,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // effect while the session is hidden behind the loading overlay;
         // there is nothing to scroll here.
         initialScrollDoneRef.current = true;
+      } else if (justCompactedRef.current) {
+        // Compaction just reloaded — the layout effect already pinned the
+        // viewport to the bottom; skip the generic run-end smooth scroll and
+        // clear the latch now that both effects have run for this commit.
+        justCompactedRef.current = false;
       } else if (!agentRunningRef.current && completionScrollAllowedRef.current) {
         scrollToBottom("smooth");
       }
