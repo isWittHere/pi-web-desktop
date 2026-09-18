@@ -153,6 +153,12 @@ export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [commitFiles, setCommitFiles] = useState<GitCommitFile[] | null>(null);
   const [commitLoading, setCommitLoading] = useState(false);
+  // Per-hash file-list cache: re-selecting a viewed commit restores its
+  // detail instantly instead of re-fetching with a spinner round-trip. The
+  // in-flight slot discards stale responses when a different row is clicked
+  // mid-fetch (otherwise a slow A response would overwrite selected B).
+  const commitFilesCacheRef = useRef<Map<string, GitCommitFile[]>>(new Map());
+  const commitFetchRef = useRef<string | null>(null);
   // null = "hug the drawn lanes"; a number means the user picked a width.
   const [graphColWidth, setGraphColWidth] = useState<number | null>(loadStoredGraphColWidth);
   const [hoveredHash, setHoveredHash] = useState<string | null>(null);
@@ -160,6 +166,9 @@ export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
 
   const load = useCallback(async (requestedLimit: number) => {
     setLoading(true);
+    // History may have changed (new commits, rebase); cached per-commit file
+    // lists are no longer trustworthy.
+    commitFilesCacheRef.current.clear();
     try {
       const response = await fetch(`/api/git/log?${new URLSearchParams({ cwd, limit: String(requestedLimit) }).toString()}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -214,16 +223,33 @@ export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
 
   const selectCommit = useCallback(async (hash: string) => {
     setSelectedHash(hash);
+    const cached = commitFilesCacheRef.current.get(hash);
+    if (cached) {
+      setCommitFiles(cached);
+      setCommitLoading(false);
+      return;
+    }
+    // Same-hash fetch already in flight (rapid re-click): keep waiting on it.
+    if (commitFetchRef.current === hash) return;
+    commitFetchRef.current = hash;
     setCommitFiles(null);
     setCommitLoading(true);
     try {
       const response = await fetch(`/api/git/log?${new URLSearchParams({ cwd, commit: hash }).toString()}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setCommitFiles((await response.json() as { files?: GitCommitFile[] }).files ?? null);
+      const files = (await response.json() as { files?: GitCommitFile[] }).files ?? [];
+      // Cache regardless of what is selected — the list is valid data.
+      commitFilesCacheRef.current.set(hash, files);
+      // Apply only if this hash is still the latest request; a newer click
+      // owns the detail panel now.
+      if (commitFetchRef.current === hash) setCommitFiles(files);
     } catch {
-      setCommitFiles(null);
+      if (commitFetchRef.current === hash) setCommitFiles(null);
     } finally {
-      setCommitLoading(false);
+      if (commitFetchRef.current === hash) {
+        setCommitLoading(false);
+        commitFetchRef.current = null;
+      }
     }
   }, [cwd]);
 
