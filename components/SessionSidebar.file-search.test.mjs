@@ -49,6 +49,7 @@ test("adds matching en and zh-CN search strings under the desktop namespace", ()
     "desktop.noMatchingFiles",
     "desktop.clearSearch",
     "desktop.fileSearchFailed",
+    "desktop.sessionSearchTitleHit",
   ]) {
     assert.match(enMessages, new RegExp(`"${key}"`));
     assert.match(zhMessages, new RegExp(`"${key}"`));

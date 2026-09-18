@@ -6,6 +6,19 @@ import { formatRelativeTime } from "@/lib/format-relative-time";
 import type { SessionInfo } from "@/lib/types";
 import type { SessionSearchResponse } from "@/lib/session-search";
 
+const markStyle = { borderRadius: 2, background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--text)", padding: "0 1px" } as const;
+
+/** Split a title-hit title into highlight segments around the query. */
+function splitTitleHighlight(title: string, query: string) {
+  const index = title.toLowerCase().indexOf(query.toLowerCase());
+  if (index === -1) return null;
+  return {
+    before: title.slice(0, index),
+    match: title.slice(index, index + query.length),
+    after: title.slice(index + query.length),
+  };
+}
+
 // Sidebar session-search overlay: while active it replaces the session list
 // with literal-text hits across the current project's indexed sessions
 // (scoped by the optional `project` root, same grouping as the sidebar list).
@@ -60,7 +73,11 @@ export function SessionSearch({ open, query, project, refreshKey, children, sele
           {t("desktop.sessionSearchPartial")}
         </div>
       )}
-      {response?.results.map(({ session, entryId, blockIndex, before, match, after }) => (
+      {response?.results.map((hit) => {
+        const { session, entryId, blockIndex, before, match, after, titleHit } = hit;
+        const title = session.name || session.firstMessage;
+        const titleParts = titleHit && title ? splitTitleHighlight(title, search) : null;
+        return (
         <button
           key={session.id}
           type="button"
@@ -81,17 +98,24 @@ export function SessionSearch({ open, query, project, refreshKey, children, sele
           onMouseLeave={(e) => { e.currentTarget.style.background = session.id === selectedSessionId ? "var(--bg-selected)" : "transparent"; }}
         >
           <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 500, color: "var(--text)" }}>
-            {session.name || session.firstMessage}
+            {titleParts ? (<>{titleParts.before}<mark style={markStyle}>{titleParts.match}</mark>{titleParts.after}</>) : title}
           </span>
           <span style={{ marginTop: 2, display: "flex", minWidth: 0, gap: 8, fontSize: 10, color: "var(--text-dim)" }}>
             <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={session.cwd}>{session.cwd}</span>
             <span style={{ flexShrink: 0 }}>{formatRelativeTime(session.modified, t)}</span>
           </span>
-          <span style={{ marginTop: 3, display: "block", fontSize: 11, lineHeight: 1.5, overflowWrap: "anywhere", color: "var(--text-muted)" }}>
-            {before}<mark style={{ borderRadius: 2, background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--text)", padding: "0 1px" }}>{match}</mark>{after}
-          </span>
+          {titleHit ? (
+            <span style={{ marginTop: 3, display: "inline-block", fontSize: 10, color: "var(--text-dim)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 6px" }}>
+              {t("desktop.sessionSearchTitleHit")}
+            </span>
+          ) : (
+            <span style={{ marginTop: 3, display: "block", fontSize: 11, lineHeight: 1.5, overflowWrap: "anywhere", color: "var(--text-muted)" }}>
+              {before}<mark style={markStyle}>{match}</mark>{after}
+            </span>
+          )}
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }

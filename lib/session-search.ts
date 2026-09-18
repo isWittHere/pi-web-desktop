@@ -15,11 +15,19 @@ export interface SessionSearchResult {
   before: string;
   match: string;
   after: string;
+  /** True when the query matched the displayed title, not message content. */
+  titleHit?: boolean;
 }
 
 export interface SessionSearchResponse {
   results: SessionSearchResult[];
   truncated: boolean;
+}
+
+/** Title = user-set name, else the first-message preview — what the row shows. */
+function titleMatches(session: SessionInfo, needleLower: string): boolean {
+  if (session.name && session.name.toLowerCase().includes(needleLower)) return true;
+  return Boolean(session.firstMessage?.toLowerCase().includes(needleLower));
 }
 
 // Scan recent files without an index; add indexing if measured latency warrants it.
@@ -37,11 +45,27 @@ export async function searchSessionContents(
   const deadline = Date.now() + TIME_BUDGET_MS;
   const timeout = AbortSignal.timeout(TIME_BUDGET_MS);
   const signal = requestSignal ? AbortSignal.any([requestSignal, timeout]) : timeout;
+  const needleLower = needle.toLowerCase();
   const candidates = sessions
     .filter((session) => !session.transient && session.path)
     .sort((a, b) => b.modified.localeCompare(a.modified));
 
-  for (const [index, session] of candidates.entries()) {
+  // Phase 1 — title hits: the displayed title is the strongest relevance
+  // signal and costs only a string compare, so matched sessions become
+  // results immediately (no file scan) and naturally sort before content
+  // hits. This also finds renamed sessions whose body never mentions the
+  // title, which the content scan alone would miss.
+  const contentCandidates: SessionInfo[] = [];
+  for (const session of candidates) {
+    if (titleMatches(session, needleLower)) {
+      if (response.results.length >= MAX_RESULTS) { response.truncated = true; break; }
+      response.results.push({ session, blockIndex: -1, before: "", match: "", after: "", titleHit: true });
+    } else {
+      contentCandidates.push(session);
+    }
+  }
+
+  for (const [index, session] of contentCandidates.entries()) {
     if (index >= MAX_FILES || response.results.length >= MAX_RESULTS || signal.aborted || Date.now() >= deadline) {
       response.truncated = true;
       break;
