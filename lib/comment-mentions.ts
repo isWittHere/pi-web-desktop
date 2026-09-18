@@ -19,8 +19,9 @@ export const COMMENT_AT_PREFIX = "comment:";
  *  hidden by an unrelated file-result limit. */
 export const COMMENT_FETCH_LIMIT = 50;
 
-/** Inserted when the user picks the prefix suggestion: token stays open. */
-export const COMMENT_PREFIX_INSERTION = `@${COMMENT_AT_PREFIX}`;
+/** Full token inserted when the user picks the prefix suggestion; it ends
+ *  without a space so the @ token stays open and the menu lists commits. */
+const COMMENT_PREFIX_INSERTION = `@${COMMENT_AT_PREFIX}`;
 
 /** The token carries a bare sha, so validity is a pure format check — no git
  *  data needed, which keeps highlight working in rendered history messages
@@ -54,11 +55,9 @@ export function isCommentShaValue(value: string): boolean {
  */
 export function parseCommentQuery(query: string | null): string | null {
   if (!query) return null;
-  const normalized = query.startsWith("comment：") || query.startsWith("comment:")
-    ? query
-    : null;
-  if (normalized === null) return null;
-  return normalized.slice(COMMENT_AT_PREFIX.length);
+  if (!query.startsWith("comment:") && !query.startsWith("comment：")) return null;
+  // "comment：" and "comment:" share the same UTF-16 length.
+  return query.slice(COMMENT_AT_PREFIX.length);
 }
 
 /**

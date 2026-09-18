@@ -1019,8 +1019,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const before = value.slice(0, start);
     const after = value.slice(end);
     const separator = before && !/[\s@]$/.test(before) ? " " : "";
-    const nextValue = `${before}${separator}@comment:${after}`;
-    const cursor = before.length + separator.length + "@comment:".length;
+    const token = buildCommentPrefixInsertion().text;
+    const nextValue = `${before}${separator}${token}${after}`;
+    const cursor = before.length + separator.length + token.length;
     setValue(nextValue);
     setAtQuery(extractAtQuery(nextValue.slice(0, cursor)));
     setAtMenuOpen(true);
@@ -2595,9 +2596,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   <GitCommitIcon size={14} weight="regular" aria-hidden="true" />
                                 </span>
                               )}
-                            <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)" }}>
-                              {commentShortSha(commit.hash)}
-                            </span>
+                              <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)" }}>
+                                {commentShortSha(commit.hash)}
+                              </span>
                               {commit.refs && commit.refs.length > 0 && (
                                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                                   <RefTagList tags={parseGitRefTags(commit.refs)} laneColor={laneColor} />
