@@ -24,10 +24,16 @@ export interface SessionSearchResponse {
   truncated: boolean;
 }
 
-/** Title = user-set name, else the first-message preview — what the row shows. */
+/** Title hit = the query appears in the title the row actually renders:
+ *  the user-set session name when present, else the first-message preview
+ *  bounded to its visible prefix. Matching anything else (a firstMessage
+ *  hidden behind a set name, or text past the ellipsis) surfaces sessions
+ *  whose visible title never mentions the query. */
+const TITLE_PREVIEW_CHARS = 24;
+
 function titleMatches(session: SessionInfo, needleLower: string): boolean {
-  if (session.name && session.name.toLowerCase().includes(needleLower)) return true;
-  return Boolean(session.firstMessage?.toLowerCase().includes(needleLower));
+  const title = session.name || session.firstMessage?.slice(0, TITLE_PREVIEW_CHARS);
+  return Boolean(title?.toLowerCase().includes(needleLower));
 }
 
 // Scan recent files without an index; add indexing if measured latency warrants it.
