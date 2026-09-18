@@ -2023,6 +2023,15 @@ span.token.table {
     overflow: hidden;
     transition: width 0.2s ease, min-width 0.2s ease;
     flex-shrink: 0;
+    /* Every workspace region needs its own stacking context to paint above
+       the fixed z-0 wallpaper layer (chat column uses `relative z-0`/`z-10`
+       wrappers, the sidebar carries inline z-index: 200). Without one, the
+       container's background paints in the non-positioned layer — BELOW the
+       opaque wallpaper — so the panel-glass "trans" mode showed the raw
+       image with only absolutely-positioned fragments visible. z-index
+       works on static flex items; the tablet overlay below re-raises this
+       to 202. */
+    z-index: 200;
   }
   .right-panel-container.right-panel-open {
     width: var(--right-panel-width, clamp(360px, calc(42vw / var(--app-ui-scale, 1)), 640px));
@@ -2131,6 +2140,8 @@ span.token.table {
     overflow: hidden;
     transition: width 0.2s ease, min-width 0.2s ease;
     flex-shrink: 0;
+    /* Wallpaper-stacking fix, same as the ≥641px rule above. */
+    z-index: 200;
   }
   .right-panel-container.right-panel-open {
     width: 100%;
