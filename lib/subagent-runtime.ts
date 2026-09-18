@@ -24,6 +24,7 @@ import {
   SUBAGENT_META_TYPE,
   SUBAGENT_STATUS_TYPE,
   SUBAGENT_RESULT_TYPE,
+  selectSubagentExtensionTools,
   withSubagentExtensionTools,
   type SubagentMetadata,
   type SubagentResultMetadata,
@@ -204,7 +205,9 @@ export function createSubagentController(
       });
 
       const extensionToolNames = profile.loadExtensions
-        ? services.resourceLoader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()])
+        ? profile.extensionTools?.length
+          ? selectSubagentExtensionTools(services.resourceLoader.getExtensions().extensions, profile.extensionTools)
+          : services.resourceLoader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()])
         : [];
       const activeTools = resolveShellTools(
         withSubagentExtensionTools(profile.tools, extensionToolNames),

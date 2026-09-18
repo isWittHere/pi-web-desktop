@@ -24,6 +24,7 @@ export interface SubagentProfile {
   description: string;
   systemPrompt: string;
   tools: string[];
+  extensionTools?: string[];
   loadSkills: boolean;
   loadExtensions: boolean;
   model?: string;
@@ -181,23 +182,37 @@ function parseTools(value: unknown, fallback: string[]): string[] {
   return [...new Set(tools.filter((tool) => BUILTIN_TOOLS.has(tool)))];
 }
 
+function rawToolValues(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return values.map((item) => String(item).trim()).filter(Boolean);
+}
+
+function parseExtensionToolSelectors(value: unknown): string[] {
+  return [...new Set(rawToolValues(value).filter((tool) => tool.toLowerCase().startsWith("ext:")))];
+}
+
 function parseProfileFile(filePath: string, scope: SubagentScope): SubagentProfile | null {
   try {
     const source = readFileSync(filePath, "utf8");
     const { data, rest } = parseFrontmatter(source);
     const name = stringValue(data?.name) ?? basename(filePath, ".md");
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) return null;
     const thinkingValue = stringValue(data?.thinking) as ThinkingLevel | undefined;
     const maxTurnsValue = typeof data?.max_turns === "number" ? Math.floor(data.max_turns) : undefined;
     const tools = parseTools(data?.tools, DEFAULT_TOOLS);
     const disallowedTools = new Set(parseTools(data?.disallowed_tools, []));
+    const disallowedExtensionTools = new Set(parseExtensionToolSelectors(data?.disallowed_tools).map((tool) => tool.toLowerCase()));
+    const extensionTools = parseExtensionToolSelectors(data?.tools)
+      .filter((tool) => !disallowedExtensionTools.has(tool.toLowerCase()));
     return {
       name,
       displayName: stringValue(data?.display_name) ?? name,
       description: stringValue(data?.description) ?? name,
       systemPrompt: rest.trim(),
       tools: tools.filter((tool) => !disallowedTools.has(tool)),
+      ...(extensionTools.length > 0 ? { extensionTools } : {}),
       loadSkills: resourceBoolean(data?.load_skills ?? data?.skills, false),
-      loadExtensions: resourceBoolean(data?.load_extensions ?? data?.extensions, false),
+      loadExtensions: resourceBoolean(data?.load_extensions ?? data?.extensions, extensionTools.length > 0),
       ...(stringValue(data?.model) ? { model: stringValue(data?.model) } : {}),
       ...(thinkingValue && THINKING_LEVELS.has(thinkingValue) ? { thinking: thinkingValue } : {}),
       ...(maxTurnsValue && maxTurnsValue > 0 ? { maxTurns: maxTurnsValue } : {}),
@@ -295,6 +310,7 @@ export function saveSubagentProfile(
 ): SubagentProfile {
   const name = assertProfileName(profile.name);
   const tools = [...new Set(profile.tools.filter((tool) => BUILTIN_TOOLS.has(tool)))];
+  const extensionTools = [...new Set(profile.extensionTools ?? [])];
   if (profile.thinking && !THINKING_LEVELS.has(profile.thinking)) {
     throw new Error(`Invalid thinking level: ${profile.thinking}`);
   }
@@ -320,7 +336,7 @@ export function saveSubagentProfile(
   const frontmatter: Record<string, unknown> = {
     description,
     display_name: displayName,
-    tools: tools.length > 0 ? tools.join(", ") : "none",
+    tools: [...tools, ...extensionTools].length > 0 ? [...tools, ...extensionTools].join(", ") : "none",
     load_skills: loadSkills,
     load_extensions: loadExtensions,
     enabled: profile.enabled,
@@ -343,6 +359,7 @@ export function saveSubagentProfile(
     description,
     systemPrompt,
     tools,
+    ...(extensionTools.length > 0 ? { extensionTools } : {}),
     loadSkills,
     loadExtensions,
     ...(model ? { model } : { model: undefined }),
@@ -422,6 +439,29 @@ export function withSubagentExtensionTools(
     ...profileTools,
     ...[...extensionToolNames].filter((name) => !SUBAGENT_CONTROL_TOOLS.has(name)),
   ])];
+}
+
+export function selectSubagentExtensionTools(
+  extensions: Iterable<{ path: string; sourceInfo?: { source?: string }; tools: Map<string, unknown> }>,
+  selectors: readonly string[],
+): string[] {
+  const wanted = selectors.map((selector) => selector.slice(4).toLowerCase());
+  return [...extensions].flatMap((extension) => {
+    const pathName = extension.path.replaceAll("\\", "/").split("/").at(-2) ?? extension.path;
+    const sourceName = (extension.sourceInfo?.source ?? "").replace(/^npm:/, "");
+    const extensionNames = new Set([pathName.toLowerCase(), sourceName.toLowerCase()]);
+    const selected = wanted.some((selector) => {
+      if (selector === "*") return true;
+      const [extensionName, toolName] = selector.split("/", 2);
+      return extensionNames.has(extensionName) && (!toolName || extension.tools.has(toolName));
+    });
+    if (!selected) return [];
+    return [...extension.tools.keys()].filter((toolName) => wanted.some((selector) => {
+      if (selector === "*" || selector.endsWith("/*")) return selector === "*" || extensionNames.has(selector.slice(0, -2));
+      const [extensionName, selectedTool] = selector.split("/", 2);
+      return extensionNames.has(extensionName) && (!selectedTool || selectedTool === toolName);
+    }));
+  });
 }
 
 export function readSubagentRun(entries: readonly SessionEntry[], sessionId: string, sessionPath: string): SubagentRunInfo | null {
