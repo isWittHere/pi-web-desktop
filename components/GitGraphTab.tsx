@@ -146,7 +146,8 @@ function CommitFileRow({ file, cwd, onOpenFile }: {
 
 export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
   const { t, locale } = useI18n();
-  const { accent } = useTheme();
+  const { accent, resolvedMode } = useTheme();
+  const isDark = resolvedMode === "dark";
   const [data, setData] = useState<GitLogResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
@@ -192,7 +193,9 @@ export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
   // Lane colors follow the theme applied to the DOM: useTheme re-publishes
   // the accent after every theme/mode application, so this recomputes
   // reactively — including while the tab sits hidden in the keep-alive cache.
-  const palette = useMemo(() => deriveLanePalette(accent), [accent]);
+  // Mode-aware: a theme set's variants often share one accent token, so the
+  // lightness must come from the background mode, not the accent.
+  const palette = useMemo(() => deriveLanePalette(accent, isDark), [accent, isDark]);
 
   const timeFormat = useMemo(
     () => new Intl.DateTimeFormat(locale, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }),

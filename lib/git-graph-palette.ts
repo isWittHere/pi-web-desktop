@@ -4,14 +4,20 @@
  * The prototype hardcoded ten colors; in the product the graph must follow
  * the active pi CLI theme. Lane 0 (the first-parent main line) uses the
  * theme's accent color directly; the remaining lanes rotate the accent's hue
- * around the wheel at fixed saturation/lightness so they stay distinguishable
- * on both dark and light backgrounds. Falls back to the prototype's palette
- * when the accent cannot be parsed.
+ * around the wheel. The palette is mode-aware: a theme set's dark and light
+ * variants often share the same accent token, so lightness must come from
+ * the background mode (L 0.55 pops on dark, but washes out on light).
  */
 
 export const FALLBACK_PALETTE = [
   "#5871a3", "#4d9d6e", "#b3702d", "#a34d68", "#7a6bc4",
   "#2e8f8f", "#9d4d4d", "#6e7f3d", "#a3794d", "#4d6e9d",
+];
+
+// Deeper tones of the fallback set for light backgrounds.
+export const FALLBACK_PALETTE_LIGHT = [
+  "#3d5c8f", "#2f7a50", "#8f5a1f", "#8f2f4d", "#5d4fa8",
+  "#1f6e6e", "#7a2f2f", "#4f5f22", "#7a5222", "#224f7a",
 ];
 
 export const LANE_COLOR_COUNT = FALLBACK_PALETTE.length;
@@ -40,23 +46,30 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
 }
 
 function hslToCss(h: number, s: number, l: number): string {
-  // Saturation/lightness are pinned so every lane reads on both themes; only
-  // the hue follows the theme accent.
+  // Saturation/lightness are chosen per mode in deriveLanePalette; only the
+  // hue follows the theme accent.
   return `hsl(${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`;
 }
 
-export function deriveLanePalette(accent: string): string[] {
+export function deriveLanePalette(accent: string, isDark: boolean): string[] {
   const hsl = hexToHsl(accent);
-  if (!hsl) return FALLBACK_PALETTE;
-  if (hsl.s < 0.08) {
-    // A near-grey accent has no hue to rotate; fall back to a fixed set.
-    return FALLBACK_PALETTE;
+  if (!hsl || hsl.s < 0.08) {
+    // Unparseable, or a near-grey accent with no hue to rotate: fixed set.
+    return isDark ? FALLBACK_PALETTE : FALLBACK_PALETTE_LIGHT;
   }
-  const palette: string[] = [hslToCss(hsl.h, Math.max(hsl.s, 0.35), 0.55)];
-  // h is normalized to 0..1; rotate the remaining lanes evenly around it.
   const step = 1 / LANE_COLOR_COUNT;
+  if (isDark) {
+    const palette: string[] = [hslToCss(hsl.h, Math.max(hsl.s, 0.35), 0.55)];
+    // h is normalized to 0..1; rotate the remaining lanes evenly around it.
+    for (let i = 1; i < LANE_COLOR_COUNT; i++) {
+      palette.push(hslToCss((hsl.h + i * step) % 1, 0.45, 0.55));
+    }
+    return palette;
+  }
+  // Light background: deepen the tones so lanes keep contrast.
+  const palette: string[] = [hslToCss(hsl.h, Math.max(hsl.s, 0.45), 0.4)];
   for (let i = 1; i < LANE_COLOR_COUNT; i++) {
-    palette.push(hslToCss((hsl.h + i * step) % 1, 0.45, 0.55));
+    palette.push(hslToCss((hsl.h + i * step) % 1, 0.55, 0.38));
   }
   return palette;
 }
