@@ -23,10 +23,11 @@ import {
 import { toCwdRelativeMentions } from "@/lib/file-mentions";
 import { tokenizeMentions } from "@/lib/mention-tokens";
 import {
-  buildAtMenuItems, buildCommitLaneColors, buildCommentMentionText, buildCommentPrefixInsertion, commentShortSha,
-  COMMENT_FETCH_LIMIT, parseCommentQuery, type AtMenuItem,
+  buildAtMenuItems, buildCommentMentionText, buildCommentPrefixInsertion, commentShortSha, COMMENT_FETCH_LIMIT,
+  parseCommentQuery, type AtMenuItem,
 } from "@/lib/comment-mentions";
 import { deriveLanePalette } from "@/lib/git-graph-palette";
+import { buildGitGraphLayout } from "@/lib/git-graph-lanes";
 import type { GitLogCommit } from "@/lib/git-graph-parser";
 import { useFileIndex, useSkillNames } from "@/hooks/useProjectContext";
 import { encodeFilePathForApi } from "@/lib/file-paths";
@@ -34,6 +35,7 @@ import { cssPx, getUiScale } from "@/lib/ui-scale";
 import type { ThinkingLevelOption } from "@/lib/thinking-levels";
 import { filterThinkingLevelOptions } from "@/lib/thinking-levels";
 import { FolderIcon, getFileIcon } from "./FileIcons";
+import { MINI_ROW_H, MiniLaneGraph, miniLaneGraphWidth } from "./MiniLaneGraph";
 import { ToolsPanel } from "./ToolsPanel";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useTheme } from "@/hooks/useTheme";
@@ -1415,6 +1417,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     && atServerResult.cwd === cwd
     && atServerResult.query === atQueryText;
   const commitsForCwd = commitsState && commitsState.cwd === cwd ? commitsState : null;
+  // One lane-layout pass over the full fetched window feeds both surfaces:
+  // the per-row color dots (filtered mode) and the mini graph (empty-query
+  // browse mode), mirroring the git-graph tab's machine and palette.
+  const laneLayout = useMemo(
+    () => (commitsForCwd && commitsForCwd.isGitRepository ? buildGitGraphLayout(commitsForCwd.commits, "compact") : null),
+    [commitsForCwd],
+  );
+  const commitLaneColors = useMemo(
+    () => (laneLayout ? new Map(laneLayout.nodes.map((node) => [node.hash, node.colorIndex])) : null),
+    [laneLayout],
+  );
+  // Graph lines are only topologically truthful over the full, unfiltered
+  // list — the moment a filter text is typed the rows are a subset whose
+  // parents are missing, so the graph yields to plain (lane-tinted) rows.
+  const showMiniGraph = commentRouted && commentFilter !== null && commentFilter.trim() === "";
+  const miniGraphW = laneLayout ? miniLaneGraphWidth(laneLayout.laneCount) : 0;
   // Lane colors mirror the git-graph tab: accent-derived palette recomputed on
   // theme switches, lane indexes from the same machine over the full fetched
   // window so the "same color = same branch line" signal survives filtering.
@@ -1427,10 +1445,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDark]);
-  const commitLaneColors = useMemo(
-    () => (commitsForCwd && commitsForCwd.isGitRepository ? buildCommitLaneColors(commitsForCwd.commits) : null),
-    [commitsForCwd],
-  );
   // Unified, flat menu list: prefix suggestion + files normally, commits only
   // when the query routes to comment: mode. Keyboard navigation and rendering
   // treat it as one list; empty routed results mean "no match" (the loading /
@@ -2536,54 +2550,62 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         {t("desktop.noMatchingCommits")}
                       </div>
                     ) : (
-                      atItems.map((item, index) => {
-                        if (item.kind !== "commit") return null;
-                        const active = index === atActiveIndex;
-                        const commit = item.commit;
-                        const laneColorIndex = commitLaneColors?.get(commit.hash);
-                        const laneColor = laneColorIndex === undefined
-                          ? "var(--text-dim)"
-                          : lanePalette[laneColorIndex % lanePalette.length];
-                        return (
-                          <button
-                            key={`c:${commit.hash}`}
-                            ref={(node) => {
-                              atItemRefs.current[index] = node;
-                            }}
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              applyAtCompletion(item);
-                            }}
-                            onMouseEnter={() => setAtHoverIndex(index)}
-                            onMouseLeave={() => setAtHoverIndex(null)}
-                            style={{
-                              width: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 5,
-                              padding: "3px 6px",
-                              border: "none",
-                              borderRadius: 5,
-                              background: active ? "var(--bg-selected)" : atHoverIndex === index ? "var(--bg-hover)" : "none",
-                              color: "var(--text)",
-                              cursor: "pointer",
-                              textAlign: "left",
-                              fontSize: 12.5,
-                            }}
-                          >
-                            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: laneColor }}>
-                              <GitCommitIcon size={14} weight="regular" aria-hidden="true" />
-                            </span>
+                      <div style={{ position: "relative" }}>
+                        {atItems.map((item, index) => {
+                          if (item.kind !== "commit") return null;
+                          const active = index === atActiveIndex;
+                          const commit = item.commit;
+                          const laneColorIndex = commitLaneColors?.get(commit.hash);
+                          const laneColor = laneColorIndex === undefined
+                            ? "var(--text-dim)"
+                            : lanePalette[laneColorIndex % lanePalette.length];
+                          return (
+                            <button
+                              key={`c:${commit.hash}`}
+                              ref={(node) => {
+                                atItemRefs.current[index] = node;
+                              }}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                applyAtCompletion(item);
+                              }}
+                              onMouseEnter={() => setAtHoverIndex(index)}
+                              onMouseLeave={() => setAtHoverIndex(null)}
+                              style={{
+                                width: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 5,
+                                height: MINI_ROW_H,
+                                padding: showMiniGraph ? `0 6px 0 ${miniGraphW + 6}px` : "3px 6px",
+                                border: "none",
+                                borderRadius: 5,
+                                background: active ? "var(--bg-selected)" : atHoverIndex === index ? "var(--bg-hover)" : "none",
+                                color: "var(--text)",
+                                cursor: "pointer",
+                                textAlign: "left",
+                                fontSize: 12.5,
+                              }}
+                            >
+                              {!showMiniGraph && (
+                                <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: laneColor }}>
+                                  <GitCommitIcon size={14} weight="regular" aria-hidden="true" />
+                                </span>
+                              )}
                             <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)" }}>
                               {commentShortSha(commit.hash)}
                             </span>
-                            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {commit.subject}
-                            </span>
-                          </button>
-                        );
-                      })
+                              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {commit.subject}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {showMiniGraph && laneLayout && (
+                          <MiniLaneGraph layout={laneLayout} palette={lanePalette} />
+                        )}
+                      </div>
                     )
                   ) : indexLoading ? (
                     <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>

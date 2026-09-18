@@ -7,7 +7,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { type GitCommitFile, type GitLogResponse } from "@/lib/git-graph";
 import type { GitLogCommit } from "@/lib/git-graph-parser";
-import { buildGitGraphLayout, type GitGraphEdge, type GitGraphLayout } from "@/lib/git-graph-lanes";
+import { buildGitGraphLayout, type GitGraphLayout } from "@/lib/git-graph-lanes";
+import { gitGraphEdgePath } from "@/lib/git-graph-geometry";
 import { deriveLanePalette } from "@/lib/git-graph-palette";
 import { parseGitRefTags, type GitRefTag, type GitRefTagKind } from "@/lib/git-graph-refs";
 
@@ -167,25 +168,6 @@ function RefTagList({ tags, laneColor }: { tags: GitRefTag[]; laneColor: string 
     }
   }
   return <>{items}</>;
-}
-
-function edgePath(edge: GitGraphEdge, rowTops: number[]): string {
-  const x1 = laneX(edge.fromLane);
-  const y1 = rowTops[edge.fromRow] + rowHeightOf(edge.fromRow) / 2;
-  const x2 = laneX(edge.toLane);
-  const y2 = rowTops[edge.toRow] + rowHeightOf(edge.toRow) / 2;
-  if (edge.fromLane === edge.toLane) {
-    return `M ${x1} ${y1} L ${x2} ${y2}`;
-  }
-  const dx = x2 > x1 ? 1 : -1;
-  const sy = y2 > y1 ? 1 : -1;
-  const r = Math.min(CORNER_R, Math.abs(x2 - x1) / 2, Math.abs(y2 - y1) / 2);
-  if (edge.kind === "branch") {
-    // Horizontal out of the child, rounded corner, vertical into the parent.
-    return `M ${x1} ${y1} L ${x2 - dx * r} ${y1} Q ${x2} ${y1} ${x2} ${y1 + sy * r} L ${x2} ${y2}`;
-  }
-  // merge: vertical out of the child's lane, horizontal into the parent.
-  return `M ${x1} ${y1} L ${x1} ${y2 - sy * r} Q ${x1} ${y2} ${x1 + dx * r} ${y2} L ${x2} ${y2}`;
 }
 
 function CommitFileRow({ file, cwd, onOpenFile }: {
@@ -457,7 +439,7 @@ export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
                   {layout.edges.map((edge, index) => (
                     <path
                       key={`edge-${index}`}
-                      d={edgePath(edge, rowTops)}
+                      d={gitGraphEdgePath(edge, { laneX, rowTops, rowHeight: rowHeightOf, cornerRadius: CORNER_R })}
                       fill="none"
                       stroke={laneVar(edge.colorIndex)}
                       strokeWidth={1.5}
