@@ -23,8 +23,8 @@ import {
 import { toCwdRelativeMentions } from "@/lib/file-mentions";
 import { tokenizeMentions } from "@/lib/mention-tokens";
 import {
-  buildAtMenuItems, buildCommentMentionText, buildCommentPrefixInsertion, commentShortSha, parseCommentQuery,
-  type AtMenuItem,
+  buildAtMenuItems, buildCommentMentionText, buildCommentPrefixInsertion, commentShortSha, COMMENT_FETCH_LIMIT,
+  parseCommentQuery, type AtMenuItem,
 } from "@/lib/comment-mentions";
 import type { GitLogCommit } from "@/lib/git-graph-parser";
 import { useFileIndex, useSkillNames } from "@/hooks/useProjectContext";
@@ -1479,7 +1479,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (commitsFetchingRef.current === cwd) return;
     commitsFetchingRef.current = cwd;
     const fetchCwd = cwd;
-    fetch(`/api/git/log?cwd=${encodeURIComponent(fetchCwd)}&limit=50`)
+    fetch(`/api/git/log?cwd=${encodeURIComponent(fetchCwd)}&limit=${COMMENT_FETCH_LIMIT}`)
       .then((res) => {
         if (!res.ok) throw new Error(`git log failed: ${res.status}`);
         return res.json() as Promise<{ isGitRepository?: boolean; commits?: GitLogCommit[] }>;
@@ -2517,55 +2517,50 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         {t("desktop.noMatchingCommits")}
                       </div>
                     ) : (
-                      <>
-                        <div style={{ padding: "2px 6px 4px", fontSize: 10, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-dim)" }}>
-                          {t("desktop.gitCommitGroupTitle")}
-                        </div>
-                        {atItems.map((item, index) => {
-                          if (item.kind !== "commit") return null;
-                          const active = index === atActiveIndex;
-                          const commit = item.commit;
-                          return (
-                            <button
-                              key={`c:${commit.hash}`}
-                              ref={(node) => {
-                                atItemRefs.current[index] = node;
-                              }}
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                applyAtCompletion(item);
-                              }}
-                              onMouseEnter={() => setAtHoverIndex(index)}
-                              onMouseLeave={() => setAtHoverIndex(null)}
-                              style={{
-                                width: "100%",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 5,
-                                padding: "3px 6px",
-                                border: "none",
-                                borderRadius: 5,
-                                background: active ? "var(--bg-selected)" : atHoverIndex === index ? "var(--bg-hover)" : "none",
-                                color: "var(--text)",
-                                cursor: "pointer",
-                                textAlign: "left",
-                                fontSize: 12.5,
-                              }}
-                            >
-                              <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
-                                <GitCommitIcon size={14} weight="regular" aria-hidden="true" />
-                              </span>
-                              <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)" }}>
-                                {commentShortSha(commit.hash)}
-                              </span>
-                              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {commit.subject}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </>
+                      atItems.map((item, index) => {
+                        if (item.kind !== "commit") return null;
+                        const active = index === atActiveIndex;
+                        const commit = item.commit;
+                        return (
+                          <button
+                            key={`c:${commit.hash}`}
+                            ref={(node) => {
+                              atItemRefs.current[index] = node;
+                            }}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              applyAtCompletion(item);
+                            }}
+                            onMouseEnter={() => setAtHoverIndex(index)}
+                            onMouseLeave={() => setAtHoverIndex(null)}
+                            style={{
+                              width: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "3px 6px",
+                              border: "none",
+                              borderRadius: 5,
+                              background: active ? "var(--bg-selected)" : atHoverIndex === index ? "var(--bg-hover)" : "none",
+                              color: "var(--text)",
+                              cursor: "pointer",
+                              textAlign: "left",
+                              fontSize: 12.5,
+                            }}
+                          >
+                            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
+                              <GitCommitIcon size={14} weight="regular" aria-hidden="true" />
+                            </span>
+                            <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)" }}>
+                              {commentShortSha(commit.hash)}
+                            </span>
+                            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {commit.subject}
+                            </span>
+                          </button>
+                        );
+                      })
                     )
                   ) : indexLoading ? (
                     <div style={{ padding: "4px 6px", fontSize: 12, color: "var(--text-dim)" }}>

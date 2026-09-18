@@ -288,7 +288,6 @@ export const enLocale = {
     "desktop.attachSkillCommand": "Skill command",
     "desktop.attachGitCommit": "Git commit",
     "desktop.atCommentPrefixHint": "Reference a git commit",
-    "desktop.gitCommitGroupTitle": "Git commits",
     "desktop.loadingCommits": "Loading commits…",
     "desktop.noMatchingCommits": "No matching commits",
     "desktop.mentionInChat": "Mention in chat",

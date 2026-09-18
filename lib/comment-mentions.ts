@@ -14,6 +14,11 @@ import type { FileIndexEntry } from "./file-fuzzy";
 /** Trigger prefix inside an @ token (after the @). */
 export const COMMENT_AT_PREFIX = "comment:";
 
+/** How many recent commits the menu works with — the fetch size in
+ *  ChatInput and the result cap here stay in lockstep so nothing fetched is
+ *  hidden by an unrelated file-result limit. */
+export const COMMENT_FETCH_LIMIT = 50;
+
 /** Inserted when the user picks the prefix suggestion: token stays open. */
 export const COMMENT_PREFIX_INSERTION = `@${COMMENT_AT_PREFIX}`;
 
@@ -122,7 +127,9 @@ export function buildAtMenuItems(opts: {
   const filter = parseCommentQuery(opts.query);
   if (filter !== null) {
     if (opts.commits === null) return [];
-    return filterCommentCommits(opts.commits, filter, opts.limit)
+    // Commits are capped by the fetch size (COMMENT_FETCH_LIMIT), not by the
+    // file-result limit — the user asked for commits, show every fetched one.
+    return filterCommentCommits(opts.commits, filter, COMMENT_FETCH_LIMIT)
       .map((commit) => ({ kind: "commit", commit }));
   }
   const items: AtMenuItem[] = [];

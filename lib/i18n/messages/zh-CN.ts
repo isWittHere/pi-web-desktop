@@ -288,7 +288,6 @@ export const zhCNLocale = {
     "desktop.attachSkillCommand": "技能命令",
     "desktop.attachGitCommit": "Git 提交",
     "desktop.atCommentPrefixHint": "引用 git 提交",
-    "desktop.gitCommitGroupTitle": "Git 提交记录",
     "desktop.loadingCommits": "正在加载提交…",
     "desktop.noMatchingCommits": "没有匹配的提交",
     "desktop.mentionInChat": "在会话中引用",
