@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowClockwise, GitCommit, Spinner, X } from "@phosphor-icons/react";
+import { ArrowClockwise, At, Spinner, X } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { getFileName, getRelativeFilePath } from "@/lib/file-paths";
@@ -459,6 +459,22 @@ export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
                         </div>
                       )}
                     </div>
+                    {onMentionCommit && hoveredHash === node.hash && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMentionCommit(commit);
+                        }}
+                        title={t("desktop.mentionInChat")}
+                        aria-label={t("desktop.mentionInChat")}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-selected)"; e.currentTarget.style.color = "var(--accent)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-panel)"; e.currentTarget.style.color = "var(--text-dim)"; }}
+                        style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, padding: 0, border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg-panel)", color: "var(--text-dim)", cursor: "pointer", zIndex: 1 }}
+                      >
+                        <At size={13} aria-hidden="true" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -511,15 +527,19 @@ export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
               onClick={() => onMentionCommit?.(selectedCommit)}
               title={t("desktop.mentionInChat")}
               aria-label={t("desktop.mentionInChat")}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
               style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, padding: 0, flexShrink: 0, border: "none", borderRadius: 4, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
             >
-              <GitCommit size={13} aria-hidden="true" />
+              <At size={13} aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={closeDetail}
               title={t("desktop.closeTab")}
               aria-label={t("desktop.closeTab")}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
               style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, padding: 0, flexShrink: 0, border: "none", borderRadius: 4, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
             >
               <X size={11} aria-hidden="true" />
