@@ -1006,13 +1006,20 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
   const lines = data.content.split("\n");
   const hasLiveDiff = prevContent !== null && prevContent !== data.content;
   const hasDiff = hasLiveDiff || hasGitDiff;
+  // A requested diff view can end up with no diff at hand (a freshly written
+  // untracked file has neither a git patch nor prior content). Falling back to
+  // rendering the source while the toolbar still gates on "diff" would hide
+  // every source tool (wrap, word count, markdown preview/raw) with no visible
+  // toggle back. Normalize the effective mode to "source" so the toolbar and
+  // the content area agree on what is actually shown.
+  const effectiveViewMode = viewMode === "diff" && !hasDiff ? "source" : viewMode;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Status bar */}
       <FileViewerToolbar filePath={filePath} cwd={cwd}>
         <span>{data.language}</span>
-        {viewMode === "source" && <span>{t("desktop.lines", { count: lines.length })}</span>}
+        {effectiveViewMode === "source" && <span>{t("desktop.lines", { count: lines.length })}</span>}
         <span>{formatSize(data.size)}</span>
 
         {/* Diff / Source toggle — shown only when there are changes */}
@@ -1022,9 +1029,9 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
               onClick={() => setViewMode("source")}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
-                background: viewMode === "source" ? "var(--bg-selected)" : "var(--bg-hover)",
-                color: viewMode === "source" ? "var(--text)" : "var(--text-muted)",
-                fontWeight: viewMode === "source" ? 600 : 400,
+                background: effectiveViewMode === "source" ? "var(--bg-selected)" : "var(--bg-hover)",
+                color: effectiveViewMode === "source" ? "var(--text)" : "var(--text-muted)",
+                fontWeight: effectiveViewMode === "source" ? 600 : 400,
               }}
             >
               {t("desktop.source")}
@@ -1033,9 +1040,9 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
               onClick={() => setViewMode("diff")}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
-                background: viewMode === "diff" ? "var(--bg-selected)" : "var(--bg-hover)",
-                color: viewMode === "diff" ? "var(--text)" : "var(--text-muted)",
-                fontWeight: viewMode === "diff" ? 600 : 400,
+                background: effectiveViewMode === "diff" ? "var(--bg-selected)" : "var(--bg-hover)",
+                color: effectiveViewMode === "diff" ? "var(--text)" : "var(--text-muted)",
+                fontWeight: effectiveViewMode === "diff" ? 600 : 400,
               }}
             >
               {t("desktop.diff")} {changeCount > 0 && <span style={{ color: "var(--git-status-added)", marginLeft: 2 }}>+{changeCount}</span>}
@@ -1044,9 +1051,9 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
         )}
 
         {/* Word wrap toggle */}
-        {viewMode === "source" && !previewMode && (
+        {effectiveViewMode === "source" && !previewMode && (
           <button
-            onClick={() => setWrapLines((v) => !v)}
+            onClick={() => { setViewMode("source"); setWrapLines((v) => !v); }}
             title={wrapLines ? t("desktop.disableWordWrap") : t("desktop.enableWordWrap")}
             style={{
               padding: "2px 8px", fontSize: 11, cursor: "pointer",
@@ -1061,10 +1068,10 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
         )}
 
         {/* HTML source/preview toggle */}
-        {isHtml && viewMode === "source" && (
+        {isHtml && effectiveViewMode === "source" && (
           <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
             <button
-              onClick={() => setPreviewMode(false)}
+              onClick={() => { setViewMode("source"); setPreviewMode(false); }}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
                 background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -1075,7 +1082,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
               {t("desktop.code")}
             </button>
             <button
-              onClick={() => setPreviewMode(true)}
+              onClick={() => { setViewMode("source"); setPreviewMode(true); }}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
                 background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -1089,10 +1096,10 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
         )}
 
         {/* Markdown preview/raw toggle */}
-        {isMarkdown && viewMode === "source" && (
+        {isMarkdown && effectiveViewMode === "source" && (
           <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
             <button
-              onClick={() => setPreviewMode(true)}
+              onClick={() => { setViewMode("source"); setPreviewMode(true); }}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
                 background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -1103,7 +1110,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
               {t("desktop.preview")}
             </button>
             <button
-              onClick={() => setPreviewMode(false)}
+              onClick={() => { setViewMode("source"); setPreviewMode(false); }}
               style={{
                 padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
                 background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
@@ -1123,7 +1130,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onAtMentio
       <div
         style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}
       >
-        {viewMode === "diff" && hasDiff ? (
+        {effectiveViewMode === "diff" ? (
           hasGitDiff
             ? <GitDiffView patch={gitDiff.patch!} />
             : <DiffView oldContent={prevContent!} newContent={data.content} />
