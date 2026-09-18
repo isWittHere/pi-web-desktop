@@ -443,18 +443,23 @@ function GitDiffView({ patch }: { patch: string }) {
 
   return (
     <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, minWidth: "max-content" }}>
-      {rows.map((row) => {
+      {rows.map((row, rowGlobalIndex) => {
         if (row.kind === "hunk") {
+          // Leave a blank line above and below a hunk header so its
+          // abbreviated summary reads as a gap between the surrounding diff
+          // rows — but only where there is actually a neighbouring row. A
+          // hunk that opens the diff (no row above) or closes it (no row
+          // below) must not gain a leading/trailing spacer, otherwise an
+          // empty line appears at the very top/bottom of the preview.
+          const hasPrev = rowGlobalIndex > 0;
+          const hasNext = rowGlobalIndex < rows.length - 1;
           return (
             <div key={row.key}>
-              {/* Leave one blank line above and below each hunk header so the
-                  abbreviated summary reads as a gap between the surrounding
-                  diff rows. */}
-              <div style={{ height: "1.55em" }} />
+              {hasPrev && <div style={{ height: "1.55em" }} />}
               <div style={{ padding: "3px 12px", color: "var(--accent-blue)", background: "var(--bg-secondary)" }}>
                 {row.text}
               </div>
-              <div style={{ height: "1.55em" }} />
+              {hasNext && <div style={{ height: "1.55em" }} />}
             </div>
           );
         }
