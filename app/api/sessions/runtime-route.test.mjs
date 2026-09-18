@@ -156,5 +156,49 @@ test("DELETE tolerates an unpersisted runtime session without a file on disk", a
   // unlink for a session never written to disk — both must fall through.
   const enoentGuards = (deleteSource.match(/code !== "ENOENT"\) throw error/g) ?? []).length;
   assert.equal(enoentGuards, 2, "expected one ENOENT guard for the header probe and one for unlink");
-  assert.match(deleteSource, /unlinkSync\(filePath\)/);
+  assert.match(deleteSource, /unlinkSync\(deletedPath\)/);
+});
+
+test("deleting a session removes all persisted subagent descendants", async (t) => {
+  const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { DELETE: deleteSession } = await jiti.import("./[id]/route.ts");
+  const { cacheSessionPath, invalidateSessionListCache } = await jiti.import("@/lib/session-reader");
+
+  const dir = await mkdtemp(join(tmpdir(), "pi-web-delete-reparent-"));
+  const parentPath = join(dir, "parent.jsonl");
+  const childPath = join(dir, "child.jsonl");
+  const grandchildPath = join(dir, "grandchild.jsonl");
+  const parentId = "delete-reparent-parent";
+  const childId = "delete-reparent-child";
+  const grandchildId = "delete-reparent-grandchild";
+  const header = (id, parentSession) => JSON.stringify({ type: "session", version: 3, id, timestamp: "2026-01-01T00:00:00.000Z", cwd: dir, ...(parentSession ? { parentSession } : {}) });
+  const subagentMeta = (id, parentSessionId, parentSessionPath, profile, description) => JSON.stringify({
+    type: "custom",
+    customType: "pi-web:subagent",
+    id,
+    parentId: null,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    data: { version: 1, parentSessionId, parentSessionPath, profile, description },
+  });
+
+  await writeFile(parentPath, `${header(parentId)}\n`);
+  await writeFile(childPath, `${header(childId, parentPath)}\n${subagentMeta("child-meta", parentId, parentPath, "Review", "Review parser")}\n`);
+  await writeFile(grandchildPath, `${header(grandchildId, childPath)}\n${subagentMeta("grandchild-meta", childId, childPath, "Explore", "Explore parser")}\n`);
+  cacheSessionPath(parentId, parentPath);
+  cacheSessionPath(childId, childPath);
+  cacheSessionPath(grandchildId, grandchildPath);
+  invalidateSessionListCache();
+  t.after(async () => {
+    invalidateSessionListCache();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const context = { params: Promise.resolve({ id: parentId }) };
+  const response = await deleteSession(new Request(`http://localhost/api/sessions/${parentId}`, { method: "DELETE" }), context);
+  assert.equal(response.status, 200);
+  await assert.rejects(readFile(parentPath), { code: "ENOENT" });
+  await assert.rejects(readFile(childPath), { code: "ENOENT" });
+  await assert.rejects(readFile(grandchildPath), { code: "ENOENT" });
 });

@@ -9,9 +9,11 @@ import {
   invalidateSessionListCache,
   buildSessionContext,
   findFirstUserMessage,
+  listAllSessions,
+  mergeSessionLists,
   readSessionHeader,
 } from "@/lib/session-reader";
-import { getRpcSession } from "@/lib/rpc-manager";
+import { abortSubagent, getRpcSession, getRpcSessionInfos } from "@/lib/rpc-manager";
 import { readSubagentRun, SUBAGENT_META_TYPE } from "@/lib/subagents";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
 import { computeSessionStats } from "@/lib/session-stats";
@@ -304,18 +306,86 @@ export async function DELETE(
       }
     }
 
-    // Re-attach all direct children to this session's parent (cascade re-parent)
-    // Scan sibling files in the same directory
     const dir = filePath.replace(/\\/g, "/").split("/").slice(0, -1).join("/");
+    // Paths may be expressed differently by git/listers and the filesystem, so
+    // normalise to forward slashes for membership checks below.
+    const pathKey = (p: string) => p.replace(/\\+/g, "/");
+    const targetPathKey = pathKey(filePath);
+
+    // Deleting a session also deletes every persisted or live subagent below it.
+    // Collect the subagent family tree from the catalogue (plus a local dir scan
+    // so stale/incomplete caches still find siblings), then unlink each member.
+    const sessions = mergeSessionLists(
+      await listAllSessions({ force: true }),
+      getRpcSessionInfos({ includeTransient: true }),
+    );
+    const childrenByParent = new Map<string, string[]>();
+    for (const session of sessions) {
+      if (session.relation?.kind !== "subagent") continue;
+      const children = childrenByParent.get(session.relation.parentSessionId) ?? [];
+      children.push(session.id);
+      childrenByParent.set(session.relation.parentSessionId, children);
+    }
+    const sessionPaths = new Map(sessions.map((session) => [session.id, session.path]));
+    // Include local files even when the global catalogue is stale or incomplete.
     try {
-      const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl") && join(dir, f) !== filePath);
+      for (const file of readdirSync(dir).filter((name) => name.endsWith(".jsonl"))) {
+        const childPath = join(dir, file);
+        if (pathKey(childPath) === targetPathKey) continue;
+        try {
+          const lines = readFileSync(childPath, "utf8").split("\n");
+          const header = JSON.parse(lines[0]) as { type?: string; id?: string };
+          if (header.type !== "session" || typeof header.id !== "string") continue;
+          const entries = lines.slice(1).flatMap((line) => {
+            try { return [JSON.parse(line) as SessionEntry]; } catch { return []; }
+          });
+          const subagent = readSubagentRun(entries, header.id, childPath);
+          if (!subagent) continue;
+          const children = childrenByParent.get(subagent.parentSessionId) ?? [];
+          children.push(header.id);
+          childrenByParent.set(subagent.parentSessionId, children);
+          sessionPaths.set(header.id, childPath);
+        } catch { /* skip malformed or concurrently removed sessions */ }
+      }
+    } catch { /* skip if dir unreadable */ }
+    const deletedSessionIds = new Set<string>([id]);
+    const pending = [id];
+    while (pending.length > 0) {
+      const parentId = pending.pop()!;
+      for (const childId of childrenByParent.get(parentId) ?? []) {
+        if (deletedSessionIds.has(childId)) continue;
+        deletedSessionIds.add(childId);
+        pending.push(childId);
+      }
+    }
+    const deletedPaths = new Map<string, string>([[id, filePath]]);
+    for (const deletedId of deletedSessionIds) {
+      const sessionPath = sessionPaths.get(deletedId);
+      if (sessionPath) deletedPaths.set(deletedId, sessionPath);
+    }
+    for (const deletedId of deletedSessionIds) {
+      if (deletedPaths.has(deletedId)) continue;
+      const runtimePath = getRpcSession(deletedId)?.sessionFile;
+      if (runtimePath) deletedPaths.set(deletedId, runtimePath);
+      else {
+        const resolvedPath = await resolveSessionPath(deletedId);
+        if (resolvedPath) deletedPaths.set(deletedId, resolvedPath);
+      }
+    }
+    const deletedPathKeys = new Set([...deletedPaths.values()].map(pathKey));
+
+    // Non-subagent children (e.g. forks) are re-attached to this session's parent.
+    // Subagent descendants were deleted above and must be skipped here.
+    try {
+      const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
       for (const file of files) {
         const childPath = join(dir, file);
+        if (pathKey(childPath) === targetPathKey || deletedPathKeys.has(pathKey(childPath))) continue;
         try {
           const content = readFileSync(childPath, "utf8");
           const lines = content.split("\n");
           const header = JSON.parse(lines[0]) as { type?: string; parentSession?: string };
-          if (header.type === "session" && header.parentSession === filePath) {
+          if (header.type === "session" && pathKey(header.parentSession ?? "") === targetPathKey) {
             // Rewrite header with new parentSession
             header.parentSession = parentSessionPath;
             lines[0] = JSON.stringify(header);
@@ -352,14 +422,24 @@ export async function DELETE(
       }
     } catch { /* skip if dir unreadable */ }
 
-    await getRpcSession(id)?.shutdown();
-    try {
-      unlinkSync(filePath);
-    } catch (error) {
-      // The session may never have been written to disk (cached runtime path).
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    // Terminate and shut down every deleted descendant before unlinking, so a
+    // running subagent cannot keep writing to a file about to be removed.
+    for (const deletedId of [...deletedSessionIds].reverse()) {
+      if (deletedId === id) continue;
+      try { await abortSubagent(deletedId); } catch { /* idle or completed */ }
+      await getRpcSession(deletedId)?.shutdown();
     }
-    invalidateSessionPathCache(id);
+    try { await abortSubagent(id); } catch { /* ordinary session */ }
+    await getRpcSession(id)?.shutdown();
+    for (const [deletedId, deletedPath] of deletedPaths) {
+      try {
+        unlinkSync(deletedPath);
+      } catch (error) {
+        // The session may never have been written to disk (cached runtime path).
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      invalidateSessionPathCache(deletedId);
+    }
     invalidateSessionListCache();
     return NextResponse.json({ ok: true });
   } catch (error) {
