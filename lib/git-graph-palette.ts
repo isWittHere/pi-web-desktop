@@ -2,11 +2,13 @@
  * Theme-derived lane palette for the git graph tab.
  *
  * The prototype hardcoded ten colors; in the product the graph must follow
- * the active pi CLI theme. Lane 0 (the first-parent main line) uses the
- * theme's accent color directly; the remaining lanes rotate the accent's hue
- * around the wheel. The palette is mode-aware: a theme set's dark and light
- * variants often share the same accent token, so lightness must come from
- * the background mode (L 0.55 pops on dark, but washes out on light).
+ * the active pi CLI theme. Each theme variant already ships a mode-tuned
+ * accent (light variants define deeper accents than dark ones), so the
+ * palette must NOT re-decide lightness: lane 0 (the first-parent main line)
+ * is the accent verbatim, and the remaining lanes rotate the accent's hue
+ * around the wheel while keeping its lightness — only saturation is scaled
+ * down so side lanes stay subordinate to the main line. Unparseable or
+ * near-grey accents fall back to a mode-matched fixed set.
  */
 
 export const FALLBACK_PALETTE = [
@@ -46,8 +48,6 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
 }
 
 function hslToCss(h: number, s: number, l: number): string {
-  // Saturation/lightness are chosen per mode in deriveLanePalette; only the
-  // hue follows the theme accent.
   return `hsl(${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`;
 }
 
@@ -57,19 +57,14 @@ export function deriveLanePalette(accent: string, isDark: boolean): string[] {
     // Unparseable, or a near-grey accent with no hue to rotate: fixed set.
     return isDark ? FALLBACK_PALETTE : FALLBACK_PALETTE_LIGHT;
   }
+  // Inherit the variant's own accent tuning: lightness flows through
+  // untouched, saturation only damped for the rotated side lanes.
+  const palette: string[] = [hslToCss(hsl.h, hsl.s, hsl.l)];
+  // h is normalized to 0..1; rotate the remaining lanes evenly around it.
   const step = 1 / LANE_COLOR_COUNT;
-  if (isDark) {
-    const palette: string[] = [hslToCss(hsl.h, Math.max(hsl.s, 0.35), 0.55)];
-    // h is normalized to 0..1; rotate the remaining lanes evenly around it.
-    for (let i = 1; i < LANE_COLOR_COUNT; i++) {
-      palette.push(hslToCss((hsl.h + i * step) % 1, 0.45, 0.55));
-    }
-    return palette;
-  }
-  // Light background: deepen the tones so lanes keep contrast.
-  const palette: string[] = [hslToCss(hsl.h, Math.max(hsl.s, 0.45), 0.4)];
+  const sideS = Math.max(hsl.s * 0.55, 0.25);
   for (let i = 1; i < LANE_COLOR_COUNT; i++) {
-    palette.push(hslToCss((hsl.h + i * step) % 1, 0.55, 0.38));
+    palette.push(hslToCss((hsl.h + i * step) % 1, sideS, hsl.l));
   }
   return palette;
 }
