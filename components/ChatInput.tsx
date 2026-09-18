@@ -2626,6 +2626,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                             style={{
+                              width: "100%",
                               display: "flex",
                               alignItems: "center",
                               gap: 5,
