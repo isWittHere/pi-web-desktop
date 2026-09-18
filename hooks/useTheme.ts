@@ -16,6 +16,22 @@ function subscribe(cb: () => void): () => void {
 
 function notify() { listeners.forEach((cb) => cb()); }
 
+// Accent of the theme most recently applied to the DOM. Written only by
+// applyModeAndTheme (after the CSS vars land, so the value can never race
+// ahead of or behind the visible theme); read through the existing store
+// notifications — every apply path already calls notify() on completion.
+let appliedAccent = "";
+
+function getAppliedAccent(): string { return appliedAccent; }
+
+function readComputedAccent(): string {
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+  } catch {
+    return "";
+  }
+}
+
 // ─── localStorage keys ──────────────────────────────────────────────────────
 
 const KEY_MODE = "pi-theme-mode";
@@ -281,17 +297,19 @@ async function applyModeAndTheme(
   if (!themeName) {
     delete el.dataset.theme;
     clearCssVars();
-    return;
-  }
-
-  el.dataset.theme = themeName;
-  const resolved = await fetchTheme(themeName, resolvedMode);
-  if (resolved) {
-    applyCssVars(resolved.cssVars);
   } else {
-    console.warn(`Theme "${themeName}" variant "${resolvedMode}" not found, using defaults`);
-    clearCssVars();
+    el.dataset.theme = themeName;
+    const resolved = await fetchTheme(themeName, resolvedMode);
+    if (resolved) {
+      applyCssVars(resolved.cssVars);
+    } else {
+      console.warn(`Theme "${themeName}" variant "${resolvedMode}" not found, using defaults`);
+      clearCssVars();
+    }
   }
+  // Read after the writes above: computed style reflects the applied theme
+  // (inline vars or globals.css defaults for cleared/failed resolutions).
+  appliedAccent = readComputedAccent();
 }
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
@@ -301,6 +319,7 @@ type ToggleOrigin = { x: number; y: number };
 export function useTheme() {
   const mode = useSyncExternalStore(subscribe, getModeSnapshot, getServerSnapshot);
   const storedThemeName = useSyncExternalStore(subscribe, getThemeSnapshot, () => "");
+  const accent = useSyncExternalStore(subscribe, getAppliedAccent, () => "");
 
   // Resolved mode — must trigger re-renders when it changes
   const [resolvedMode, setResolvedMode] = useState<ResolvedMode>(() => {
@@ -475,6 +494,9 @@ export function useTheme() {
     mode,
     resolvedMode,
     themeName: storedThemeName,
+    /** Accent color of the theme currently applied to the DOM ("" before the
+     *  first application). Updates reactively after every theme/mode change. */
+    accent,
     setMode: setModeAction,
     setTheme,
     toggleTheme,

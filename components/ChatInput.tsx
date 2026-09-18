@@ -524,7 +524,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
-  const { isDark } = useTheme();
+  const { accent } = useTheme();
   const { fontSize } = useChatAppearance();
 
   // Step pill: measure its natural width so the independent status button can
@@ -1436,18 +1436,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // parents are missing, so the graph yields to plain (lane-tinted) rows.
   const showMiniGraph = commentRouted && commentFilter !== null && commentFilter.trim() === "";
   const miniGraphW = laneLayout ? miniLaneGraphWidth(laneLayout.laneCount) : 0;
-  // Lane colors mirror the git-graph tab: accent-derived palette recomputed on
-  // theme switches, lane indexes from the same machine over the full fetched
+  // Lane colors mirror the git-graph tab: accent-derived palette from
+  // useTheme's applied-theme snapshot (recomputes reactively on every theme
+  // switch), lane indexes from the same machine over the full fetched
   // window so the "same color = same branch line" signal survives filtering.
-  const lanePalette = useMemo(() => {
-    try {
-      const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
-      return deriveLanePalette(accent);
-    } catch {
-      return deriveLanePalette("");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDark]);
+  const lanePalette = useMemo(() => deriveLanePalette(accent), [accent]);
   // Unified, flat menu list: prefix suggestion + files normally, commits only
   // when the query routes to comment: mode. Keyboard navigation and rendering
   // treat it as one list; empty routed results mean "no match" (the loading /
