@@ -193,8 +193,8 @@ export function GitGraphTab({ cwd, onOpenFile, onMentionCommit }: Props) {
   // Lane colors follow the theme applied to the DOM: useTheme re-publishes
   // the accent after every theme/mode application, so this recomputes
   // reactively — including while the tab sits hidden in the keep-alive cache.
-  // Mode-aware: a theme set's variants often share one accent token, so the
-  // lightness must come from the background mode, not the accent.
+  // deriveLanePalette inherits the variant's own accent tuning (lightness
+  // passthrough); isDark only picks the fallback palette family.
   const palette = useMemo(() => deriveLanePalette(accent, isDark), [accent, isDark]);
 
   const timeFormat = useMemo(
