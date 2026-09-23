@@ -79,6 +79,15 @@ function isWritableScope(scope: SubagentScope): scope is SubagentWritableScope {
   return scope === "global" || scope === "project";
 }
 
+/**
+ * A built-in has no file to edit, so its fields stay read-only, but its switch is
+ * live: the server records the name in `agents/settings.json` instead of writing a
+ * copy of the profile to disk.
+ */
+function isTogglableScope(scope: SubagentScope): boolean {
+  return isWritableScope(scope) || scope === "builtin";
+}
+
 function shortenPath(path: string): string {
   return path.replace(/^\/(?:Users|home)\/[^/]+/, "~").replace(/^[A-Za-z]:\\Users\\[^\\]+/, "~");
 }
@@ -284,6 +293,9 @@ export function AgentsConfig({
   const editing = mode !== "view";
   const creating = mode === "create";
   const disabled = !editing || saving || toggling;
+  const switchDisabled = creating
+    ? disabled
+    : !selected || !isTogglableScope(selected.scope) || saving || toggling;
   const displayedScope = creating ? targetScope : selected?.scope;
   const displayedPath = creating
     ? targetScope === "global"
@@ -301,7 +313,7 @@ export function AgentsConfig({
       update("enabled", enabled);
       return;
     }
-    if (!selected || !isWritableScope(selected.scope)) return;
+    if (!selected || !isTogglableScope(selected.scope)) return;
     setToggling(true);
     setError(null);
     try {
@@ -595,7 +607,7 @@ export function AgentsConfig({
               )}
               <Toggle
                 checked={draft.enabled}
-                disabled={disabled}
+                disabled={switchDisabled}
                 label={draft.enabled ? t("agents.disable") : t("agents.enable")}
                 onChange={(checked) => void toggleEnabled(checked)}
               />

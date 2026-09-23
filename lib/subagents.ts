@@ -7,6 +7,7 @@ import { parseFrontmatter } from "./frontmatter";
 import { writePrivateFileAtomicSync } from "./atomic-file";
 import { isExistingPathWithinRoots } from "./path-security";
 import { PRESET_READ_ONLY } from "./tool-presets";
+import { disabledBuiltInSubagents } from "./subagent-settings";
 import type { SessionEntry, SubagentSessionStatus } from "./types";
 
 export const SUBAGENT_META_TYPE = "pi-web:subagent";
@@ -336,9 +337,24 @@ function profileDirectories(cwd: string): Array<[string, Exclude<SubagentScope, 
   ];
 }
 
+/**
+ * A built-in has no file, so `enabled: false` cannot be written next to it the way
+ * it is for a profile on disk. Its off state is a name in `agents/settings.json`
+ * instead of a copied-out override file, which would otherwise freeze the built-in
+ * prompt at the version it was copied from.
+ */
+function builtInProfiles(): SubagentProfile[] {
+  const disabled = disabledBuiltInSubagents();
+  return BUILTIN_PROFILES.map((profile) => ({
+    ...profile,
+    tools: [...profile.tools],
+    enabled: !disabled.has(profile.name.toLowerCase()),
+  }));
+}
+
 /** Every configured source, including profiles shadowed by a higher-precedence scope. */
 export function listSubagentProfileSources(cwd: string): SubagentProfile[] {
-  const profiles = BUILTIN_PROFILES.map((profile) => ({ ...profile, tools: [...profile.tools] }));
+  const profiles = builtInProfiles();
   for (const [dir, scope] of profileDirectories(cwd)) {
     profiles.push(...readProfileDirectory(dir, scope, cwd));
   }
@@ -346,7 +362,8 @@ export function listSubagentProfileSources(cwd: string): SubagentProfile[] {
 }
 
 export function listSubagentProfiles(cwd: string): SubagentProfile[] {
-  const byName = new Map(BUILTIN_PROFILES.map((profile) => [profile.name.toLowerCase(), { ...profile, tools: [...profile.tools] }]));
+  // A same-name file replaces the built-in outright, its own `enabled` included.
+  const byName = new Map(builtInProfiles().map((profile) => [profile.name.toLowerCase(), profile]));
   for (const [dir, scope] of profileDirectories(cwd)) {
     for (const profile of readProfileDirectory(dir, scope, cwd)) byName.set(profile.name.toLowerCase(), profile);
   }

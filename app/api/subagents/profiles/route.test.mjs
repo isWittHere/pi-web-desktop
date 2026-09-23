@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -207,4 +208,61 @@ test("profiles route rejects cross-site requests via the desktop security guard"
   const putResponse = await PUT(nonJson);
   assert.equal(putResponse.status, 415);
   assert.deepEqual(await putResponse.json(), { error: "Content-Type must be application/json" });
+});
+
+test("profiles route toggles a built-in through settings.json without writing a profile file", async (t) => {
+  const cwd = await mkdtemp(join(tmpdir(), "pi-web-subagent-route-"));
+  allowFileRoot(cwd);
+  t.after(async () => {
+    await PATCH(jsonRequest("PATCH", { cwd, scope: "builtin", name: "explore", enabled: true }));
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  let response = await PATCH(jsonRequest("PATCH", { cwd, scope: "builtin", name: "Explore", enabled: false }));
+  assert.equal(response.status, 200);
+  let body = await response.json();
+  assert.equal(body.profile.scope, "builtin");
+  assert.equal(body.profile.enabled, false);
+  assert.equal(body.profile.filePath, undefined);
+  assert.deepEqual(
+    JSON.parse(await readFile(join(testAgentDir, "agents", "settings.json"), "utf8")).disabledBuiltIns,
+    ["explore"],
+  );
+  assert.equal(existsSync(join(testAgentDir, "agents", "explore.md")), false);
+
+  response = await GET(localGet(`http://localhost/api/subagents/profiles?cwd=${encodeURIComponent(cwd)}`));
+  const builtIns = (await response.json()).profiles.filter((item) => item.scope === "builtin");
+  assert.equal(builtIns.find((item) => item.name === "explore").enabled, false);
+  assert.equal(builtIns.filter((item) => item.enabled).length, builtIns.length - 1);
+
+  response = await PATCH(jsonRequest("PATCH", { cwd, scope: "builtin", name: "explore", enabled: true }));
+  assert.equal(response.status, 200);
+  body = await response.json();
+  assert.equal(body.profile.enabled, true);
+  assert.deepEqual(
+    JSON.parse(await readFile(join(testAgentDir, "agents", "settings.json"), "utf8")).disabledBuiltIns,
+    [],
+  );
+
+  response = await PATCH(jsonRequest("PATCH", { cwd, scope: "builtin", name: "not-a-built-in", enabled: false }));
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: "Agent profile not found" });
+});
+
+test("profiles route keeps PUT and DELETE refusing the builtin scope", async (t) => {
+  const cwd = await mkdtemp(join(tmpdir(), "pi-web-subagent-route-"));
+  allowFileRoot(cwd);
+  t.after(async () => { await rm(cwd, { recursive: true, force: true }); });
+
+  let response = await PUT(jsonRequest("PUT", { cwd, scope: "builtin", profile: profile() }));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "scope must be global or project" });
+
+  response = await DELETE(jsonRequest("DELETE", { cwd, scope: "builtin", name: "explore" }));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "scope must be global or project" });
+
+  response = await PATCH(jsonRequest("PATCH", { cwd, scope: "workspace", name: "explore", enabled: false }));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "scope must be global, project, or builtin" });
 });
