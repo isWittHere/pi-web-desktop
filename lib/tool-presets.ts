@@ -26,13 +26,14 @@ export function getPresetFromTools(tools: ToolEntry[]): ToolPreset {
   const activeTools = tools.filter((t) => t.active);
   if (activeTools.length === 0) return "none";
 
-  const active = activeTools
-    .map((t) => t.name)
-    .map((name) => name === "powershell" ? "bash" : name)
-    .filter((name) => BUILTIN_TOOL_NAMES.has(name))
-    .sort()
-    .join(",");
+  const active = [...new Set(
+    activeTools
+      .map((t) => t.name)
+      .map((name) => name === "powershell" ? "bash" : name)
+      .filter((name) => BUILTIN_TOOL_NAMES.has(name)),
+  )].sort().join(",");
 
+  if (active === "") return "none";
   if (active === [...PRESET_READ_ONLY].sort().join(",")) return "read-only";
   if (active === [...PRESET_DEFAULT].sort().join(",")) return "default";
   if (active === [...PRESET_FULL].sort().join(",")) return "full";
@@ -44,4 +45,23 @@ export function getToolNamesForPreset(preset: ToolPreset): string[] {
   if (preset === "read-only") return [...PRESET_READ_ONLY];
   if (preset === "full") return [...PRESET_FULL];
   return [...PRESET_DEFAULT];
+}
+
+/**
+ * Infer the builtin tool preset from a session's live tool state and return
+ * its coding tool names. The SDK activates every extension tool at session
+ * construction (`includeAllExtensionTools`), so a session's active set may
+ * carry extra host tools (e.g. Windows `powershell`) on top of the real
+ * preset; `getPresetFromTools` maps powershell → bash and only counts builtin
+ * names, which neutralizes that bloat. Non-coding extension tools are ignored
+ * here — callers re-append them separately. Returns [] for "none".
+ */
+export function deriveToolNamesFromActive(
+  activeNames: readonly string[],
+  allToolNames: readonly string[],
+): string[] {
+  const active = new Set(activeNames);
+  return getToolNamesForPreset(getPresetFromTools(
+    allToolNames.map((name) => ({ name, description: "", active: active.has(name) })),
+  ));
 }
