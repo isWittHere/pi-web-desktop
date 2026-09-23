@@ -17,6 +17,8 @@ const HOST_SUBAGENT_EXTENSION_PATH = `<inline:${HOST_SUBAGENT_EXTENSION_NAME}>`;
 const SUBAGENT_TOOL_NAMES = new Set<string>(SUBAGENT_CONTROL_TOOL_NAMES);
 const LEGACY_SUBAGENT_PACKAGE_NAME = "pi-subagents";
 
+const TERMINAL_SUBAGENT_STATUSES = new Set<SubagentRunInfo["status"]>(["completed", "failed", "aborted", "interrupted"]);
+
 export interface SubagentToolDetails {
   kind: "pi-web-subagent";
   sessionId: string;
@@ -71,6 +73,7 @@ export interface SubagentExtensionRuntime {
   get(sessionId: string): Promise<SubagentRunInfo | null>;
   steer(sessionId: string, message: string): Promise<void>;
   notifyParent(run: SubagentRunInfo): Promise<void>;
+  markResultConsumed(sessionId: string): void;
 }
 
 export type SubagentProfileProvider = () => readonly SubagentProfile[];
@@ -267,6 +270,9 @@ export function createSubagentExtension(
             run = await runtime.get(params.agent_id);
             if (!run) return { content: [{ type: "text", text: `Subagent not found: ${params.agent_id}` }], details: undefined, isError: true };
           }
+          // The parent now holds this result, so the background completion notification must not
+          // deliver the same text again and wake a duplicate turn.
+          if (run.runInBackground && TERMINAL_SUBAGENT_STATUSES.has(run.status)) runtime.markResultConsumed(run.sessionId);
           return {
             content: [{ type: "text", text: subagentFinalText(run) }],
             details: subagentToolDetails(run),

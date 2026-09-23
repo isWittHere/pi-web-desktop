@@ -79,6 +79,7 @@ type StoredSubagentExecution = {
 declare global {
   var __piSubagentRuns: Map<string, StoredSubagentExecution> | undefined;
   var __piSubagentQueue: SubagentQueue<SubagentRunInfo> | undefined;
+  var __piSubagentConsumedResults: Set<string> | undefined;
 }
 const SUBAGENT_CONTEXT_LIMIT = 50_000;
 const THINKING_LEVELS = new Set<ThinkingLevel>(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -104,6 +105,27 @@ function getSubagentRuns(): Map<string, StoredSubagentExecution> {
 function getSubagentQueue(): SubagentQueue<SubagentRunInfo> {
   if (!globalThis.__piSubagentQueue) globalThis.__piSubagentQueue = new SubagentQueue();
   return globalThis.__piSubagentQueue;
+}
+
+const PARENT_IDLE_POLL_MS = 200;
+
+/**
+ * Session IDs whose terminal result the parent already collected with `get_subagent_result`.
+ * Only background runs are recorded: a foreground run never notifies, so nothing would ever
+ * clear its entry. `notifyParent` consumes the mark, so the set stays bounded by the
+ * background results still waiting to be delivered.
+ */
+function getConsumedSubagentResults(): Set<string> {
+  if (!globalThis.__piSubagentConsumedResults) globalThis.__piSubagentConsumedResults = new Set();
+  return globalThis.__piSubagentConsumedResults;
+}
+
+function markResultConsumed(sessionId: string): void {
+  getConsumedSubagentResults().add(sessionId);
+}
+
+function takeResultConsumed(sessionId: string): boolean {
+  return getConsumedSubagentResults().delete(sessionId);
 }
 
 function parseSubagentModel(runtime: ModelRuntime, value: string | undefined) {
@@ -565,6 +587,7 @@ export function createSubagentController(
   }
 
   async function notifyParent(run: SubagentRunInfo): Promise<void> {
+    if (takeResultConsumed(run.sessionId)) return;
     let parent = dependencies.getSession(run.parentSessionId);
     if (!parent?.isAlive()) {
       const sessionFile = await dependencies.resolveSessionPath(run.parentSessionId);
@@ -572,6 +595,15 @@ export function createSubagentController(
       parent = await dependencies.reopenSession(run.parentSessionId, sessionFile);
     }
     await parent.waitUntilReady();
+    // The parent may still be inside the `get_subagent_result` call that collects this result,
+    // and `deliverAs: "followUp"` would only queue the message until that turn ends anyway.
+    // Hold the notification until the parent is idle and re-check the mark, so a result the
+    // parent already consumed never triggers a duplicate turn.
+    while (parent.isAlive() && parent.isRunning()) {
+      if (takeResultConsumed(run.sessionId)) return;
+      await new Promise<void>((resolve) => { setTimeout(resolve, PARENT_IDLE_POLL_MS); });
+    }
+    if (takeResultConsumed(run.sessionId)) return;
     if (!parent.isAlive()) throw new Error(`Parent session is no longer available: ${run.parentSessionId}`);
     await parent.inner.sendCustomMessage({
       customType: "pi-web:subagent-notification",
@@ -595,7 +627,7 @@ export function createSubagentController(
   }
 
   return {
-    extensionRuntime: { start, resume, get, steer, notifyParent },
+    extensionRuntime: { start, resume, get, steer, notifyParent, markResultConsumed },
     get,
     steer,
     abort,
