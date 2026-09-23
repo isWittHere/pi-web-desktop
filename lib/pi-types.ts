@@ -135,7 +135,8 @@ export interface AgentSessionLike {
   readonly settingsManager: SettingsManager;
   readonly agent: {
     state?: {
-      systemPrompt?: string;
+      /** Replayed from the transcript's system messages since Pi 0.86; never assign it. */
+      readonly systemPrompt?: string;
       thinkingLevel?: string;
       /** Cumulative assistant message in flight, replayed on SSE reconnect. */
       streamingMessage?: unknown;

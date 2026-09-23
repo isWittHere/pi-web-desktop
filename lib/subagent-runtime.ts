@@ -32,6 +32,7 @@ import {
 } from "./subagents";
 import type { SessionEntry } from "./types";
 import { buildSubagentPromptPlan } from "./subagent-prompt";
+import { createExactSystemPromptExtension } from "./exact-system-prompt";
 import { appendSubagentInputFiles, loadSubagentInputFiles } from "./subagent-input";
 import { projectTrustReloadOptions } from "./project-trust";
 import { resolveShellTools } from "./powershell-settings";
@@ -198,6 +199,10 @@ export function createSubagentController(
               }
             : {}),
           appendSystemPrompt,
+          // The exact prompt is sent through before_agent_start; see lib/exact-system-prompt.ts.
+          ...(promptPlan.exactSystemPrompt !== undefined
+            ? { extensionFactories: [createExactSystemPromptExtension(() => promptPlan.exactSystemPrompt)] }
+            : {}),
         },
         ...((profile.loadExtensions || profile.loadSkills)
           ? { resourceLoaderReloadOptions: projectTrustReloadOptions(childCwd, agentDir) }
@@ -323,18 +328,7 @@ export function createSubagentController(
         dependencies.invalidateSessionList();
         let result: SubagentRunInfo;
         try {
-          await inner.prompt(delegatedTask, {
-            source: "rpc",
-            ...(chatOnly
-              ? {
-                  preflightResult: (success: boolean) => {
-                    if (success && inner.agent.state) {
-                      inner.agent.state.systemPrompt = profile.systemPrompt;
-                    }
-                  },
-                }
-              : {}),
-          });
+          await inner.prompt(delegatedTask, { source: "rpc" });
           const text = inner.getLastAssistantText()?.trim();
           const aborted = stored.abortRequested && !maxTurnsReached;
           result = {

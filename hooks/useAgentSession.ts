@@ -20,7 +20,7 @@ import { mergeSessionStats, type SessionFileStats } from "@/lib/session-stats";
 import { createStreamUpdateScheduler, type StreamUpdateScheduler } from "@/lib/stream-update-scheduler";
 import { AgentEventConnection, AgentEventConnectionError } from "@/lib/agent-event-connection";
 import { getToolExecutionProgress } from "@/lib/tool-execution-progress";
-import type { AgentEventLike } from "@/lib/agent-event-wire";
+import { isSystemMessageEvent, type AgentEventLike } from "@/lib/agent-event-wire";
 import { getCachedSession, setCachedSession } from "@/lib/session-cache";
 import { modelKey } from "@/lib/thinking-levels";
 import type { ThinkingLevelOption } from "@/lib/thinking-levels";
@@ -1269,6 +1269,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // (e.g. SSE data buffered while the tab was frozen, flushed after
         // reconcile) — they would resurrect a ghost streaming bubble.
         if (!agentRunningRef.current) break;
+        // Transcript system messages (prompt and tool loadout) are filtered
+        // server-side; keep them out of the chat should one arrive.
+        if (isSystemMessageEvent(event)) break;
         const msg = event.message as Partial<AgentMessage> | undefined;
         if (msg?.role === "user") {
           break;
@@ -1287,6 +1290,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // loadSession already loaded this message from the session file —
         // appending it again would duplicate it.
         if (!agentRunningRef.current) break;
+        if (isSystemMessageEvent(event)) break;
         const completed = event.message as AgentMessage | undefined;
         if (completed && completed.role === "user") {
           // Delivered steering/follow-up messages surface here as user

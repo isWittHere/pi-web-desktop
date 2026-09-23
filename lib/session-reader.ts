@@ -566,7 +566,8 @@ export function findFirstUserMessage(entries: SessionEntry[]): AgentMessage | un
     (entry): entry is Extract<SessionEntry, { type: "message" }> =>
       entry.type === "message" && entry.message.role === "user",
   );
-  return firstUserEntry?.message;
+  const message = firstUserEntry?.message;
+  return message && message.role === "user" ? message : undefined;
 }
 
 function parseEntryTimestamp(timestamp: string): number | undefined {
@@ -628,6 +629,9 @@ function entryToUiMessage(
 ): AgentMessage | null {
   switch (entry.type) {
     case "message": {
+      // Transcript system messages carry the prompt and tool loadout (Pi >= 0.86).
+      // They are provider input, not conversation, so they never render.
+      if (entry.message.role === "system") return null;
       let message = options.deferToolResultImages
         ? omitToolResultBase64Images(normalizeToolCalls(entry.message))
         : normalizeToolCalls(entry.message);

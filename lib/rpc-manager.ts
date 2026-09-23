@@ -25,6 +25,7 @@ import { isBuiltInSubagentsEnabled } from "./subagent-settings";
 import { listSubagentProfiles, readSubagentRun, readSubagentSessionResources, SUBAGENT_CONTROL_TOOL_NAMES } from "./subagents";
 import { cacheSessionPath, getLatestModelChange, invalidateSessionListCache, resolveSessionPath } from "./session-reader";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
+import { createExactSystemPromptExtension } from "./exact-system-prompt";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import { rememberThinkingLevel } from "./thinking-level-memory";
 import { modelKey } from "./thinking-levels";
@@ -221,7 +222,6 @@ export class AgentSessionWrapper {
   private extensionBindingError: unknown = null;
   private forceEmptySystemPrompt = false;
   private exactSystemPrompt: (() => string) | null = null;
-  private exactSystemPromptInstalled = false;
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
@@ -281,42 +281,28 @@ export class AgentSessionWrapper {
 
   setForceEmptySystemPrompt(force: boolean): void {
     this.forceEmptySystemPrompt = force;
-    this.applyForcedEmptySystemPrompt();
   }
 
   /**
    * Pin the system prompt for sessions whose prompt is owned by code rather
-   * than resource discovery (chat-only subagent profiles). The SDK rebuilds
-   * the system prompt on later turns, so a per-turn continuation hook keeps
-   * the exact prompt in place.
+   * than resource discovery (chat-only subagent profiles). Since Pi 0.86 the
+   * prompt is projected per run by the inline before_agent_start extension
+   * (see lib/exact-system-prompt.ts); this getter is read by that extension
+   * at prompt time and by get_state for display.
    */
   setExactSystemPrompt(getter: () => string): void {
     this.exactSystemPrompt = getter;
-    this.installExactSystemPromptContinuation();
-    this.applyForcedEmptySystemPrompt();
   }
 
-  private installExactSystemPromptContinuation(): void {
-    if (this.exactSystemPromptInstalled) return;
-    const agent = this.inner.agent as {
-      prepareNextTurnWithContext?: (
-        turn: unknown,
-        signal: AbortSignal,
-      ) => Promise<{ context?: { systemPrompt?: string } } | undefined> | undefined;
-    };
-    if (typeof agent.prepareNextTurnWithContext !== "function") return;
-    this.exactSystemPromptInstalled = true;
-    const previous = agent.prepareNextTurnWithContext.bind(agent);
-    agent.prepareNextTurnWithContext = async (turn, signal) => {
-      const prepared = await previous(turn, signal);
-      return {
-        ...prepared,
-        context: {
-          ...(prepared?.context ?? (turn as { context?: { systemPrompt?: string } }).context),
-          systemPrompt: this.exactSystemPrompt!(),
-        },
-      };
-    };
+  /**
+   * Resolve the prompt the before_agent_start extension should project for the
+   * next run: the pinned exact prompt when set, "" for sessions with every
+   * tool disabled, or undefined to leave Pi's structured prompt untouched.
+   */
+  resolveExactSystemPrompt(): string | undefined {
+    if (this.exactSystemPrompt) return this.exactSystemPrompt();
+    if (this.forceEmptySystemPrompt) return "";
+    return undefined;
   }
 
   /** Await extension binding so a prompt cannot race session_start dispatch. */
@@ -332,10 +318,7 @@ export class AgentSessionWrapper {
 
   private ensureExtensionsBound(options: ExtensionBindingOptions = {}): Promise<void> {
     if (options.forceEmptySystemPrompt) this.forceEmptySystemPrompt = true;
-    if (this.extensionsBound) {
-      this.applyForcedEmptySystemPrompt();
-      return Promise.resolve();
-    }
+    if (this.extensionsBound) return Promise.resolve();
     if (this.extensionBindingPromise) return this.extensionBindingPromise;
 
     this.extensionBindingError = null;
@@ -372,7 +355,6 @@ export class AgentSessionWrapper {
         this.inner.extensionRunner.setUIContext?.(uiContext, "rpc");
       }
       this.extensionsBound = true;
-      this.applyForcedEmptySystemPrompt();
       console.log(`[pi-web] session_start dispatched to extensions for session ${this.inner.sessionId}`);
     })().catch((err) => {
       this.extensionBindingError = err;
@@ -397,15 +379,6 @@ export class AgentSessionWrapper {
 
   private shouldWaitForExtensions(type: string): boolean {
     return type === "prompt" || type === "steer" || type === "follow_up" || type === "get_commands";
-  }
-
-  private applyForcedEmptySystemPrompt(): void {
-    if (!this.inner.agent.state) return;
-    if (this.exactSystemPrompt) {
-      this.inner.agent.state.systemPrompt = this.exactSystemPrompt();
-      return;
-    }
-    if (this.forceEmptySystemPrompt) this.inner.agent.state.systemPrompt = "";
   }
 
   private emit(event: AgentEvent): void {
@@ -571,7 +544,9 @@ export class AgentSessionWrapper {
           contextUsage: contextUsage
             ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
             : null,
-          systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
+          // An exact prompt is projected onto each run by the inline extension;
+          // the SDK state only shows Pi's structured sections.
+          systemPrompt: this.resolveExactSystemPrompt() ?? this.inner.agent.state?.systemPrompt ?? "",
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           extensionStatuses: this.getExtensionStatuses(),
           extensionWidgets: this.getExtensionWidgets(),
@@ -774,12 +749,10 @@ export class AgentSessionWrapper {
           this.syncProjectTrust();
           await this.inner.reload();
           applyDerivedToolPolicy(this.inner);
-          this.applyForcedEmptySystemPrompt();
           return { success: true };
         }
         this.setForceEmptySystemPrompt(toolNames.length === 0);
         applyToolPolicy(this.inner, toolNames);
-        this.applyForcedEmptySystemPrompt();
         return null;
       }
 
@@ -799,7 +772,6 @@ export class AgentSessionWrapper {
         if (typeof this.inner.bindExtensions !== "function") {
           this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
         }
-        this.applyForcedEmptySystemPrompt();
         return { success: true };
       }
 
@@ -1258,7 +1230,6 @@ export class AgentSessionWrapper {
             this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
           },
         });
-        this.applyForcedEmptySystemPrompt();
       },
     };
   }
@@ -1540,6 +1511,16 @@ export async function startRpcSession(
         : undefined)
       : projectTrustReloadOptions(sessionCwd, agentDir);
     const settingsManager = SettingsManager.create(sessionCwd, agentDir);
+    // Chat-only sessions and subagents that replace Pi's prompt send an exact
+    // system prompt. The prompt is resolved at prompt time through this inline
+    // extension: it may read the session's context files, which exist only
+    // after the session is created, so the getter is filled in below.
+    const exactSystemPromptRef: { current?: () => string | undefined } = {};
+    const exactSystemPromptExtension = createExactSystemPromptExtension(() => exactSystemPromptRef.current?.());
+    // Subagents register the extension only when their profile pins an exact
+    // prompt; real sessions always register it because tools can be disabled
+    // at runtime (force-empty projects "" per run via the same extension).
+    const subagentUsesExactSystemPrompt = subagentChatOnly || subagentResources?.exactSystemPrompt !== undefined;
     const services = await createAgentSessionServices({
       cwd: sessionCwd,
       agentDir,
@@ -1558,6 +1539,7 @@ export async function startRpcSession(
                 }
               : {}),
             appendSystemPrompt: subagentResources.appendSystemPrompt,
+            ...(subagentUsesExactSystemPrompt ? { extensionFactories: [exactSystemPromptExtension] } : {}),
           }
         : {
         extensionFactories: [
@@ -1577,6 +1559,8 @@ export async function startRpcSession(
             () => listSubagentProfiles(sessionCwd),
             isBuiltInSubagentsEnabled,
           ),
+          // Projects the exact/empty prompt per run (see lib/exact-system-prompt.ts).
+          exactSystemPromptExtension,
         ],
         extensionsOverride: (base) =>
           preferUserPowerShellExtension(preferUserBashExtension(preferPiWebSubagentExtension(base))),
@@ -1590,7 +1574,8 @@ export async function startRpcSession(
     const defaultProvider = services.settingsManager.getDefaultProvider();
     const defaultModelId = services.settingsManager.getDefaultModel();
     const branch = sessionManager.getBranch();
-    const hasExistingMessages = branch.some((entry) => entry.type === "message");
+    // System messages carry the prompt and tool loadout, not a conversation.
+    const hasExistingMessages = branch.some((entry) => entry.type === "message" && entry.message.role !== "system");
     const savedModel = hasExistingMessages
       ? getLatestModelChange(branch as unknown as SessionEntry[])
       : null;
@@ -1686,6 +1671,10 @@ export async function startRpcSession(
     } else if (!subagentResources && effectiveToolNames?.length === 0) {
       wrapper.setForceEmptySystemPrompt(true);
     }
+    // The inline extension resolves the prompt lazily per run through this ref,
+    // so runtime tool changes (set_tools → force-empty) take effect on the
+    // next prompt without rebuilding the resource loader.
+    exactSystemPromptRef.current = () => wrapper.resolveExactSystemPrompt();
     wrapper.start();
 
     const realSessionId = inner.sessionId as string;

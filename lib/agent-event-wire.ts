@@ -8,6 +8,17 @@ const OMITTED_EVENT_TYPES = new Set([
   "turn_end",
 ]);
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** A `message_start` / `message_end` for a transcript system message (prompt and tool loadout). */
+export function isSystemMessageEvent(event: AgentEventLike): boolean {
+  return (event.type === "message_start" || event.type === "message_end")
+    && isObject(event.message)
+    && event.message.role === "system";
+}
+
 /**
  * Project raw SDK agent events onto the wire shape the desktop client
  * consumes, filtering out events it never uses.
@@ -21,6 +32,11 @@ export function toClientAgentEvent(
   event: AgentEventLike,
 ): AgentEventLike | null {
   if (OMITTED_EVENT_TYPES.has(event.type)) return null;
+  // Pi >= 0.86 appends the prompt and tool loadout to the transcript as system
+  // messages, which the agent loop announces like any message. They carry the
+  // whole prompt plus every tool schema and are never rendered, so drop them
+  // before they cost the browser bandwidth.
+  if (isSystemMessageEvent(event)) return null;
 
   if (event.type === "tool_execution_update") {
     // Forward only the progress payload; the repeated tool arguments are not

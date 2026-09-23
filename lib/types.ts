@@ -112,6 +112,23 @@ export interface BashExecutionMessage {
 
 export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage | CustomMessage | BashExecutionMessage;
 
+/**
+ * Prompt and tool loadout carried by the session transcript (Pi >= 0.86). The
+ * leading one holds the base prompt; later ones patch `sections` by name and
+ * list tool changes. Never a chat message: the UI hides it everywhere.
+ */
+export interface SystemMessage {
+  role: "system";
+  content: string | TextContent[];
+  sections?: Record<string, string | null>;
+  toolsAdded?: unknown[];
+  toolsRemoved?: Array<{ name: string }>;
+  timestamp?: number;
+}
+
+/** Any message a `message` entry can store, including transcript system messages. */
+export type SessionMessage = AgentMessage | SystemMessage;
+
 export type ExtensionUiRequest =
   | {
       type: "extension_ui_request";
@@ -209,7 +226,7 @@ export interface ExtensionWidgetItem {
 
 export interface SessionMessageEntry extends SessionEntryBase {
   type: "message";
-  message: AgentMessage;
+  message: SessionMessage;
 }
 
 export interface ThinkingLevelChangeEntry extends SessionEntryBase {
@@ -221,6 +238,16 @@ export interface ModelChangeEntry extends SessionEntryBase {
   type: "model_change";
   provider: string;
   modelId: string;
+}
+
+/** Model usage outside the conversation, such as prompt-cache warming (`kind: "cache_warm"`). */
+export interface UsageEntry extends SessionEntryBase {
+  type: "usage";
+  kind: string;
+  provider: string;
+  model: string;
+  usage: AgentUsage;
+  note?: string;
 }
 
 export interface CompactionEntry extends SessionEntryBase {
@@ -273,6 +300,7 @@ export type SessionEntry =
   | ModelChangeEntry
   | CompactionEntry
   | BranchSummaryEntry
+  | UsageEntry
   | CustomEntry
   | CustomMessageEntry
   | LabelEntry
