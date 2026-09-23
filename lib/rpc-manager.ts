@@ -763,7 +763,20 @@ export class AgentSessionWrapper {
         if (readSubagentSessionResources(this.inner.sessionManager.getEntries() as unknown as SessionEntry[])) {
           throw new Error("Subagent tool selection is fixed by its profile");
         }
-        const toolNames = command.toolNames as string[];
+        const toolNames = command.toolNames as string[] | undefined;
+        if (toolNames === undefined) {
+          // Return the session to pi's configured defaults (settings.json
+          // defaultTools): rebuild like reload does so the SDK re-resolves the
+          // loadout instead of keeping the previously pinned preset (#700).
+          this.setForceEmptySystemPrompt(false);
+          this.extensionStatuses.clear();
+          this.extensionWidgets.clear();
+          this.syncProjectTrust();
+          await this.inner.reload();
+          applyDerivedToolPolicy(this.inner);
+          this.applyForcedEmptySystemPrompt();
+          return { success: true };
+        }
         this.setForceEmptySystemPrompt(toolNames.length === 0);
         applyToolPolicy(this.inner, toolNames);
         this.applyForcedEmptySystemPrompt();

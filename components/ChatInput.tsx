@@ -5,7 +5,7 @@ import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, Slas
 import type { SkillsResponse } from "@/lib/api-types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
 import { continueMarkdownList } from "@/lib/markdown-list";
-import type { ToolPreset } from "@/lib/tool-presets";
+import type { AllToolPreset } from "@/lib/tool-presets";
 import type { ToolEntry } from "@/lib/tool-presets";
 import { isBase64ImageWithinLimits } from "@/lib/image-attachments";
 import {
@@ -111,8 +111,8 @@ interface Props {
   modelError?: string | null;
   onModelChange?: (provider: string, modelId: string) => void;
   compactResult?: CompactResultInfo | null;
-  toolPreset?: ToolPreset;
-  onToolPresetChange?: (preset: ToolPreset) => void;
+  toolPreset?: AllToolPreset;
+  onToolPresetChange?: (preset: AllToolPreset) => void;
   /** Full tool definitions (with parameter schemas) for the active session. */
   tools?: ToolEntry[];
   /** True while a fresh tool/system-info load is in flight. */
@@ -152,9 +152,10 @@ export interface ChatInputHandle {
   addFileMentions: (files: File[]) => void;
 }
 
-const TOOL_PRESETS = ["off", "read-only", "default", "full"] as const;
+const TOOL_PRESETS = ["configured", "off", "read-only", "default", "full"] as const;
 type ToolPresetLabel = typeof TOOL_PRESETS[number];
-const TOOL_PRESET_MAP: Record<ToolPresetLabel, ToolPreset> = {
+const TOOL_PRESET_MAP: Record<ToolPresetLabel, AllToolPreset> = {
+  configured: "configured",
   off: "none",
   "read-only": "read-only",
   default: "default",
@@ -590,6 +591,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [visibleStepLabel, stepRoll, stepPillMaxWidth]);
   // Thinking levels are model-facing identifiers shown as-is (English).
   const toolPresetLabels: Record<typeof TOOL_PRESETS[number], string> = {
+    configured: t("desktop.toolConfigured"),
     off: t("desktop.toolOff"),
     "read-only": t("desktop.toolReadOnly"),
     default: t("desktop.toolDefault"),
@@ -1967,8 +1969,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (lvl === "auto" || !thinkingLevelMap) return lvl;
     return thinkingLevelMap[lvl] ?? lvl;
   })();
-  const toolPresetKey = Object.entries(TOOL_PRESET_MAP).find(([, value]) => value === (toolPreset ?? "default"))?.[0] as typeof TOOL_PRESETS[number] | undefined;
-  const toolPresetLabel = toolPresetLabels[toolPresetKey ?? "default"];
+  const toolPresetKey = Object.entries(TOOL_PRESET_MAP).find(([, value]) => value === (toolPreset ?? "configured"))?.[0] as typeof TOOL_PRESETS[number] | undefined;
+  const toolPresetLabel = toolPresetLabels[toolPresetKey ?? "configured"];
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -3466,7 +3468,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}>
             {(onToolPresetChange || onLoadTools) && (
               <div
-                className={(toolPreset ?? "default") === "none" ? "chat-input-toolbar-tools-group tools-group-preset-off" : "chat-input-toolbar-tools-group"}
+                className={(toolPreset ?? "configured") === "none" ? "chat-input-toolbar-tools-group tools-group-preset-off" : "chat-input-toolbar-tools-group"}
                 style={{
                   position: "relative",
                   display: "flex",
@@ -3587,8 +3589,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 2 }}>
                         {TOOL_PRESETS.map((lvl) => {
                           const preset = TOOL_PRESET_MAP[lvl];
-                          const isActive = (toolPreset ?? "default") === preset;
-                          const desc = lvl === "off" ? t("desktop.noTools") : lvl === "read-only" ? t("desktop.readOnlyBuiltInTools") : lvl === "default" ? t("desktop.fourBuiltInTools") : t("desktop.allBuiltInTools");
+                          const isActive = (toolPreset ?? "configured") === preset;
+                          const desc = lvl === "configured" ? t("desktop.configuredTools") : lvl === "off" ? t("desktop.noTools") : lvl === "read-only" ? t("desktop.readOnlyBuiltInTools") : lvl === "default" ? t("desktop.fourBuiltInTools") : t("desktop.allBuiltInTools");
                           return (
                             <button
                               key={lvl}

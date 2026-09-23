@@ -1,4 +1,4 @@
-import { isToolPreset, type ToolPreset } from "./tool-presets";
+import { CONFIGURED_TOOL_PRESET, isAllToolPreset, type AllToolPreset } from "./tool-presets";
 
 const STORAGE_KEY = "pi-tool-preset";
 
@@ -18,18 +18,18 @@ function getBrowserStorage(): StorageLike | null {
 
 export function getPreferredToolPreset(
   storage: StorageLike | null = getBrowserStorage(),
-): ToolPreset {
-  if (!storage) return "default";
+): AllToolPreset {
+  if (!storage) return CONFIGURED_TOOL_PRESET;
   try {
     const value = storage.getItem(STORAGE_KEY);
-    return isToolPreset(value) ? value : "default";
+    return isAllToolPreset(value) ? value : CONFIGURED_TOOL_PRESET;
   } catch {
-    return "default";
+    return CONFIGURED_TOOL_PRESET;
   }
 }
 
 export function setPreferredToolPreset(
-  preset: ToolPreset,
+  preset: AllToolPreset,
   storage: StorageLike | null = getBrowserStorage(),
 ): void {
   if (!storage) return;

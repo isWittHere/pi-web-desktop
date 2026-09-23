@@ -13,7 +13,7 @@ import type {
 import { normalizeToolCalls } from "@/lib/normalize";
 import { cssPx } from "@/lib/ui-scale";
 import { sendAgentCommand } from "@/lib/agent-client";
-import { getToolNamesForPreset, type ToolEntry, type ToolPreset } from "@/lib/tool-presets";
+import { CONFIGURED_TOOL_PRESET, getAllToolNamesForPreset, type AllToolPreset, type ToolEntry } from "@/lib/tool-presets";
 import { getPreferredToolPreset, setPreferredToolPreset } from "@/lib/tool-preset-preference";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { mergeSessionStats, type SessionFileStats } from "@/lib/session-stats";
@@ -174,7 +174,7 @@ export interface UseAgentSessionOptions {
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
   onSystemPromptChange?: (prompt: string | null) => void;
   onSessionStatsPanelOpen?: () => void;
-  setToolPreset?: (preset: ToolPreset) => void;
+  setToolPreset?: (preset: AllToolPreset) => void;
 }
 
 export type { ThinkingLevelOption } from "@/lib/thinking-levels";
@@ -384,7 +384,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelError, setModelError] = useState<string | null>(null);
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
   const [newSessionDefaultModel, setNewSessionDefaultModel] = useState<SelectedModel | null>(null);
-  const [toolPreset, setToolPreset] = useState<ToolPreset>("default");
+  const [toolPreset, setToolPreset] = useState<AllToolPreset>(CONFIGURED_TOOL_PRESET);
   const [tools, setTools] = useState<ToolEntry[]>([]);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
@@ -724,14 +724,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const selectedModel = newSessionModelOverrideRef.current;
       const selectedThinkingLevel = thinkingLevelOverrideRef.current;
       if (selectedModel) setPendingModel(selectedModel);
-      const toolNames = getToolNamesForPreset(toolPreset);
+      // Undefined means the user never overrode the loadout: omit the field entirely
+      // so pi resolves settings.json defaultTools instead of being pinned to ours (#700).
+      const toolNames = getAllToolNamesForPreset(toolPreset);
       const res = await fetch("/api/agent/new", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cwd: newSessionCwd,
           type: "ensure_session",
-          toolNames,
+          ...(toolNames !== undefined ? { toolNames } : {}),
           ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
           ...(selectedThinkingLevel ? { thinkingLevel: selectedThinkingLevel } : {}),
         }),
@@ -1963,14 +1965,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setToolPresetState(getPreferredToolPreset());
   }, [isNew, setToolPresetState]);
 
-  const handleToolPresetChange = useCallback(async (preset: ToolPreset) => {
-    const toolNames = getToolNamesForPreset(preset);
+  const handleToolPresetChange = useCallback(async (preset: AllToolPreset) => {
+    const toolNames = getAllToolNamesForPreset(preset);
     setToolPresetState(preset);
     setPreferredToolPreset(preset);
     const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_tools", toolNames });
+      // Omitting toolNames retracts the session's pin so it follows the
+      // configured defaults again; the server rebuilds the session to resolve them.
+      await sendAgentCommand(sid, {
+        type: "set_tools",
+        ...(toolNames !== undefined ? { toolNames } : {}),
+      });
       // Refresh the tools panel so it reflects the new active set instead of
       // the list loaded before the switch.
       await loadSystemInfo(sid);
