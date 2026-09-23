@@ -186,6 +186,9 @@ const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
 const EVENT_STREAM_IDLE_GRACE_MS = 30_000;
 const AGENT_STATE_RECONCILE_MS = 15_000;
+// The selected session's SSE lease is renewed from the browser on this cadence
+// so an idle-but-viewed session survives the server's idle eviction.
+const SESSION_LEASE_RENEW_INTERVAL_MS = 30_000;
 // Opening an inactive session may load its resources and extensions before the
 // SSE route can emit `connected`; that handshake (not the transport OPEN) is
 // what readiness waits on. One absolute deadline covers a cold Turbopack route
@@ -835,6 +838,52 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
     };
   }, [maintainEventsConnected, session?.id, sessionRunning]);
+
+  // Keep the selected session warm even while its agent is idle. The SSE lease
+  // is renewed separately below and expires if the browser disappears.
+  useEffect(() => {
+    const sid = session?.id;
+    if (!sid) return;
+    let disposed = false;
+    let renewing = false;
+
+    const renewLease = async () => {
+      if (disposed || renewing) return;
+      renewing = true;
+      try {
+        const response = await fetch(`/api/agent/${encodeURIComponent(sid)}/lease`, {
+          method: "POST",
+          cache: "no-store",
+        });
+        if (!response.ok || disposed) return;
+        const result = await response.json() as { renewed?: number };
+        if (
+          !disposed
+          && result.renewed === 0
+          && sessionIdRef.current === sid
+          && sessionPropIdRef.current === sid
+        ) {
+          closeEvents();
+          maintainEventsConnected(sid);
+        }
+      } catch {
+        // Retry on the next interval; the SSE connection remains the primary path.
+      } finally {
+        renewing = false;
+      }
+    };
+
+    const interval = setInterval(() => void renewLease(), SESSION_LEASE_RENEW_INTERVAL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void renewLease();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      disposed = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [closeEvents, maintainEventsConnected, session?.id]);
 
   const respondToExtensionUi = useCallback(async (
     request: ExtensionUiDialogRequest,

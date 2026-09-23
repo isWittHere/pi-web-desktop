@@ -843,6 +843,9 @@ export class AgentSessionWrapper {
   destroy(): void {
     if (!this._alive) return;
     this._alive = false;
+    // Tell attached SSE listeners to drop this instance so the browser
+    // EventSource errors and reconnects instead of staying OPEN on a dead wrapper.
+    this.emit({ type: "session_shutdown" });
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.inner.isBashRunning) this.inner.abortBash();
     this.unsubscribe?.();
