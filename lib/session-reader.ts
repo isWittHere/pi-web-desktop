@@ -516,6 +516,30 @@ function isTurnBoundaryEntry(entry: SessionEntry): boolean {
 /** Extra entries the window may reach back to find a turn boundary. */
 export const MAX_TURN_ALIGN_ENTRIES = 50;
 
+/**
+ * Entry that renders as a standalone visible message in the chat window:
+ * user / assistant messages plus the compaction divider. toolResult entries,
+ * transcript system messages (prompt and tool loadout) and session meta render
+ * as attachments or nothing, so they must not consume the `tail` budget —
+ * counting raw entries starves user messages out of the window in
+ * agent-heavy sessions (a 50-entry window over a tool-heavy session can hold
+ * a single user message).
+ */
+function countsTowardTail(entry: SessionEntry): boolean {
+  if (entry.type === "compaction") return true;
+  if (entry.type !== "message") return false;
+  const role = (entry as { message?: { role?: string } }).message?.role;
+  return role === "user" || role === "assistant";
+}
+
+/**
+ * Raw-entry ceiling for one page, so a span of tool traffic with few visible
+ * anchors cannot balloon the payload. Scaled with `tail`; older history still
+ * pages in via `before`.
+ */
+const MIN_RAW_WINDOW_ENTRIES = 200;
+const rawWindowCap = (tail: number) => Math.max(MIN_RAW_WINDOW_ENTRIES, tail * 6);
+
 export function sliceActiveBranch(
   entries: SessionEntry[],
   leafId: string | null,
@@ -533,8 +557,17 @@ export function sliceActiveBranch(
   if (!leaf) return [];
   const chain: SessionEntry[] = [];
   let current: SessionEntry | undefined = leaf;
-  while (current && chain.length < tail) {
+  let visible = 0;
+  const rawCap = rawWindowCap(tail);
+  while (current) {
     chain.push(current);
+    if (countsTowardTail(current)) visible += 1;
+    if (visible >= tail || chain.length >= rawCap) {
+      // Leave `current` parked at the last pushed entry for the alignment
+      // walk below, which starts from its parent.
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+      break;
+    }
     current = current.parentId ? byId.get(current.parentId) : undefined;
   }
   // Align the window start back to a turn boundary so the client's turn
