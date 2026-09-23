@@ -28,6 +28,7 @@ import { hasActiveSessionLivenessProvider } from "./session-liveness";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import { rememberThinkingLevel } from "./thinking-level-memory";
 import { modelKey } from "./thinking-levels";
+import { deriveToolNamesFromActive } from "./tool-presets";
 import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
 import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem, SessionEntry, SessionInfo, SessionMessageEntry } from "./types";
@@ -173,6 +174,32 @@ function withExtensionTools(session: AgentSessionLike, toolNames: string[]): str
     .filter((name) => !codingToolNames.has(name));
 
   return [...new Set([...toolNames, ...extensionToolNames])];
+}
+
+/**
+ * Narrow a session's active tools to the pi-web policy: the given builtin
+ * preset tools (shell swapped per the PowerShell setting) PLUS all non-coding
+ * extension/package tools, so installed extensions stay usable in pi-web just
+ * like in the `pi` CLI. Empty lists disable every tool.
+ */
+function applyToolPolicy(session: AgentSessionLike, toolNames: string[]): void {
+  const defaultTools = session.settingsManager.getDefaultTools();
+  session.setActiveToolsByName(withExtensionTools(session, resolveShellTools(toolNames, defaultTools)));
+}
+
+/**
+ * Re-apply the pi-web tool policy to a session whose live active set drifted
+ * from it: derive the builtin preset from the current state (the SDK activates
+ * every extension tool at session construction via includeAllExtensionTools,
+ * which would otherwise leave the Windows host `powershell` tool active even
+ * when the PowerShell setting is off), then narrow via applyToolPolicy.
+ */
+function applyDerivedToolPolicy(session: AgentSessionLike): void {
+  const toolNames = deriveToolNamesFromActive(
+    session.getActiveToolNames(),
+    session.getAllTools().map((t) => t.name),
+  );
+  applyToolPolicy(session, toolNames);
 }
 
 // ============================================================================
@@ -738,11 +765,7 @@ export class AgentSessionWrapper {
         }
         const toolNames = command.toolNames as string[];
         this.setForceEmptySystemPrompt(toolNames.length === 0);
-        const selectedToolNames = resolveShellTools(
-          toolNames,
-          this.inner.settingsManager.getDefaultTools(),
-        );
-        this.inner.setActiveToolsByName(withExtensionTools(this.inner, selectedToolNames));
+        applyToolPolicy(this.inner, toolNames);
         this.applyForcedEmptySystemPrompt();
         return null;
       }
@@ -753,6 +776,13 @@ export class AgentSessionWrapper {
         this.extensionWidgets.clear();
         this.syncProjectTrust();
         await this.inner.reload();
+        // reload() rebuilds the tool registry with includeAllExtensionTools,
+        // re-activating every extension tool (e.g. the Windows host powershell
+        // tool regardless of the PowerShell setting). Re-apply the derived
+        // preset policy for non-subagent sessions.
+        if (!readSubagentSessionResources(this.inner.sessionManager.getEntries() as unknown as SessionEntry[])) {
+          applyDerivedToolPolicy(this.inner);
+        }
         if (typeof this.inner.bindExtensions !== "function") {
           this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
         }
@@ -1601,12 +1631,29 @@ export async function startRpcSession(
       }
     }
 
-    // If specific tool names were requested (non-empty), set the active tools to the
-    // requested builtin coding tools PLUS all extension/package tools, so installed
+    // Apply the pi-web tool policy: the active set is the chosen (or derived)
+    // builtin preset PLUS all non-coding extension/package tools, so installed
     // extensions stay usable in pi-web just like in the `pi` CLI.
-    if (!subagentResources && toolNames && toolNames.length > 0) {
-      const selectedToolNames = resolveShellTools(toolNames, settingsManager.getDefaultTools());
-      inner.setActiveToolsByName(withExtensionTools(inner, selectedToolNames));
+    // The SDK activates every extension tool at session construction
+    // (includeAllExtensionTools); sessions opened without an explicit tool
+    // list would otherwise keep the Windows host `powershell` tool active even
+    // when the PowerShell setting is off, so re-derive the preset from the
+    // live state in that case.
+    let effectiveToolNames: string[] | undefined;
+    if (!subagentResources) {
+      if (toolNames !== undefined) {
+        effectiveToolNames = toolNames;
+      } else {
+        effectiveToolNames = deriveToolNamesFromActive(
+          inner.getActiveToolNames(),
+          inner.getAllTools().map((t) => t.name),
+        );
+      }
+    }
+    // effectiveToolNames stays undefined for subagent sessions (fixed by
+    // their profile), so the guard below only fires for real sessions.
+    if (effectiveToolNames && effectiveToolNames.length > 0) {
+      applyToolPolicy(inner, effectiveToolNames);
     }
 
     const wrapper = new AgentSessionWrapper(inner, sessionCwd);
@@ -1620,7 +1667,7 @@ export async function startRpcSession(
       wrapper.setExactSystemPrompt(exact !== undefined
         ? () => exact
         : () => subagentResources.appendSystemPrompt[0] ?? "");
-    } else if (!subagentResources && toolNames?.length === 0) {
+    } else if (!subagentResources && effectiveToolNames?.length === 0) {
       wrapper.setForceEmptySystemPrompt(true);
     }
     wrapper.start();
@@ -1632,7 +1679,7 @@ export async function startRpcSession(
     wrapper.onDestroy(() => registry.delete(realSessionId));
     registry.set(realSessionId, wrapper);
     if (!subagentChatOnly) {
-      wrapper.beginExtensionBinding({ forceEmptySystemPrompt: !subagentResources && toolNames?.length === 0 });
+      wrapper.beginExtensionBinding({ forceEmptySystemPrompt: !subagentResources && effectiveToolNames?.length === 0 });
     }
 
     return { session: wrapper, realSessionId };
