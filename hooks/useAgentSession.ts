@@ -427,15 +427,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
   const completionScrollAllowedRef = useRef(true);
-  // Set in the compaction handlers right before `loadSession`; transferred to
-  // `justCompactedRef` inside `applySessionData` so the flag is armed exactly
-  // when the rebuilt message list is committed to state (not earlier, when an
-  // intervening state commit such as `setIsCompacting(false)` still shows the
-  // old DOM and would otherwise clear the layout-effect latch prematurely).
-  const compactReloadPendingRef = useRef(false);
   // Consumed by the layout effect below to pin the viewport back to the
   // (now shorter) bottom before paint, instead of letting the browser clamp
-  // it to the top and then animating back down.
+  // it to the top and then animating back down. Armed only inside
+  // `loadSession` when THAT call carries `alignToBottom: true` — auto
+  // compaction races three concurrent loadSession calls (agent_end,
+  // compaction_end, agent_settled), so arming from a shared pre-call flag
+  // would let an unrelated call steal the latch and leave the real compaction
+  // reload unprotected against the browser's scrollTop clamp.
   const justCompactedRef = useRef(false);
   const userScrollIntentUntilRef = useRef(0);
   const ignoreProgrammaticScrollUntilRef = useRef(0);
@@ -517,10 +516,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // Apply a loaded session snapshot (messages, tree, leaf, metadata) to the
   // hook state. Shared by the full load path and the cache fast path.
   const applySessionData = useCallback((d: SessionData) => {
-    if (compactReloadPendingRef.current) {
-      compactReloadPendingRef.current = false;
-      justCompactedRef.current = true;
-    }
     setData(d);
     setActiveLeafId(d.leafId);
     setMessages(d.context.messages);
@@ -561,8 +556,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, []);
 
-  const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
+  const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false, opts?: { alignToBottom?: boolean }) => {
     let messagesLoaded = false;
+    // Compaction reloads shrink the rebuilt context (the new SDK prunes
+    // pre-compaction entries from the parent chain), so the browser clamps
+    // the collapsed scrollTop to 0 — jumping the view to the head of the
+    // session. Arm the latch here, synchronously inside THIS call, so the
+    // concurrent loadSession calls racing a compaction (agent_end,
+    // agent_settled) can never steal it and leave the real reload unprotected.
+    const alignToBottom = opts?.alignToBottom === true;
     try {
       if (showLoading) setLoading(true);
 
@@ -583,6 +585,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           fresh = false;
         }
         if (fresh && sessionIdRef.current === sid) {
+          if (alignToBottom) justCompactedRef.current = true;
           applySessionData(cached.data);
           messagesLoaded = true;
           if (showLoading) setLoading(false);
@@ -610,6 +613,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData;
       if (sessionIdRef.current !== sid) return null;
+      if (alignToBottom) justCompactedRef.current = true;
       applySessionData(d);
 
       messagesLoaded = true;
@@ -1415,8 +1419,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           setCompactResult(null);
         } else if (!event.aborted) {
           setCompactResult(readCompactResult(event.result, (event.reason as string | undefined) ?? "auto"));
-          compactReloadPendingRef.current = true;
-          if (sessionIdRef.current) loadSession(sessionIdRef.current);
+          if (sessionIdRef.current) loadSession(sessionIdRef.current, false, false, { alignToBottom: true });
         }
         break;
       case "extension_ui_request":
@@ -1716,8 +1719,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     try {
       const result = await sendAgentCommand<CompactCommandResult>(sid, { type: "compact" });
       setCompactResult(readCompactResult(result, "manual"));
-      compactReloadPendingRef.current = true;
-      await loadSession(sid, true);
+      await loadSession(sid, true, false, { alignToBottom: true });
     } catch (e) {
       setCompactError(e instanceof Error ? e.message : String(e));
       setCompactResult(null);
@@ -1815,7 +1817,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ...(args ? { customInstructions: args } : {}),
           });
           setCompactResult(readCompactResult(result, "manual"));
-          if (await loadSession(sid, true)) promoteNewSession();
+          if (await loadSession(sid, true, false, { alignToBottom: true })) promoteNewSession();
           return complete({ handled: true, message: "Compacted context" });
         }
 
