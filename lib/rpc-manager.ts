@@ -196,10 +196,7 @@ function applyToolPolicy(session: AgentSessionLike, toolNames: string[]): void {
  * when the PowerShell setting is off), then narrow via applyToolPolicy.
  */
 function applyDerivedToolPolicy(session: AgentSessionLike): void {
-  const toolNames = deriveToolNamesFromActive(
-    session.getActiveToolNames(),
-    session.getAllTools().map((t) => t.name),
-  );
+  const toolNames = deriveToolNamesFromActive(session.getActiveToolNames());
   applyToolPolicy(session, toolNames);
 }
 
@@ -209,7 +206,10 @@ function applyDerivedToolPolicy(session: AgentSessionLike): void {
 // ============================================================================
 
 export class AgentSessionWrapper {
-  private listeners: EventListener[] = [];
+  // A Set, not an array: an SSE stream unsubscribes from inside emit() when it
+  // closes on session_shutdown, and splicing an array mid-iteration made the
+  // next stream miss that same event.
+  private listeners = new Set<EventListener>();
   private pendingUiResponses = new Map<string, PendingUiResponse>();
   private pendingUiRequests = new Map<string, AgentEvent>();
   private activeToolEvents = new Map<string, AgentEvent>();
@@ -459,12 +459,11 @@ export class AgentSessionWrapper {
   }
 
   onEvent(listener: EventListener): () => void {
-    this.listeners.push(listener);
+    this.listeners.add(listener);
     for (const event of this.pendingUiRequests.values()) listener(event);
     for (const event of this.activeToolEvents.values()) listener(event);
     return () => {
-      const i = this.listeners.indexOf(listener);
-      if (i !== -1) this.listeners.splice(i, 1);
+      this.listeners.delete(listener);
     };
   }
 
@@ -1645,10 +1644,7 @@ export async function startRpcSession(
       if (toolNames !== undefined) {
         effectiveToolNames = toolNames;
       } else {
-        effectiveToolNames = deriveToolNamesFromActive(
-          inner.getActiveToolNames(),
-          inner.getAllTools().map((t) => t.name),
-        );
+        effectiveToolNames = deriveToolNamesFromActive(inner.getActiveToolNames());
       }
     }
     // effectiveToolNames stays undefined for subagent sessions (fixed by
