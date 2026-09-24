@@ -4,7 +4,6 @@ import { isValidBasicAuthorization, isWebPasswordEnabled } from "@/lib/web-auth"
 import {
   getAuthRetryAfterMs,
   recordAuthFailure,
-  recordAuthSuccess,
   retryAfterSeconds,
 } from "@/lib/auth-throttle";
 
@@ -39,7 +38,9 @@ export function proxy(request: NextRequest) {
         });
       }
       if (isValidBasicAuthorization(authorization, password)) {
-        recordAuthSuccess();
+        // A success does not reset the counter: Basic clients authenticate on
+        // every request, and each reset would hand an interleaved guesser a
+        // fresh short block. The idle window still clears it naturally.
         return NextResponse.next();
       }
       const delayMs = recordAuthFailure();

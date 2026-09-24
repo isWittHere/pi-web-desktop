@@ -89,6 +89,12 @@ export function recordAuthFailure(
   return delay;
 }
 
+/**
+ * Resets the counter immediately. Kept for future cookie-session logins: a
+ * Basic success must NOT call this — Basic clients authenticate on every
+ * request, so each reset would restart an interleaved guesser at the base
+ * delay. The idle window clears the counter naturally instead.
+ */
 export function recordAuthSuccess(state: AuthThrottleState = getGlobalState()): void {
   Object.assign(state, freshState());
 }
