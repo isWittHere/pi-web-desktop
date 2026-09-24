@@ -1821,6 +1821,9 @@ export function ModelsConfig({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveWarnings, setSaveWarnings] = useState<string[] | null>(null);
+  // Set when models.json could not be read. Saving stays disabled: the draft
+  // would not contain the file's providers, and a save replaces the whole file.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
@@ -1854,14 +1857,18 @@ export function ModelsConfig({
 
   useEffect(() => {
     fetch("/api/models-config")
-      .then((r) => r.json())
+      .then(async (r) => {
+        const d = await r.json() as ModelsJson & { error?: string };
+        if (!r.ok || d.error) throw new Error(d.error ?? `HTTP ${r.status}`);
+        return d;
+      })
       .then((d: ModelsJson) => {
         const normalized = d.providers ? d : { ...d, providers: {} };
         setConfig(normalized);
         const keys = Object.keys(normalized.providers ?? {});
         if (keys.length > 0) setSelection({ type: "provider", name: keys[0] });
       })
-      .catch(() => setConfig({ providers: {} }))
+      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
     refreshAuthenticationProviders();
     // 加载已保存状态的权威推理强度 profile，供请求预览列展示。
@@ -1963,6 +1970,7 @@ export function ModelsConfig({
   }, []);
 
   const handleSave = useCallback(async () => {
+    if (loadError) return;
     setSaving(true);
     setSaveError(null);
     setSaveWarnings(null);
@@ -1997,7 +2005,7 @@ export function ModelsConfig({
     } finally {
       setSaving(false);
     }
-  }, [config, onSavedAction, cwd]);
+  }, [config, onSavedAction, cwd, loadError]);
 
   const toggleProviderCollapse = useCallback((name: string) => {
     setCollapsedProviders((prev) => {
@@ -2252,7 +2260,8 @@ export function ModelsConfig({
               </span>
             )}
             {saveError && <span style={{ fontSize: 12, color: "var(--status-danger)", flex: 1 }}>{saveError}</span>}
-            <button onClick={handleSave} disabled={saving || savedOk} style={{
+            {loadError && <span style={{ fontSize: 12, color: "var(--status-danger)", flex: 1 }}>{t("desktop.modelsConfigUnreadable", { error: loadError })}</span>}
+            <button onClick={handleSave} disabled={saving || savedOk || loadError !== null} style={{
               position: "relative",
               padding: "6px 16px",
               minWidth: 92,

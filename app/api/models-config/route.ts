@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
-import { ModelsConfigWriteError, readModelsConfig, writeModelsConfig } from "@/lib/models-config-store";
+import { ModelsConfigReadError, ModelsConfigWriteError, readModelsConfig, writeModelsConfig } from "@/lib/models-config-store";
 import { findBuiltinModelConflicts } from "@/lib/builtin-models";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(readModelsConfig());
+  try {
+    return NextResponse.json(readModelsConfig());
+  } catch (error) {
+    if (error instanceof ModelsConfigReadError) {
+      return NextResponse.json({ error: error.message }, { status: 422 });
+    }
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
 }
 
 export async function PUT(req: Request) {
@@ -21,6 +28,10 @@ export async function PUT(req: Request) {
       ...(conflicts.length > 0 ? { warnings: conflicts } : {}),
     });
   } catch (error) {
+    if (error instanceof ModelsConfigReadError) {
+      // The file cannot be used, so it must not be replaced by this draft.
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     if (error instanceof ModelsConfigWriteError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
