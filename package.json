@@ -59,7 +59,7 @@
     "katex": "^0.16.47",
     "mammoth": "^1.12.0",
     "mermaid": "^11.16.1",
-    "next": "16.3.1",
+    "next": "16.3.6",
     "proper-lockfile": "4.1.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -71,8 +71,8 @@
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
-    "semver": "^7.8.0",
-    "undici": "8.10.0",
+    "semver": "7.8.5",
+    "undici": "8.11.0",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
@@ -87,7 +87,7 @@
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
-    "eslint-config-next": "16.3.1",
+    "eslint-config-next": "16.3.6",
     "jiti": "^2.7.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.2.2",
