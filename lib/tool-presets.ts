@@ -8,12 +8,8 @@ export interface ToolEntry {
   promptGuidelines?: string[];
 }
 
-export const TOOL_PRESET_VALUES = ["none", "read-only", "default", "full"] as const;
-export type ToolPreset = typeof TOOL_PRESET_VALUES[number];
-
 /** Presets that pin an explicit tool list onto the session. */
-export const CONCRETE_TOOL_PRESET_VALUES = ["none", "read-only", "default", "full"] as const;
-export type ConcreteToolPreset = typeof CONCRETE_TOOL_PRESET_VALUES[number];
+export type ConcreteToolPreset = "none" | "read-only" | "default" | "full";
 
 /**
  * "configured" is not a tool list: it means "send no override", so pi resolves the
@@ -24,6 +20,10 @@ export const CONFIGURED_TOOL_PRESET = "configured";
 export const ALL_TOOL_PRESET_VALUES = ["configured", "none", "read-only", "default", "full"] as const;
 export type AllToolPreset = typeof ALL_TOOL_PRESET_VALUES[number];
 
+export function isAllToolPreset(value: unknown): value is AllToolPreset {
+  return typeof value === "string" && (ALL_TOOL_PRESET_VALUES as readonly string[]).includes(value);
+}
+
 export const PRESET_NONE: string[] = [];
 export const PRESET_READ_ONLY: string[] = ["read", "grep", "find", "ls"];
 export const PRESET_DEFAULT: string[] = ["read", "bash", "edit", "write"];
@@ -31,25 +31,24 @@ export const PRESET_FULL: string[] = ["bash", "read", "edit", "write", "grep", "
 
 const BUILTIN_TOOL_NAMES = new Set([...PRESET_FULL, "powershell"]);
 
-export function isToolPreset(value: unknown): value is ToolPreset {
-  return typeof value === "string" && (TOOL_PRESET_VALUES as readonly string[]).includes(value);
-}
+/**
+ * A preset inferred from a live active-tool set. "custom" means the builtin
+ * active set matches no preset combination (e.g. a user-tailored settings.json
+ * defaultTools) — it is an honest result, never a fallback masquerade.
+ */
+export type InferredToolPreset = ConcreteToolPreset | "custom";
 
-export function isAllToolPreset(value: unknown): value is AllToolPreset {
-  return typeof value === "string" && (ALL_TOOL_PRESET_VALUES as readonly string[]).includes(value);
-}
-
-export function isConcreteToolPreset(value: unknown): value is ConcreteToolPreset {
-  return typeof value === "string" && (CONCRETE_TOOL_PRESET_VALUES as readonly string[]).includes(value);
-}
-
-export function getPresetFromTools(tools: ToolEntry[]): ConcreteToolPreset {
-  const activeTools = tools.filter((t) => t.active);
-  if (activeTools.length === 0) return "none";
-
+/**
+ * Infer the preset from a live active-tool set. Returns "custom" when the
+ * builtin active set matches no preset combination instead of silently
+ * masquerading as "default". Extension tools and the powershell↔bash shell
+ * mapping are ignored.
+ */
+export function deriveToolPresetFromActive(
+  activeNames: readonly string[],
+): InferredToolPreset {
   const active = [...new Set(
-    activeTools
-      .map((t) => t.name)
+    activeNames
       .map((name) => name === "powershell" ? "bash" : name)
       .filter((name) => BUILTIN_TOOL_NAMES.has(name)),
   )].sort().join(",");
@@ -58,10 +57,10 @@ export function getPresetFromTools(tools: ToolEntry[]): ConcreteToolPreset {
   if (active === [...PRESET_READ_ONLY].sort().join(",")) return "read-only";
   if (active === [...PRESET_DEFAULT].sort().join(",")) return "default";
   if (active === [...PRESET_FULL].sort().join(",")) return "full";
-  return "default";
+  return "custom";
 }
 
-export function getToolNamesForPreset(preset: ToolPreset): string[] {
+export function getToolNamesForPreset(preset: ConcreteToolPreset): string[] {
   if (preset === "none") return [...PRESET_NONE];
   if (preset === "read-only") return [...PRESET_READ_ONLY];
   if (preset === "full") return [...PRESET_FULL];
@@ -79,16 +78,13 @@ export function getAllToolNamesForPreset(preset: AllToolPreset): string[] | unde
  * its coding tool names. The SDK activates every extension tool at session
  * construction (`includeAllExtensionTools`), so a session's active set may
  * carry extra host tools (e.g. Windows `powershell`) on top of the real
- * preset; `getPresetFromTools` maps powershell → bash and only counts builtin
- * names, which neutralizes that bloat. Non-coding extension tools are ignored
- * here — callers re-append them separately. Returns [] for "none".
+ * preset; `deriveToolPresetFromActive` maps powershell → bash and only counts
+ * builtin names, which neutralizes that bloat. Non-coding extension tools are
+ * ignored here — callers re-append them separately. Returns [] for "none".
  */
 export function deriveToolNamesFromActive(
   activeNames: readonly string[],
-  allToolNames: readonly string[],
 ): string[] {
-  const active = new Set(activeNames);
-  return getToolNamesForPreset(getPresetFromTools(
-    allToolNames.map((name) => ({ name, description: "", active: active.has(name) })),
-  ));
+  const inferred = deriveToolPresetFromActive(activeNames);
+  return getToolNamesForPreset(inferred === "custom" ? "default" : inferred);
 }

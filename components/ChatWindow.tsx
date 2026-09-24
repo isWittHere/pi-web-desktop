@@ -207,7 +207,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
 
   const {
     loading, error, messages, entryIds, historyCursor, hasEarlierMessages, streamState, activeToolResults,
-    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, modelError, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, modelError, toolPreset, inferredPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -680,6 +680,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       onModelChange={handleModelChange}
       compactResult={compactResult}
       toolPreset={toolPreset}
+      inferredPreset={inferredPreset}
       onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
       tools={tools}
       toolsLoading={toolsLoading}

@@ -13,7 +13,7 @@ import type {
 import { normalizeToolCalls } from "@/lib/normalize";
 import { cssPx } from "@/lib/ui-scale";
 import { sendAgentCommand } from "@/lib/agent-client";
-import { CONFIGURED_TOOL_PRESET, getAllToolNamesForPreset, type AllToolPreset, type ToolEntry } from "@/lib/tool-presets";
+import { getAllToolNamesForPreset, deriveToolPresetFromActive, type AllToolPreset, type ConcreteToolPreset, type InferredToolPreset, type ToolEntry } from "@/lib/tool-presets";
 import { getPreferredToolPreset, setPreferredToolPreset } from "@/lib/tool-preset-preference";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { mergeSessionStats, type SessionFileStats } from "@/lib/session-stats";
@@ -174,7 +174,6 @@ export interface UseAgentSessionOptions {
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
   onSystemPromptChange?: (prompt: string | null) => void;
   onSessionStatsPanelOpen?: () => void;
-  setToolPreset?: (preset: AllToolPreset) => void;
 }
 
 export type { ThinkingLevelOption } from "@/lib/thinking-levels";
@@ -384,7 +383,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelError, setModelError] = useState<string | null>(null);
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
   const [newSessionDefaultModel, setNewSessionDefaultModel] = useState<SelectedModel | null>(null);
-  const [toolPreset, setToolPreset] = useState<AllToolPreset>(CONFIGURED_TOOL_PRESET);
+  // The single authoritative tool-preset state: the user's explicit pin.
+  // null = "configured" (no pin; pi resolves settings.json defaultTools).
+  // Written ONLY by explicit user actions — no load/refresh ever touches it.
+  const [toolPreset, setToolPreset] = useState<ConcreteToolPreset | null>(null);
   const [tools, setTools] = useState<ToolEntry[]>([]);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
@@ -484,7 +486,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     });
   }
 
-  const setToolPresetState = opts.setToolPreset ?? setToolPreset;
+  // The inferred preset is a pure derivation of `tools` (useMemo, not state):
+  // it can never drift from the live tool set, which is what kept the old
+  // single-state design from being able to represent "configured" honestly.
+  const inferredPreset = useMemo<InferredToolPreset>(
+    () => deriveToolPresetFromActive(tools.filter((t) => t.active).map((t) => t.name)),
+    [tools],
+  );
 
   const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
   const displayModel = isNew ? (newSessionModel ?? newSessionDefaultModel) : currentModel;
@@ -668,14 +676,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     try {
       const tools = await sendAgentCommand<ToolEntry[]>(sid, { type: "get_tools" });
       if (tools) {
-        const { getPresetFromTools } = await import("@/lib/tool-presets");
+        // Feed only the `tools` state; the inferred preset derives from it via
+        // useMemo. The user's explicit pin is never overwritten here — that
+        // root write used to make "configured" a transient value (#700).
         setTools(tools);
-        setToolPresetState(getPresetFromTools(tools));
       }
     } catch (e) {
       console.error("Failed to load tools:", e);
     }
-  }, [setToolPresetState]);
+  }, []);
 
   // Loading the latest system info on demand: refresh the full tool list (for
   // the tools panel) and re-fetch the in-process agent state so the system
@@ -726,7 +735,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (selectedModel) setPendingModel(selectedModel);
       // Undefined means the user never overrode the loadout: omit the field entirely
       // so pi resolves settings.json defaultTools instead of being pinned to ours (#700).
-      const toolNames = getAllToolNamesForPreset(toolPreset);
+      const toolNames = toolPreset === null ? undefined : getAllToolNamesForPreset(toolPreset);
       const res = await fetch("/api/agent/new", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1962,16 +1971,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [addNotice, t]);
 
-  // New-session composers start from the preset the user last picked; existing
-  // sessions never trust that preference and use their live get_tools state.
+  // New-session composers start from the preset the user last picked; only an
+  // explicit concrete choice is trusted — an unset (or stale non-preset) value
+  // leaves the pin at null so pi resolves settings.json defaultTools.
   useLayoutEffect(() => {
     if (!isNew || sessionIdRef.current) return;
-    setToolPresetState(getPreferredToolPreset());
-  }, [isNew, setToolPresetState]);
+    const preferred = getPreferredToolPreset();
+    if (preferred !== "configured") setToolPreset(preferred);
+  }, [isNew]);
 
   const handleToolPresetChange = useCallback(async (preset: AllToolPreset) => {
     const toolNames = getAllToolNamesForPreset(preset);
-    setToolPresetState(preset);
+    // The pin is sticky: the UI keeps showing the user's choice; the follow-up
+    // loadSystemInfo only refreshes the derived inferred preset.
+    setToolPreset(preset === "configured" ? null : preset);
     setPreferredToolPreset(preset);
     const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
     if (!sid) return;
@@ -1992,7 +2005,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         message: e instanceof Error ? e.message : `Failed to set tool preset: ${String(e)}`,
       });
     }
-  }, [setToolPresetState, addNotice, loadSystemInfo]);
+  }, [addNotice, loadSystemInfo]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
@@ -2057,6 +2070,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sessionHookMountedRef.current = true;
     if (session) {
       sessionIdRef.current = session.id;
+      // Feed the inferred preset regardless of running state: an idle session
+      // still needs a truthful label instead of reading as "configured" when
+      // it is actually pinned.
+      void loadTools(session.id);
       loadSession(session.id, true, true).then((agentState) => {
         if (agentState?.running) {
           if (agentState.state?.isBashRunning) {
@@ -2223,7 +2240,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     loading, error, activeLeafId, messages, entryIds, historyCursor, hasEarlierMessages, streamState, activeToolResults,
-    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, modelError, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, modelError, toolPreset, inferredPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,

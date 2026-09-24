@@ -40,7 +40,7 @@ test("keeps the session event stream open through the idle grace window", () => 
 test("delegates event stream readiness and reconnection to AgentEventConnection", () => {
   const connectionSource = source.slice(
     source.indexOf("if (!eventConnectionRef.current) {"),
-    source.indexOf("const setToolPresetState"),
+    source.indexOf("const inferredPreset"),
   );
   const ensureSource = source.slice(
     source.indexOf("const ensureEventsConnected"),

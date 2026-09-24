@@ -5,7 +5,7 @@ import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, Slas
 import type { SkillsResponse } from "@/lib/api-types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
 import { continueMarkdownList } from "@/lib/markdown-list";
-import type { AllToolPreset } from "@/lib/tool-presets";
+import type { AllToolPreset, ConcreteToolPreset, InferredToolPreset } from "@/lib/tool-presets";
 import type { ToolEntry } from "@/lib/tool-presets";
 import { isBase64ImageWithinLimits } from "@/lib/image-attachments";
 import {
@@ -111,7 +111,10 @@ interface Props {
   modelError?: string | null;
   onModelChange?: (provider: string, modelId: string) => void;
   compactResult?: CompactResultInfo | null;
-  toolPreset?: AllToolPreset;
+  /** The user's explicit tool pin; null/undefined = "configured" (no pin). */
+  toolPreset?: ConcreteToolPreset | null;
+  /** Preset inferred from the live tool set ("custom" when it matches no preset). */
+  inferredPreset?: InferredToolPreset | null;
   onToolPresetChange?: (preset: AllToolPreset) => void;
   /** Full tool definitions (with parameter schemas) for the active session. */
   tools?: ToolEntry[];
@@ -515,7 +518,7 @@ function NextTurnBanner() {
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, isCompacting, onAbortCompaction, stepLabel, model, isAutoModelSelection, modelNames, modelList, imageInputByModel, modelScopeWarnings, modelError, onModelChange,
-  compactResult, toolPreset, onToolPresetChange,
+  compactResult, toolPreset, inferredPreset, onToolPresetChange,
   tools, toolsLoading = false, onLoadTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
@@ -1969,8 +1972,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (lvl === "auto" || !thinkingLevelMap) return lvl;
     return thinkingLevelMap[lvl] ?? lvl;
   })();
+  // Display rule (pure): the explicit pin wins and is sticky — "configured"
+  // (null/undefined) always reads as "configured" no matter what any refresh
+  // reports. The inferred preset only surfaces inside the dropdown as a
+  // reference hint under the "configured" entry.
   const toolPresetKey = Object.entries(TOOL_PRESET_MAP).find(([, value]) => value === (toolPreset ?? "configured"))?.[0] as typeof TOOL_PRESETS[number] | undefined;
   const toolPresetLabel = toolPresetLabels[toolPresetKey ?? "configured"];
+  const inferredPresetLabel = (() => {
+    if (!inferredPreset || inferredPreset === "custom") return inferredPreset ? t("desktop.toolCustom") : null;
+    const key = Object.entries(TOOL_PRESET_MAP).find(([, value]) => value === inferredPreset)?.[0] as typeof TOOL_PRESETS[number] | undefined;
+    return key ? toolPresetLabels[key] : null;
+  })();
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -3468,7 +3480,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}>
             {(onToolPresetChange || onLoadTools) && (
               <div
-                className={(toolPreset ?? "configured") === "none" ? "chat-input-toolbar-tools-group tools-group-preset-off" : "chat-input-toolbar-tools-group"}
+                className={(toolPreset ?? "configured") === "none" || inferredPreset === "none" ? "chat-input-toolbar-tools-group tools-group-preset-off" : "chat-input-toolbar-tools-group"}
                 style={{
                   position: "relative",
                   display: "flex",
@@ -3612,6 +3624,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             >
                               <span style={{ flex: 1 }}>{toolPresetLabels[lvl]}</span>
                               <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
+                              {lvl === "configured" && inferredPresetLabel && (
+                                <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0 }}>
+                                  → {inferredPresetLabel}
+                                </span>
+                              )}
                               {isActive && <CheckIcon size={12} weight="bold" color="var(--accent)" style={{ flexShrink: 0 }} />}
                             </button>
                           );
