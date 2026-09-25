@@ -8,7 +8,7 @@ import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
 import { getDraft } from "@/lib/draft-store";
 import { clearWelcomeState, getLastWorkspace, getWelcomeState, workspaceKeyOf } from "@/lib/workspace-memory";
-import { getSessionList } from "@/lib/session-list";
+import { getSessionList, invalidateSessionList } from "@/lib/session-list";
 import { getSessionDisplayFirstMessage } from "@/lib/skill-block";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { getTitleModel } from "@/lib/title-settings";
@@ -410,6 +410,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // Once a lightweight running snapshot arrives it owns the dynamic state;
   // late /api/sessions responses cannot revive an older embedded snapshot.
   const runningSnapshotAuthoritativeRef = useRef(false);
+  // Latest session list, kept so the refresh indicator only lights when a
+  // reload actually replaced the rows (a cache hit passes the same array).
+  const previousSessionsRef = useRef<SessionInfo[] | null>(null);
   const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
@@ -451,7 +454,14 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         return next.size === prev.size ? prev : next;
       });
       setError(null);
-      if (!showLoading) {
+      // The refresh indicator means "the visible list changed" — light it only
+      // when the reload actually replaced the rows (or was an explicit
+      // refresh). A cache hit or an unchanged list (e.g. the polling loop's
+      // periodic reload) must not re-trigger it, or the button reads as
+      // constantly refreshing.
+      const listChanged = data.sessions !== previousSessionsRef.current;
+      previousSessionsRef.current = data.sessions;
+      if (!showLoading && (listChanged || force)) {
         setSessionRefreshDone(true);
         if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
         sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
@@ -521,9 +531,13 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         runningSnapshotAuthoritativeRef.current = true;
         setRunningSessionIds(new Set(data.runningSessionIds ?? []));
         // Cross-window sync: another window created/renamed/deleted a session
-        // since our last list fetch. Reuse the (now-invalidated) cache rather
-        // than forcing a scan, which would bump the version again.
+        // since our last list fetch. Drop the client-side list cache so the
+        // reload re-fetches: the cache never expires on its own, so a cached
+        // call would return the stale version forever and this comparison
+        // would re-trigger every tick (the refresh indicator never settles).
+        // The server-side scan stays cached — this is not a force refresh.
         if (typeof data.sessionListVersion === "number" && data.sessionListVersion !== sessionListVersionRef.current) {
+          invalidateSessionList();
           void loadSessions();
         }
       } catch (error) {
