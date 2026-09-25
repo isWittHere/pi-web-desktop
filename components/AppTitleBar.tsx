@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { useElectronWindow } from "@/hooks/useElectronWindow";
 import { useI18n } from "@/hooks/useI18n";
+import { SystemPromptTree } from "./SystemPromptTree";
 import { WorkspacePickerMenu } from "./WorkspacePickerMenu";
 import { TitleBarDismissOverlay } from "./TitleBarDismissOverlay";
 import { PiLogo } from "./PiLogo";
@@ -153,6 +154,27 @@ export function AppTitleBar({
 }: AppTitleBarProps) {
   const { isElectron, isMac, isMaximized, minimize, toggleMaximize, close } = useElectronWindow();
   const { t: translate } = useI18n();
+
+  // Token estimate for the system prompt tree (same CJK-aware heuristic as
+  // SessionInfoBar so both panels show the same number).
+  const systemPromptTokenEstimate = useMemo(() => {
+    if (!systemPrompt) return 0;
+    let tokens = 0;
+    for (const ch of systemPrompt) {
+      const code = ch.codePointAt(0) ?? 0;
+      if ((code >= 0x4E00 && code <= 0x9FFF) ||
+          (code >= 0x3400 && code <= 0x4DBF) ||
+          (code >= 0x20000 && code <= 0x2A6DF) ||
+          (code >= 0x3040 && code <= 0x309F) ||
+          (code >= 0x30A0 && code <= 0x30FF) ||
+          (code >= 0xAC00 && code <= 0xD7AF)) {
+        tokens += 1;
+      } else {
+        tokens += 0.25;
+      }
+    }
+    return Math.max(1, Math.round(tokens));
+  }, [systemPrompt]);
   // Sidebar toggle title: while no workspace exists the toggle stays visible
   // but disabled, with a hint pointing at the workspace picker.
   const sidebarToggleTitle = sidebarToggleDisabled
@@ -503,10 +525,11 @@ export function AppTitleBar({
                   color: "var(--text-muted)",
                   fontSize: 12,
                   lineHeight: 1.6,
-                  whiteSpace: "pre-wrap",
-                  fontFamily: "var(--font-mono)",
                 }}>
-                  {systemPrompt}
+                  <SystemPromptTree
+                    systemPrompt={systemPrompt}
+                    tokenEstimate={systemPromptTokenEstimate}
+                  />
                 </div>
               ) : systemPrompt === "" ? (
                 <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>

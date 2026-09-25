@@ -20,9 +20,8 @@ import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { SessionTreeNode } from "@/lib/types";
 import { copyText } from "@/lib/clipboard";
 import { useCallback, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { BranchNavigator } from "./BranchNavigator";
+import { SystemPromptTree } from "./SystemPromptTree";
 
 export interface SessionInfoBarProps {
   onViewFullHistory?: () => void;
@@ -334,9 +333,10 @@ export function SessionInfoBar({
                 </div>
                 <div className="session-info-bar-system-body">
                   {systemPrompt ? (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {systemPrompt}
-                    </ReactMarkdown>
+                    <SystemPromptTree
+                      systemPrompt={systemPrompt}
+                      tokenEstimate={systemPromptTokenEstimate}
+                    />
                   ) : (
                     <span className="session-info-bar-popover-empty">
                       System prompt is empty (tools are disabled)
