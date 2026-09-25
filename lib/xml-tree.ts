@@ -28,15 +28,11 @@ export interface XmlTreeElement {
 
 export type XmlNode = XmlTreeElement | XmlTextNode;
 
-export interface PromptTree {
-  root: XmlTreeElement;
-}
-
 const OPEN_TAG_RE = /^<([A-Za-z_][\w.:-]*)((?:"[^"]*"|'[^']*'|[^"'>/])*)(\/?)>/;
 const CLOSE_TAG_RE = /^<\/\s*([A-Za-z_][\w.:-]*)\s*>/;
 const FENCE_OPEN_RE = /^( {0,3})(`{3,}|~{3,})/;
 
-export function parsePromptTree(src: string): PromptTree {
+export function parsePromptTree(src: string): XmlTreeElement {
   const root: XmlTreeElement = { kind: "xml", tag: "#root", children: [], raw: "", selfClosing: false };
   const stack: XmlTreeElement[] = [root];
   let textStart = 0;
@@ -136,7 +132,7 @@ export function parsePromptTree(src: string): PromptTree {
   }
   pushText(n);
   // Unclosed stack nodes stay in place (tolerant)
-  return { root };
+  return root;
 }
 
 /**

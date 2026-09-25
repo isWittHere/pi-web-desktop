@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -30,17 +30,24 @@ export function SystemPromptTree({ systemPrompt, tokenEstimate }: SystemPromptTr
   // Expansion state: open nodes keyed by a stable path from the root.
   const [openNodes, setOpenNodes] = useState<Set<string>>(() => {
     const initial = new Set<string>();
-    for (let i = 0; i < tree.root.children.length; i++) {
+    for (let i = 0; i < tree.children.length; i++) {
       initial.add(nodeKey(i));
     }
     return initial;
   });
 
-  const toggle = useCallbackFactory(setOpenNodes);
+  const toggle = useCallback((path: string) => {
+    setOpenNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
 
   return (
     <div className="sp-tree">
-      {tree.root.children.map((child, i) => (
+      {tree.children.map((child, i) => (
         <ChipNode
           key={nodeKey(i)}
           node={child}
@@ -57,17 +64,6 @@ export function SystemPromptTree({ systemPrompt, tokenEstimate }: SystemPromptTr
 
 function nodeKey(i: number): string {
   return `c${i}`;
-}
-
-function useCallbackFactory(setOpenNodes: (fn: (prev: Set<string>) => Set<string>) => void) {
-  return (path: string) => {
-    setOpenNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  };
 }
 
 interface ChipNodeProps {
@@ -111,7 +107,7 @@ function ChipNode({ node, path, depth, tokenEstimate, openNodes, onToggle }: Chi
   };
 
   return (
-    <div className={`sp-node sp-depth-${Math.min(depth, 4)}${isLeaf ? " leaf" : ""}${isOpen ? " open" : ""}`}>
+    <div className={`sp-node sp-depth-${Math.min(depth, 4)}${isLeaf ? " leaf" : ""}`}>
       <div
         className="sp-chip-row"
         onClick={handleToggle}
