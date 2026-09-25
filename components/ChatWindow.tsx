@@ -22,10 +22,7 @@ import { ImagesIcon } from "@phosphor-icons/react/Images";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import {
   captureScrollDistance,
-  getVisibleRenderWindow,
-  getNextVisibleCount,
   restoreScrollTop,
-  VISIBLE_PAGE_SIZE,
 } from "@/lib/chat-lazy-load";
 
 interface Props {
@@ -362,9 +359,10 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
   }, [messages.length, scrollContainerRef, updateChatFades]);
 
   // --- Lazy-load historical messages ---
-  // Only render the last N messages initially. When the user scrolls to the
-  // top, load another page while keeping the scroll position stable.
-  const [visibleCount, setVisibleCount] = useState(VISIBLE_PAGE_SIZE);
+  // History is paged server-side: the initial load returns the most recent
+  // page (turn-boundary aligned) and scrolling to the top fetches the previous
+  // page through the `before` cursor, which is prepended with the scroll
+  // position kept stable. There is no client-side render window on top of it.
   const sentinelRef = useRef<HTMLDivElement>(null);
   const prevScrollDistanceRef = useRef<number | null>(null);
   // scrollHeight captured alongside the anchor: prepends land across two
@@ -372,10 +370,9 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
   // must only fire once the new content is actually in the DOM.
   const prevScrollHeightRef = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
-  const serverPrependRef = useRef(false);
 
   // IntersectionObserver on the sentinel div at the top of the message list.
-  // When it becomes visible, load the next page of older messages.
+  // When it becomes visible, fetch the previous server page and prepend it.
   useEffect(() => {
     const sentinel = sentinelRef.current;
     const container = scrollContainerRef.current;
@@ -384,51 +381,32 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
         if (loadingOlderRef.current) return;
-        if (hasEarlierMessages) {
-          // Server-side paging (dormant while routes default to the full
-          // chain): fetch the previous page and prepend it. loadContext
-          // captures the scroll anchor right before the prepend lands —
-          // capturing before the network round trip would go stale by
-          // however far the user scrolls while the request is in flight.
-          const oldestId = historyCursor;
-          if (!oldestId) return;
-          const sid = session?.id ?? sessionIdRef.current;
-          if (!sid) return;
-          loadingOlderRef.current = true;
-          serverPrependRef.current = true;
-          void loadContext(sid, branchActiveLeafId, oldestId, {
-            captureAnchor: () => {
-              const anchorContainer = scrollContainerRef.current;
-              if (!anchorContainer) return;
-              prevScrollDistanceRef.current = captureScrollDistance(anchorContainer.scrollHeight, anchorContainer.scrollTop);
-              prevScrollHeightRef.current = anchorContainer.scrollHeight;
-            },
-          }).finally(() => {
-            loadingOlderRef.current = false;
-          });
-          return;
-        }
-        // Legacy client-side render-window paging: older entries are already
-        // in memory, so reveal the next page in the same frame.
-        prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
-        prevScrollHeightRef.current = container.scrollHeight;
-        setVisibleCount((prev) => getNextVisibleCount(prev));
+        if (!hasEarlierMessages) return;
+        // Fetch the previous page and prepend it. loadContext captures the
+        // scroll anchor right before the prepend lands — capturing before
+        // the network round trip would go stale by however far the user
+        // scrolls while the request is in flight.
+        const oldestId = historyCursor;
+        if (!oldestId) return;
+        const sid = session?.id ?? sessionIdRef.current;
+        if (!sid) return;
+        loadingOlderRef.current = true;
+        void loadContext(sid, branchActiveLeafId, oldestId, {
+          captureAnchor: () => {
+            const anchorContainer = scrollContainerRef.current;
+            if (!anchorContainer) return;
+            prevScrollDistanceRef.current = captureScrollDistance(anchorContainer.scrollHeight, anchorContainer.scrollTop);
+            prevScrollHeightRef.current = anchorContainer.scrollHeight;
+          },
+        }).finally(() => {
+          loadingOlderRef.current = false;
+        });
       },
       { root: container, threshold: 0 }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [historyCursor, hasEarlierMessages, session, branchActiveLeafId, loadContext, sessionIdRef, scrollContainerRef]);
-
-  // Grow the rendered window to cover server-prepended pages (dormant while
-  // routes default to the full chain). Client-side paging grows the window
-  // incrementally in the observer instead — growing it here to the full
-  // history would defeat that lazy render entirely.
-  useEffect(() => {
-    if (!serverPrependRef.current) return;
-    serverPrependRef.current = false;
-    setVisibleCount((current) => Math.max(current, messages.length));
-  }, [messages.length]);
 
   // ── Full-text search jump ───────────────────────────────────────────────
   // When a search hit opens (or targets) this session, make sure the entry is
@@ -468,7 +446,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
         // Cancel any pending scroll restore — the jump takes over the viewport.
         prevScrollDistanceRef.current = null;
         prevScrollHeightRef.current = null;
-        setVisibleCount((current) => Math.max(current, (searchHistoryRef.current.entryIds.length + 200) * 2));
         setPendingSearchScroll(searchTarget);
       } else {
         onSearchTargetHandledRef.current?.(searchTarget);
@@ -505,7 +482,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
 
   // After the prepended page commits, restore the scroll position so the
   // viewport doesn't jump. Runs as a layout effect (before paint) and only
-  // consumes the anchor once the grown window is actually in the DOM.
+  // consumes the anchor once the prepended content is actually in the DOM.
   useLayoutEffect(() => {
     const anchor = prevScrollDistanceRef.current;
     if (anchor == null) return;
@@ -516,7 +493,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     updateChatFades();
     prevScrollDistanceRef.current = null;
     prevScrollHeightRef.current = null;
-  }, [visibleCount, scrollContainerRef, updateChatFades]);
+  }, [scrollContainerRef, updateChatFades]);
 
   // A pending anchor must never leak across sessions: the first prepend in a
   // newly opened session would otherwise restore against a stale snapshot.
@@ -1230,16 +1207,17 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
                 }
                 idx = endIdx;
               }
-              const { startIndex } = getVisibleRenderWindow(rendered.length, visibleCount);
-              const hasMore = startIndex > 0 || hasEarlierMessages;
+              // History is paged server-side: render everything the current
+              // pages contain. The sentinel only appears when older server
+              // pages exist; there is no client-side render window.
               return (
                 <>
-                  {hasMore && (
+                  {hasEarlierMessages && (
                     <div ref={sentinelRef} className="py-3 text-center text-xs text-text-muted">
-                      {t("desktop.scrollToLoadEarlierMessages", { count: startIndex })}
+                      {t("desktop.scrollToLoadEarlierMessages", { count: entryIds.length })}
                     </div>
                   )}
-                  {rendered.slice(startIndex)}
+                  {rendered}
                 </>
               );
             })()}

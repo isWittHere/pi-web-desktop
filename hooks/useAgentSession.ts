@@ -180,6 +180,11 @@ export type { ThinkingLevelOption } from "@/lib/thinking-levels";
 
 const PROGRAMMATIC_SCROLL_IGNORE_MS = 700;
 const USER_SCROLL_INTENT_MS = 1200;
+// Server-side history paging: the initial load fetches the most recent page
+// (raw entries, incl. turn-boundary alignment) and older pages load on demand
+// via the `before` cursor. One authoritative paging mechanism — the client no
+// longer runs its own render-window pagination on top of it.
+const HISTORY_PAGE_SIZE = 200;
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
@@ -596,7 +601,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // the full load, which refreshes the snapshot.
       }
 
-      const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
+      const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1", tail: String(HISTORY_PAGE_SIZE) });
       const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}?${params}`);
       if (res.status === 404) {
         if (showLoading) {
@@ -636,9 +641,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       if (leafId) params.set("leafId", leafId);
       // Page upward: ask the server for the `tail` ancestors preceding `before`,
-      // then prepend them. Omitting `before` fetches the most-recent page.
+      // then prepend them. Omitting `before` fetches the most-recent page —
+      // the branch-switch path also pages, so the window never exceeds one
+      // authoritative server page.
       if (before) params.set("before", before);
-      if (opts?.tail) params.set("tail", String(opts.tail));
+      params.set("tail", String(opts?.tail ?? HISTORY_PAGE_SIZE));
       const url = `/api/sessions/${encodeURIComponent(sid)}/context?${params}`;
       const res = await fetch(url, { signal: opts?.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

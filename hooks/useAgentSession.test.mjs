@@ -180,7 +180,7 @@ test("caches live shell output across SSE reconnects", async () => {
   assert.match(chatWindowSource, /activeToolResults, messages\]\);/);
 });
 
-test("uses server pagination state when active and client paging otherwise", async () => {
+test("pages history server-side with no client render window", async () => {
   const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
   const loadContextSource = source.slice(
     source.indexOf("const loadContext = useCallback"),
@@ -190,13 +190,17 @@ test("uses server pagination state when active and client paging otherwise", asy
   assert.match(source, /setHasEarlierMessages\(d\.context\.hasMore\)/);
   assert.match(source, /setHistoryCursor\(d\.context\.oldestEntryId\)/);
   assert.match(loadContextSource, /setData\(\(prev\) => \{[\s\S]*messages: \[\.\.\.d\.context\.messages, \.\.\.prev\.context\.messages\]/);
-  // Dual-mode sentinel: server paging only when older server pages exist;
-  // the legacy client-side render window covers the full-chain default.
-  assert.match(chatWindowSource, /if \(hasEarlierMessages\) \{/);
+  // The initial load pages the most recent window server-side.
+  assert.match(source, /tail: String\(HISTORY_PAGE_SIZE\)/);
+  // The client renders everything the loaded pages contain; the sentinel
+  // only appears when older server pages exist. No client-side render window.
+  // The observer early-outs when no older server page exists.
+  assert.match(chatWindowSource, /if \(!hasEarlierMessages\) return;/);
   assert.match(chatWindowSource, /const oldestId = historyCursor/);
   assert.doesNotMatch(chatWindowSource, /const oldestId = entryIds\[0\]/);
-  assert.match(chatWindowSource, /setVisibleCount\(\(prev\) => getNextVisibleCount\(prev\)\)/);
-  assert.match(chatWindowSource, /const hasMore = startIndex > 0 \|\| hasEarlierMessages/);
+  assert.match(chatWindowSource, /hasEarlierMessages && \(\s*<div ref=\{sentinelRef\}/);
+  assert.match(chatWindowSource, /\{rendered\}/);
+  assert.doesNotMatch(chatWindowSource, /getVisibleRenderWindow|getNextVisibleCount|setVisibleCount|VISIBLE_PAGE_SIZE/);
 });
 
 test("ChatWindow groups a headless leading run instead of the legacy renderer", async () => {
