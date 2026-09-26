@@ -333,10 +333,7 @@ export function SessionInfoBar({
                 </div>
                 <div className="session-info-bar-system-body">
                   {systemPrompt ? (
-                    <SystemPromptTree
-                      systemPrompt={systemPrompt}
-                      tokenEstimate={systemPromptTokenEstimate}
-                    />
+                    <SystemPromptTree systemPrompt={systemPrompt} />
                   ) : (
                     <span className="session-info-bar-popover-empty">
                       System prompt is empty (tools are disabled)

@@ -4,16 +4,14 @@ import { useCallback, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  collectSubtreeTextLength,
   isRecordChildren,
   parsePromptTree,
+  type XmlTreeElement,
   type XmlNode,
 } from "@/lib/xml-tree";
 
 interface SystemPromptTreeProps {
   systemPrompt: string;
-  /** Token estimate shown next to the top-level chips. */
-  tokenEstimate: number;
 }
 
 /**
@@ -25,7 +23,7 @@ interface SystemPromptTreeProps {
  * Parsing is fence-aware: XML-looking samples inside markdown code fences
  * are never parsed as structure.
  */
-export function SystemPromptTree({ systemPrompt, tokenEstimate }: SystemPromptTreeProps) {
+export function SystemPromptTree({ systemPrompt }: SystemPromptTreeProps) {
   const tree = useMemo(() => parsePromptTree(systemPrompt), [systemPrompt]);
   // Expansion state: open nodes keyed by a stable path from the root.
   const [openNodes, setOpenNodes] = useState<Set<string>>(() => {
@@ -53,7 +51,6 @@ export function SystemPromptTree({ systemPrompt, tokenEstimate }: SystemPromptTr
           node={child}
           path={nodeKey(i)}
           depth={1}
-          tokenEstimate={tokenEstimate}
           openNodes={openNodes}
           onToggle={toggle}
         />
@@ -66,19 +63,53 @@ function nodeKey(i: number): string {
   return `c${i}`;
 }
 
+// CJK-aware token estimate for a subtree (~4 latin chars/token, CJK chars
+// count as 1) — same heuristic as SessionInfoBar's whole-prompt estimate.
+function estimateTokens(node: XmlNode): number {
+  let tokens = 0;
+  const walk = (n: XmlNode) => {
+    for (const c of (n as XmlTreeElement).children || []) {
+      if (c.kind === "text") {
+        for (const ch of c.raw) {
+          const code = ch.codePointAt(0) ?? 0;
+          if ((code >= 0x4E00 && code <= 0x9FFF) ||
+              (code >= 0x3400 && code <= 0x4DBF) ||
+              (code >= 0x20000 && code <= 0x2A6DF) ||
+              (code >= 0x3040 && code <= 0x309F) ||
+              (code >= 0x30A0 && code <= 0x30FF) ||
+              (code >= 0xAC00 && code <= 0xD7AF)) {
+            tokens += 1;
+          } else {
+            tokens += 0.25;
+          }
+        }
+      } else {
+        walk(c);
+      }
+    }
+  };
+  walk(node);
+  return Math.round(tokens);
+}
+
+function formatTokens(n: number): string {
+  return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+}
+
 interface ChipNodeProps {
   node: XmlNode;
   path: string;
   depth: number;
-  /** Only the top-level chip row shows a token estimate. */
-  tokenEstimate: number;
   openNodes: Set<string>;
   onToggle: (path: string) => void;
 }
 
-function ChipNode({ node, path, depth, tokenEstimate, openNodes, onToggle }: ChipNodeProps) {
+function ChipNode({ node, path, depth, openNodes, onToggle }: ChipNodeProps) {
   const isOpen = openNodes.has(path);
   const childPath = (i: number) => `${path}/${nodeKey(i)}`;
+  // Hooks must run before any early return — compute the token estimate
+  // unconditionally (cheap: subtree text scan).
+  const subtreeTokens = useMemo(() => estimateTokens(node), [node]);
 
   if (node.kind === "text") {
     return (
@@ -98,9 +129,9 @@ function ChipNode({ node, path, depth, tokenEstimate, openNodes, onToggle }: Chi
       ? nameField.children[0].raw.trim()
       : undefined;
 
-  // Token estimate: only on the top-level chip row (depth 1), summed over
-  // the whole subtree.
-  const showTokens = depth === 1 && collectSubtreeTextLength(node) > 0;
+  // Token estimate: only on the top-level chip row (depth 1), computed
+  // from this node's own subtree (~4 chars/token, CJK chars count as 1).
+  const showTokens = depth === 1 && subtreeTokens > 0;
 
   const handleToggle = () => {
     if (!isLeaf) onToggle(path);
@@ -126,7 +157,7 @@ function ChipNode({ node, path, depth, tokenEstimate, openNodes, onToggle }: Chi
           {node.attrs ? <span className="sp-attrs">{node.attrs}</span> : null}
         </span>
         {nameValue ? <span className="sp-name-value">{nameValue}</span> : null}
-        {showTokens ? <span className="sp-meta">{tokenEstimate} tok</span> : null}
+        {showTokens ? <span className="sp-meta">~{formatTokens(subtreeTokens)} tok</span> : null}
       </div>
 
       {isLeaf ? null : isRecord ? (
@@ -145,7 +176,6 @@ function ChipNode({ node, path, depth, tokenEstimate, openNodes, onToggle }: Chi
               node={child}
               path={childPath(i)}
               depth={depth + 1}
-              tokenEstimate={tokenEstimate}
               openNodes={openNodes}
               onToggle={onToggle}
             />
