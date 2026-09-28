@@ -18,6 +18,7 @@ import { getPreferredToolPreset, setPreferredToolPreset } from "@/lib/tool-prese
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { mergeSessionStats, type SessionFileStats } from "@/lib/session-stats";
 import { createStreamUpdateScheduler, type StreamUpdateScheduler } from "@/lib/stream-update-scheduler";
+import type { ContentChange, ContentChangeKind } from "@/lib/chat-viewport";
 import { AgentEventConnection, AgentEventConnectionError } from "@/lib/agent-event-connection";
 import { getToolExecutionProgress } from "@/lib/tool-execution-progress";
 import { isSystemMessageEvent, type AgentEventLike } from "@/lib/agent-event-wire";
@@ -450,6 +451,33 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const ignoreProgrammaticScrollUntilRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  // ── Viewport signal ───────────────────────────────────────────────────────
+  // Every wholesale message-list mutation bumps this monotonic revision and
+  // records HOW the list changed. The single viewport effect (ChatWindow) reads
+  // `lastContentChangeRef` keyed by `contentRev` instead of inferring intent
+  // from `messages.length`, which is what let several effects race one another.
+  const [contentRev, setContentRev] = useState(0);
+  const contentRevRef = useRef(0);
+  const lastContentChangeRef = useRef<ContentChange | null>(null);
+  const bumpContent = useCallback((
+    kind: ContentChangeKind,
+    opts?: { targetEntryId?: string | null; followBottom?: boolean; pinUserMessageTop?: boolean },
+  ) => {
+    const container = scrollContainerRef.current;
+    contentRevRef.current += 1;
+    lastContentChangeRef.current = {
+      rev: contentRevRef.current,
+      kind,
+      // Measure BEFORE React commits the new list: the DOM still holds the old
+      // layout, which is exactly the anchor a prepend needs.
+      prevScrollTop: container?.scrollTop ?? 0,
+      prevScrollHeight: container?.scrollHeight ?? 0,
+      targetEntryId: opts?.targetEntryId ?? null,
+      ...(opts?.followBottom ? { followBottom: true } : {}),
+      ...(opts?.pinUserMessageTop ? { pinUserMessageTop: true } : {}),
+    };
+    setContentRev(contentRevRef.current);
+  }, [scrollContainerRef]);
   const ensuringNewSessionRef = useRef<Promise<string | null> | null>(null);
   const newSessionPromotedRef = useRef(false);
   const promptRunIdRef = useRef(0);
@@ -525,7 +553,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   // Apply a loaded session snapshot (messages, tree, leaf, metadata) to the
   // hook state. Shared by the full load path and the cache fast path.
-  const applySessionData = useCallback((d: SessionData) => {
+  const applySessionData = useCallback((d: SessionData, kind: ContentChangeKind = "replace", followBottom = false) => {
+    // Record the change before React commits the list so `bumpContent` still
+    // measures the pre-commit layout.
+    bumpContent(kind, { followBottom });
     setData(d);
     setActiveLeafId(d.leafId);
     setMessages(d.context.messages);
@@ -537,7 +568,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (d.context.thinkingLevel) {
       setThinkingLevel(d.context.thinkingLevel as ThinkingLevelOption);
     }
-  }, [setData, setActiveLeafId, setMessages, setEntryIds, setCurrentModelOverride, setError, setThinkingLevel]);
+  }, [bumpContent, setData, setActiveLeafId, setMessages, setEntryIds, setCurrentModelOverride, setError, setThinkingLevel]);
 
   // Fetch the in-process agent state for a session (running flag + live
   // state). Shared by the full load path and the cache fast path.
@@ -566,7 +597,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, []);
 
-  const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false, opts?: { alignToBottom?: boolean }) => {
+  const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false, opts?: { alignToBottom?: boolean; followBottom?: boolean }) => {
     let messagesLoaded = false;
     // Compaction reloads shrink the rebuilt context (the new SDK prunes
     // pre-compaction entries from the parent chain), so the browser clamps
@@ -575,6 +606,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // concurrent loadSession calls racing a compaction (agent_end,
     // agent_settled) can never steal it and leave the real reload unprotected.
     const alignToBottom = opts?.alignToBottom === true;
+    // A plain reload (run end / bash end / session open) returns to the bottom
+    // unless the user took over; a compaction reload pins straight to the
+    // bottom instead.
+    const followBottom = !alignToBottom && opts?.followBottom !== false;
     try {
       if (showLoading) setLoading(true);
 
@@ -596,7 +631,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         if (fresh && sessionIdRef.current === sid) {
           if (alignToBottom) justCompactedRef.current = true;
-          applySessionData(cached.data);
+          applySessionData(cached.data, alignToBottom ? "compact" : "replace", followBottom);
           messagesLoaded = true;
           if (showLoading) setLoading(false);
           if (!includeState) return null;
@@ -624,7 +659,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const d = await res.json() as SessionData;
       if (sessionIdRef.current !== sid) return null;
       if (alignToBottom) justCompactedRef.current = true;
-      applySessionData(d);
+      applySessionData(d, alignToBottom ? "compact" : "replace", followBottom);
 
       messagesLoaded = true;
       // Cache the snapshot for fast reopen, anchored to the file mtime.
@@ -641,7 +676,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [loadAgentState, applySessionData]);
 
-  const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null, opts?: { captureAnchor?: () => void; tail?: number; signal?: AbortSignal }) => {
+  const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null, opts?: { captureAnchor?: () => void; tail?: number; signal?: AbortSignal; targetEntryId?: string | null }) => {
     try {
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       if (leafId) params.set("leafId", leafId);
@@ -673,6 +708,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // wholesale — the viewport belongs to the anchor restore or the
       // navigation, not to the generic "new messages arrived" bottom scroll.
       suppressAutoScrollRef.current = true;
+      // Record the page change before the list commits (pre-commit anchor).
+      bumpContent(before ? "prepend" : "replace", { targetEntryId: before ? null : opts?.targetEntryId ?? null });
       if (before) {
         // Capture the scroll anchor at the last synchronous moment before the
         // prepend lands. Capturing earlier (at fetch start) would go stale:
@@ -690,7 +727,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       if (!opts?.signal?.aborted) console.error("Failed to load context:", e);
     }
-  }, []);
+  }, [bumpContent]);
 
   const loadTools = useCallback(async (sid: string) => {
     try {
@@ -1330,6 +1367,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const deliveredKey = userMessageKey(delivered);
           const optimisticKey = optimisticUserMessageKeyRef.current;
           optimisticUserMessageKeyRef.current = null;
+          bumpContent("append");
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (optimisticKey && last?.role === "user" && userMessageKey(last) === optimisticKey) {
@@ -1340,6 +1378,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             return [...prev, delivered];
           });
         } else if (completed) {
+          bumpContent("append");
           setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
         }
         resetStreamUpdates();
@@ -1444,6 +1483,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [
     addNotice,
+    bumpContent,
     cancelEventStreamGrace,
     handleExtensionUiRequest,
     loadSession,
@@ -1474,6 +1514,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         : message,
       timestamp: Date.now(),
     };
+    bumpContent("append", { pinUserMessageTop: true });
     setMessages((prev) => [...prev, userMsg]);
     optimisticUserMessageKeyRef.current = userMessageKey(userMsg);
     promptRunIdRef.current = promptRunId;
@@ -1591,7 +1632,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       dispatch({ type: "end" });
       restoreUnsentMessage();
     }
-  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, opts.chatInputRef, resetStreamUpdates]);
+  }, [isNew, bumpContent, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, opts.chatInputRef, resetStreamUpdates]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;
@@ -1656,7 +1697,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       });
       if (result?.cancelled || sessionIdRef.current !== sid) return false;
       setActiveLeafId(entryId);
-      await loadContext(sid, entryId);
+      await loadContext(sid, entryId, undefined, { targetEntryId: entryId });
       return sessionIdRef.current === sid;
     } catch (error) {
       console.error("Failed to navigate:", error);
@@ -2277,6 +2318,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // Refs
     sessionIdRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
+    // Viewport signal
+    contentRev, lastContentChangeRef,
     // Actions
     handleSend, executeBash, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
