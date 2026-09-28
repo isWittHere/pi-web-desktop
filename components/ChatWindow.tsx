@@ -456,10 +456,9 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
           const el = scrollContainerRef.current;
           if (el && el.scrollHeight > el.clientHeight) return;
         }
-        // Fetch the previous page and prepend it. loadContext captures the
-        // scroll anchor right before the prepend lands — capturing before
-        // the network round trip would go stale by however far the user
-        // scrolls while the request is in flight.
+        // Fetch the previous page and prepend it. loadContext records the
+        // pre-commit anchor itself, so the restore is not offset by any
+        // scrolling during the network round trip.
         const oldestId = historyCursor;
         if (!oldestId) return;
         const sid = sessionIdRef.current;

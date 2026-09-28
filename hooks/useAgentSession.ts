@@ -178,6 +178,10 @@ export interface UseAgentSessionOptions {
 
 export type { ThinkingLevelOption } from "@/lib/thinking-levels";
 
+// Server-side history paging: the initial load fetches the most recent page
+// (raw entries, incl. turn-boundary alignment) and older pages load on demand
+// via the `before` cursor. One authoritative paging mechanism — the client no
+// longer runs its own render-window pagination on top of it.
 const HISTORY_PAGE_SIZE = 200;
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
@@ -531,7 +535,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   // Apply a loaded session snapshot (messages, tree, leaf, metadata) to the
   // hook state. Shared by the full load path and the cache fast path.
-  const applySessionData = useCallback((d: SessionData, kind: ContentChangeKind = "replace", followBottom = false) => {
+  const applySessionData = useCallback((d: SessionData, kind: ContentChangeKind, followBottom: boolean) => {
     // Record the change before React commits the list so `bumpContent` still
     // measures the pre-commit layout.
     bumpContent(kind, { followBottom });
@@ -577,12 +581,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false, opts?: { alignToBottom?: boolean; followBottom?: boolean }) => {
     let messagesLoaded = false;
-    // Compaction reloads shrink the rebuilt context (the new SDK prunes
-    // pre-compaction entries from the parent chain), so the browser clamps
+    // Compaction reloads shrink the rebuilt context (the SDK prunes
+    // pre-compaction entries from the parent chain), so the browser would clamp
     // the collapsed scrollTop to 0 — jumping the view to the head of the
-    // session. Arm the latch here, synchronously inside THIS call, so the
-    // concurrent loadSession calls racing a compaction (agent_end,
-    // agent_settled) can never steal it and leave the real reload unprotected.
+    // session. Record the reload as a `compact` intent (instant bottom pin +
+    // sticky target); the request generation below keeps a racing older load
+    // (agent_end, agent_settled) from overwriting it.
     const alignToBottom = opts?.alignToBottom === true;
     // A plain reload (run end / bash end / session open) returns to the bottom
     // unless the user took over; a compaction reload pins straight to the
@@ -693,10 +697,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         } : d.context;
         return { ...prev, context };
       });
-      // Both a prepend and a page replacement change the message page
-      // wholesale — the viewport belongs to the anchor restore or the
-      // navigation, not to the generic "new messages arrived" bottom scroll.
-      // Record the page change before the list commits (pre-commit anchor).
+      // A prepend / page replacement swaps the message page wholesale; record
+      // it before the list commits so the pre-commit layout is captured as the
+      // anchor (prepend) or navigation target.
       bumpContent(before ? "prepend" : "replace", { targetEntryId: before ? null : opts?.targetEntryId ?? null });
       if (before) {
         // Older page: prepend so scroll position stays anchored. The anchor

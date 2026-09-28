@@ -17,7 +17,7 @@
 /** Distance (px) within which the viewport counts as pinned to the bottom. */
 export const BOTTOM_EPS = 8;
 
-export type ContentChangeKind = "initial" | "append" | "prepend" | "replace" | "compact";
+export type ContentChangeKind = "append" | "prepend" | "replace" | "compact";
 
 /** Description of a single committed message-list change. */
 export interface ContentChange {
@@ -104,11 +104,6 @@ export function decideViewportAction(change: ContentChange, ctx: ViewportContext
   }
 
   switch (change.kind) {
-    case "initial":
-      // The pre-paint `openPositioning` layout effect owns the first frame;
-      // the pipeline must not fight it.
-      return { kind: "keep" };
-
     case "compact":
       // The rebuilt list is shorter, so the browser would clamp to the top.
       // Pin straight to the bottom; the caller also enters a sticky-bottom
