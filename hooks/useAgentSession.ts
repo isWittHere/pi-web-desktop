@@ -422,7 +422,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const bashRunningRef = useRef(false);
   const handleAgentEventRef = useRef<((event: AgentEventLike) => void) | null>(null);
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   // ── Viewport signal ───────────────────────────────────────────────────────
   // Every wholesale message-list mutation bumps this monotonic revision and
@@ -2180,7 +2179,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     tools,
     branchTree,
     // Refs
-    sessionIdRef, messagesEndRef, scrollContainerRef,
+    sessionIdRef, scrollContainerRef,
     lastUserMsgRef,
     // Viewport signal
     contentRev, lastContentChangeRef,

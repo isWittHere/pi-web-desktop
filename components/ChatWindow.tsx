@@ -218,7 +218,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     isNew,
     tools,
     branchTree, activeLeafId: branchActiveLeafId, handleLeafChange,
-    sessionIdRef, messagesEndRef, scrollContainerRef,
+    sessionIdRef, scrollContainerRef,
     lastUserMsgRef,
     contentRev, lastContentChangeRef,
     handleSend, executeBash, handleAbort, handleFork, handleNavigate, handleModelChange,
@@ -1386,7 +1386,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
               <div style={{ height: scrollContainerRef.current ? scrollContainerRef.current.clientHeight : "calc(80vh / var(--app-ui-scale, 1))" }} />
             )}
 
-              <div ref={messagesEndRef} />
               </div>
             </div>
           </div>
