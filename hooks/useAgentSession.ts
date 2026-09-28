@@ -432,6 +432,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [contentRev, setContentRev] = useState(0);
   const contentRevRef = useRef(0);
   const lastContentChangeRef = useRef<ContentChange | null>(null);
+  // Request generation: a newer load (e.g. the compaction reload) must not be
+  // overwritten by an older in-flight load resolving late (agent_end racing
+  // compaction_end). Every list-applying load takes a sequence number and only
+  // the newest one may commit.
+  const requestSeqRef = useRef(0);
+  const lastAppliedSeqRef = useRef(0);
   const bumpContent = useCallback((
     kind: ContentChangeKind,
     opts?: { targetEntryId?: string | null; followBottom?: boolean; pinUserMessageTop?: boolean },
@@ -583,6 +589,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // unless the user took over; a compaction reload pins straight to the
     // bottom instead.
     const followBottom = !alignToBottom && opts?.followBottom !== false;
+    const seq = ++requestSeqRef.current;
+    // Commit a loaded snapshot only if no newer load already did.
+    const applyLoaded = (d: SessionData): boolean => {
+      if (seq < lastAppliedSeqRef.current) return false;
+      lastAppliedSeqRef.current = seq;
+      applySessionData(d, alignToBottom ? "compact" : "replace", followBottom);
+      return true;
+    };
     try {
       if (showLoading) setLoading(true);
 
@@ -603,7 +617,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           fresh = false;
         }
         if (fresh && sessionIdRef.current === sid) {
-          applySessionData(cached.data, alignToBottom ? "compact" : "replace", followBottom);
+          applyLoaded(cached.data);
           messagesLoaded = true;
           if (showLoading) setLoading(false);
           if (!includeState) return null;
@@ -630,7 +644,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData;
       if (sessionIdRef.current !== sid) return null;
-      applySessionData(d, alignToBottom ? "compact" : "replace", followBottom);
+      applyLoaded(d);
 
       messagesLoaded = true;
       // Cache the snapshot for fast reopen, anchored to the file mtime.
@@ -648,6 +662,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [loadAgentState, applySessionData]);
 
   const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null, opts?: { tail?: number; signal?: AbortSignal; targetEntryId?: string | null }) => {
+    const seq = ++requestSeqRef.current;
     try {
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       if (leafId) params.set("leafId", leafId);
@@ -662,6 +677,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as { context: SessionData["context"] };
       if (sessionIdRef.current !== sid || opts?.signal?.aborted) return;
+      // Discard an out-of-order page so an older fetch resolving after a newer
+      // load cannot overwrite the fresher context.
+      if (seq < lastAppliedSeqRef.current) return;
+      lastAppliedSeqRef.current = seq;
       setHistoryCursor(d.context.oldestEntryId);
       setHasEarlierMessages(d.context.hasMore);
       setData((prev) => {

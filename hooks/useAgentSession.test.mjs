@@ -238,6 +238,25 @@ test("routes every scroll decision through one revision-keyed pipeline", async (
   assert.match(chatWindowSource, /bottomTargetRef\.current && Date\.now\(\) > userScrollGestureUntilRef\.current/);
 });
 
+test("drops out-of-order loads with a request generation", () => {
+  const loadSessionSource = source.slice(
+    source.indexOf("const loadSession = useCallback"),
+    source.indexOf("const loadContext = useCallback"),
+  );
+  const loadContextSource = source.slice(
+    source.indexOf("const loadContext = useCallback"),
+    source.indexOf("const loadTools = useCallback"),
+  );
+  // A newer load (e.g. the compaction reload) must win even when an older
+  // in-flight load resolves later.
+  assert.match(source, /const requestSeqRef = useRef\(0\)/);
+  assert.match(source, /const lastAppliedSeqRef = useRef\(0\)/);
+  assert.match(loadSessionSource, /const seq = \+\+requestSeqRef\.current/);
+  assert.match(loadSessionSource, /if \(seq < lastAppliedSeqRef\.current\) return false/);
+  assert.match(loadContextSource, /const seq = \+\+requestSeqRef\.current/);
+  assert.match(loadContextSource, /if \(seq < lastAppliedSeqRef\.current\) return/);
+});
+
 test("navigate_tree reports success before the session reloads", () => {
   const navigateSource = source.slice(
     source.indexOf("const handleNavigate = useCallback"),
