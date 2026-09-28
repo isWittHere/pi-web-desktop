@@ -9,6 +9,8 @@ interface Props {
   scrollContainer: RefObject<HTMLDivElement | null>;
   messageRefs: RefObject<(HTMLDivElement | null)[]>;
   onWidthChange?: (width: number) => void;
+  /** Fired when a drag starts, so the chat viewport stops auto-following. */
+  onUserInteract?: () => void;
 }
 
 const MINIMAP_WIDTH = 18;
@@ -123,7 +125,7 @@ interface NodeInfo {
   index: number;
 }
 
-export function ChatMinimap({ messages, streamingMessage, scrollContainer, messageRefs, onWidthChange }: Props) {
+export function ChatMinimap({ messages, streamingMessage, scrollContainer, messageRefs, onWidthChange, onUserInteract }: Props) {
   const [scrollRatio, setScrollRatio] = useState(0);
   const [viewportRatio, setViewportRatio] = useState(1);
   const [visible, setVisible] = useState(false);
@@ -267,6 +269,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
     if (!visible) return;
 
     draggingRef.current = true;
+    onUserInteract?.();
     const rect = e.currentTarget.getBoundingClientRect();
     const clickRatio = (e.clientY - rect.top) / rect.height;
     const grabOffset = clickRatio - scrollRatio * (1 - viewportRatio);
@@ -287,7 +290,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [visible, viewportRatio, scrollRatio, scrollToMinimapRatio]);
+  }, [visible, viewportRatio, scrollRatio, scrollToMinimapRatio, onUserInteract]);
 
 
 

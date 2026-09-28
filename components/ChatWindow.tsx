@@ -627,6 +627,15 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       window.removeEventListener("keydown", markGesture);
     };
   }, [scrollContainerRef, loading]);
+
+  // A minimap drag is a user takeover: stop auto-following and drop any sticky
+  // bottom target so the pipeline does not fight the drag.
+  const handleViewportUserInteract = useCallback(() => {
+    userScrollGestureUntilRef.current = Date.now() + USER_SCROLL_GESTURE_MS;
+    viewportUserOwnedRef.current = true;
+    bottomTargetRef.current = false;
+    pagingBlockedRef.current = false;
+  }, []);
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
   const statsKey = sessionStats
@@ -1400,6 +1409,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
             streamingMessage={streamState.streamingMessage}
             scrollContainer={scrollContainerRef}
             messageRefs={messageRefs}
+            onUserInteract={handleViewportUserInteract}
           />
         )}
       </div>
