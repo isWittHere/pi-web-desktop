@@ -11,7 +11,6 @@ import type {
   ToolResultMessage,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
-import { cssPx } from "@/lib/ui-scale";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { getAllToolNamesForPreset, deriveToolPresetFromActive, type AllToolPreset, type ConcreteToolPreset, type InferredToolPreset, type ToolEntry } from "@/lib/tool-presets";
 import { getPreferredToolPreset, setPreferredToolPreset } from "@/lib/tool-preset-preference";
@@ -179,12 +178,6 @@ export interface UseAgentSessionOptions {
 
 export type { ThinkingLevelOption } from "@/lib/thinking-levels";
 
-const PROGRAMMATIC_SCROLL_IGNORE_MS = 700;
-const USER_SCROLL_INTENT_MS = 1200;
-// Server-side history paging: the initial load fetches the most recent page
-// (raw entries, incl. turn-boundary alignment) and older pages load on demand
-// via the `before` cursor. One authoritative paging mechanism — the client no
-// longer runs its own render-window pagination on top of it.
 const HISTORY_PAGE_SIZE = 200;
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
@@ -205,7 +198,6 @@ const MODELS_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
 const MAX_NOTICES = 5;
 const NOTICE_VISIBLE_MS = 5000;
 const NOTICE_EXIT_ANIMATION_MS = 180;
-const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Space", "Spacebar"]);
 
 function createNoticeId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -429,26 +421,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const notifiedPromptRunIdRef = useRef(-1);
   const bashRunningRef = useRef(false);
   const handleAgentEventRef = useRef<((event: AgentEventLike) => void) | null>(null);
-  const initialScrollDoneRef = useRef(false);
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
-  const pendingScrollToUserRef = useRef(false);
-  const completionScrollAllowedRef = useRef(true);
-  // Consumed by the layout effect below to pin the viewport back to the
-  // (now shorter) bottom before paint, instead of letting the browser clamp
-  // it to the top and then animating back down. Armed only inside
-  // `loadSession` when THAT call carries `alignToBottom: true` — auto
-  // compaction races three concurrent loadSession calls (agent_end,
-  // compaction_end, agent_settled), so arming from a shared pre-call flag
-  // would let an unrelated call steal the latch and leave the real compaction
-  // reload unprotected against the browser's scrollTop clamp.
-  const justCompactedRef = useRef(false);
-  // Set by loadContext for wholesale page changes (navigate / branch switch /
-  // older-page prepend): those own the viewport (anchor restore, navigation
-  // target) and must not be mistaken for appended messages that should pull
-  // the view to the bottom.
-  const suppressAutoScrollRef = useRef(false);
-  const userScrollIntentUntilRef = useRef(0);
-  const ignoreProgrammaticScrollUntilRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   // ── Viewport signal ───────────────────────────────────────────────────────
@@ -630,7 +603,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           fresh = false;
         }
         if (fresh && sessionIdRef.current === sid) {
-          if (alignToBottom) justCompactedRef.current = true;
           applySessionData(cached.data, alignToBottom ? "compact" : "replace", followBottom);
           messagesLoaded = true;
           if (showLoading) setLoading(false);
@@ -658,7 +630,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData;
       if (sessionIdRef.current !== sid) return null;
-      if (alignToBottom) justCompactedRef.current = true;
       applySessionData(d, alignToBottom ? "compact" : "replace", followBottom);
 
       messagesLoaded = true;
@@ -676,7 +647,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [loadAgentState, applySessionData]);
 
-  const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null, opts?: { captureAnchor?: () => void; tail?: number; signal?: AbortSignal; targetEntryId?: string | null }) => {
+  const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null, opts?: { tail?: number; signal?: AbortSignal; targetEntryId?: string | null }) => {
     try {
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       if (leafId) params.set("leafId", leafId);
@@ -707,16 +678,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // Both a prepend and a page replacement change the message page
       // wholesale — the viewport belongs to the anchor restore or the
       // navigation, not to the generic "new messages arrived" bottom scroll.
-      suppressAutoScrollRef.current = true;
       // Record the page change before the list commits (pre-commit anchor).
       bumpContent(before ? "prepend" : "replace", { targetEntryId: before ? null : opts?.targetEntryId ?? null });
       if (before) {
-        // Capture the scroll anchor at the last synchronous moment before the
-        // prepend lands. Capturing earlier (at fetch start) would go stale:
-        // the user keeps scrolling while the request is in flight, and the
-        // restore would land the viewport offset by exactly that drift.
-        if (d.context.messages.length > 0) opts?.captureAnchor?.();
-        // Older page: prepend so scroll position stays anchored.
+        // Older page: prepend so scroll position stays anchored. The anchor
+        // was captured by `bumpContent` above, before the list commits.
         setMessages((prev) => [...d.context.messages, ...prev]);
         setEntryIds((prev) => [...d.context.entryIds, ...prev]);
       } else {
@@ -1522,10 +1488,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentRunning(true);
     setAgentPhase(isSlashCommandPrompt ? { kind: "running_command" } : { kind: "waiting_model" });
     dispatch({ type: "start" });
-    pendingScrollToUserRef.current = true;
-    completionScrollAllowedRef.current = true;
-    // A fresh send is a genuine append; clear any stale replacement suppress.
-    suppressAutoScrollRef.current = false;
 
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
 
@@ -2068,64 +2030,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [addNotice, loadSystemInfo]);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  }, []);
-
-  // Compaction reloads shrink the whole message list: the rebuilt DOM is
-  // shorter than the current scrollTop, so the browser clamps the viewport
-  // back to the top before any smooth scroll can run — leaving the user
-  // staring at the head of the session. When a compaction has just reloaded,
-  // anchor the viewport straight to the bottom (where the compaction summary
-  // now lives). This runs as a layout effect before paint, so it beats the
-  // clamp flash entirely; we set scrollTop directly rather than scrolling
-  // smoothly to avoid animating from the clamped top position.
-  const alignToCompactionBottom = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-    initialScrollDoneRef.current = true;
-    pendingScrollToUserRef.current = false;
-    container.scrollTop = container.scrollHeight - container.clientHeight;
-  }, []);
-
-  const scrollUserMsgToTop = useCallback(() => {
-    const container = scrollContainerRef.current;
-    const el = lastUserMsgRef.current;
-    if (!container || !el) return;
-    const elAbsTop = cssPx(el.getBoundingClientRect().top - container.getBoundingClientRect().top) + container.scrollTop;
-    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-    container.scrollTo({ top: elAbsTop - 16, behavior: "smooth" });
-  }, []);
-
-  // Jump the viewport to an arbitrary message element (e.g. a search hit) and
-  // stop any pending auto-scroll from fighting the jump.
-  const scrollToMessage = useCallback((element: HTMLElement) => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-    initialScrollDoneRef.current = true;
-    pendingScrollToUserRef.current = false;
-    const top = cssPx(element.getBoundingClientRect().top - container.getBoundingClientRect().top) + container.scrollTop;
-    container.scrollTo({ top: top - 16, behavior: "instant" });
-  }, []);
-
-  const markUserScrollIntent = useCallback((event: Event) => {
-    if (event instanceof KeyboardEvent) {
-      if (!SCROLL_KEYS.has(event.key)) return;
-      if (event.target instanceof Element && event.target.closest("input, textarea, [contenteditable='true']")) return;
-    }
-    userScrollIntentUntilRef.current = Date.now() + USER_SCROLL_INTENT_MS;
-  }, []);
-
-  const handleScrollPositionChange = useCallback(() => {
-    if (!agentRunningRef.current) return;
-    if (Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
-    if (Date.now() > userScrollIntentUntilRef.current) return;
-    completionScrollAllowedRef.current = false;
-  }, []);
-
   // Load session on mount
   useEffect(() => {
     sessionHookMountedRef.current = true;
@@ -2186,65 +2090,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!onBranchDataChange) return;
     onBranchDataChange(data?.tree ?? [], activeLeafId, handleLeafChange);
   }, [data?.tree, activeLeafId, handleLeafChange, onBranchDataChange]);
-
-  useEffect(() => {
-    window.addEventListener("keydown", markUserScrollIntent);
-    window.addEventListener("pointerdown", markUserScrollIntent, { passive: true });
-    return () => {
-      window.removeEventListener("keydown", markUserScrollIntent);
-      window.removeEventListener("pointerdown", markUserScrollIntent);
-    };
-  }, [markUserScrollIntent]);
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    container.addEventListener("wheel", markUserScrollIntent, { passive: true });
-    container.addEventListener("touchstart", markUserScrollIntent, { passive: true });
-    container.addEventListener("scroll", handleScrollPositionChange, { passive: true });
-    return () => {
-      container.removeEventListener("wheel", markUserScrollIntent);
-      container.removeEventListener("touchstart", markUserScrollIntent);
-      container.removeEventListener("scroll", handleScrollPositionChange);
-    };
-  }, [messages.length, loading, handleScrollPositionChange, markUserScrollIntent]);
-
-  // After a compaction reload the rebuilt list is much shorter; both the
-  // layout-effect below (before paint) and this effect must not run the usual
-  // smooth scroll-from-top-to-bottom, which would visibly animate from the
-  // clamped top position. Row 1 executes before paint (pin to bottom, keeping
-  // the latch); row 2 skips the run-end smooth scroll and clears the latch.
-  useLayoutEffect(() => {
-    if (justCompactedRef.current) {
-      alignToCompactionBottom();
-    }
-  });
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      if (pendingScrollToUserRef.current) {
-        pendingScrollToUserRef.current = false;
-        initialScrollDoneRef.current = true;
-        scrollUserMsgToTop();
-      } else if (!initialScrollDoneRef.current) {
-        // ChatWindow positions the initial viewport pre-paint in a layout
-        // effect while the session is hidden behind the loading overlay;
-        // there is nothing to scroll here.
-        initialScrollDoneRef.current = true;
-      } else if (justCompactedRef.current) {
-        // Compaction just reloaded — the layout effect already pinned the
-        // viewport to the bottom; skip the generic run-end smooth scroll and
-        // clear the latch now that both effects have run for this commit.
-        justCompactedRef.current = false;
-      } else if (suppressAutoScrollRef.current) {
-        // A page replacement / prepend (navigate, branch switch, older page)
-        // owns the viewport — don't drag it to the bottom.
-        suppressAutoScrollRef.current = false;
-      } else if (!agentRunningRef.current && completionScrollAllowedRef.current) {
-        scrollToBottom("smooth");
-      }
-    }
-  }, [messages.length, agentRunning, scrollToBottom, scrollUserMsgToTop]);
 
   // Load the model list with bounded retries; loadModels exposes each failure.
   useEffect(() => {
@@ -2328,6 +2173,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
     loadSystemInfo, loadSystemInfoOnDemand,
     handleLeafChange,
-    loadContext, scrollToMessage,
+    loadContext,
   };
 }

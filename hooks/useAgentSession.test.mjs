@@ -212,20 +212,30 @@ test("ChatWindow groups a headless leading run instead of the legacy renderer", 
   assert.match(chatWindowSource, /headlessEnd < messages\.length && messages\[headlessEnd\]\.role !== "user" && !isCompactionBoundary\(messages\[headlessEnd\]\)/);
 });
 
-test("scroll anchoring captures at prepend time and restores only after the DOM grows", async () => {
+test("routes every scroll decision through one revision-keyed pipeline", async () => {
   const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
   const loadContextSource = source.slice(
     source.indexOf("const loadContext = useCallback"),
     source.indexOf("const loadTools = useCallback"),
   );
-  // The anchor must be captured inside loadContext (post-fetch, pre-setState),
-  // not at fetch start — otherwise user scrolling during the request goes stale.
-  assert.match(loadContextSource, /opts\?\.captureAnchor\?\.\(\)/);
-  assert.doesNotMatch(chatWindowSource, /loadingOlderRef\.current = true;\s*\n\s*prevScrollDistanceRef\.current = captureScrollDistance/);
-  // The restore must wait until the grown window is actually in the DOM.
-  assert.match(chatWindowSource, /prevScrollHeightRef\.current === container\.scrollHeight\) return/);
-  // Anchors must not leak across sessions.
-  assert.match(chatWindowSource, /prevScrollDistanceRef\.current = null;\s*\n\s*prevScrollHeightRef\.current = null;\s*\n\s*\}, \[session\?\.id\]\)/);
+
+  // The page change is recorded pre-commit, so the prepend anchor is captured
+  // synchronously before the list mutates (replaces the old captureAnchor).
+  assert.match(loadContextSource, /bumpContent\(before \? "prepend" : "replace"/);
+  assert.doesNotMatch(loadContextSource, /captureAnchor/);
+
+  // Exactly one viewport effect, keyed on the monotonic content revision.
+  assert.match(chatWindowSource, /useLayoutEffect\(\(\) => \{\s*const change = lastContentChangeRef\.current;/);
+  assert.match(chatWindowSource, /\}, \[contentRev, openPositioning,/);
+
+  // The old per-mechanism scroll flags are gone from both layers.
+  assert.doesNotMatch(chatWindowSource, /prevScrollDistanceRef|prevScrollHeightRef/);
+  assert.doesNotMatch(source, /justCompactedRef|suppressAutoScrollRef|completionScrollAllowedRef|pendingScrollToUserRef|initialScrollDoneRef/);
+
+  // A compaction pins to the bottom and stays pinned across late layout growth
+  // (highlighting, Mermaid, media) until the user takes over.
+  assert.match(chatWindowSource, /if \(change\.kind === "compact"\) bottomTargetRef\.current = true;/);
+  assert.match(chatWindowSource, /bottomTargetRef\.current && Date\.now\(\) > userScrollGestureUntilRef\.current/);
 });
 
 test("navigate_tree reports success before the session reloads", () => {

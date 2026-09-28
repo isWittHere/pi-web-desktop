@@ -20,10 +20,14 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ImagesIcon } from "@phosphor-icons/react/Images";
 import type { SessionStatsInfo } from "@/lib/pi-types";
-import {
-  captureScrollDistance,
-  restoreScrollTop,
-} from "@/lib/chat-lazy-load";
+import { decideViewportAction, isAtBottom } from "@/lib/chat-viewport";
+
+// Programmatic writes (pin / anchor / jump) set a short ignore window so the
+// scroll event they produce is not mistaken for a user gesture.
+const PROGRAMMATIC_SCROLL_IGNORE_MS = 150;
+// How long a gesture keeps counting as "the user is driving the viewport".
+const USER_SCROLL_GESTURE_MS = 1200;
+const VIEWPORT_SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Space", "Spacebar"]);
 
 interface Props {
   session: SessionInfo | null;
@@ -216,13 +220,14 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     branchTree, activeLeafId: branchActiveLeafId, handleLeafChange,
     sessionIdRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
+    contentRev, lastContentChangeRef,
     handleSend, executeBash, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
     loadSystemInfoOnDemand,
-    loadContext, scrollToMessage,
+    loadContext,
   } = useAgentSession({
     session, sessionRunning, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
@@ -269,6 +274,26 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
   useEffect(() => {
     registerAbortHandler(agentRunning || bashRunning ? handleAbort : null);
   }, [agentRunning, bashRunning, handleAbort]);
+
+  // ── Single viewport pipeline state ──────────────────────────────────────
+  // useAgentSession records every message-list change as a ContentChange keyed
+  // by `contentRev`; exactly one layout effect below turns one change into at
+  // most one viewport write. These refs replace the old ad-hoc scroll flags.
+  // `userScrollGestureUntilRef`  time-bounded "a real gesture just happened"
+  // `viewportUserOwnedRef`       sticky "user took over since the last send"
+  // `bottomTargetRef`            sticky bottom after a compaction, re-pinned
+  //                              across resize until the user takes over
+  // `pagingBlockedRef`           a replace/compaction must not trigger a
+  //                              stray history prepend before the user scrolls
+  // `appliedRevRef`              last consumed change, so flipping
+  //                              `openPositioning` cannot replay a change
+  // `ignoreProgrammaticScrollUntilRef`  mute our own writes' scroll events
+  const userScrollGestureUntilRef = useRef(0);
+  const viewportUserOwnedRef = useRef(false);
+  const bottomTargetRef = useRef(false);
+  const pagingBlockedRef = useRef(false);
+  const appliedRevRef = useRef(0);
+  const ignoreProgrammaticScrollUntilRef = useRef(0);
 
   // --- Scroll-edge fades ---
   // Display a fade only when more conversation content exists beyond that edge.
@@ -346,7 +371,15 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const observer = new ResizeObserver(updateChatFades);
+    const observer = new ResizeObserver(() => {
+      // Keep a compaction-stated bottom target pinned across late layout growth
+      // (code highlight, Mermaid, media) until the user takes over.
+      if (bottomTargetRef.current && Date.now() > userScrollGestureUntilRef.current) {
+        ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
+        container.scrollTop = container.scrollHeight - container.clientHeight;
+      }
+      updateChatFades();
+    });
     observer.observe(container);
     if (container.firstElementChild) observer.observe(container.firstElementChild);
     container.addEventListener("scroll", updateChatFades, { passive: true });
@@ -356,7 +389,40 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       container.removeEventListener("scroll", updateChatFades);
       observer.disconnect();
     };
-  }, [messages.length, scrollContainerRef, updateChatFades]);
+  }, [messages.length, loading, scrollContainerRef, updateChatFades]);
+
+  // ── Viewport writers ────────────────────────────────────────────────────
+  const pinToBottom = useCallback((behavior: "instant" | "smooth") => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
+    const top = container.scrollHeight - container.clientHeight;
+    if (behavior === "smooth") container.scrollTo({ top, behavior: "smooth" });
+    else container.scrollTop = top;
+    updateChatFades();
+  }, [scrollContainerRef, updateChatFades]);
+
+  const scrollToElement = useCallback((element: HTMLElement, behavior: ScrollBehavior = "instant") => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
+    bottomTargetRef.current = false;
+    const top = cssPx(element.getBoundingClientRect().top - container.getBoundingClientRect().top) + container.scrollTop;
+    container.scrollTo({ top: Math.max(0, top - 16), behavior });
+    updateChatFades();
+  }, [scrollContainerRef, updateChatFades]);
+
+  const scrollToEntry = useCallback((entryId: string) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const element = container.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(entryId)}"]`);
+    if (element) scrollToElement(element);
+  }, [scrollContainerRef, scrollToElement]);
+
+  const scrollUserMessageToTop = useCallback(() => {
+    const element = lastUserMsgRef.current;
+    if (element) scrollToElement(element, "smooth");
+  }, [lastUserMsgRef, scrollToElement]);
 
   // --- Lazy-load historical messages ---
   // History is paged server-side: the initial load returns the most recent
@@ -364,11 +430,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
   // page through the `before` cursor, which is prepended with the scroll
   // position kept stable. There is no client-side render window on top of it.
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const prevScrollDistanceRef = useRef<number | null>(null);
-  // scrollHeight captured alongside the anchor: prepends land across two
-  // commits (messages first, the grown render window next), so the restore
-  // must only fire once the new content is actually in the DOM.
-  const prevScrollHeightRef = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
   // Read inside the observer callback so re-pointing the active leaf does not
   // tear the observer down and re-fire its initial callback (which would race
@@ -387,6 +448,14 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
         if (!entries[0]?.isIntersecting) return;
         if (loadingOlderRef.current) return;
         if (!hasEarlierMessages) return;
+        // A page replacement / compaction must not trigger a stray prepend
+        // before the user scrolls: that prepend grows content above the
+        // viewport and races the pinned position. A list shorter than the
+        // viewport has no position to preserve, so it may still page.
+        if (pagingBlockedRef.current) {
+          const el = scrollContainerRef.current;
+          if (el && el.scrollHeight > el.clientHeight) return;
+        }
         // Fetch the previous page and prepend it. loadContext captures the
         // scroll anchor right before the prepend lands — capturing before
         // the network round trip would go stale by however far the user
@@ -396,14 +465,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
         const sid = sessionIdRef.current;
         if (!sid) return;
         loadingOlderRef.current = true;
-        void loadContext(sid, branchActiveLeafIdRef.current, oldestId, {
-          captureAnchor: () => {
-            const anchorContainer = scrollContainerRef.current;
-            if (!anchorContainer) return;
-            prevScrollDistanceRef.current = captureScrollDistance(anchorContainer.scrollHeight, anchorContainer.scrollTop);
-            prevScrollHeightRef.current = anchorContainer.scrollHeight;
-          },
-        }).finally(() => {
+        void loadContext(sid, branchActiveLeafIdRef.current, oldestId).finally(() => {
           loadingOlderRef.current = false;
         });
       },
@@ -411,7 +473,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [historyCursor, hasEarlierMessages, loadContext, sessionIdRef, scrollContainerRef]);
+  }, [historyCursor, hasEarlierMessages, loading, loadContext, sessionIdRef, scrollContainerRef]);
 
   // ── Full-text search jump ───────────────────────────────────────────────
   // When a search hit opens (or targets) this session, make sure the entry is
@@ -431,11 +493,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       let found = history.entryIds.includes(searchTarget.entryId);
       if (!found && !agentRunning && history.hasEarlierMessages && history.historyCursor && !loadingOlderRef.current) {
         loadingOlderRef.current = true;
-        const container = scrollContainerRef.current;
-        if (container) {
-          prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
-          prevScrollHeightRef.current = container.scrollHeight;
-        }
         // One extra page of 200 entries; deeper or other-branch hits just open
         // the session without a jump.
         const context = await loadContext(searchTarget.sessionId, branchActiveLeafId, history.historyCursor, {
@@ -448,9 +505,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       }
       if (controller.signal.aborted) return;
       if (found) {
-        // Cancel any pending scroll restore — the jump takes over the viewport.
-        prevScrollDistanceRef.current = null;
-        prevScrollHeightRef.current = null;
         setPendingSearchScroll(searchTarget);
       } else {
         onSearchTargetHandledRef.current?.(searchTarget);
@@ -474,7 +528,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       searchMessage?.role === "user" ? selector : `${selector} [data-search-target]`,
     );
     if (element) {
-      scrollToMessage(element);
+      scrollToElement(element);
       element.animate([
         { backgroundColor: "var(--bg-selected)" },
         { backgroundColor: "transparent" },
@@ -482,33 +536,97 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     }
     setPendingSearchScroll(null);
     onSearchTargetHandledRef.current?.(pendingSearchScroll);
-  }, [pendingSearchScroll, searchTarget, searchMessage, scrollContainerRef, scrollToMessage]);
+  }, [pendingSearchScroll, searchTarget, searchMessage, scrollContainerRef, scrollToElement]);
 
-
-  // After the prepended page commits, restore the scroll position so the
-  // viewport doesn't jump. Runs as a layout effect (before paint) and only
-  // consumes the anchor once the prepended content is actually in the DOM.
-  // `messages.length` is the trigger: the server paging design has no client
-  // render window, so a prepend is a single commit that grows the message
-  // list (the pre-converge code relied on `visibleCount` for this signal).
+  // The ONE viewport effect. It consumes each ContentChange exactly once and
+  // performs at most one write, so no two effects can fight over the position.
   useLayoutEffect(() => {
-    const anchor = prevScrollDistanceRef.current;
-    if (anchor == null) return;
+    const change = lastContentChangeRef.current;
+    if (!change || change.rev <= appliedRevRef.current) return;
+    appliedRevRef.current = change.rev;
+    // `openPositioning` owns the first frames (and re-positions on every commit
+    // while hidden). Consume the change silently so turning it off cannot
+    // replay it.
+    if (openPositioning) return;
+
+    if (change.pinUserMessageTop) viewportUserOwnedRef.current = false;
+    // A run-end / page change re-blocks paging until a real user gesture.
+    if (change.kind === "replace" || change.kind === "compact") pagingBlockedRef.current = true;
+
+    const container = scrollContainerRef.current;
+    const action = decideViewportAction(change, {
+      // Use the pre-commit anchor for "was the user at the bottom": after an
+      // append the scroller is taller, so a post-commit measurement would read
+      // false and the append would never follow the bottom.
+      atBottom: container ? isAtBottom(change.prevScrollHeight, change.prevScrollTop, container.clientHeight) : false,
+      userOwnsViewport: viewportUserOwnedRef.current,
+      containerPresent: Boolean(container),
+      hasTarget: Boolean(change.targetEntryId && entryIds.includes(change.targetEntryId)),
+      newScrollHeight: container?.scrollHeight ?? change.prevScrollHeight,
+    });
+
+    if (action.kind === "bottom") {
+      if (change.kind === "compact") bottomTargetRef.current = true;
+      if (action.behavior === "smooth") viewportUserOwnedRef.current = false;
+      pinToBottom(action.behavior);
+      return;
+    }
+
+    bottomTargetRef.current = false;
+    if (action.kind === "anchor") {
+      if (container) {
+        ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
+        container.scrollTop = action.scrollTop;
+        updateChatFades();
+      }
+    } else if (action.kind === "entry") {
+      if (change.targetEntryId) scrollToEntry(change.targetEntryId);
+    } else if (action.kind === "userTop") {
+      scrollUserMessageToTop();
+    }
+  }, [contentRev, openPositioning, entryIds, lastContentChangeRef, scrollContainerRef, pinToBottom, scrollToEntry, scrollUserMessageToTop, updateChatFades]);
+
+  // A compaction reloads through the loading gate, which unmounts the scroll
+  // container; re-pin pre-paint once it is back so the sticky bottom target is
+  // honored on the remounted container too.
+  useLayoutEffect(() => {
+    if (!loading && bottomTargetRef.current) pinToBottom("instant");
+  }, [loading, pinToBottom]);
+
+  // User-intent tracking. Wheel / touch / scroll keys / a scrollbar drag are
+  // unambiguous; a plain pointerdown only *arms* intent, and the scroll handler
+  // confirms it while ignoring our own programmatic writes.
+  useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    if (prevScrollHeightRef.current === container.scrollHeight) return;
-    container.scrollTop = restoreScrollTop(container.scrollHeight, anchor);
-    updateChatFades();
-    prevScrollDistanceRef.current = null;
-    prevScrollHeightRef.current = null;
-  }, [messages.length, scrollContainerRef, updateChatFades]);
-
-  // A pending anchor must never leak across sessions: the first prepend in a
-  // newly opened session would otherwise restore against a stale snapshot.
-  useEffect(() => {
-    prevScrollDistanceRef.current = null;
-    prevScrollHeightRef.current = null;
-  }, [session?.id]);
+    const markGesture = (event: Event) => {
+      if (event instanceof KeyboardEvent) {
+        if (!VIEWPORT_SCROLL_KEYS.has(event.key)) return;
+        if (event.target instanceof Element && event.target.closest("input, textarea, [contenteditable='true']")) return;
+      }
+      userScrollGestureUntilRef.current = Date.now() + USER_SCROLL_GESTURE_MS;
+      if (event.type !== "pointerdown") pagingBlockedRef.current = false;
+    };
+    const handleScroll = () => {
+      if (Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
+      if (Date.now() > userScrollGestureUntilRef.current) return;
+      viewportUserOwnedRef.current = true;
+      bottomTargetRef.current = false;
+      pagingBlockedRef.current = false;
+    };
+    container.addEventListener("wheel", markGesture, { passive: true });
+    container.addEventListener("touchstart", markGesture, { passive: true });
+    container.addEventListener("pointerdown", markGesture, { passive: true });
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("keydown", markGesture);
+    return () => {
+      container.removeEventListener("wheel", markGesture);
+      container.removeEventListener("touchstart", markGesture);
+      container.removeEventListener("pointerdown", markGesture);
+      container.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("keydown", markGesture);
+    };
+  }, [scrollContainerRef, loading]);
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
   const statsKey = sessionStats
