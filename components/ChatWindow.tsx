@@ -370,6 +370,11 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
   // must only fire once the new content is actually in the DOM.
   const prevScrollHeightRef = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
+  // Read inside the observer callback so re-pointing the active leaf does not
+  // tear the observer down and re-fire its initial callback (which would race
+  // an unintended prepend against a navigation's own page replacement).
+  const branchActiveLeafIdRef = useRef(branchActiveLeafId);
+  branchActiveLeafIdRef.current = branchActiveLeafId;
 
   // IntersectionObserver on the sentinel div at the top of the message list.
   // When it becomes visible, fetch the previous server page and prepend it.
@@ -388,10 +393,10 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
         // scrolls while the request is in flight.
         const oldestId = historyCursor;
         if (!oldestId) return;
-        const sid = session?.id ?? sessionIdRef.current;
+        const sid = sessionIdRef.current;
         if (!sid) return;
         loadingOlderRef.current = true;
-        void loadContext(sid, branchActiveLeafId, oldestId, {
+        void loadContext(sid, branchActiveLeafIdRef.current, oldestId, {
           captureAnchor: () => {
             const anchorContainer = scrollContainerRef.current;
             if (!anchorContainer) return;
@@ -406,7 +411,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [historyCursor, hasEarlierMessages, session, branchActiveLeafId, loadContext, sessionIdRef, scrollContainerRef]);
+  }, [historyCursor, hasEarlierMessages, loadContext, sessionIdRef, scrollContainerRef]);
 
   // ── Full-text search jump ───────────────────────────────────────────────
   // When a search hit opens (or targets) this session, make sure the entry is
@@ -483,6 +488,9 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
   // After the prepended page commits, restore the scroll position so the
   // viewport doesn't jump. Runs as a layout effect (before paint) and only
   // consumes the anchor once the prepended content is actually in the DOM.
+  // `messages.length` is the trigger: the server paging design has no client
+  // render window, so a prepend is a single commit that grows the message
+  // list (the pre-converge code relied on `visibleCount` for this signal).
   useLayoutEffect(() => {
     const anchor = prevScrollDistanceRef.current;
     if (anchor == null) return;
@@ -493,7 +501,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     updateChatFades();
     prevScrollDistanceRef.current = null;
     prevScrollHeightRef.current = null;
-  }, [scrollContainerRef, updateChatFades]);
+  }, [messages.length, scrollContainerRef, updateChatFades]);
 
   // A pending anchor must never leak across sessions: the first prepend in a
   // newly opened session would otherwise restore against a stale snapshot.

@@ -441,6 +441,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // would let an unrelated call steal the latch and leave the real compaction
   // reload unprotected against the browser's scrollTop clamp.
   const justCompactedRef = useRef(false);
+  // Set by loadContext for wholesale page changes (navigate / branch switch /
+  // older-page prepend): those own the viewport (anchor restore, navigation
+  // target) and must not be mistaken for appended messages that should pull
+  // the view to the bottom.
+  const suppressAutoScrollRef = useRef(false);
   const userScrollIntentUntilRef = useRef(0);
   const ignoreProgrammaticScrollUntilRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -664,6 +669,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         } : d.context;
         return { ...prev, context };
       });
+      // Both a prepend and a page replacement change the message page
+      // wholesale — the viewport belongs to the anchor restore or the
+      // navigation, not to the generic "new messages arrived" bottom scroll.
+      suppressAutoScrollRef.current = true;
       if (before) {
         // Capture the scroll anchor at the last synchronous moment before the
         // prepend lands. Capturing earlier (at fetch start) would go stale:
@@ -1474,6 +1483,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     dispatch({ type: "start" });
     pendingScrollToUserRef.current = true;
     completionScrollAllowedRef.current = true;
+    // A fresh send is a genuine append; clear any stale replacement suppress.
+    suppressAutoScrollRef.current = false;
 
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
 
@@ -2184,6 +2195,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // viewport to the bottom; skip the generic run-end smooth scroll and
         // clear the latch now that both effects have run for this commit.
         justCompactedRef.current = false;
+      } else if (suppressAutoScrollRef.current) {
+        // A page replacement / prepend (navigate, branch switch, older page)
+        // owns the viewport — don't drag it to the bottom.
+        suppressAutoScrollRef.current = false;
       } else if (!agentRunningRef.current && completionScrollAllowedRef.current) {
         scrollToBottom("smooth");
       }
