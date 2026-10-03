@@ -32,6 +32,10 @@ import { listSubagentProfiles, readSubagentRun, readSubagentSessionResources, SU
 import { cacheSessionPath, getRecordedSessionModel, invalidateSessionListCache, resolveSessionPath } from "./session-reader";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
 import { createExactSystemPromptExtension } from "./exact-system-prompt";
+import { createPiWebBuiltinExtensions, type PiWebBuiltinExtensions } from "./builtin-extensions";
+import type { McpHost } from "./mcp-host";
+import { mcpPromptPreparation, type McpCommandCandidate } from "./mcp-command";
+import { createReadOnlyMcpPolicyExtension } from "./mcp-read-only-policy";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import { rememberThinkingLevel } from "./thinking-level-memory";
 import { modelKey } from "./thinking-levels";
@@ -253,6 +257,8 @@ function pinnedToolNames(session: AgentSessionLike): string[] | undefined {
 // Wraps AgentSession with the same interface the rest of the app expects
 // ============================================================================
 
+export const MCP_WAIT_STOPPED_MESSAGE = "Stopped while MCP servers were connecting; the message was not sent.";
+
 export class AgentSessionWrapper {
   // A Set, not an array: an SSE stream unsubscribes from inside emit() when it
   // closes on session_shutdown, and splicing an array mid-iteration made the
@@ -292,8 +298,41 @@ export class AgentSessionWrapper {
   // Set when shutdown() starts. The SDK session stays usable until destroy(),
   // but lookups must treat the wrapper as gone from this point on.
   private closing = false;
+  private promptAdmissionTail: Promise<void> = Promise.resolve();
+  private readonly mcpHost?: Pick<McpHost, "prepareForPrompt" | "dispose">;
+  private mcpHostDisposed = false;
 
-  constructor(public readonly inner: AgentSessionLike, public readonly cwd: string) {}
+  private mcpPromptWait: { controller: AbortController; done: Promise<void> } | null = null;
+
+  public readonly cwd: string;
+
+  /**
+   * The second argument is the session cwd (production), or the wrapper
+   * options object (upstream shape, used by tests and by callers that let the
+   * cwd come from the session manager).
+   */
+  constructor(
+    public readonly inner: AgentSessionLike,
+    cwdOrOptions: string | { mcpHost?: Pick<McpHost, "prepareForPrompt" | "dispose"> } = "",
+    options: { mcpHost?: Pick<McpHost, "prepareForPrompt" | "dispose"> } = {},
+  ) {
+    const optionsFromSecondArg = typeof cwdOrOptions !== "string";
+    this.cwd = optionsFromSecondArg
+      ? (typeof inner.sessionManager?.getCwd === "function" ? inner.sessionManager.getCwd() : "")
+      : (cwdOrOptions as string);
+    this.mcpHost = (optionsFromSecondArg ? cwdOrOptions : options).mcpHost;
+  }
+
+  /** Connects the session's MCP servers before a prompt starts a run (lib/mcp-host.ts). */
+  disposeMcpHost(): void {
+    if (this.mcpHostDisposed) return;
+    this.mcpHostDisposed = true;
+    try {
+      this.mcpHost?.dispose();
+    } catch (error) {
+      console.error("[pi-web] MCP host dispose failed:", error instanceof Error ? error.message : error);
+    }
+  }
 
   get sessionId(): string {
     return this.inner.sessionId;
@@ -631,6 +670,30 @@ export class AgentSessionWrapper {
     this.onDestroyCallback = cb;
   }
 
+  /** Serialize admission: each prompt waits for the previous one to settle at preflight. */
+  private async acquirePromptAdmission(): Promise<() => void> {
+    const previous = this.promptAdmissionTail;
+    let release!: () => void;
+    this.promptAdmissionTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    return release;
+  }
+
+  /** The session's extension commands as pi looks them up: by invocation name, with the extension's path. */
+  private extensionCommandCandidates(): McpCommandCandidate[] {
+    try {
+      return this.inner.extensionRunner.getRegisteredCommands().map((command) => ({
+        name: command.invocationName,
+        sourceInfo: command.sourceInfo,
+      }));
+    } catch {
+      // Unreadable: treat the prompt as one that may start a run, as before.
+      return [];
+    }
+  }
+
   async send(command: Record<string, unknown>): Promise<unknown> {
     const type = command.type as string;
     // A models.json change from any source takes effect before the next command.
@@ -645,6 +708,11 @@ export class AgentSessionWrapper {
 
     switch (type) {
       case "prompt": {
+        // Serialize only admission. Once the preceding prompt has been handed to the
+        // SDK, it can atomically decide whether this submission starts a run or joins
+        // its streaming queue.
+        const releaseAdmission = await this.acquirePromptAdmission();
+        try {
         if (this.inner.isBashRunning) {
           throw new Error("Cannot send a prompt while a shell command is running");
         }
@@ -652,6 +720,37 @@ export class AgentSessionWrapper {
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         const streamingBehavior = command.streamingBehavior as "steer" | "followUp" | undefined;
         this.promptRunning = true;
+        // A prompt that may start a run first connects the session's MCP servers and
+        // waits for the ones still connecting. The SDK runs before_agent_start before a
+        // run has an abort signal, so Stop is honoured here: it ends the wait, and the
+        // message is rejected unsent, which returns it to the composer. pi runs an
+        // extension command before anything else and starts no run for it: another
+        // extension's command skips this, and the built-in `/mcp`, which acts on the
+        // registered servers, registers them without waiting (`mcpPromptPreparation()`).
+        const mcpPreparation = this.mcpHost && !this.inner.isStreaming
+          ? mcpPromptPreparation(typeof command.message === "string" ? command.message : "", this.extensionCommandCandidates())
+          : "none";
+        if (this.mcpHost && mcpPreparation !== "none") {
+          const controller = new AbortController();
+          const waited = this.mcpHost.prepareForPrompt(controller.signal, { wait: mcpPreparation === "wait" })
+            .catch((error: unknown) => {
+              console.error("[pi-web] MCP servers could not be prepared:", error instanceof Error ? error.message : error);
+            })
+            .then(() => {
+              if (!controller.signal.aborted) return;
+              throw new Error(MCP_WAIT_STOPPED_MESSAGE);
+            });
+          const wait = { controller, done: waited.then(() => undefined, () => undefined) };
+          this.mcpPromptWait = wait;
+          try {
+            await waited;
+          } catch (error) {
+            this.promptRunning = false;
+            throw error;
+          } finally {
+            if (this.mcpPromptWait === wait) this.mcpPromptWait = null;
+          }
+        }
         this.inner.prompt(command.message as string, {
           ...(promptImages?.length ? { images: promptImages } : {}),
           ...(streamingBehavior ? { streamingBehavior } : {}),
@@ -674,10 +773,19 @@ export class AgentSessionWrapper {
         // pi defers its first file flush until an assistant message exists.
         this.persistPromptSession();
         return null;
+        } finally {
+          releaseAdmission();
+        }
       }
 
       case "abort":
         this.forceShutdownOnIdle = true;
+        // A prompt still waiting for MCP servers is withdrawn before it starts a run.
+        if (this.mcpPromptWait) {
+          const wait = this.mcpPromptWait;
+          wait.controller.abort();
+          await wait.done;
+        }
         try {
           await this.inner.abort();
           return null;
@@ -1008,6 +1116,9 @@ export class AgentSessionWrapper {
   destroy(): void {
     if (!this._alive) return;
     this._alive = false;
+    // Let go of what the host reported to Settings before any extension's
+    // shutdown handler runs, so a closed session leaves no stale records.
+    this.disposeMcpHost();
     // Tell attached SSE listeners to drop this instance so the browser
     // EventSource errors and reconnects instead of staying OPEN on a dead wrapper.
     this.emit({ type: "session_shutdown" });
@@ -1104,6 +1215,8 @@ export class AgentSessionWrapper {
             error instanceof Error ? error.message : error,
           );
         }
+        // After binding, so the host's session_start has run and finds nothing to record later.
+        this.disposeMcpHost();
         if (!this.sessionShutdownEmitted) {
           this.sessionShutdownEmitted = true;
           const emit = this.inner.extensionRunner?.emit;
@@ -1794,6 +1907,11 @@ export async function startRpcSession(
     // prompt; real sessions always register it because tools can be disabled
     // at runtime (force-empty projects "" per run via the same extension).
     const subagentUsesExactSystemPrompt = subagentChatOnly || subagentResources?.exactSystemPrompt !== undefined;
+    // codemode, tool-search, and mcp, as the pi CLI loads them, and the host that decides
+    // which MCP servers the session connects (ADR 0006).
+    const builtins: PiWebBuiltinExtensions | undefined = subagentResources || subagentChatOnly
+      ? undefined
+      : await createPiWebBuiltinExtensions({ agentDir });
     const services = await createAgentSessionServices({
       cwd: sessionCwd,
       agentDir,
@@ -1816,6 +1934,11 @@ export async function startRpcSession(
           }
         : {
         extensionFactories: [
+          // codemode, tool-search, and mcp, as the pi CLI loads them, plus the
+          // per-session MCP host (ADR 0006). Chat-only and subagents skip them.
+          ...(builtins?.extensions ?? []),
+          // Blocks write-capable MCP tools in read-only sessions (ADR 0006).
+          createReadOnlyMcpPolicyExtension(),
           createProjectCommandBashExtension({
             cwd: sessionCwd,
             settings: settingsManager,
@@ -1954,7 +2077,9 @@ export async function startRpcSession(
       selectionIsEmpty = inner.getActiveToolNames().length === 0;
     }
 
-    const wrapper = new AgentSessionWrapper(inner, sessionCwd);
+    const wrapper = new AgentSessionWrapper(inner, sessionCwd, {
+      ...(builtins?.mcpHost ? { mcpHost: builtins.mcpHost } : {}),
+    });
     // Surface the explicit model decision made above (active / missing+reason+
     // suggestion) to the client, and baseline models.json for the lazy refresh.
     wrapper.setModelStatus(resolution);
