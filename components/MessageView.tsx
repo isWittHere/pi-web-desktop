@@ -14,6 +14,9 @@ import { CompactionSummary } from "./CompactionSummary";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import { isEditToolName } from "@/lib/tool-names";
+import { CODEMODE_TOOL_NAME, codemodeCalls, codemodeScript, codemodeScriptPreview, stripCodemodeHeader } from "@/lib/codemode-view";
+import { mcpToolLabel } from "@/lib/mcp-tool-display";
+import { CodemodeCallList } from "./CodemodeToolView";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/ArrowBendDownRight";
 import { ArrowDownIcon } from "@phosphor-icons/react/ArrowDown";
@@ -1204,15 +1207,27 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, isStreamin
 const RESULT_PREVIEW_CHARS = 8000;
 
 export const ToolCallBlock = memo(function ToolCallBlock({ block, result, duration, processStyle = false }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; processStyle?: boolean }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const inputStr = useMemo(() => JSON.stringify(block.input, null, 2), [block.input]);
   const isEditTool = isEditToolName(block.toolName);
   const resultDiff = result && !result.isError ? getResultDiff(result) : null;
+  // A script and the calls it made, instead of the input JSON. Streamed input keeps the generic view.
+  const codemodeCode = block.toolName === CODEMODE_TOOL_NAME ? codemodeScript(block.input) : null;
+  const codemode = codemodeCode === null ? null : { code: codemodeCode, ...codemodeCalls(result?.details) };
+  // A running script's progress snapshot has calls but no content yet.
+  const codemodeRunning = codemode !== null && result !== undefined && result.content.length === 0;
+  // `server/tool` instead of the registered `mcp__server__tool`, as pi's TUI shows it.
+  const mcpLabel = mcpToolLabel(block.toolName, result?.details);
+  const codemodeCallCount = codemode ? codemode.calls.length + codemode.omitted : 0;
 
   // Result display
+  // `stripCodemodeHeader` is applied unconditionally: it only removes the
+  // `// @options:` header a codemode script's result carries, so it is a no-op
+  // for every other tool, and the memo then depends on `result` alone.
   const resultText = useMemo(
     () => (result
-      ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
+      ? stripCodemodeHeader(result.content).filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
       : null),
     [result],
   );
@@ -1230,11 +1245,21 @@ export const ToolCallBlock = memo(function ToolCallBlock({ block, result, durati
         aria-expanded={expanded}
       >
         <span className="tool-call-name">
-          {block.toolName}
+          {mcpLabel ? (
+            <>
+              <span style={{ fontWeight: 500, opacity: 0.75 }}>{mcpLabel.server}/</span>
+              {mcpLabel.tool}
+            </>
+          ) : block.toolName}
         </span>
         <span className="tool-call-preview">
-          {getToolPreview(block)}
+          {codemode ? codemodeScriptPreview(codemode.code) : getToolPreview(block)}
         </span>
+        {codemodeCallCount > 0 && (
+          <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+            {codemodeCallCount === 1 ? t("codemode.callCountOne") : t("codemode.callCount", { count: codemodeCallCount })}
+          </span>
+        )}
         {duration !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
@@ -1243,15 +1268,21 @@ export const ToolCallBlock = memo(function ToolCallBlock({ block, result, durati
         </span>
       </button>
 
-      {/* ── Expanded: input args ── */}
+      {/* ── Expanded: input args; a codemode script in place of its JSON ── */}
       {expanded && !isEditTool && (
         <pre className="tool-call-input">
-          {inputStr}
+          {codemode ? codemode.code.replace(/\r/g, "").trimEnd() : inputStr}
         </pre>
       )}
 
-      {/* ── Paired result — only shown when expanded ── */}
-      {expanded && result && (
+      {/* ── Expanded: the calls a codemode script made ── */}
+      {expanded && codemode && (
+        <CodemodeCallList calls={codemode.calls} omitted={codemode.omitted} isError={isError} />
+      )}
+
+      {/* ── Paired result — only shown when expanded, and not while a codemode
+           script is still streaming its progress snapshot (no content yet) ── */}
+      {expanded && result && !codemodeRunning && (
         resultDiff ? (
           <PairedDiffResult
             diff={resultDiff}

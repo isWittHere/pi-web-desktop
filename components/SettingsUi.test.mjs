@@ -12,8 +12,6 @@ const templateSource = await readFile(new URL("./SettingsUi.tsx", import.meta.ur
 const cssSource = await readFile(new URL("../app/settings.css", import.meta.url), "utf8");
 const globalCssSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 const layoutSource = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
-const enSource = await readFile(new URL("../lib/i18n/messages/en.ts", import.meta.url), "utf8");
-const zhSource = await readFile(new URL("../lib/i18n/messages/zh-CN.ts", import.meta.url), "utf8");
 const mcpSource = await readFile(new URL("./McpConfig.tsx", import.meta.url), "utf8");
 
 test("provides one template for config layout and controls", () => {

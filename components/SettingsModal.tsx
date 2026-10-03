@@ -5,6 +5,7 @@ import { ChatCenteredText, Cpu, Monitor, Plug, Stack, TextT, UsersThree, X } fro
 import { ChatConfig } from "./ChatConfig";
 import { DisplayConfig } from "./DisplayConfig";
 import { ModelsConfig } from "./ModelsConfig";
+import { McpConfig } from "./McpConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { PromptsConfig } from "./PromptsConfig";
@@ -50,6 +51,7 @@ const tabIcons: Record<SettingsTab, typeof Cpu> = {
   agents: UsersThree,
   plugins: Plug,
   prompts: TextT,
+  mcp: Plug,
 };
 
 /** Manager pages render their own list+detail panes; the SettingsPane body
@@ -301,6 +303,7 @@ export function SettingsModal({
           {cwd && activeTab === "agents" && <AgentsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
           {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
           {cwd && activeTab === "prompts" && <PromptsConfig cwd={cwd} />}
+          {activeTab === "mcp" && <McpConfig cwd={cwd} onClose={onCloseAction} />}
         </SettingsPane>
       </section>
     </div>
