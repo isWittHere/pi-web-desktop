@@ -759,9 +759,12 @@ export class AgentSessionWrapper {
       case "get_tools": {
         const all: ToolInfo[] = this.inner.getAllTools();
         const active = new Set<string>(this.inner.getActiveToolNames());
+        // The definition's description is not always what the model gets: `prepareLoadout`
+        // hooks rewrite the declared ones (codemode lists its nested tools and the MCP types).
+        const declared = new Map((this.inner.agent.state?.tools ?? []).map((t) => [t.name, t.description]));
         return all.map((t) => ({
           name: t.name,
-          description: t.description,
+          description: declared.get(t.name) ?? t.description,
           active: active.has(t.name),
           ...(t.parameters !== undefined ? { parameters: t.parameters } : {}),
           ...(t.promptGuidelines !== undefined ? { promptGuidelines: t.promptGuidelines } : {}),

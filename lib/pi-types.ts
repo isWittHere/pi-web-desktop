@@ -148,6 +148,8 @@ export interface AgentSessionLike {
       thinkingLevel?: string;
       /** Cumulative assistant message in flight, replayed on SSE reconnect. */
       streamingMessage?: unknown;
+      /** The declared tools, with the descriptions `prepareLoadout` hooks set for the model. */
+      readonly tools?: readonly { readonly name: string; readonly description: string }[];
     };
   };
   readonly extensionRunner: ExtensionRunnerLike;
