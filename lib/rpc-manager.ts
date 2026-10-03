@@ -18,6 +18,11 @@ import {
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
 import { resolveShellTools } from "./powershell-settings";
 import {
+  appendClearedSessionToolSelection,
+  appendSessionToolSelection,
+  readSessionToolSelection,
+} from "./session-tool-selection";
+import {
   createSubagentExtension,
   preferPiWebSubagentExtension,
 } from "./subagent-extension";
@@ -30,9 +35,9 @@ import { createExactSystemPromptExtension } from "./exact-system-prompt";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import { rememberThinkingLevel } from "./thinking-level-memory";
 import { modelKey } from "./thinking-levels";
-import { deriveToolNamesFromActive } from "./tool-presets";
+import { PRESET_DEFAULT } from "./tool-presets";
 import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
-import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
+import type { AgentSessionLike, ExtensionUiContextLike, NavigateTreeResult, ToolInfo } from "./pi-types";
 import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem, SessionEntry, SessionInfo, SessionMessageEntry } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
 
@@ -190,39 +195,57 @@ class PlainTextTheme extends Theme {
 const PLAIN_TEXT_THEME = new PlainTextTheme();
 const CUSTOM_UI_KEYBINDINGS = new TuiKeybindingsManager(TUI_KEYBINDINGS);
 
-function withExtensionTools(session: AgentSessionLike, toolNames: string[]): string[] {
-  if (toolNames.length === 0) return [];
+/**
+ * Narrow a session's active tools to the selection: the coding tools are
+ * replaced by `requested` (with the shell tool swapped per the PowerShell
+ * setting) while non-coding tools the carry set holds and the registry still
+ * lists stay active. Never adds a tool: pi activates extension tools itself at
+ * construction and reload, so the carry already holds them — forcing them back
+ * on here would resurrect tools a reload deliberately left inactive.
+ */
+export function resolveActiveToolNames(
+  session: AgentSessionLike,
+  requested: readonly string[],
+  carry: readonly string[],
+): string[] {
+  // An empty request disables every tool: the empty allow-list is explicit.
+  if (requested.length === 0) return [];
 
+  const registered = new Map(session.getAllTools().map((tool) => [tool.name, tool]));
   const codingToolNames = new Set(CODING_TOOL_NAMES);
-  const extensionToolNames = session
-    .getAllTools()
-    .map((t) => t.name)
-    .filter((name) => !codingToolNames.has(name));
-
-  return [...new Set([...toolNames, ...extensionToolNames])];
+  const active: string[] = [];
+  const seen = new Set<string>();
+  for (const name of resolveShellTools(requested, session.settingsManager.getDefaultTools())) {
+    if (!seen.has(name)) {
+      seen.add(name);
+      active.push(name);
+    }
+  }
+  for (const name of carry) {
+    if (codingToolNames.has(name) || seen.has(name)) continue;
+    const tool = registered.get(name);
+    // A hidden tool is withdrawn: not callable and not declarable.
+    if (tool && tool.exposure !== "hidden") {
+      seen.add(name);
+      active.push(name);
+    }
+  }
+  return active;
 }
 
 /**
- * Narrow a session's active tools to the pi-web policy: the given builtin
- * preset tools (shell swapped per the PowerShell setting) PLUS all non-coding
- * extension/package tools, so installed extensions stay usable in pi-web just
- * like in the `pi` CLI. Empty lists disable every tool.
+ * The coding tool list pi resolves from settings.json when no selection is
+ * pinned: the resolved defaultTools, or pi's builtin defaults when the setting
+ * is unset. resolveActiveToolNames re-swaps the shell tool, so the list is
+ * handed over as-is.
  */
-function applyToolPolicy(session: AgentSessionLike, toolNames: string[]): void {
-  const defaultTools = session.settingsManager.getDefaultTools();
-  session.setActiveToolsByName(withExtensionTools(session, resolveShellTools(toolNames, defaultTools)));
+function configuredToolNames(session: AgentSessionLike): string[] {
+  return session.settingsManager.getDefaultTools() ?? PRESET_DEFAULT;
 }
 
-/**
- * Re-apply the pi-web tool policy to a session whose live active set drifted
- * from it: derive the builtin preset from the current state (the SDK activates
- * every extension tool at session construction via includeAllExtensionTools,
- * which would otherwise leave the Windows host `powershell` tool active even
- * when the PowerShell setting is off), then narrow via applyToolPolicy.
- */
-function applyDerivedToolPolicy(session: AgentSessionLike): void {
-  const toolNames = deriveToolNamesFromActive(session.getActiveToolNames());
-  applyToolPolicy(session, toolNames);
+/** Re-read the pinned tool selection from the session's current branch. */
+function pinnedToolNames(session: AgentSessionLike): string[] | undefined {
+  return readSessionToolSelection(session.sessionManager.getBranch() as unknown as SessionEntry[]);
 }
 
 // ============================================================================
@@ -406,6 +429,44 @@ export class AgentSessionWrapper {
   /** Await extension binding so a prompt cannot race session_start dispatch. */
   async waitUntilReady(): Promise<void> {
     await this.waitForExtensionsBound();
+  }
+
+  /** The names of the tools currently declared to the model. */
+  getActiveToolNames(): string[] {
+    return this.inner.getActiveToolNames();
+  }
+
+  /**
+   * Apply a user tool selection: replace the coding tools with `toolNames` and
+   * keep the active non-coding extension/package tools. `carry` defaults to
+   * the current active set, so a selection applies on top of the live state.
+   */
+  setActiveToolSelection(
+    toolNames: readonly string[],
+    carry: readonly string[] = this.getActiveToolNames(),
+  ): void {
+    this.inner.setActiveToolsByName(resolveActiveToolNames(this.inner, toolNames, carry));
+  }
+
+  /**
+   * Navigate the session tree and re-apply the pinned tool selection
+   * afterwards: the SDK restores the target branch's transcript-declared
+   * loadout, which would otherwise keep the branch from the user's last pin
+   * (an older pin on the abandoned path must not leak into the new one).
+   */
+  private async navigateTreeKeepingToolSelection(
+    targetId: string,
+    options?: { summarize?: boolean },
+  ): Promise<NavigateTreeResult> {
+    const result = await this.inner.navigateTree(targetId, options ?? {});
+    if (result.cancelled) return result;
+    // Subagent tool selection is fixed by its profile; chat-only subagents
+    // carry an empty selection that must not be re-resolved from settings.
+    if (!readSubagentSessionResources(this.inner.sessionManager.getEntries() as unknown as SessionEntry[])) {
+      const carry = this.getActiveToolNames();
+      this.setActiveToolSelection(pinnedToolNames(this.inner) ?? carry, carry);
+    }
+    return result;
   }
 
   beginExtensionBinding(options: ExtensionBindingOptions = {}): void {
@@ -730,7 +791,7 @@ export class AgentSessionWrapper {
       }
 
       case "navigate_tree": {
-        const result = await this.inner.navigateTree(command.targetId as string, {});
+        const result = await this.navigateTreeKeepingToolSelection(command.targetId as string, {});
         return { cancelled: result.cancelled };
       }
 
@@ -859,11 +920,17 @@ export class AgentSessionWrapper {
           this.extensionWidgets.clear();
           this.syncProjectTrust();
           await this.inner.reload();
-          applyDerivedToolPolicy(this.inner);
+          // Record the retraction so re-materialization and later reloads
+          // resolve the settings instead of replaying an older pin.
+          appendClearedSessionToolSelection(this.inner.sessionManager);
+          const carry = this.getActiveToolNames();
+          this.setActiveToolSelection(configuredToolNames(this.inner), carry);
           return { success: true };
         }
         this.setForceEmptySystemPrompt(toolNames.length === 0);
-        applyToolPolicy(this.inner, toolNames);
+        // Persist the pin first so a reload or re-materialization replays it.
+        appendSessionToolSelection(this.inner.sessionManager, toolNames);
+        this.setActiveToolSelection(toolNames);
         return null;
       }
 
@@ -873,12 +940,14 @@ export class AgentSessionWrapper {
         this.extensionWidgets.clear();
         this.syncProjectTrust();
         await this.inner.reload();
-        // reload() rebuilds the tool registry with includeAllExtensionTools,
-        // re-activating every extension tool (e.g. the Windows host powershell
-        // tool regardless of the PowerShell setting). Re-apply the derived
-        // preset policy for non-subagent sessions.
+        // reload() rebuilds the tool registry with includeAllExtensionTools and
+        // keeps the previous active set plus newly added defaultTools. Re-apply
+        // the pinned selection (or the settings resolution when no pin is set)
+        // for non-subagent sessions, so a PowerShell toggle or a changed
+        // defaultTools cannot leave both shell tools active.
         if (!readSubagentSessionResources(this.inner.sessionManager.getEntries() as unknown as SessionEntry[])) {
-          applyDerivedToolPolicy(this.inner);
+          const carry = this.getActiveToolNames();
+          this.setActiveToolSelection(pinnedToolNames(this.inner) ?? configuredToolNames(this.inner), carry);
         }
         if (typeof this.inner.bindExtensions !== "function") {
           this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
@@ -1866,26 +1935,23 @@ export async function startRpcSession(
       }
     }
 
-    // Apply the pi-web tool policy: the active set is the chosen (or derived)
-    // builtin preset PLUS all non-coding extension/package tools, so installed
-    // extensions stay usable in pi-web just like in the `pi` CLI.
-    // The SDK activates every extension tool at session construction
-    // (includeAllExtensionTools); sessions opened without an explicit tool
-    // list would otherwise keep the Windows host `powershell` tool active even
-    // when the PowerShell setting is off, so re-derive the preset from the
-    // live state in that case.
-    let effectiveToolNames: string[] | undefined;
+    // Apply the session's tool selection: the persisted pin when present, the
+    // explicit request for new sessions, else the SDK's transcript-derived (or
+    // settings-default) active set. Coding tools are replaced by the selection
+    // (shell swapped per the PowerShell setting); non-coding tools the session
+    // already carries stay active. Subagent sessions keep the profile's fixed
+    // tool list — their registry is allow-listed at construction.
+    let selectionIsEmpty = false;
     if (!subagentResources) {
-      if (toolNames !== undefined) {
-        effectiveToolNames = toolNames;
-      } else {
-        effectiveToolNames = deriveToolNamesFromActive(inner.getActiveToolNames());
-      }
-    }
-    // effectiveToolNames stays undefined for subagent sessions (fixed by
-    // their profile), so the guard below only fires for real sessions.
-    if (effectiveToolNames && effectiveToolNames.length > 0) {
-      applyToolPolicy(inner, effectiveToolNames);
+      const persistedToolNames = readSessionToolSelection(branch as unknown as SessionEntry[]);
+      const selectedToolNames = persistedToolNames ?? (toolNames !== undefined ? toolNames : undefined);
+      const initialToolNames = inner.getActiveToolNames();
+      inner.setActiveToolsByName(
+        resolveActiveToolNames(inner, selectedToolNames ?? initialToolNames, initialToolNames),
+      );
+      // An empty selection (the "none" preset) disables every tool and clears
+      // the system prompt, same as the explicit empty allow-list path.
+      selectionIsEmpty = inner.getActiveToolNames().length === 0;
     }
 
     const wrapper = new AgentSessionWrapper(inner, sessionCwd);
@@ -1903,7 +1969,7 @@ export async function startRpcSession(
       wrapper.setExactSystemPrompt(exact !== undefined
         ? () => exact
         : () => subagentResources.appendSystemPrompt[0] ?? "");
-    } else if (!subagentResources && effectiveToolNames?.length === 0) {
+    } else if (selectionIsEmpty) {
       wrapper.setForceEmptySystemPrompt(true);
     }
     // The inline extension resolves the prompt lazily per run through this ref,
@@ -1915,7 +1981,7 @@ export async function startRpcSession(
     const realSessionId = inner.sessionId as string;
     registerRpcWrapper(wrapper);
     if (!subagentChatOnly) {
-      wrapper.beginExtensionBinding({ forceEmptySystemPrompt: !subagentResources && effectiveToolNames?.length === 0 });
+      wrapper.beginExtensionBinding({ forceEmptySystemPrompt: selectionIsEmpty });
     }
 
     return { session: wrapper, realSessionId };
