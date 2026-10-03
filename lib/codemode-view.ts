@@ -121,7 +121,7 @@ const PROGRESS_ARGS_LENGTH = 120;
 export function getCodemodeProgress(partialResult: unknown): string | null {
   if (!isRecord(partialResult)) return null;
   const { calls } = codemodeCalls(partialResult.details);
-  const call = calls.findLast((candidate) => candidate.status === "running") ?? calls[calls.length - 1];
+  const call = calls.findLast((candidate) => candidate.status === "running") ?? calls.at(-1);
   if (!call) return null;
   const args = call.args.length > PROGRESS_ARGS_LENGTH
     ? `${call.args.slice(0, PROGRESS_ARGS_LENGTH - 3)}...`

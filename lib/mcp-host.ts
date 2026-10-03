@@ -616,7 +616,7 @@ class HostInstance {
     this.update(attempt, "connecting");
     let redactor: ((text: string) => string) | undefined;
     const redact = (text: string) => {
-      if (!redactor) redactor = createTestRedactor(entry.config, [transport], { isCommandConfigValue: this.isCommandValue });
+      redactor ??= createTestRedactor(entry.config, [transport], { isCommandConfigValue: this.isCommandValue });
       return redactor(text);
     };
     const stderr = (text: string | undefined) => (text === undefined ? {} : { stderr: maskStatusStderr(text, redact) });

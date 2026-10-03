@@ -322,7 +322,7 @@ function maskConnectionString(value: string, isReference: ReferenceTest, hidden?
       return `${key}${SECRET_MASK}`;
     }
     const inner = maskValue(segmentValue, isReference, hidden);
-    masked = masked || inner.masked;
+    masked ||= inner.masked;
     return `${key}${inner.value}`;
   });
   return { value: result.join(";"), masked };
@@ -396,7 +396,7 @@ function flagTakesSecret(flag: string): boolean {
   if (!/^--?[A-Za-z]/.test(flag)) return false;
   const name = flag.replace(/^-+/, "");
   // `--auth user:password`, `--basic-auth …`.
-  return isSecretName(name) || nameWords(name)[nameWords(name).length - 1] === "auth";
+  return isSecretName(name) || nameWords(name).at(-1) === "auth";
 }
 
 const SCHEME_WORD = /^(?:bearer|basic|token)$/i;
@@ -431,7 +431,7 @@ function maskSequence(
         return `${name}=${SECRET_MASK}`;
       }
       const inner = maskValue(value, isReference, hidden);
-      masked = masked || inner.masked;
+      masked ||= inner.masked;
       return `${name}=${inner.value}`;
     }
     if (/^--?[A-Za-z][A-Za-z0-9_.-]*$/.test(item)) {
@@ -446,7 +446,7 @@ function maskSequence(
       }
     }
     const inner = maskValue(item, isReference, hidden);
-    masked = masked || inner.masked;
+    masked ||= inner.masked;
     return inner.value;
   });
   return { values, masked };

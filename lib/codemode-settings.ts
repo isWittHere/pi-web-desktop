@@ -1,12 +1,12 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import lockfile from "proper-lockfile";
-import {
-  getPowerShellSettingsPath,
-  isToolModifier,
-  resolveDefaultToolEntries,
-} from "./powershell-settings";
+import type { CodemodeInlineBudgetSetting, CodemodeModeSetting } from "./api-types";
+import { isToolModifier, resolveDefaultToolEntries } from "./powershell-settings";
+import { getPowerShellSettingsPath } from "./powershell-settings";
+import { getGlobalSettingsPath } from "./global-settings-file";
+import { PROJECT_SETTINGS_MAX_BYTES, readRegularFileText } from "./regular-file";
 import { getProjectTrustStatus } from "./project-trust";
 import { PRESET_DEFAULT } from "./tool-presets";
 
@@ -242,4 +242,223 @@ export function findProjectCodemodeOverride(
     // An unreadable project file cannot silently shadow the global choice.
     return undefined;
   }
+}
+
+// ---------------------------------------------------------------------------
+// The ADR reader surface (Settings › MCP, ADR 0006 "Code mode"): what a
+// settings layer's `codemode` object means to the codemode extension, with
+// pi's own SettingsManager merging a trusted project's text over the global
+// choice, and values pi ignores reported rather than normalized.
+// ---------------------------------------------------------------------------
+
+const CODEMODE = CODEMODE_TOOL_NAME;
+
+type CodemodeKey = "mode" | "inlineBudget";
+
+function isSettingsObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** One key of `codemode`. A `codemode` that is not an object holds none, as `settings.codemode?.[key]` reads it. */
+function codemodeValueOf(settings: Record<string, unknown>, key: CodemodeKey): unknown {
+  return isSettingsObject(settings.codemode) ? settings.codemode[key] : undefined;
+}
+
+const INVALID_VALUE_MAX_CHARS = 60;
+
+/** A value pi does not use, as JSON shortened for a notice. */
+function invalidValueText(raw: unknown): string {
+  const json = JSON.stringify(raw) ?? String(raw);
+  return json.length > INVALID_VALUE_MAX_CHARS ? `${json.slice(0, INVALID_VALUE_MAX_CHARS - 1)}…` : json;
+}
+
+/** Global settings for each choice, reduced to what decides Code mode: other entries never do. */
+const GLOBAL_SETTINGS_FOR: Record<CodemodeChoice, string | undefined> = {
+  automatic: undefined,
+  always: JSON.stringify({ defaultTools: [`+${CODEMODE}`] }),
+};
+
+/** Global and project settings texts merged by pi's own SettingsManager, as a trusted project's session merges them. */
+function mergedSettings(globalText: string | undefined, projectText: string): SettingsManager {
+  const texts = { global: globalText, project: projectText };
+  const storage: Parameters<typeof SettingsManager.fromStorage>[0] = {
+    withLock: (scope, fn) => {
+      fn(texts[scope]);
+    },
+  };
+  return SettingsManager.fromStorage(storage, { projectTrusted: true });
+}
+
+/** Whether a session starts with `codemode` active, merged and resolved by pi's own SettingsManager. */
+function startsWithCodemode(globalText: string | undefined, projectText: string): boolean {
+  return mergedSettings(globalText, projectText).getDefaultTools()?.includes(CODEMODE) === true;
+}
+
+/**
+ * The Code mode a project's settings text gives its sessions when the global
+ * choice no longer matters there, undefined when the global choice still
+ * decides. A project `defaultTools` list with a plain tool name replaces the
+ * global list, `+codemode` and all; one of only modifiers is appended to it,
+ * so a `+codemode` or `-codemode` there has the last word. The SDK merges and
+ * resolves both global choices with the project's text, so its rules apply
+ * exactly, malformed values included; the two agreeing is what overriding
+ * means. A text that does not parse reads as empty, as pi reads it.
+ */
+export function projectCodemodePreference(projectText: string | undefined): CodemodeChoice | undefined {
+  if (projectText === undefined) return undefined;
+  const automatic = startsWithCodemode(GLOBAL_SETTINGS_FOR.automatic, projectText);
+  if (automatic !== startsWithCodemode(GLOBAL_SETTINGS_FOR.always, projectText)) return undefined;
+  return automatic ? "always" : "automatic";
+}
+
+export function projectSettingsPath(cwd: string): string {
+  return join(cwd, CONFIG_DIR_NAME, "settings.json");
+}
+
+function readProjectSettingsText(settingsPath: string): string | undefined {
+  try {
+    return readRegularFileText(settingsPath, PROJECT_SETTINGS_MAX_BYTES);
+  } catch {
+    // Unreadable, or not a regular file: pi reads one it cannot read as empty too.
+    return undefined;
+  }
+}
+
+/**
+ * Whether the project at `cwd` decides Code mode for its sessions through its
+ * `.pi/settings.json`. Call it only for a project whose settings sessions read
+ * (a trusted one): an untrusted project's file never reaches a session. The
+ * file is read without pi's lock, as `readBuiltinExtensionSwitches()` reads
+ * it, so a write caught halfway reads as unparsable and reports nothing until
+ * the next load.
+ */
+export function readProjectCodemodeOverride(cwd: string): ProjectCodemodeOverride | undefined {
+  const settingsPath = projectSettingsPath(cwd);
+  const preference = projectCodemodePreference(readProjectSettingsText(settingsPath));
+  return preference ? { settingsPath, preference } : undefined;
+}
+
+/** What a trusted project's `.pi/settings.json` makes of Code mode for its sessions, whatever the global choice. */
+export interface ProjectCodemodeOverride {
+  settingsPath: string;
+  /** "always" when its sessions start with `codemode` active, "automatic" when they start without it. */
+  preference: CodemodeChoice;
+}
+
+/** Both global `codemode` settings, in one read. */
+export async function readCodemodeSettings(settingsPath = getGlobalSettingsPath()): Promise<{
+  mode: CodemodeModeSetting;
+  inlineBudget: CodemodeInlineBudgetSetting;
+}> {
+  const settings = parseSettingsSync(settingsPath);
+  return {
+    mode: codemodeModeSetting(codemodeValueOf(settings, "mode")),
+    inlineBudget: inlineBudgetSetting(codemodeValueOf(settings, "inlineBudget")),
+  };
+}
+
+/** The global `codemode.mode` and `codemode.inlineBudget` in one read (alias of `readCodemodeSettings`). */
+export async function readCodemodePreference(settingsPath = getGlobalSettingsPath()): Promise<CodemodeChoice> {
+  const settings = parseSettingsSync(settingsPath);
+  const raw = settings.defaultTools;
+  return Array.isArray(raw)
+    ? resolveDefaultToolEntries(raw as string[]).includes(CODEMODE) ? "always" : "automatic"
+    : "automatic";
+}
+
+function parseSettingsSync(path: string): Record<string, unknown> {
+  if (!existsSync(path)) return {};
+  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+  if (!isRecord(parsed)) throw new Error("Invalid settings.json: expected an object");
+  return parsed;
+}
+
+// ---------------------------------------------------------------------------
+// codemode.mode
+// ---------------------------------------------------------------------------
+
+/**
+ * A raw `codemode.mode` as the codemode extension reads it: "only" when it is
+ * exactly that, anything else "on".
+ */
+function codemodeModeSetting(raw: unknown): CodemodeModeSetting {
+  if (raw === "only") return { value: "only" };
+  if (raw === undefined || raw === "on") return { value: "on" };
+  return { value: "on", invalid: invalidValueText(raw) };
+}
+
+/** What a trusted project's `.pi/settings.json` makes of the mode for its sessions, whatever the global value. */
+export interface ProjectCodemodeMode extends CodemodeModeSetting {
+  settingsPath: string;
+}
+
+/**
+ * The mode a project's settings text gives its sessions when the global value
+ * no longer matters there, undefined when the global value still decides.
+ */
+export function readProjectCodemodeMode(cwd: string): ProjectCodemodeMode | undefined {
+  const settingsPath = projectSettingsPath(cwd);
+  const text = readProjectSettingsText(settingsPath);
+  if (text === undefined) return undefined;
+  const mode = projectCodemodeValue("mode", ["on", "only"], text);
+  return mode ? { settingsPath, ...codemodeModeSetting(mode.raw) } : undefined;
+}
+
+/**
+ * The raw `codemode[key]` a project's settings text gives its sessions when
+ * the global value no longer matters there, undefined when the global value
+ * still decides. Merged by the SDK itself under two global values that differ
+ * for the extension, the project decides when both give the same value.
+ */
+function projectCodemodeValue(
+  key: CodemodeKey,
+  globalValues: readonly [unknown, unknown],
+  projectText: string,
+): { raw: unknown } | undefined {
+  const first = mergedCodemodeValue(key, globalValues[0], projectText);
+  if (JSON.stringify(first) !== JSON.stringify(mergedCodemodeValue(key, globalValues[1], projectText))) return undefined;
+  return { raw: first };
+}
+
+/** The merged `codemode[key]` a trusted project's session reads, with `globalValue` in the global settings. */
+function mergedCodemodeValue(key: CodemodeKey, globalValue: unknown, projectText: string): unknown {
+  const globalText = JSON.stringify({ codemode: { [key]: globalValue } });
+  return codemodeValueOf({ codemode: mergedSettings(globalText, projectText).getSettings().codemode }, key);
+}
+
+// ---------------------------------------------------------------------------
+// codemode.inlineBudget
+// ---------------------------------------------------------------------------
+
+/** pi's default budget, in estimated tokens (characters / 4), when the setting is unset or ignored. */
+export const CODEMODE_INLINE_BUDGET_DEFAULT = DEFAULT_CODEMODE_INLINE_BUDGET;
+/** The largest budget Settings saves. pi itself takes any finite number of 0 or more. */
+export const CODEMODE_INLINE_BUDGET_MAX = 1_000_000;
+
+/**
+ * A raw `codemode.inlineBudget` as the codemode extension reads it: a finite
+ * number of 0 or more is used, anything else leaves the default.
+ */
+function inlineBudgetSetting(raw: unknown): CodemodeInlineBudgetSetting {
+  if (raw === undefined) return {};
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) return { value: raw };
+  return { invalid: invalidValueText(raw) };
+}
+
+/** What a trusted project's `.pi/settings.json` makes of the budget for its sessions, whatever the global value. */
+export interface ProjectCodemodeInlineBudget extends CodemodeInlineBudgetSetting {
+  settingsPath: string;
+}
+
+/**
+ * The budget a project's settings text gives its sessions when the global
+ * value no longer matters there, undefined when the global value still
+ * decides.
+ */
+export function readProjectCodemodeInlineBudget(cwd: string): ProjectCodemodeInlineBudget | undefined {
+  const settingsPath = projectSettingsPath(cwd);
+  const text = readProjectSettingsText(settingsPath);
+  if (text === undefined) return undefined;
+  const budget = projectCodemodeValue("inlineBudget", [1, 2], text);
+  return budget ? { settingsPath, ...inlineBudgetSetting(budget.raw) } : undefined;
 }

@@ -5,6 +5,7 @@ import { ChatCenteredText, Cpu, Monitor, Plug, Stack, TextT, UsersThree, X } fro
 import { ChatConfig } from "./ChatConfig";
 import { DisplayConfig } from "./DisplayConfig";
 import { ModelsConfig } from "./ModelsConfig";
+import { McpConfig } from "./McpConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { PromptsConfig } from "./PromptsConfig";
@@ -14,6 +15,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { countEffectiveSubagentProfiles } from "@/lib/subagent-profile-precedence";
 import type { SubagentProfile } from "@/lib/subagents";
+import type { ProjectTrustStatus } from "@/lib/api-types";
 import {
   SETTINGS_NAV,
   settingsNavItems,
@@ -30,6 +32,12 @@ interface SettingsModalProps {
   onCloseAction: () => void;
   onModelsSavedAction: () => void;
   onSessionReloadedAction: () => void;
+  /** The page's trust status for `cwd`, so Settings › MCP shows the same notice the restricted banner does. */
+  projectTrust?: ProjectTrustStatus | null;
+  /** Opens the page's trust dialog (AppShell owns trust). */
+  onOpenTrustDialog?: () => void;
+  /** Hands the page `cwd`'s trust after Settings › MCP changed it (an Add that trusted a fresh folder). */
+  onProjectTrustChanged?: (cwd: string, status: ProjectTrustStatus) => void;
 }
 
 /** Counts shown on the nav badges (skills total, agents total, plugins
@@ -50,11 +58,12 @@ const tabIcons: Record<SettingsTab, typeof Cpu> = {
   agents: UsersThree,
   plugins: Plug,
   prompts: TextT,
+  mcp: Plug,
 };
 
 /** Manager pages render their own list+detail panes; the SettingsPane body
  * then stops scrolling so the manager's columns scroll independently. */
-const MANAGER_TABS: SettingsTab[] = ["models", "skills", "agents", "plugins", "prompts"];
+const MANAGER_TABS: SettingsTab[] = ["models", "skills", "agents", "plugins", "prompts", "mcp"];
 
 export function SettingsModal({
   initialTab = "models",
@@ -63,6 +72,9 @@ export function SettingsModal({
   onCloseAction,
   onModelsSavedAction,
   onSessionReloadedAction,
+  projectTrust = null,
+  onOpenTrustDialog,
+  onProjectTrustChanged,
 }: SettingsModalProps) {
   const isMobile = useIsMobile();  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<SettingsTab>(
@@ -301,6 +313,16 @@ export function SettingsModal({
           {cwd && activeTab === "agents" && <AgentsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
           {cwd && activeTab === "plugins" && <PluginsConfig cwd={cwd} sessionId={sessionId} onReloadedAction={onSessionReloadedAction} />}
           {cwd && activeTab === "prompts" && <PromptsConfig cwd={cwd} />}
+          {activeTab === "mcp" && (
+            <McpConfig
+              embedded
+              cwd={cwd}
+              trust={projectTrust}
+              onTrustProject={onOpenTrustDialog}
+              onProjectTrustChanged={onProjectTrustChanged}
+              onClose={onCloseAction}
+            />
+          )}
         </SettingsPane>
       </section>
     </div>

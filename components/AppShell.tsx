@@ -17,7 +17,7 @@ import { ChangesTabView } from "./ChangesTabView";
 import { GitGraphTab } from "./GitGraphTab";
 import { SettingsModal, type SettingsTab } from "./SettingsModal";
 import { AppTitleBar } from "./AppTitleBar";
-import { ProjectTrustDialog } from "./ProjectTrustDialog";
+import { ProjectTrustDialog, type ProjectTrustFailure } from "./ProjectTrustDialog";
 import { useTheme } from "@/hooks/useTheme";
 import { useAudio } from "@/hooks/useAudio";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -63,7 +63,7 @@ import { getTitleAutoEnabled, getTitleModel } from "@/lib/title-settings";
 import type { SessionInfo } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
-import type { ProjectTrustStatus } from "@/lib/api-types";
+import type { McpErrorResponse, ProjectTrustStatus } from "@/lib/api-types";
 
 type SessionCopyField = "file" | "id";
 
@@ -192,7 +192,7 @@ export function AppShell() {
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
   const [projectTrustBusy, setProjectTrustBusy] = useState(false);
-  const [projectTrustError, setProjectTrustError] = useState<string | null>(null);
+  const [projectTrustError, setProjectTrustError] = useState<ProjectTrustFailure | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   // True while the session list has loaded and contains no sessions and no
   // drafts anywhere (brand-new user: no pi workspace has ever been selected).
@@ -1257,18 +1257,34 @@ export function AppShell() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cwd: projectTrustCwd }),
       });
-      const data = await response.json() as ProjectTrustStatus & { error?: string };
-      if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+      const data = await response.json() as ProjectTrustStatus & Partial<McpErrorResponse>;
+      if (!response.ok || data.error) {
+        // The dialog translates the reason; the English error is only its diagnostic.
+        setProjectTrustError({ error: data.error ?? `HTTP ${response.status}`, ...(data.reason ? { reason: data.reason } : {}) });
+        return;
+      }
       setProjectTrust(data);
       setProjectTrustDialogOpen(false);
       setModelsRefreshKey((key) => key + 1);
       setSessionKey((key) => key + 1);
     } catch (error) {
-      setProjectTrustError(error instanceof Error ? error.message : String(error));
+      setProjectTrustError({ error: error instanceof Error ? error.message : String(error) });
     } finally {
       setProjectTrustBusy(false);
     }
   }, [projectTrustBusy, projectTrustCwd]);
+
+  // The restricted-mode banner and Settings › MCP's trust notice open the same dialog.
+  const openProjectTrustDialog = useCallback(() => {
+    setProjectTrustError(null);
+    setProjectTrustDialogOpen(true);
+  }, []);
+
+  // Settings › MCP added a project server (and maybe trusted a fresh folder): keep the
+  // banner and every mounted panel on the status the route answered with.
+  const handleProjectTrustChanged = useCallback((trustCwd: string, status: ProjectTrustStatus) => {
+    if (trustCwd === projectTrustCwd) setProjectTrust(status);
+  }, [projectTrustCwd]);
 
   const activeTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const settingsCwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
@@ -1395,10 +1411,7 @@ export function AppShell() {
       {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
         <button
           type="button"
-          onClick={() => {
-            setProjectTrustError(null);
-            setProjectTrustDialogOpen(true);
-          }}
+          onClick={openProjectTrustDialog}
           title={t("desktop.projectResourcesRestricted")}
           aria-label={t("desktop.projectResourcesRestricted")}
           style={{
@@ -1498,6 +1511,7 @@ export function AppShell() {
               onSystemPromptChange={handleSystemPromptChange}
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}
+              onOpenSettings={openSettings}
               onContextUsageChange={handleContextUsageChange}
               onContentReady={contentDone}
               onOpenFile={handleOpenLinkedFile}
@@ -1627,10 +1641,11 @@ export function AppShell() {
         cwd={projectTrustCwd}
         busy={projectTrustBusy}
         error={projectTrustError}
-        onCancelAction={() => {
+        onCancel={() => {
           if (!projectTrustBusy) setProjectTrustDialogOpen(false);
         }}
-        onConfirmAction={() => void handleTrustProject()}
+        onConfirm={() => void handleTrustProject()}
+        onStatus={setProjectTrust}
       />
     )}
     {settingsOpen && (
@@ -1644,6 +1659,9 @@ export function AppShell() {
         }}
         onModelsSavedAction={() => setModelsRefreshKey((k) => k + 1)}
         onSessionReloadedAction={() => setSessionKey((k) => k + 1)}
+        projectTrust={projectTrust}
+        onOpenTrustDialog={openProjectTrustDialog}
+        onProjectTrustChanged={handleProjectTrustChanged}
       />
     )}
     </div>

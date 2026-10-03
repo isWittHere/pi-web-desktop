@@ -69,12 +69,12 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     (key: string, params?: TranslationParams) => translateMessage(locale, key, messages, params),
     [locale, messages],
   );
-  const value = useMemo(() => ({ locale, setLocale, t, supportedLocales }), [locale, setLocale, t, supportedLocales]);
+  // SSR (and the first client render) translate with the default locale; the persisted one applies
+  // once the effect has read it. The pre-hydration bootstrap in app/layout.tsx already sets html.lang
+  // and data-language before React hydration, so the page never flashes the wrong language tree.
+  const value = useMemo(() => ({ locale: hydrated ? locale : defaultLocale, setLocale, t, supportedLocales }), [hydrated, locale, setLocale, t, supportedLocales]);
 
-  // The server cannot read localStorage. Delay language-dependent UI until the
-  // client has resolved the persisted locale so SSR and hydration never compare
-  // different language trees.
-  return <I18nContext.Provider value={value}>{hydrated ? children : null}</I18nContext.Provider>;
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
 export function useI18n(): I18nContextValue {

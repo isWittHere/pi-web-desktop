@@ -13,6 +13,7 @@ import {
 import { guardedCredentialStore, mcpOAuthUrl, mcpSignInKey, mcpSignOutCount, mcpSignOutGuard, type McpSignInWriteGuard } from "./mcp-sign-out";
 import { recordMcpStatus } from "./mcp-status";
 import { createPiWebMcpTransportFactory, resolvedConfigValues } from "./mcp-transport";
+import { createModelRuntimeWithExtensions } from "./model-runtime";
 import type {
   McpClient,
   McpOAuthCredentialStore,
@@ -393,30 +394,12 @@ function providerTokenReader(): (provider: string) => Promise<string | undefined
   let registry: Promise<ModelRegistry> | undefined;
   return async (provider) => {
     try {
-      registry ??= createModelRuntimeWithExtensions().then((runtime) => new ModelRegistry(runtime as ConstructorParameters<typeof ModelRegistry>[0]));
+      registry ??= createModelRuntimeWithExtensions().then((runtime) => new ModelRegistry(runtime));
       return await (await registry).getApiKeyForProvider(provider);
     } catch {
       return undefined;
     }
   };
-}
-
-/**
- * ModelRuntime that also includes providers registered by extensions (an
- * extension that calls `registerProvider` / `createProvider` during resource
- * loading). A bare `ModelRuntime.create()` only knows built-in providers plus
- * models.json, so extension-registered providers were invisible to the
- * provider-listing and auth routes.
- *
- * The agent dir acts as cwd so project-local extensions stay out; global
- * package extensions always load. Not cached: these routes need fresh
- * credentials for auth status and login/logout to be truthful.
- */
-async function createModelRuntimeWithExtensions(): Promise<unknown> {
-  const { createAgentSessionServices, getAgentDir } = await import("@earendil-works/pi-coding-agent");
-  const agentDir = getAgentDir();
-  const services = await createAgentSessionServices({ cwd: agentDir, agentDir });
-  return services.modelRuntime;
 }
 
 /**
@@ -639,38 +622,27 @@ function startTest(
   const connect: McpTestConnect = options.connect
     ?? ((entry, signal) => connectForTest(entry, internals, signal, { requestTimeoutMs: options.requestTimeoutMs, closeWaitMs, guard }));
   const signedOutSince = (): boolean => {
-    const url = mcpOAuthUrl(target.config);
-    if (url === undefined) return false;
     try {
-      return mcpSignOutCount(mcpSignInKey(target.name, url)) !== (guard ? signOutsOf(target) : 0);
-    } catch {
+      guard?.();
       return false;
+    } catch {
+      return true;
     }
   };
-  void signedOutSince;
-  const flight = runTestFlight(target, internals, { deadlineMs, closeWaitMs, connect }, onCancelled);
-  return flight;
-}
-
-function runTestFlight(
-  target: McpTestTarget,
-  internals: McpTestInternals,
-  timing: { deadlineMs: number; closeWaitMs: number; connect: McpTestConnect },
-  onCancelled: () => void,
-): Promise<McpTestResult> & { join: (signal?: AbortSignal) => void } {
-  const { deadlineMs, closeWaitMs, connect } = timing;
-  const waiting: { count: number; unbounded: boolean } = { count: 0, unbounded: false };
   const controller = new AbortController();
+  // Callers still waiting; one without a signal never gives up.
+  let waiting = 0;
+  let unbounded = false;
   const listeners: [AbortSignal, () => void][] = [];
   const join = (signal?: AbortSignal) => {
     if (!signal) {
-      waiting.unbounded = true;
+      unbounded = true;
       return;
     }
-    waiting.count += 1;
+    waiting += 1;
     const leave = () => {
-      waiting.count -= 1;
-      if (waiting.count === 0 && !waiting.unbounded && !controller.signal.aborted) {
+      waiting -= 1;
+      if (waiting === 0 && !unbounded && !controller.signal.aborted) {
         controller.abort(CANCELLED);
         onCancelled();
       }
@@ -684,44 +656,49 @@ function runTestFlight(
 
   const run = async (): Promise<McpTestResult> => {
     try {
-      // Let the first caller join before anything can abort.
-      await Promise.resolve();
-      const queuedAt = Date.now();
-      const serial = runsShellCommand(target.config, internals);
-      const slot = serial ? await takeMcpCommandSlot(controller.signal, deadlineMs) : undefined;
-      const queuedMs = serial ? Date.now() - queuedAt : 0;
-      const finish = (result: McpTestRun, record: boolean): McpTestResult => {
-        const full: McpTestResult = { ...result, testedAt: Date.now(), ...(queuedMs > 0 ? { queuedMs } : {}) };
-        if (record) recordMcpStatus(target, target.configKey, { ...full, origin: "test" });
-        return full;
-      };
-      const notRun = (extra: Partial<McpTestRun>): McpTestRun => ({ state: "failed", tools: [], toolCount: 0, durationMs: 0, ...extra });
-      if (slot && !slot.turn) {
-        // Never tested, so nothing is recorded: the entry's last real result stays.
-        return finish(notRun(slot.timedOut ? { queueTimedOut: true } : {}), false);
-      }
-      const deadline = setTimeout(() => controller.abort(DEADLINE), deadlineMs);
-      deadline.unref?.();
-      const started = Date.now();
-      try {
-        // `connectForTest()` answers within closeWaitMs of an abort; this bounds a replacement that does not.
-        const fallback = aborted(controller.signal)
-          .then(() => delay(closeWaitMs + 500).promise)
-          .then(() => notRun({ timedOut: true, durationMs: Date.now() - started }));
-        const result = await Promise.race([connect(target, controller.signal), fallback]);
-        // Stopped because every caller gave up: what it found says nothing about the server. A result
-        // that settled first is real, even if the callers left while the server was closing.
-        const cancelled = controller.signal.reason === CANCELLED && result.timedOut === true;
-        return finish(result, !cancelled);
-      } finally {
-        clearTimeout(deadline);
-        slot?.release();
-      }
+      return await runTest();
     } finally {
       // Over: a caller that leaves now cannot abort anything.
       for (const [signal, leave] of listeners) signal.removeEventListener("abort", leave);
     }
   };
 
+  const runTest = async (): Promise<McpTestResult> => {
+    // Let the first caller join before anything can abort.
+    await Promise.resolve();
+    const queuedAt = Date.now();
+    const serial = runsShellCommand(target.config, internals);
+    const slot = serial ? await takeMcpCommandSlot(controller.signal, deadlineMs) : undefined;
+    const queuedMs = serial ? Date.now() - queuedAt : 0;
+    const finish = (result: McpTestRun, record: boolean): McpTestResult => {
+      const full: McpTestResult = { ...result, testedAt: Date.now(), ...(queuedMs > 0 ? { queuedMs } : {}) };
+      // A sign-out since the test started forgot the entry's statuses; what the test found with
+      // the tokens it had then is not news about the server signed out of.
+      if (record && !signedOutSince()) recordMcpStatus(target, target.configKey, { ...full, origin: "test" });
+      return full;
+    };
+    const notRun = (extra: Partial<McpTestRun>): McpTestRun => ({ state: "failed", tools: [], toolCount: 0, durationMs: 0, ...extra });
+    if (slot && !slot.turn) {
+      // Never tested, so nothing is recorded: the entry's last real result stays.
+      return finish(notRun(slot.timedOut ? { queueTimedOut: true } : {}), false);
+    }
+    const deadline = setTimeout(() => controller.abort(DEADLINE), deadlineMs);
+    deadline.unref?.();
+    const started = Date.now();
+    try {
+      // `connectForTest()` answers within closeWaitMs of an abort; this bounds a replacement that does not.
+      const fallback = aborted(controller.signal)
+        .then(() => delay(closeWaitMs + 500).promise)
+        .then(() => notRun({ timedOut: true, durationMs: Date.now() - started }));
+      const result = await Promise.race([connect(target, controller.signal), fallback]);
+      // Stopped because every caller gave up: what it found says nothing about the server. A result
+      // that settled first is real, even if the callers left while the server was closing.
+      const cancelled = controller.signal.reason === CANCELLED && result.timedOut === true;
+      return finish(result, !cancelled);
+    } finally {
+      clearTimeout(deadline);
+      slot?.release();
+    }
+  };
   return Object.assign(run(), { join });
 }

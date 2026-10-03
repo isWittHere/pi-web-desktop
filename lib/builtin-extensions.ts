@@ -175,8 +175,17 @@ export function mcpRuntimeFromInternals(
   return { available: true, internals };
 }
 
+const MCP_WARNED_KEY: symbol = Symbol.for("pi-web.mcpOffWarned");
+
 async function loadMcpRuntime(): Promise<McpRuntimeResult> {
-  return mcpRuntimeFromInternals(await loadPiSdkInternals());
+  const runtime = mcpRuntimeFromInternals(await loadPiSdkInternals());
+  const store = globalThis as Record<symbol, string | undefined>;
+  // The operator's switch is deliberate and needs no warning; a failed adapter does.
+  if (!runtime.available && !isMcpDisabledByOperator() && store[MCP_WARNED_KEY] !== runtime.reason) {
+    store[MCP_WARNED_KEY] = runtime.reason;
+    console.warn(`[pi-web] MCP is off: ${runtime.reason}`);
+  }
+  return runtime;
 }
 
 /**

@@ -4,7 +4,7 @@
  * sidebar layout; each labelKey must exist in both i18n catalogs.
  */
 
-export type SettingsTab = "display" | "chat" | "models" | "skills" | "agents" | "plugins" | "prompts";
+export type SettingsTab = "display" | "chat" | "models" | "skills" | "agents" | "plugins" | "prompts" | "mcp";
 
 export interface SettingsNavItem {
   id: SettingsTab;
@@ -36,6 +36,12 @@ export const SETTINGS_NAV: SettingsNavSection[] = [
     items: [{ id: "models", labelKey: "desktop.models" }],
   },
   {
+    id: "mcp",
+    labelKey: "desktop.settingsGroupModels",
+    scope: "global",
+    items: [{ id: "mcp", labelKey: "settings.mcp" }],
+  },
+  {
     id: "workspace",
     labelKey: "desktop.settingsGroupWorkspace",
     scope: "workspace",
@@ -57,6 +63,7 @@ export const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTab, string> = {
   agents: "desktop.settingsPageAgents",
   plugins: "desktop.settingsPagePlugins",
   prompts: "desktop.settingsPagePrompts",
+  mcp: "settings.mcp",
 };
 
 /** Flattened nav items, in display order. */
