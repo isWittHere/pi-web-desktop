@@ -237,6 +237,8 @@ export const enLocale = {
     "desktop.followUp": "Follow-up",
     "desktop.recallToInput": "Recall to input",
     "desktop.recallQueuedMessages": "Remove all queued messages and put them back into the input box for editing",
+    "desktop.retry": "Retry",
+    "desktop.fileLoadFailed": "Could not open this folder (no permission).",
     "desktop.retrying": "Retrying",
     "desktop.compacted": "Compacted",
     "desktop.tokens": "tokens",

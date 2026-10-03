@@ -242,6 +242,8 @@ function TreeNode({
   const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [hovered, setHovered] = useState(false);
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
@@ -249,12 +251,17 @@ function TreeNode({
   const loadChildren = useCallback(async (force = false) => {
     if (loaded && !force) return;
     setLoading(true);
+    setLoadError(null);
+    setLoadFailed(false);
     try {
       const entries = await fetchEntries(node.fullPath);
       setChildren(entries);
       setLoaded(true);
-    } catch {
-      // ignore
+    } catch (error) {
+      // The 403 of a symlinked folder outside the allowed roots (and any other
+      // load failure) surfaces under the folder instead of reading as empty.
+      setLoadError(error instanceof Error ? error.message : String(error));
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -458,9 +465,51 @@ function TreeNode({
               changedFiles={changedFiles}
             />
           ))}
-          {children.length === 0 && loaded && (
+          {children.length === 0 && loaded && !loadFailed && (
             <div style={{ paddingLeft: 8 + (depth + 1) * 14, fontSize: 11, color: "var(--text-dim)", height: 22, display: "flex", alignItems: "center" }}>
               empty
+            </div>
+          )}
+          {loadFailed && (
+            <div
+              role="alert"
+              style={{
+                paddingLeft: 8 + (depth + 1) * 14,
+                paddingRight: 8,
+                paddingTop: 3,
+                paddingBottom: 5,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                gap: 4,
+                fontSize: 11,
+                color: "#f87171",
+              }}
+            >
+              <span style={{ wordBreak: "break-word", color: "var(--text-muted)" }}>
+                {loadError ?? t("desktop.fileLoadFailed")}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void loadChildren(true);
+                }}
+                style={{
+                  height: 20,
+                  padding: "0 8px",
+                  background: "var(--bg-panel)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 4,
+                  color: "var(--accent)",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {t("desktop.retry")}
+              </button>
             </div>
           )}
         </div>

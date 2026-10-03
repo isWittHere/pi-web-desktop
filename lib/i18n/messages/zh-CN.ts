@@ -237,6 +237,8 @@ export const zhCNLocale = {
     "desktop.followUp": "后续消息",
     "desktop.recallToInput": "恢复到输入框",
     "desktop.recallQueuedMessages": "移除所有排队消息，并将其放回输入框以便编辑",
+    "desktop.retry": "重试",
+    "desktop.fileLoadFailed": "无法打开该文件夹（无权限）。",
     "desktop.retrying": "正在重试",
     "desktop.compacted": "已压缩",
     "desktop.tokens": "令牌",
