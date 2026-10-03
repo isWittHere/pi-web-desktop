@@ -1,5 +1,19 @@
 import type { SubagentProfile } from "./subagents";
 
+// ---------------------------------------------------------------------------
+// Settings › MCP (ADR 0006). Every refusal carries `{ error, reason }`: `error`
+// is an English diagnostic, `reason` a code the panel translates.
+// ---------------------------------------------------------------------------
+
+export type McpScope = "global" | "project";
+
+/** A value the SDK resolves before it connects: a stdio `env` value, an HTTP header, or `oauth.clientSecret`. */
+export interface McpConfigFieldRef {
+  kind: "env" | "header" | "oauth-client-secret";
+  /** The variable or header name; absent for `oauth.clientSecret`. */
+  name?: string;
+}
+
 export interface SubagentProfilesResponse {
   profiles: SubagentProfile[];
 }
