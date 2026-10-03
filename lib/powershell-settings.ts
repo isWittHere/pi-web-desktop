@@ -10,6 +10,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** True for the `+name`/`-name` defaultTools modifier entries. */
+export function isToolModifier(entry: string): boolean {
+  return entry.startsWith("+") || entry.startsWith("-");
+}
+
+/**
+ * Resolve a raw `defaultTools` list: plain names replace the pi defaults, then
+ * `+name` adds and `-name` removes a tool, in list order. Appending a plain
+ * name to a list of only modifiers would otherwise turn it into a plain list
+ * that drops pi's default tools.
+ */
+export function resolveDefaultToolEntries(entries: readonly string[]): string[] {
+  const plain = entries.filter((entry) => !isToolModifier(entry));
+  const tools = plain.length > 0 || entries.length === 0 ? [...plain] : [...DEFAULT_TOOLS];
+  for (const entry of entries) {
+    if (!isToolModifier(entry)) continue;
+    const name = entry.slice(1);
+    const index = tools.indexOf(name);
+    if (entry.startsWith("+") && index === -1 && name) tools.push(name);
+    else if (entry.startsWith("-") && index !== -1) tools.splice(index, 1);
+  }
+  return tools;
+}
+
 /** True when the persisted default tools select PowerShell instead of Bash as the shell tool. */
 export function isPowerShellToolEnabled(
   defaultTools: readonly string[] | undefined,
@@ -62,7 +86,9 @@ function configuredTools(settings: Record<string, unknown>): string[] | undefine
   ) {
     throw new Error("Invalid settings.json: defaultTools must be an array of strings");
   }
-  return settings.defaultTools as string[];
+  // Resolve modifiers so a shell swap cannot drop `+name`/`-name` effects:
+  // writing bash/powershell back must preserve entries like `+codemode`.
+  return resolveDefaultToolEntries(settings.defaultTools as string[]);
 }
 
 export async function readPowerShellToolEnabled(

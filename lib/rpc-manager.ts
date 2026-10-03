@@ -518,9 +518,9 @@ export class AgentSessionWrapper {
       .join("\n") + "\n";
     writeFileSync(sessionFile, content, { encoding: "utf8", flag: "wx" });
 
-    // Pi normally delays the first flush until an assistant message exists.
-    // A leading shell command has no assistant message, so mark this SDK
-    // manager as flushed after writing its own generated entries.
+    // Pi defers the first flush until the session has a user or assistant
+    // message. A leading shell command has no assistant message, so mark this
+    // SDK manager as flushed after writing its own generated entries.
     (manager as unknown as { flushed: boolean }).flushed = true;
     cacheSessionPath(this.inner.sessionId, sessionFile);
   }
@@ -528,12 +528,12 @@ export class AgentSessionWrapper {
   /**
    * Persist a new session's file the moment its first prompt is sent.
    *
-   * Pi defers the first flush until an assistant message exists, which keeps
-   * a brand-new session invisible in the disk-backed session list until the
-   * model's first response. Flushing here (header, plus any entries already
-   * buffered — usually just the header at this point) closes that gap: the
-   * session appears in the sidebar as soon as the message is sent, marked
-   * running, while the SDK appends the user/assistant messages afterwards
+   * Pi defers the first flush until the session holds a user or assistant
+   * message, which keeps a brand-new session invisible in the disk-backed
+   * session list until the prompt lands. Flushing here (header, plus any
+   * entries already buffered — usually just the header at this point) closes
+   * that gap: the session appears in the sidebar as soon as the message is
+   * sent, marked running, while the SDK appends the user message afterwards
    * through its normal append path (flushed === true).
    */
   private persistPromptSession(): void {
@@ -550,7 +550,8 @@ export class AgentSessionWrapper {
     writeFileSync(sessionFile, content, { encoding: "utf8", flag: "wx" });
 
     // Mark the SDK manager as flushed so subsequent _persist calls take the
-    // appendFileSync path (mirrors persistBashOnlySession).
+    // appendFileSync path (mirrors persistBashOnlySession); a flushed manager
+    // skips the user-or-assistant conversation gate when appending.
     (manager as unknown as { flushed: boolean }).flushed = true;
     cacheSessionPath(this.inner.sessionId, sessionFile);
     invalidateSessionListCache();
@@ -799,7 +800,8 @@ export class AgentSessionWrapper {
       }
 
       case "get_tools": {
-        const all: ToolInfo[] = this.inner.getAllTools();
+        // Hidden tools are withdrawn: not callable, not declared, and not togglable.
+        const all: ToolInfo[] = this.inner.getAllTools().filter((t) => t.exposure !== "hidden");
         const active = new Set<string>(this.inner.getActiveToolNames());
         // The definition's description is not always what the model gets: `prepareLoadout`
         // hooks rewrite the declared ones (codemode lists its nested tools and the MCP types).
@@ -807,6 +809,7 @@ export class AgentSessionWrapper {
         return all.map((t) => ({
           name: t.name,
           description: declared.get(t.name) ?? t.description,
+          exposure: t.exposure,
           active: active.has(t.name),
           ...(t.parameters !== undefined ? { parameters: t.parameters } : {}),
           ...(t.promptGuidelines !== undefined ? { promptGuidelines: t.promptGuidelines } : {}),

@@ -18,9 +18,13 @@ export interface ModelLike {
   provider: string;
 }
 
+export type ToolExposure = "direct" | "model-only" | "codemode" | "deferred" | "hidden";
+
 export interface ToolInfo {
   name: string;
   description: string;
+  /** How the model reaches the tool. "hidden" tools are withdrawn entirely. */
+  exposure: ToolExposure;
   /** JSON-schema (TypeBox) parameter schema. Omitted for tools without parameters. */
   parameters?: unknown;
   /** Guideline bullets appended to the default system prompt when this tool is active. */
