@@ -6,7 +6,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { copyText } from "@/lib/clipboard";
 import { cssPx, cssViewportSize } from "@/lib/ui-scale";
 
-import { isEmptyThinkingBlock } from "@/lib/message-display";
+import { isEmptyThinkingBlock, hasAssistantAnswer } from "@/lib/message-display";
 import { parseSkillBlock } from "@/lib/skill-block";
 import { useFileIndex, useSkillInfo } from "@/hooks/useProjectContext";
 import type { MentionValidators } from "@/lib/mention-tokens";
@@ -238,6 +238,10 @@ interface Props {
   writtenFiles?: WrittenFile[];
   /** The block a search hit points at — rendered with a data-search-target marker. */
   searchBlock?: AssistantContentBlock;
+  /** Truncation recovery: a compact prompt on an unanswered length-stopped reply. */
+  onCompact?: () => void;
+  isCompacting?: boolean;
+  compactError?: string | null;
 }
 
 function formatTime(ts?: number): string | null {
@@ -267,12 +271,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onEditContent, onCancelEdit, isEditing, showTimestamp, prevTimestamp, sessionId, writtenFiles, searchBlock }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onEditContent, onCancelEdit, isEditing, showTimestamp, prevTimestamp, sessionId, writtenFiles, searchBlock, onCompact, isCompacting, compactError }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onEditContent={onEditContent} onCancelEdit={onCancelEdit} isEditing={isEditing} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} writtenFiles={writtenFiles} searchBlock={searchBlock} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} writtenFiles={writtenFiles} searchBlock={searchBlock} onCompact={onCompact} isCompacting={isCompacting} compactError={compactError} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -305,7 +309,10 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.showTimestamp === next.showTimestamp
     && prev.prevTimestamp === next.prevTimestamp
     && prev.sessionId === next.sessionId
-    && haveSameWrittenFiles(prev.writtenFiles, next.writtenFiles);
+    && haveSameWrittenFiles(prev.writtenFiles, next.writtenFiles)
+    && prev.onCompact === next.onCompact
+    && prev.isCompacting === next.isCompacting
+    && prev.compactError === next.compactError
 });
 
 function haveSameWrittenFiles(previous: WrittenFile[] | undefined, next: WrittenFile[] | undefined): boolean {
@@ -706,6 +713,9 @@ function AssistantMessageView({
   entryId,
   writtenFiles,
   searchBlock,
+  onCompact,
+  isCompacting,
+  compactError,
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
@@ -719,6 +729,9 @@ function AssistantMessageView({
   entryId?: string;
   writtenFiles?: WrittenFile[];
   searchBlock?: AssistantContentBlock;
+  onCompact?: () => void;
+  isCompacting?: boolean;
+  compactError?: string | null;
 }) {
   const { t } = useI18n();
   const blockItems = (message.content ?? [])
@@ -835,7 +848,12 @@ function AssistantMessageView({
   const failureMessage = message.stopReason === "error" && message.errorMessage
     ? message.errorMessage
     : null;
-  if (blocks.length === 0 && !isStreaming && !failureMessage) return null;
+  // A length stop with no text/image/tool call has no room for another message;
+  // tell the user to compact instead of retrying.
+  const unansweredTruncation = message.stopReason === "length"
+    && !isStreaming
+    && !hasAssistantAnswer(message);
+  if (blocks.length === 0 && !isStreaming && !failureMessage && !unansweredTruncation) return null;
 
   return (
     <div
@@ -877,6 +895,37 @@ function AssistantMessageView({
           <div className="chat-assistant-error" role="alert">
             <WarningCircleIcon size={13} weight="bold" />
             <span>{failureMessage}</span>
+          </div>
+        )}
+        {unansweredTruncation && (
+          <div className="chat-assistant-error" role="status">
+            <WarningCircleIcon size={13} weight="bold" />
+            <span>
+              {t("desktop.truncatedWithoutAnswer")}
+              {onCompact && (
+                <button
+                  type="button"
+                  onClick={onCompact}
+                  disabled={isCompacting}
+                  style={{
+                    display: "block",
+                    marginTop: 8,
+                    padding: "3px 8px",
+                    border: "1px solid currentColor",
+                    borderRadius: 5,
+                    background: "transparent",
+                    color: "inherit",
+                    cursor: isCompacting ? "default" : "pointer",
+                    font: "inherit",
+                  }}
+                >
+                  {t(isCompacting ? "desktop.compacting" : "desktop.compactContext")}
+                </button>
+              )}
+              {compactError && (
+                <span style={{ display: "block", marginTop: 6, whiteSpace: "pre-wrap" }}>{compactError}</span>
+              )}
+            </span>
           </div>
         )}
         {blockItems.map(({ block, originalIndex }) => (

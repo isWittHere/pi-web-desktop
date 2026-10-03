@@ -70,3 +70,17 @@ test("the edited message highlights and offers cancel instead of edit", async ()
   assert.match(source, /prev\.onCancelEdit === next\.onCancelEdit/);
   assert.match(source, /prev\.isEditing === next\.isEditing/);
 });
+
+test("an unanswered length stop offers compaction instead of retrying", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("./MessageView.tsx", import.meta.url), "utf8");
+  const { hasAssistantAnswer } = await import("../lib/message-display.ts");
+
+  // The thinking-only reply is not an answer, so it should compact.
+  assert.equal(hasAssistantAnswer({ role: "assistant", content: [{ type: "thinking", thinking: "hm" }] }), false);
+
+  assert.match(source, /unansweredTruncation = message\.stopReason === "length"/);
+  assert.match(source, /!hasAssistantAnswer\(message\)/);
+  assert.match(source, /t\(isCompacting \? "desktop\.compacting" : "desktop\.compactContext"\)/);
+  assert.match(source, /disabled=\{isCompacting\}/);
+});

@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
 import { modelProfileKey } from "@/lib/thinking-levels";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
-import { getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
+import { getDisplayableAssistantBlocks, hasAssistantAnswer, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { cssPx } from "@/lib/ui-scale";
 import { collectProcessContentBlocks, splitAssistantContentBlocks } from "@/lib/process-content";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
@@ -1028,7 +1028,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
                 if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
               };
 
-              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[] } = {}): ReactNode => {
+              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; recoverTruncation?: boolean } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
                 const isVisible = msg.role === "user" || msg.role === "assistant";
                 const currentRefIdx = visibleRefIndexByMessage.get(idx);
@@ -1066,6 +1066,9 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
                     prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
                     sessionId={session?.id ?? sessionIdRef.current ?? undefined}
                     writtenFiles={options.writtenFiles}
+                    onCompact={options.recoverTruncation ? handleCompact : undefined}
+                    isCompacting={options.recoverTruncation ? isCompacting : undefined}
+                    compactError={options.recoverTruncation ? compactError : undefined}
                   />
                 );
                 if (!isVisible || options.attachRef === false || currentRefIdx === undefined) return view;
@@ -1311,7 +1314,13 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
                 // final answer alone carries no record of what the turn wrote.
                 const writtenFiles = collectTurnWrittenFiles(messages, userIdx + 1, finalAssistantIdx, toolResultsMap, messageCwd);
                 if (finalAnswerMessage) {
-                  rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, writtenFiles }));
+                  rendered.push(renderMessage(finalAssistantIdx, {
+                    messageOverride: finalAnswerMessage,
+                    writtenFiles,
+                    // Truncation recovery only applies to the session tail: an
+                    // unanswered length stop has no room for another message.
+                    recoverTruncation: endIdx === messages.length && !streamState.isStreaming && !hasAssistantAnswer(finalAnswerMessage),
+                  }));
                 } else {
                   // A turn whose output is entirely process blocks has no
                   // answer message to host the chip and the usage/timestamp

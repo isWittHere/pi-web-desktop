@@ -316,6 +316,7 @@ export const zhCNLocale = {
     "desktop.stopCompaction": "停止压缩",
     "desktop.compactContext": "压缩上下文",
     "desktop.compacting": "正在压缩上下文...",
+    "desktop.truncatedWithoutAnswer": "输出额度被思考耗尽，没有生成正文。再发消息会再次截断。先压缩上下文，或把思考档降到 medium 以下。",
     "desktop.compact": "压缩",
     "desktop.changeToolPreset": "更改工具预设：{preset}",
     "desktop.toolPreset": "更改工具预设",

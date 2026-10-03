@@ -37,3 +37,11 @@ export function splitFinalAssistantBlocks(
 export function countToolCallBlocks(blocks: AssistantContentBlock[]): number {
   return blocks.filter((block): block is ToolCallContent => block.type === "toolCall").length;
 }
+
+/** Text, an image, or a tool call is an answer. Thinking alone is not. */
+export function hasAssistantAnswer(message: AssistantMessage): boolean {
+  return (message.content ?? []).some((block) => {
+    if (block.type === "text") return block.text.trim().length > 0;
+    return block.type === "image" || block.type === "toolCall";
+  });
+}

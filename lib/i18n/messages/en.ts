@@ -316,6 +316,7 @@ export const enLocale = {
     "desktop.stopCompaction": "Stop compaction",
     "desktop.compactContext": "Compact context",
     "desktop.compacting": "Compacting...",
+    "desktop.truncatedWithoutAnswer": "The output budget was used up by thinking, so no answer was produced. Sending another message will be cut off again. Compact the context first, or lower the thinking level to medium or below.",
     "desktop.compact": "Compact",
     "desktop.changeToolPreset": "Change tool preset: {preset}",
     "desktop.toolPreset": "Change tool preset",
