@@ -155,6 +155,9 @@ export function createSubagentExtension(
       pi.registerTool(defineTool({
         name: "Agent",
         label: "Agent",
+        // Host-side orchestrators are model-facing only: codemode scripts and
+        // other tools must not reach them through ctx.executeTool.
+        exposure: "model-only",
         description: `Delegate a focused task to a configured subagent. Each subagent runs as a full, inspectable Pi session. Use background mode for independent work and foreground mode when the result is needed immediately.\n\nAvailable agent types:\n${agentTypeDescription(profiles)}`,
         promptSnippet: "Delegate a focused task to an inspectable subagent session",
         promptGuidelines: [
@@ -250,6 +253,7 @@ export function createSubagentExtension(
       pi.registerTool(defineTool({
         name: "get_subagent_result",
         label: "Get agent result",
+        exposure: "model-only",
         description: "Check an inspectable subagent session and retrieve its latest result.",
         parameters: Type.Object({
           agent_id: Type.String({ description: "Subagent session ID." }),
@@ -288,6 +292,7 @@ export function createSubagentExtension(
       pi.registerTool(defineTool({
         name: "steer_subagent",
         label: "Steer agent",
+        exposure: "model-only",
         description: "Send a steering message to a currently running subagent session.",
         parameters: Type.Object({
           agent_id: Type.String({ description: "Subagent session ID." }),
