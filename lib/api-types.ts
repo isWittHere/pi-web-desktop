@@ -12,6 +12,13 @@ export interface SubagentSettingsResponse {
 export interface ShellToolSettingsResponse {
   isWindows: boolean;
   powerShellEnabled: boolean;
+  /** How the codemode tool is activated: "always" = pinned in defaultTools. */
+  codemode?: "automatic" | "always";
+  /** Codemode sandbox self-test outcome for this server process. */
+  sandboxAvailable?: boolean;
+  sandboxError?: string;
+  /** Trusted project settings.json that governs the choice (global writes are shadowed). */
+  projectOverride?: string;
 }
 
 export interface SkillSearchResult {
