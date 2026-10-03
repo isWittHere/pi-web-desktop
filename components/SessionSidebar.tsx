@@ -2095,7 +2095,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
                   // defensive guard keeps a browser-mode build from rendering it.
                   void window.piDesktop?.openWorkspaceFolder(cwd);
                 }}
-                disabled={!window.piDesktop}
+                disabled={typeof window === "undefined" || !window.piDesktop}
                 title={t("desktop.openInFileManager")}
                 aria-label={t("desktop.openInFileManager")}
                 style={{

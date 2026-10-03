@@ -12,7 +12,7 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
  *   /api/cwd/validate (which registers the file allow-root) before it is
  *   opened.
  * - "Quick workspace": asks the server for a scratch workspace
- *   (~/pi-cwd-<YYYYMMDD> via /api/default-cwd) and opens it.
+ *   (~/pi-cwd/<YYYYMMDD> via /api/default-cwd) and opens it.
  *
  * Both call `onOpenProject(project)` with the resolved path, which routes
  * through the normal workspace-open chain.

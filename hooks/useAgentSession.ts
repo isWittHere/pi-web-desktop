@@ -1563,6 +1563,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   ]);
   handleAgentEventRef.current = handleAgentEvent;
 
+  // Give an unsent message back to the composer. Text is restored via
+  // insertIfEmpty; image attachments cannot be reconstructed, so surface
+  // them in a notice. Shared by the edit-send failure path and the queued
+  // (steer / follow-up) guards.
+  const restoreUnsentMessage = useCallback((message: string, images?: AttachedImage[]) => {
+    if (message.trim()) opts.chatInputRef?.current?.insertIfEmpty(message);
+    if (images?.length) {
+      addNotice({ type: "error", message: "Message was not sent. Image attachments were not restored — please re-attach them." });
+    }
+  }, [addNotice, opts.chatInputRef]);
+
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     const trimmedMessage = message.trim();
     if (!trimmedMessage && !images?.length) return;
@@ -1574,10 +1585,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setEdit(null);
       if (!(await handleNavigateRef.current?.(entryId))) {
         setEdit(entryId);
-        if (trimmedMessage) opts.chatInputRef?.current?.insertIfEmpty(message);
-        if (images?.length) {
-          addNotice({ type: "error", message: "Message was not sent. Image attachments were not restored — please re-attach them." });
-        }
+        restoreUnsentMessage(message, images);
         return;
       }
     }
@@ -1620,16 +1628,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           console.error("Unexpected event stream error:", error);
         }
       });
-    };
-
-    // Give the message back to the composer when it definitively never
-    // reached the server. Text is restored via insertIfEmpty; image
-    // attachments cannot be reconstructed, so surface them in a notice.
-    const restoreUnsentMessage = () => {
-      if (trimmedMessage) opts.chatInputRef?.current?.insertIfEmpty(message);
-      if (images?.length) {
-        addNotice({ type: "error", message: "Message was not sent. Image attachments were not restored — please re-attach them." });
-      }
     };
 
     // Drop the optimistic bubble when the send definitively failed.
@@ -1693,7 +1691,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // failure is ambiguous (the request may have landed); reconciliation
         // settles it without restoring, to avoid a duplicate resend.
         if (e instanceof Error && !(e instanceof TypeError)) {
-          restoreUnsentMessage();
+          restoreUnsentMessage(message, images);
         }
         void waitForPromptSettlement(sentSessionId, promptRunId);
         return;
@@ -1707,9 +1705,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentRunning(false);
       setAgentPhase(null);
       dispatch({ type: "end" });
-      restoreUnsentMessage();
+      restoreUnsentMessage(message, images);
     }
-  }, [isNew, bumpContent, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, opts.chatInputRef, resetStreamUpdates, editEntryId, setEdit]);
+  }, [isNew, bumpContent, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, resetStreamUpdates, restoreUnsentMessage, editEntryId, setEdit]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;
@@ -2012,6 +2010,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // optimistic chat bubble here would duplicate the queue panel and turn into
   // a ghost message if the queue is recalled.
   const handleSteer = useCallback(async (message: string, images?: AttachedImage[]) => {
+    // A pending history edit must branch when sent, never join the current run.
+    if (editEntryId) {
+      restoreUnsentMessage(message, images);
+      return;
+    }
     const sid = sessionIdRef.current;
     if (!sid) return;
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
@@ -2024,7 +2027,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to steer:", e);
     }
-  }, []);
+  }, [editEntryId, restoreUnsentMessage]);
 
   const handlePromptWithStreamingBehavior = useCallback(async (
     message: string,
@@ -2033,10 +2036,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   ) => {
     // A pending history edit must branch when sent, never join the current run.
     if (editEntryId) {
-      if (message.trim()) opts.chatInputRef?.current?.insertIfEmpty(message);
-      if (images?.length) {
-        addNotice({ type: "error", message: "Message was not sent. Image attachments were not restored — please re-attach them." });
-      }
+      restoreUnsentMessage(message, images);
       return;
     }
     const sid = sessionIdRef.current;
@@ -2052,9 +2052,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to queue prompt:", e);
     }
-  }, [editEntryId, opts.chatInputRef, addNotice]);
+  }, [editEntryId, restoreUnsentMessage]);
 
   const handleFollowUp = useCallback(async (message: string, images?: AttachedImage[]) => {
+    // A pending history edit must branch when sent, never join the current run.
+    if (editEntryId) {
+      restoreUnsentMessage(message, images);
+      return;
+    }
     const sid = sessionIdRef.current;
     if (!sid) return;
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
@@ -2067,7 +2072,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to follow up:", e);
     }
-  }, []);
+  }, [editEntryId, restoreUnsentMessage]);
 
   const handleAbortCompaction = useCallback(async () => {
     const sid = sessionIdRef.current;

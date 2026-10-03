@@ -286,12 +286,20 @@ test("history edits move the branch only when sent, so cancel or reload keeps it
   // The pending edit is recorded per session and dropped when its draft is gone.
   assert.match(source, /const pendingHistoryEdits = new Map<string, string>\(\)/);
   assert.match(source, /if \(sid && !getDraft\(sid\)\) pendingHistoryEdits\.delete\(sid\)/);
-  // Queued messages never join the current run while an edit is pending.
+  // Queued messages never join the current run while an edit is pending:
+  // steer, follow-up, and the streaming-behavior prompt all restore instead.
+  const steerSource = source.slice(
+    source.indexOf("const handleSteer = useCallback"),
+    source.indexOf("const handlePromptWithStreamingBehavior"),
+  );
   const queueSource = source.slice(
     source.indexOf("const handlePromptWithStreamingBehavior"),
-    source.indexOf("const handleFollowUp"),
+    source.indexOf("const handleAbortCompaction"),
   );
-  assert.match(queueSource, /if \(editEntryId\) \{/);
+  for (const queueBlock of [steerSource, queueSource]) {
+    assert.match(queueBlock, /if \(editEntryId\) \{/);
+    assert.match(queueBlock, /restoreUnsentMessage\(message, images\)/);
+  }
 });
 
 test("ChatWindow gates editing while the session is busy and wires the edit state", async () => {
