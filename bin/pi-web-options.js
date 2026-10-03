@@ -8,6 +8,8 @@ const { parseArgs } = require("util");
 //   PI_WEB_ALLOWED_HOSTS          Extra exact proxy/custom hostnames, comma-separated
 //   PI_WEB_IDLE_TIMEOUT_MS        Session idle timeout in ms (0 disables; default 600000)
 //   PI_WEB_SHUTDOWN_DEADLINE_MS   Shutdown wait for extensions in ms (default 5000)
+//   PI_WEB_MCP_IDLE_MS            Idle MCP connection teardown in ms (0 keeps connections until the session closes; default 600000)
+//   PI_WEB_DISABLE_MCP            Set to 1 to disable MCP servers for the whole server
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
