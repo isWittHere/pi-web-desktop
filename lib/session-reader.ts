@@ -408,48 +408,55 @@ export function getSessionEntries(filePath: string): SessionEntry[] {
 /**
  * Resolve the thinking level and model in effect at `leafId`.
  *
- * The model is derived from the ACTIVE branch: the most recent explicit
- * `model_change` entry wins; otherwise fall back to the model actually
- * reported on the nearest assistant response, else null. This mirrors pi's
- * "restore and display session models accurately" fix — a plain backward walk
- * can grab a stale response model or miss a branch-local model_change.
- * getSessionSettings always receives the FULL entries array (BuildSessionContext
- * passes `entries`, not the tail window), so slicing the full branch here is safe.
+ * `thinkingLevel` comes from the branch's latest `thinking_level_change`; the
+ * model is projected by getRecordedSessionModel from the ACTIVE branch (a plain
+ * backward walk can grab a stale response model or miss a branch-local
+ * model_change). getSessionSettings always receives the FULL entries array
+ * (BuildSessionContext passes `entries`, not the tail window), so slicing the
+ * full branch here is safe.
  */
 function getSessionSettings(entries: SessionEntry[], leafId?: string | null): Pick<SessionContext, "thinkingLevel" | "model"> {
   if (leafId === null) return { thinkingLevel: "off", model: null };
   const branch = sliceActiveBranch(entries, leafId ?? null, entries.length);
   let thinkingLevel: string | undefined;
-  let responseModel: SessionContext["model"] | undefined;
 
-  for (let i = branch.length - 1; i >= 0 && (thinkingLevel === undefined || responseModel === undefined); i--) {
+  for (let i = branch.length - 1; i >= 0 && thinkingLevel === undefined; i--) {
     const entry = branch[i];
-    if (thinkingLevel === undefined && entry.type === "thinking_level_change") {
+    if (entry.type === "thinking_level_change") {
       thinkingLevel = entry.thinkingLevel;
     }
-    if (responseModel === undefined && entry.type === "message" && entry.message.role === "assistant") {
+  }
+
+  return {
+    thinkingLevel: thinkingLevel ?? "off",
+    // One shared projection: the runtime restore (startRpcSession) reads the
+    // exact same recorded value through getRecordedSessionModel.
+    model: getRecordedSessionModel(branch),
+  };
+}
+
+/**
+ * The model recorded on the active branch: the latest explicit `model_change`,
+ * else the model reported on the nearest assistant response, else null. Sliced
+ * from the active branch so runtime restore and display projection agree, and
+ * legacy sessions without a `model_change` still restore the model they
+ * actually answered with.
+ */
+export function getRecordedSessionModel(entries: SessionEntry[]): SessionContext["model"] {
+  let responseModel: SessionContext["model"] = null;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (entry.type === "model_change") {
+      return { provider: entry.provider, modelId: entry.modelId };
+    }
+    if (!responseModel && entry.type === "message" && entry.message.role === "assistant") {
       const message = entry.message as { provider?: unknown; model?: unknown };
       if (typeof message.provider === "string" && typeof message.model === "string") {
         responseModel = { provider: message.provider, modelId: message.model };
       }
     }
   }
-
-  return {
-    thinkingLevel: thinkingLevel ?? "off",
-    model: getLatestModelChange(branch) ?? responseModel ?? null,
-  };
-}
-
-/** Find the most recent explicit `model_change` in the ACTIVE branch, or null. */
-export function getLatestModelChange(entries: SessionEntry[]): SessionContext["model"] {
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const entry = entries[i];
-    if (entry.type === "model_change") {
-      return { provider: entry.provider, modelId: entry.modelId };
-    }
-  }
-  return null;
+  return responseModel;
 }
 
 export interface BuildSessionContextOptions {

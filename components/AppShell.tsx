@@ -183,6 +183,12 @@ export function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("models");
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
+  // The sidebar poll saw a model-config change made anywhere (this window,
+  // another window, or an external editor) — re-fetch the model list so the
+  // selector reflects it without a restart.
+  const handleModelsVersionChange = useCallback(() => {
+    setModelsRefreshKey((k) => k + 1);
+  }, []);
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
   const [projectTrustBusy, setProjectTrustBusy] = useState(false);
@@ -1304,6 +1310,7 @@ export function AppShell() {
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
+        onModelsVersionChange={handleModelsVersionChange}
         requestedCwd={cwdRequest}
         onOpenProject={handleOpenProject}
         onWorkspaceActivityChange={setWorkspaceActivity}

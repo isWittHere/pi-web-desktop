@@ -2,11 +2,12 @@ import { createAgentSessionFromServices, createAgentSessionServices, getAgentDir
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { KeybindingsManager as TuiKeybindingsManager, TUI_KEYBINDINGS } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
-import { existsSync, realpathSync, writeFileSync } from "fs";
-import { resolve } from "path";
+import { existsSync, realpathSync, statSync, writeFileSync } from "fs";
+import { join, resolve } from "path";
 import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
-import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
+import { resolveVisibleModels } from "./model-scope";
+import { resolveSessionModel, sameModel, type SessionModelState } from "./session-model";
 import {
   createProjectCommandBashExtension,
   createProjectCommandBashOperations,
@@ -23,7 +24,7 @@ import {
 import { createSubagentController } from "./subagent-runtime";
 import { isBuiltInSubagentsEnabled } from "./subagent-settings";
 import { listSubagentProfiles, readSubagentRun, readSubagentSessionResources, SUBAGENT_CONTROL_TOOL_NAMES } from "./subagents";
-import { cacheSessionPath, getLatestModelChange, invalidateSessionListCache, resolveSessionPath } from "./session-reader";
+import { cacheSessionPath, getRecordedSessionModel, invalidateSessionListCache, resolveSessionPath } from "./session-reader";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
 import { createExactSystemPromptExtension } from "./exact-system-prompt";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
@@ -223,6 +224,16 @@ export class AgentSessionWrapper {
   private forceEmptySystemPrompt = false;
   private exactSystemPrompt: (() => string) | null = null;
   private unsubscribe: (() => void) | null = null;
+  // The model decision produced at materialization time (see lib/session-model.ts).
+  // Surfaced through get_state so the UI can render the explicit active/missing
+  // state instead of re-deriving it from the session file.
+  private modelStatus: SessionModelState | null = null;
+  // models.json mtime baseline for the lazy runtime refresh (E2): a config change
+  // from ANY source (in-app save or an external editor) is picked up before the
+  // next command without restarting the session.
+  private modelsConfigMtimeMs: number | null = null;
+  private modelsConfigCheckedAt = 0;
+  private static readonly MODELS_CONFIG_RECHECK_MS = 5_000;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
@@ -254,6 +265,51 @@ export class AgentSessionWrapper {
 
   isRunning(): boolean {
     return this._alive && (this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning);
+  }
+
+  /** Record the explicit model decision made when this session materialized. */
+  setModelStatus(status: SessionModelState): void {
+    this.modelStatus = status;
+  }
+
+  /** Baseline models.json so the next command only refreshes on a real change. */
+  markModelsConfigFresh(): void {
+    this.modelsConfigMtimeMs = this.readModelsConfigMtime();
+    this.modelsConfigCheckedAt = Date.now();
+  }
+
+  private readModelsConfigMtime(): number | null {
+    try {
+      return statSync(join(getAgentDir(), "models.json")).mtimeMs;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Pick up a models.json change before a command runs. `refresh` rebuilds the
+   * provider/model snapshots only — it never touches agent.state.model, so an
+   * in-flight stream is unaffected. Deferred while a run is active; the next
+   * command retries. Covers edits from outside the app too (no push needed).
+   */
+  private async refreshModelRuntimeOnConfigChange(): Promise<void> {
+    const now = Date.now();
+    if (now - this.modelsConfigCheckedAt < AgentSessionWrapper.MODELS_CONFIG_RECHECK_MS) return;
+    this.modelsConfigCheckedAt = now;
+    if (this.isRunning()) return;
+    const mtime = this.readModelsConfigMtime();
+    if (mtime === null || mtime === this.modelsConfigMtimeMs) return;
+    this.modelsConfigMtimeMs = mtime;
+    try {
+      await this.inner.modelRuntime.refresh({ allowNetwork: false });
+      invalidateModelsCache();
+    } catch (error) {
+      // A failed refresh must not block the command; the next check retries.
+      console.error(
+        "[pi-web] failed to refresh the model runtime after a models.json change:",
+        error instanceof Error ? error.message : error,
+      );
+    }
   }
 
   start(): void {
@@ -473,6 +529,8 @@ export class AgentSessionWrapper {
 
   async send(command: Record<string, unknown>): Promise<unknown> {
     const type = command.type as string;
+    // A models.json change from any source takes effect before the next command.
+    await this.refreshModelRuntimeOnConfigChange();
     // Status reconciliation must not postpone forced cleanup after Stop.
     if (type !== "get_state") this.resetIdleTimer();
     if (type === "prompt" || type === "steer" || type === "follow_up") {
@@ -534,6 +592,7 @@ export class AgentSessionWrapper {
           isBashRunning: this.inner.isBashRunning,
           isCompacting: this.inner.isCompacting,
           model: model ? { id: model.id, provider: model.provider } : undefined,
+          modelStatus: this.modelStatus ?? undefined,
           messageCount: 0,
           pendingMessageCount: this.inner.pendingMessageCount,
           queuedMessages: {
@@ -1576,33 +1635,63 @@ export async function startRpcSession(
     // System messages carry the prompt and tool loadout, not a conversation.
     const hasExistingMessages = branch.some((entry) => entry.type === "message" && entry.message.role !== "system");
     const savedModel = hasExistingMessages
-      ? getLatestModelChange(branch as unknown as SessionEntry[])
+      ? getRecordedSessionModel(branch as unknown as SessionEntry[])
       : null;
-    const restoredModel = savedModel
-      ? services.modelRuntime.getModel(savedModel.provider, savedModel.modelId)
+    const settingsDefault = defaultProvider && defaultModelId
+      ? { provider: defaultProvider, modelId: defaultModelId }
+      : null;
+    // The single model decision point: recorded intent (session file) + explicit
+    // request + the live registry/scope produce one explicit state. The SDK's own
+    // silent fallback is unreachable from here — every branch passes an explicit
+    // model or an explicit "nothing available".
+    const resolution = resolveSessionModel({
+      recorded: savedModel,
+      ...(initialModel ? { requested: initialModel } : {}),
+      runtime: services.modelRuntime,
+      scope,
+      ...(settingsDefault ? { settingsDefault } : {}),
+    });
+    // An explicit request for an unavailable model fails loudly; the API layer
+    // maps this prefix to HTTP 400 (existing contract).
+    if (resolution.status === "missing" && initialModel) {
+      throw new Error(
+        `Model is not available in the enabled scope: ${initialModel.provider}/${initialModel.modelId}`,
+      );
+    }
+    const startupModelRef = resolution.status === "active" ? resolution.model : resolution.suggestion;
+    // The resolver speaks in refs (serializable for get_state); construction needs
+    // the full registry model. Prefer the scope's own object so it matches the
+    // runtime's composed provider exactly.
+    const startupModel = startupModelRef
+      ? (scope.visible.find((m) => m.provider === startupModelRef.provider && m.id === startupModelRef.modelId)
+        ?? services.modelRuntime.getModel(startupModelRef.provider, startupModelRef.modelId))
       : undefined;
-    const initial = hasExistingMessages ? null : selectInitialModelScope(scope, {
-        ...(initialModel ? { requestedModel: initialModel } : {}),
-        ...(defaultProvider && defaultModelId
-          ? { defaultModel: { provider: defaultProvider, modelId: defaultModelId } }
-          : {}),
-        ...(thinkingLevel ? { thinkingLevel } : {}),
-      });
-    // Reopening a session with history: restore its last explicit model_change so
-    // the displayed/running model matches what was used, not a fresh default.
-    const startupModel = restoredModel && services.modelRuntime.hasConfiguredAuth(restoredModel.provider)
-      ? restoredModel
-      : initial?.model;
+    const startupThinkingLevel = hasExistingMessages
+      ? undefined
+      : (thinkingLevel ?? (resolution.status === "active" ? resolution.thinkingLevel : undefined));
     const { session: inner } = await createAgentSessionFromServices({
       services,
       sessionManager,
       ...(startupModel ? { model: startupModel } : {}),
-      ...(initial?.thinkingLevel ? { thinkingLevel: initial.thinkingLevel } : {}),
+      ...(startupThinkingLevel ? { thinkingLevel: startupThinkingLevel as ThinkingLevel } : {}),
       ...(scope.scopedModels.length > 0 ? { scopedModels: [...scope.scopedModels] } : {}),
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
       // Subagent sessions must never see the control tools themselves.
       ...(subagentResources ? { excludeTools: [...SUBAGENT_CONTROL_TOOL_NAMES] } : {}),
     });
+    // Write-through: an existing session whose recorded model disappeared now runs
+    // the explicit fallback. Record it so the file's latest model_change equals the
+    // live model — display and runtime can never drift again. appendModelChange
+    // (not setModel) keeps this a pure file append: no duplicate entry, no thinking
+    // re-clamp, no model_select extension event.
+    if (
+      resolution.status === "missing"
+      && startupModelRef
+      && resolution.recorded
+      && !sameModel(resolution.recorded, startupModelRef)
+    ) {
+      inner.sessionManager.appendModelChange(startupModelRef.provider, startupModelRef.modelId);
+    }
 
     if (!subagentResources) {
       const persistedPreferences = await persistExplicitStartupPreferences(
@@ -1654,6 +1743,10 @@ export async function startRpcSession(
     }
 
     const wrapper = new AgentSessionWrapper(inner, sessionCwd);
+    // Surface the explicit model decision made above (active / missing+reason+
+    // suggestion) to the client, and baseline models.json for the lazy refresh.
+    wrapper.setModelStatus(resolution);
+    wrapper.markModelsConfigFresh();
     // When all tools are disabled, clear the system prompt entirely.
     // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
     // keep this forced after extension resource discovery and reloads as well.

@@ -33,6 +33,7 @@ import { useFileIndex, useSkillNames } from "@/hooks/useProjectContext";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { cssPx, getUiScale } from "@/lib/ui-scale";
 import type { ThinkingLevelOption } from "@/lib/thinking-levels";
+import type { SessionModelState } from "@/lib/session-model";
 import { filterThinkingLevelOptions } from "@/lib/thinking-levels";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { MINI_ROW_H, MiniLaneGraph, miniLaneGraphWidth } from "./MiniLaneGraph";
@@ -56,6 +57,7 @@ import { GitCommitIcon } from "@phosphor-icons/react/GitCommit";
 import { GitMergeIcon } from "@phosphor-icons/react/GitMerge";
 import { ImageIcon } from "@phosphor-icons/react/Image";
 import { SortDescendingIcon } from "@phosphor-icons/react/SortDescending";
+import { WarningIcon } from "@phosphor-icons/react/Warning";
 
 import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
 import { ClockIcon } from "@phosphor-icons/react/Clock";
@@ -109,6 +111,8 @@ interface Props {
   modelScopeWarnings?: string[];
   /** Set when the model list failed to load; keeps the selector visible with the error surfaced. */
   modelError?: string | null;
+  /** Explicit session-model state resolved at materialization (missing/deleted etc.). */
+  modelStatus?: SessionModelState | null;
   onModelChange?: (provider: string, modelId: string) => void;
   compactResult?: CompactResultInfo | null;
   /** The user's explicit tool pin; null/undefined = "configured" (no pin). */
@@ -517,7 +521,7 @@ function NextTurnBanner() {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, isCompacting, onAbortCompaction, stepLabel, model, isAutoModelSelection, modelNames, modelList, imageInputByModel, modelScopeWarnings, modelError, onModelChange,
+  onSend, onBash, onAbort, onSteer, onFollowUp, isStreaming, isCompacting, onAbortCompaction, stepLabel, model, isAutoModelSelection, modelNames, modelList, imageInputByModel, modelScopeWarnings, modelError, modelStatus, onModelChange,
   compactResult, toolPreset, inferredPreset, onToolPresetChange,
   tools, toolsLoading = false, onLoadTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
@@ -1935,6 +1939,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)
     : undefined;
   const currentName = currentModelOption?.name ?? model?.modelId ?? null;
+  // The selector stays honest when the selected model no longer exists: the
+  // authoritative server state (recorded model gone) or the fresh model list
+  // missing it. Sends still work from the in-memory copy until restart.
+  const missingRecordedModel = Boolean(
+    model
+    && modelStatus?.status === "missing"
+    && modelStatus.recorded
+    && model.provider === modelStatus.recorded.provider
+    && model.modelId === modelStatus.recorded.modelId,
+  );
+  const currentModelMissing = Boolean(model)
+    && (missingRecordedModel || (modelOptions.length > 0 && !currentModelOption));
 
   // Image input is only available for models whose registry entry declares
   // `input` to include "image". Unknown models (not in the visible scope, or
@@ -3654,7 +3670,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       if (!modelDropdownOpen) setModelSearch("");
                       setModelDropdownOpen((v) => !v);
                     }}
-                    title={isStreaming ? t("desktop.changeModelWhileRunning") : t("desktop.changeModel")}
+                    title={currentModelMissing
+                      ? t("desktop.modelMissingHint")
+                      : (isStreaming ? t("desktop.changeModelWhileRunning") : t("desktop.changeModel"))}
                     aria-label={t("desktop.changeModel")}
                     style={{
                       display: "flex", alignItems: "center", gap: 6,
@@ -3681,8 +3699,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       e.currentTarget.style.color = "var(--text-muted)";
                     }}
                   >
+                    {currentModelMissing && (
+                      <WarningIcon size={13} weight="fill" color="var(--accent-orange)" aria-hidden="true" />
+                    )}
                     <ProviderIcon id={model?.provider ?? "unknown"} api={currentModelOption?.api} size={14} />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
+                    <span
+                      title={currentModelMissing ? t("desktop.modelMissingHint") : undefined}
+                      style={{
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,
+                        ...(currentModelMissing
+                          ? { textDecoration: "line-through", textDecorationColor: "var(--accent-orange)" }
+                          : {}),
+                      }}
+                    >{currentName}</span>
                     <CaretDownIcon
                       size={11}
                       weight="bold"

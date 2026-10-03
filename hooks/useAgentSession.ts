@@ -23,6 +23,7 @@ import { getToolExecutionProgress } from "@/lib/tool-execution-progress";
 import { isSystemMessageEvent, type AgentEventLike } from "@/lib/agent-event-wire";
 import { getCachedSession, setCachedSession } from "@/lib/session-cache";
 import { modelKey } from "@/lib/thinking-levels";
+import { selectDisplayModel, type SessionModelState } from "@/lib/session-model";
 import type { ThinkingLevelOption } from "@/lib/thinking-levels";
 import { useI18n } from "@/hooks/useI18n";
 import type { ModelThinkingProfile } from "@/lib/thinking-profile";
@@ -100,6 +101,10 @@ type AgentStateResponse = {
   extensionStatuses?: ExtensionStatusItem[];
   extensionWidgets?: ExtensionWidgetItem[];
   queuedMessages?: { steering?: string[]; followUp?: string[] } | null;
+  /** The live runtime model (authoritative over the session file). */
+  model?: { id: string; provider: string } | null;
+  /** The explicit session-model state resolved when the session materialized. */
+  modelStatus?: SessionModelState | null;
 };
 
 export interface QueuedMessages {
@@ -397,6 +402,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
+  // The live runtime model from get_state — the authoritative "what is running
+  // now", as opposed to data.context.model ("what the file recorded").
+  const [liveModel, setLiveModel] = useState<{ provider: string; modelId: string } | null>(null);
+  const [modelStatus, setModelStatus] = useState<SessionModelState | null>(null);
+  // Guards the one-time "model was deleted" notice per session+recorded model.
+  const modelFallbackNoticeKeyRef = useRef<string | null>(null);
   const [isCompacting, setIsCompacting] = useState(false);
   const [compactError, setCompactError] = useState<string | null>(null);
   const [compactResult, setCompactResult] = useState<CompactResultInfo | null>(null);
@@ -513,7 +524,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     [tools],
   );
 
-  const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
+  const currentModel = selectDisplayModel({
+    override: currentModelOverride,
+    live: liveModel,
+    recorded: data?.context.model ?? null,
+    pending: pendingModel,
+  });
   const displayModel = isNew ? (newSessionModel ?? newSessionDefaultModel) : currentModel;
 
   const sessionStats = useMemo(() => {
@@ -546,6 +562,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setHistoryCursor(d.context.oldestEntryId);
     setHasEarlierMessages(d.context.hasMore);
     setCurrentModelOverride(null);
+    setLiveModel(null);
+    setModelStatus(null);
+    modelFallbackNoticeKeyRef.current = null;
     setError(null);
     if (d.context.thinkingLevel) {
       setThinkingLevel(d.context.thinkingLevel as ThinkingLevelOption);
@@ -569,6 +588,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (liveState.extensionStatuses !== undefined) setExtensionStatuses(liveState.extensionStatuses ?? []);
         if (liveState.extensionWidgets !== undefined) setExtensionWidgets(liveState.extensionWidgets ?? []);
         if (liveState.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(liveState.queuedMessages));
+        if (liveState.model !== undefined) {
+          setLiveModel(liveState.model
+            ? { provider: liveState.model.provider, modelId: liveState.model.id }
+            : null);
+        }
+        if (liveState.modelStatus !== undefined) setModelStatus(liveState.modelStatus ?? null);
       } else if (!agentState.running) {
         setQueuedMessages({ steering: [], followUp: [] });
       }
@@ -765,6 +790,29 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       },
     });
   }, []);
+
+  // One warning per session + recorded model when the recorded model is gone.
+  // The write-through at materialization already switched the runtime; this tells
+  // the user which model was lost and what is being used instead.
+  useEffect(() => {
+    if (!modelStatus || modelStatus.status !== "missing") return;
+    const recorded = modelStatus.recorded;
+    // "No model available at all" is already surfaced through the model-error banner.
+    if (!recorded) return;
+    const key = `${sessionIdRef.current ?? ""}|${recorded.provider}/${recorded.modelId}|${modelStatus.reason}`;
+    if (modelFallbackNoticeKeyRef.current === key) return;
+    modelFallbackNoticeKeyRef.current = key;
+    const modelLabel = `${recorded.provider}/${recorded.modelId}`;
+    addNotice({
+      type: "warning",
+      message: modelStatus.suggestion
+        ? t("desktop.modelDeletedFallback", {
+            model: modelLabel,
+            using: `${modelStatus.suggestion.provider}/${modelStatus.suggestion.modelId}`,
+          })
+        : t("desktop.modelDeletedNoFallback", { model: modelLabel }),
+    });
+  }, [modelStatus, addNotice, t]);
 
   const ensureNewSession = useCallback(async () => {
     if (sessionIdRef.current) return sessionIdRef.current;
@@ -1174,6 +1222,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (state.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
         if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
         if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
+        if (state.model !== undefined) {
+          setLiveModel(state.model ? { provider: state.model.provider, modelId: state.model.id } : null);
+        }
       }
       await finishPromptWithoutStream(sid, runId);
     } catch {
@@ -2173,7 +2224,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     loading, error, activeLeafId, messages, entryIds, historyCursor, hasEarlierMessages, streamState, activeToolResults,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, modelError, toolPreset, inferredPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
-    isCompacting, compactError, compactResult, displayModel, sessionStats,
+    isCompacting, compactError, compactResult, displayModel, sessionStats, modelStatus,
     slashCommands, slashCommandsLoading, queuedMessages,
     notices: noticeState.visible, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection: isNew && newSessionModel === null,

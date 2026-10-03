@@ -210,7 +210,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     loading, error, messages, entryIds, historyCursor, hasEarlierMessages, streamState, activeToolResults,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelImageInput, modelThinkingProfiles, modelScopeWarnings, modelError, toolPreset, inferredPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
-    isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
+    isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats, modelStatus,
     slashCommands, slashCommandsLoading, queuedMessages,
     notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection,
@@ -782,6 +782,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
       onAbortCompaction={handleAbortCompaction}
       stepLabel={currentStepLabel}
       model={displayModelValue}
+      modelStatus={modelStatus}
       isAutoModelSelection={isAutoModelSelection}
       modelNames={modelNames}
       modelList={modelList}

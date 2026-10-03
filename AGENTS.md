@@ -450,6 +450,13 @@ Tool names are passed at session creation (`POST /api/agent/new` → `toolNames[
 ### Model Defaults for New Sessions
 `GET /api/models` returns `defaultModel` read from `~/.pi/agent/settings.json`. `ChatWindow` pre-selects this on mount for new sessions.
 
+### Session Model State — One Resolver, Write-Through, Config-Change Lifecycle
+- **One decision point**: `lib/session-model.ts` `resolveSessionModel()` is the only place that answers "which model is this session using?". `startRpcSession` routes the recorded intent (`getRecordedSessionModel`) + explicit request (`initialModel`) + live registry/scope through it, then passes an explicit model (or an explicit `missing` state) to `createAgentSessionFromServices` — the SDK's own silent `findInitialModel` fallback must stay unreachable. Never add a second restore/priority implementation.
+- **Explicit state**: the resolver returns `active` (with `source`) or `missing` (with `reason`: `deleted` / `no-auth` / `out-of-scope` / `none-available`, plus a `suggestion`). An explicitly requested but unavailable model throws the `Model is not available in the enabled scope: …` message so `/api/agent/new` still maps it to HTTP 400.
+- **Write-through**: when an existing session's recorded model is gone, the applied fallback is appended with `sessionManager.appendModelChange()` — never `setModel`, which duplicates the entry, re-clamps thinking, and fires `model_select`. The file's latest `model_change` must equal the live model after materialization.
+- **Display**: the UI prefers the live runtime model (`get_state.model`, via `selectDisplayModel`) over the file's recorded value; `get_state.modelStatus` carries the explicit state. `ChatInput` renders a deleted-model warning (`desktop.modelMissingHint`), and the deletion is announced once per session + recorded model.
+- **Config-change lifecycle (E1–E4)**: `PUT /api/models-config` must `invalidateModelsCache()` + `bumpModelsVersion()`; `/api/agent/running` exposes `modelsVersion` and the sidebar poll bumps `modelsRefreshKey` when it moves (no new endpoint). `AgentSessionWrapper.send()` lazily refreshes its `modelRuntime` when `models.json` mtime changes (5s recheck TTL, skipped while a run is active), so edits from any source — in-app or external — take effect before the next command. The selected session's SSE liveness lease prevents idle eviction, so this lazy refresh is the only thing that keeps its runtime snapshot current.
+
 ### SSE Reconnect on Page Refresh Mid-Stream
 On `ChatWindow` mount, `GET /api/agent/[id]` is called. If `state.isStreaming === true`, SSE is reconnected automatically. `thinkingLevel` and `isCompacting` are also synced from this response.
 

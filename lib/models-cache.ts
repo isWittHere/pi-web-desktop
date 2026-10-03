@@ -53,6 +53,24 @@ export function invalidateModelsCache(): void {
   state.inFlight.clear();
 }
 
+declare global {
+  var __piModelsVersion: number | undefined;
+}
+
+/**
+ * Monotonic version for the model configuration. Bumped by writers (the
+ * models-config PUT) and polled through /api/agent/running so open windows
+ * notice a change made anywhere — in this app or by an external editor —
+ * without a restart. Reads never bump it.
+ */
+export function getModelsVersion(): number {
+  return globalThis.__piModelsVersion ?? 0;
+}
+
+export function bumpModelsVersion(): void {
+  globalThis.__piModelsVersion = getModelsVersion() + 1;
+}
+
 export function withModelRuntimeError(data: ModelsData, modelError: string | undefined): ModelsData {
   return modelError ? { ...data, modelError } : data;
 }

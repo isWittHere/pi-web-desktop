@@ -77,6 +77,8 @@ interface Props {
   onAtMentions?: (relativePaths: string[]) => void;
   /** Reports the current set of running session ids (from the poll). */
   onRunningSessionIdsChange?: (ids: Set<string>) => void;
+  /** Fired when the polled model-config version changes (config edited anywhere). */
+  onModelsVersionChange?: () => void;
   /** Tabs view mode: the shell asks the sidebar to move the effective cwd
    *  (null clears it — last tab closed). The token makes repeated requests
    *  with the same cwd apply again (e.g. re-activating a tab). projectKey
@@ -324,7 +326,7 @@ function buildSessionTree(sessions: SessionRow[]): SessionTreeNode[] {
 
 
 
-export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, onOpenChangesView, onOpenGitGraph, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, openWorkspaceKeys, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor, onNoWorkspaceChange, viewMode = "classic" }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSession, onNewSession, draftSessions, onSelectDraft, onDeleteDraft, onRenameDraft, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, onOpenChangesView, onOpenGitGraph, explorerRefreshKey, onAtMention, onAtMentions, onRunningSessionIdsChange, onModelsVersionChange, requestedCwd, onOpenProject, onWorkspaceActivityChange, openWorkspaceKeys, workspaceControlsHosts, showWorkspaceControls = true, onBackgroundTaskDone, onSessionRenamed, onRegenerateTitle, titleGeneratingId, onSessionsLoaded, onNoContentToWaitFor, onNoWorkspaceChange, viewMode = "classic" }: Props) {
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -362,6 +364,9 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
   // running-state poll reports a newer version, the list reloads itself.
   const [sessionListVersion, setSessionListVersion] = useState<number | null>(null);
   const sessionListVersionRef = useRef<number | null>(null);
+  // Model-config version last seen by the poll; a change (in-app or external)
+  // means the models list must be re-fetched so the selector stays truthful.
+  const modelsVersionRef = useRef<number | null>(null);
   const sessionLoadIdRef = useRef(0);
   // null = show every mark; otherwise only sessions carrying this mark.
   const [markFilter, setMarkFilter] = useState<SessionMark | null>(null);
@@ -526,7 +531,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
           signal: currentController.signal,
         });
         if (!response.ok || !active || controller !== currentController) return;
-        const data = await response.json() as { sessionListVersion?: number; runningSessionIds?: string[] };
+        const data = await response.json() as { sessionListVersion?: number; runningSessionIds?: string[]; modelsVersion?: number };
         if (!active || controller !== currentController) return;
         runningSnapshotAuthoritativeRef.current = true;
         setRunningSessionIds(new Set(data.runningSessionIds ?? []));
@@ -539,6 +544,13 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
         if (typeof data.sessionListVersion === "number" && data.sessionListVersion !== sessionListVersionRef.current) {
           invalidateSessionList();
           void loadSessions();
+        }
+        if (typeof data.modelsVersion === "number") {
+          // First sighting only baselines; a real change forces a model-list refetch.
+          if (modelsVersionRef.current !== null && data.modelsVersion !== modelsVersionRef.current) {
+            onModelsVersionChange?.();
+          }
+          modelsVersionRef.current = data.modelsVersion;
         }
       } catch (error) {
         if ((error as DOMException).name !== "AbortError") console.warn("Failed to poll running sessions", error);
@@ -567,7 +579,7 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [loadSessions]);
+  }, [loadSessions, onModelsVersionChange]);
 
   useEffect(() => {
     onRunningSessionIdsChange?.(runningSessionIds);
