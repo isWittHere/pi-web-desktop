@@ -413,6 +413,7 @@ export const zhCNLocale = {
     "desktop.clearSearch": "清除搜索",
     "desktop.fileSearchFailed": "搜索失败",
     "desktop.revealInFolder": "在系统资源管理器中查看",
+    "desktop.openInFileManager": "在文件管理器中打开",
     "desktop.copyRelativePath": "复制相对路径",
     "desktop.copyAbsolutePath": "复制绝对路径",
     "desktop.agentRunningLabel": "Agent 正在运行",

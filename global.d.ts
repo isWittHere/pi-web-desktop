@@ -40,6 +40,7 @@ interface Window {
     openThemeFolder: () => Promise<string>;
     openThemeDocs: () => Promise<void>;
     showItemInFolder: (fullPath: string) => Promise<boolean>;
+    openWorkspaceFolder: (targetPath: string) => Promise<boolean>;
     getPathForFile: (file: File) => string;
     showNotification: (payload: PiDesktopNotificationPayload) => Promise<PiDesktopNotificationResult>;
     onNotificationNavigate: (callback: (sessionId: string) => void) => () => void;

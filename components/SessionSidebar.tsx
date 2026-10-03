@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FunnelSimple, GitBranch, MagnifyingGlass, PencilSimple, Plus, PushPin, SealCheck, Tag, TextAa, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
+import { ArrowClockwise, CaretDown, CaretRight, ChatCircle, Check, CircleDashed, ClockCounterClockwise, ClockCountdown, FunnelSimple, FolderOpen, GitBranch, MagnifyingGlass, PencilSimple, Plus, PushPin, SealCheck, Tag, TextAa, Trash, UploadSimple, X, XCircle } from "@phosphor-icons/react";
 import type { SessionInfo, SessionMark, TimeBucket } from "@/lib/types";
 import type { DraftSession } from "@/lib/draft-sessions";
 import { draftToSessionInfo } from "@/lib/draft-sessions";
@@ -2087,6 +2087,34 @@ export function SessionSidebar({ selectedSessionId, selectedDraftId, onSelectSes
               <CaretRight size={9} weight="regular" style={{ transform: explorerOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} aria-hidden="true" />
               {t("desktop.explorer")}
             </button>
+            {explorerOpen && (
+              <button
+                onClick={() => {
+                  const cwd = selectedCwd ?? selectedCwdProp!;
+                  // Only the Electron bridge opens the system file manager; the
+                  // defensive guard keeps a browser-mode build from rendering it.
+                  void window.piDesktop?.openWorkspaceFolder(cwd);
+                }}
+                disabled={!window.piDesktop}
+                title={t("desktop.openInFileManager")}
+                aria-label={t("desktop.openInFileManager")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26, padding: 0,
+                  background: "none",
+                  border: "none",
+                  color: "var(--text-dim)",
+                  cursor: "pointer",
+                  borderRadius: 5,
+                  flexShrink: 0,
+                  transition: "color 0.3s, background 0.3s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+              >
+                <FolderOpen size={13} weight="regular" aria-hidden="true" />
+              </button>
+            )}
             {explorerOpen && (
               <button
                 onClick={() => setFileSearchOpen((open) => !open)}

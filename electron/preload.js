@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld("piDesktop", {
   openThemeDocs: () => ipcRenderer.invoke("shell:open-theme-docs"),
   // Reveal a file/folder in the system file explorer (used by context menus).
   showItemInFolder: (fullPath) => ipcRenderer.invoke("shell:show-item-in-folder", fullPath),
+  // Open a workspace folder itself in the system file manager (Explorer /
+  // Finder / xdg-open). Main process validates the path is absolute + existing.
+  openWorkspaceFolder: (targetPath) => ipcRenderer.invoke("shell:open-workspace-folder", targetPath),
   // Absolute path of a dragged-in File (webUtils is the only sanctioned way
   // to recover paths from drop payloads since File.path was removed).
   getPathForFile: (file) => webUtils.getPathForFile(file),

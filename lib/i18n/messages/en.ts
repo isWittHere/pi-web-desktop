@@ -413,6 +413,7 @@ export const enLocale = {
     "desktop.clearSearch": "Clear search",
     "desktop.fileSearchFailed": "Search failed",
     "desktop.revealInFolder": "Show in system explorer",
+    "desktop.openInFileManager": "Open in file manager",
     "desktop.copyRelativePath": "Copy relative path",
     "desktop.copyAbsolutePath": "Copy absolute path",
     "desktop.agentRunningLabel": "Agent running",

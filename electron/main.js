@@ -759,6 +759,23 @@ ipcMain.handle("shell:show-item-in-folder", async (_event, fullPath) => {
   }
 });
 
+// Open the workspace folder itself in the system file manager (Explorer /
+// Finder / xdg-open). Only absolute paths that exist are accepted — a relative
+// path would resolve against the main process cwd, which the renderer cannot
+// control and must never influence.
+ipcMain.handle("shell:open-workspace-folder", async (_event, targetPath) => {
+  if (typeof targetPath !== "string" || targetPath.length === 0) return false;
+  if (!path.isAbsolute(targetPath)) return false;
+  try {
+    if (!fs.existsSync(targetPath)) return false;
+    const errorMessage = await shell.openPath(targetPath);
+    return errorMessage === "";
+  } catch (error) {
+    console.error("[Electron] Failed to open workspace folder:", error);
+    return false;
+  }
+});
+
 async function bootstrap() {
   if (process.platform === "darwin") {
     app.dock.setIcon(getIconPath());
