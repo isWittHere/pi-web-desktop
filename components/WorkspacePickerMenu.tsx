@@ -48,13 +48,18 @@ function pathBaseName(path: string): string {
 }
 
 /** True for quick workspaces created by the default-cwd endpoint as
- *  ~/pi-cwd-<YYYYMMDD> (same shape the server uses to seed the allow-list). */
+ *  ~/pi-cwd/<YYYYMMDD> (new layout) or the legacy ~/pi-cwd-<YYYYMMDD>. */
 function isQuickWorkspace(cwd: string, homeDir?: string): boolean {
   if (!homeDir) return false;
   const normalizedCwd = cwd.replace(/\\/g, "/");
   const normalizedHome = homeDir.replace(/\\/g, "/");
   if (!normalizedCwd.startsWith(normalizedHome)) return false;
-  const firstSegment = normalizedCwd.slice(normalizedHome.length).replace(/^\/+/, "").split("/")[0] ?? "";
+  const rest = normalizedCwd.slice(normalizedHome.length).replace(/^\/+/, "");
+  const segments = rest.split("/");
+  // New layout: ~/pi-cwd/<YYYYMMDD> (two segments).
+  if (segments.length === 2 && segments[0] === "pi-cwd" && /^\d{8}$/.test(segments[1])) return true;
+  // Legacy layout: ~/pi-cwd-<YYYYMMDD>.
+  const firstSegment = segments[0] ?? "";
   return /^pi-cwd-\d{8}$/.test(firstSegment);
 }
 

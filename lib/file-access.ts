@@ -31,9 +31,24 @@ export async function getAllowedFileRoots(): Promise<Set<string>> {
     if (s.projectRoot) roots.add(normalizeSlashes(s.projectRoot));
   }
 
-  // Also allow ~/pi-cwd-* directories created by the default-cwd endpoint.
+  // Also allow ~/pi-cwd/<YYYYMMDD> date folders (the new default-cwd layout)
+  // and legacy ~/pi-cwd-YYYYMMDD folders that existing sessions still point at.
   try {
-    for (const name of readdirSync(homedir())) {
+    const homeNames = readdirSync(homedir());
+    if (homeNames.includes("pi-cwd")) {
+      const parent = path.join(homedir(), "pi-cwd");
+      roots.add(normalizeSlashes(parent));
+      try {
+        for (const name of readdirSync(parent)) {
+          if (/^\d{8}$/.test(name)) {
+            roots.add(normalizeSlashes(path.join(parent, name)));
+          }
+        }
+      } catch {
+        // ignore if the pi-cwd parent is unreadable
+      }
+    }
+    for (const name of homeNames) {
       if (/^pi-cwd-\d{8}$/.test(name)) {
         roots.add(normalizeSlashes(path.join(homedir(), name)));
       }
