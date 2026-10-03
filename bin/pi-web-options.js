@@ -3,6 +3,12 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { parseArgs } = require("util");
 
+// Environment variables recognized by the server (passed through untouched):
+//   PI_WEB_PASSWORD               Enable browser password login
+//   PI_WEB_ALLOWED_HOSTS          Extra exact proxy/custom hostnames, comma-separated
+//   PI_WEB_IDLE_TIMEOUT_MS        Session idle timeout in ms (0 disables; default 600000)
+//   PI_WEB_SHUTDOWN_DEADLINE_MS   Shutdown wait for extensions in ms (default 5000)
+
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
 function isEnabled(value) {

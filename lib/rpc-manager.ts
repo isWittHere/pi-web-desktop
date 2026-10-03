@@ -104,6 +104,30 @@ export function resolveSessionIdleTimeoutMs(
 
 const SESSION_IDLE_TIMEOUT_MS = resolveSessionIdleTimeoutMs();
 
+const DEFAULT_SESSION_SHUTDOWN_DEADLINE_MS = 5_000;
+
+/**
+ * Resolves the PI_WEB_SHUTDOWN_DEADLINE_MS environment variable into the time
+ * extensions get to handle `session_shutdown` before the wrapper disposes the
+ * SDK session anyway. An unset/blank value returns the 5-second default, and
+ * positive values up to Node's timer limit (2147483647 ms) are used as-is.
+ * `0`, invalid and out-of-range values fall back to the default with a console
+ * warning: shutdown always has a deadline.
+ * @param rawValue Value to parse; defaults to the environment variable.
+ */
+export function resolveSessionShutdownDeadlineMs(
+  rawValue: string | undefined = process.env.PI_WEB_SHUTDOWN_DEADLINE_MS,
+): number {
+  if (rawValue !== undefined && rawValue.trim() !== "") {
+    const parsed = Number(rawValue);
+    if (Number.isFinite(parsed) && parsed > 0 && parsed <= 2_147_483_647) return parsed;
+    console.warn(`[pi-web] invalid PI_WEB_SHUTDOWN_DEADLINE_MS "${rawValue}", falling back to 5 seconds`);
+  }
+  return DEFAULT_SESSION_SHUTDOWN_DEADLINE_MS;
+}
+
+const SESSION_SHUTDOWN_DEADLINE_MS = resolveSessionShutdownDeadlineMs();
+
 export interface RpcSessionStartOptions {
   toolNames?: string[];
   initialModel?: { provider: string; modelId: string };
@@ -240,6 +264,9 @@ export class AgentSessionWrapper {
   private sessionShutdownEmitted = false;
   private forceShutdownOnIdle = false;
   private _alive = true;
+  // Set when shutdown() starts. The SDK session stays usable until destroy(),
+  // but lookups must treat the wrapper as gone from this point on.
+  private closing = false;
 
   constructor(public readonly inner: AgentSessionLike, public readonly cwd: string) {}
 
@@ -260,7 +287,7 @@ export class AgentSessionWrapper {
   }
 
   isAlive(): boolean {
-    return this._alive;
+    return this._alive && !this.closing;
   }
 
   isRunning(): boolean {
@@ -923,13 +950,13 @@ export class AgentSessionWrapper {
     }
 
     this.sessionShutdownEmitted = true;
-    const emit = this.inner.extensionRunner.emit;
+    const emit = this.inner.extensionRunner?.emit;
     if (typeof emit !== "function") {
       finishDispose();
       return;
     }
 
-    void (async () => emit.call(this.inner.extensionRunner, { type: "session_shutdown", reason: "quit" }))()
+    void this.emitSessionShutdown(emit)
       .catch((error) => {
         console.error(
           "[pi-web] session_shutdown before dispose failed:",
@@ -939,9 +966,45 @@ export class AgentSessionWrapper {
       .finally(finishDispose);
   }
 
+  /**
+   * Gives extensions at most SESSION_SHUTDOWN_DEADLINE_MS to handle
+   * session_shutdown, then returns so the SDK session is disposed and
+   * unregistered anyway. Closing an MCP connection has no upper bound: it waits
+   * for a token refresh in flight and for a stdio child whose daemonized
+   * grandchild may never close stdout.
+   */
+  private async emitSessionShutdown(
+    emit: NonNullable<AgentSessionLike["extensionRunner"]["emit"]>,
+  ): Promise<void> {
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<"timeout">((resolve) => {
+      deadlineTimer = setTimeout(() => resolve("timeout"), SESSION_SHUTDOWN_DEADLINE_MS);
+      // A quitting process must not wait for an extension's cleanup.
+      deadlineTimer.unref?.();
+    });
+    // A synchronous throw becomes a rejection, and a rejection that arrives
+    // after the deadline is still handled by the race below.
+    const handled = (async () => {
+      await emit.call(this.inner.extensionRunner, { type: "session_shutdown", reason: "quit" });
+      return "handled" as const;
+    })();
+    try {
+      if (await Promise.race([handled, deadline]) === "timeout") {
+        console.warn(
+          `[pi-web] extensions did not finish session_shutdown for session ${this.sessionId} within ${SESSION_SHUTDOWN_DEADLINE_MS} ms; disposing it anyway`,
+        );
+      }
+    } finally {
+      clearTimeout(deadlineTimer);
+    }
+  }
+
   async shutdown(): Promise<void> {
     if (this.shutdownPromise) return this.shutdownPromise;
     if (!this._alive) return;
+    // Closing starts before the first await, so a request that arrives while
+    // extensions shut down starts a fresh wrapper instead of prompting this one.
+    this.closing = true;
 
     this.shutdownPromise = (async () => {
       try {
@@ -955,7 +1018,8 @@ export class AgentSessionWrapper {
         }
         if (!this.sessionShutdownEmitted) {
           this.sessionShutdownEmitted = true;
-          await this.inner.extensionRunner.emit?.({ type: "session_shutdown", reason: "quit" });
+          const emit = this.inner.extensionRunner?.emit;
+          if (typeof emit === "function") await this.emitSessionShutdown(emit);
         }
       } finally {
         this.destroy();
@@ -1333,6 +1397,25 @@ function getLocks(): Map<string, Promise<{ session: AgentSessionWrapper; realSes
   return globalThis.__piStartLocks;
 }
 
+/**
+ * Register a wrapper for its session id. A closing wrapper reports itself dead while
+ * extensions shut down, so the next request may register a replacement under the same id;
+ * finishing later, the closing wrapper must not unregister that replacement. The replaced
+ * entry (a wrapper from before a hot reload) loses its destroy callback so it can no longer
+ * delete by id alone either.
+ */
+function registerRpcWrapper(wrapper: AgentSessionWrapper): void {
+  const registry = getRegistry();
+  const sessionId = wrapper.sessionId;
+  if (wrapper.sessionFile) cacheSessionPath(sessionId, wrapper.sessionFile);
+  wrapper.onDestroy(() => {
+    if (registry.get(sessionId) === wrapper) registry.delete(sessionId);
+  });
+  const previous = registry.get(sessionId);
+  if (previous && previous !== wrapper) previous.onDestroy(() => {});
+  registry.set(sessionId, wrapper);
+}
+
 function normalizeRpcCwd(cwd: string): string {
   const resolvedCwd = resolve(cwd);
   try {
@@ -1475,11 +1558,7 @@ const SUBAGENT_CONTROLLER = createSubagentController({
     const wrapper = new AgentSessionWrapper(inner, inner.sessionManager.getCwd());
     const exactSystemPrompt = options?.exactSystemPrompt;
     if (exactSystemPrompt !== undefined) wrapper.setExactSystemPrompt(() => exactSystemPrompt);
-    const registry = getRegistry();
-    const realSessionId = wrapper.sessionId;
-    if (wrapper.sessionFile) cacheSessionPath(realSessionId, wrapper.sessionFile);
-    wrapper.onDestroy(() => registry.delete(realSessionId));
-    registry.set(realSessionId, wrapper);
+    registerRpcWrapper(wrapper);
     wrapper.start();
     // Chat-only subagents load no extensions; dispatching session_start to an
     // empty runner would only re-run the exact-prompt policy after binding.
@@ -1775,11 +1854,7 @@ export async function startRpcSession(
     wrapper.start();
 
     const realSessionId = inner.sessionId as string;
-    const realSessionFile = inner.sessionFile as string | undefined;
-    if (realSessionFile) cacheSessionPath(realSessionId, realSessionFile);
-
-    wrapper.onDestroy(() => registry.delete(realSessionId));
-    registry.set(realSessionId, wrapper);
+    registerRpcWrapper(wrapper);
     if (!subagentChatOnly) {
       wrapper.beginExtensionBinding({ forceEmptySystemPrompt: !subagentResources && effectiveToolNames?.length === 0 });
     }
