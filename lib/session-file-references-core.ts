@@ -1,4 +1,20 @@
-import type { SessionEntry } from "./types";
+import type { SessionEntry, ToolResultMessage } from "./types";
+
+// Spelled out rather than imported: subagents.ts loads the SDK, and this module
+// stays importable on its own.
+const SUBAGENT_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
+
+// pi's coding tools, as the tool preset lists them.
+const CODING_TOOL_NAMES = new Set<string>(["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"]);
+
+// Tools whose result text may authorize a path it mentions: the coding tools and
+// Pi Web's subagent tools. Every other result (MCP, codemode, third-party
+// extensions) relays text a remote party controls.
+const PATH_REPORTING_TOOL_NAMES = new Set<string>([...CODING_TOOL_NAMES, ...SUBAGENT_TOOL_NAMES]);
+
+// The codemode extension's script store (the SDK's `CODEMODE_STORE_ENTRY_TYPE`):
+// values a script saved, often straight from MCP results.
+const CODEMODE_STORE_ENTRY_TYPE = "codemode-store";
 
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -64,10 +80,57 @@ function collectStrings(value: unknown, out: string[]): void {
   for (const item of Object.values(value)) collectStrings(item, out);
 }
 
+function recordField(value: unknown, key: string): unknown {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/**
+ * What the result of a tool outside PATH_REPORTING_TOOL_NAMES still authorizes:
+ * the file its full output was spilled to, and the arguments of the coding-tool
+ * calls it made through `ctx.executeTool()` (the SDK's `nestedCalls` record) —
+ * the files and commands the run actually operated on. Its other nested calls
+ * are left out: script code passes one MCP result straight into the next MCP
+ * call without the model reading it, so their arguments are as remote-controlled
+ * as the result itself.
+ *
+ * The `nestedCalls` part takes effect once the SDK ships that record (see
+ * 合并规划书 §3.1); with today's SDK `recordField(message, "nestedCalls")` is
+ * simply undefined and this reduces to the fullOutputPath grant.
+ */
+function collectUntrustedToolResultStrings(message: ToolResultMessage, out: string[]): void {
+  const fullOutputPath = recordField(message.details, "fullOutputPath");
+  if (typeof fullOutputPath === "string") out.push(fullOutputPath);
+  const nestedCalls = recordField(recordField(message, "nestedCalls"), "calls");
+  if (!Array.isArray(nestedCalls)) return;
+  for (const call of nestedCalls) {
+    const name = recordField(call, "name");
+    if (typeof name === "string" && CODING_TOOL_NAMES.has(name)) {
+      collectStrings(recordField(call, "arguments"), out);
+    }
+  }
+}
+
+function collectEntryStrings(entry: SessionEntry, out: string[]): void {
+  // A codemode script's `store()` writes, usually values straight from MCP results.
+  if (entry.type === "custom" && entry.customType === CODEMODE_STORE_ENTRY_TYPE) return;
+  if (entry.type === "message") {
+    const { message } = entry;
+    // Provider input: the prompt sections and every tool's schema, never a link.
+    if (message.role === "system") return;
+    if (message.role === "toolResult" && !PATH_REPORTING_TOOL_NAMES.has(message.toolName ?? "")) {
+      collectUntrustedToolResultStrings(message, out);
+      return;
+    }
+  }
+  collectStrings(entry, out);
+}
+
 export function isFilePathReferencedByEntries(filePath: string, entries: SessionEntry[]): boolean {
   for (const entry of entries) {
     const strings: string[] = [];
-    collectStrings(entry, strings);
+    collectEntryStrings(entry, strings);
     if (strings.some((text) => containsExactPathReference(text, filePath))) return true;
   }
   return false;
