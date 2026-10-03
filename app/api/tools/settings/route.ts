@@ -23,9 +23,16 @@ export async function GET(req: Request) {
   try {
     const cwd = new URL(req.url).searchParams.get("cwd")?.trim();
     const projectOverride = cwd ? findProjectCodemodeOverride(resolve(cwd)) : undefined;
-    const codemode = projectOverride
-      ? await readCodemodeChoiceFromDisk(projectOverride)
-      : await readCodemodeChoiceFromDisk();
+    // A governed-but-malformed project file must not break the whole read:
+    // fall back to the global choice, the override path is still reported.
+    let codemode: CodemodeChoice;
+    try {
+      codemode = projectOverride
+        ? await readCodemodeChoiceFromDisk(projectOverride)
+        : await readCodemodeChoiceFromDisk();
+    } catch {
+      codemode = await readCodemodeChoiceFromDisk();
+    }
     const sandbox = getCodemodeSandboxResult();
     return NextResponse.json({
       isWindows: process.platform === "win32",

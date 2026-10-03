@@ -1435,7 +1435,7 @@ export class AgentSessionWrapper {
       newSession: async () => ({ cancelled: true }),
       fork: async () => ({ cancelled: true }),
       navigateTree: async (targetId, options) => {
-        const result = await this.inner.navigateTree(targetId, { summarize: options?.summarize });
+        const result = await this.navigateTreeKeepingToolSelection(targetId, { summarize: options?.summarize });
         return { cancelled: result.cancelled };
       },
       switchSession: async () => ({ cancelled: true }),

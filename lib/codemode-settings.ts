@@ -2,8 +2,11 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import lockfile from "proper-lockfile";
-import { isToolModifier, resolveDefaultToolEntries } from "./powershell-settings";
-import { getPowerShellSettingsPath } from "./powershell-settings";
+import {
+  getPowerShellSettingsPath,
+  isToolModifier,
+  resolveDefaultToolEntries,
+} from "./powershell-settings";
 import { getProjectTrustStatus } from "./project-trust";
 import { PRESET_DEFAULT } from "./tool-presets";
 

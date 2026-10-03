@@ -72,19 +72,3 @@ export function getAllToolNamesForPreset(preset: AllToolPreset): string[] | unde
   if (preset === CONFIGURED_TOOL_PRESET) return undefined;
   return getToolNamesForPreset(preset);
 }
-
-/**
- * Infer the builtin tool preset from a session's live tool state and return
- * its coding tool names. The SDK activates every extension tool at session
- * construction (`includeAllExtensionTools`), so a session's active set may
- * carry extra host tools (e.g. Windows `powershell`) on top of the real
- * preset; `deriveToolPresetFromActive` maps powershell → bash and only counts
- * builtin names, which neutralizes that bloat. Non-coding extension tools are
- * ignored here — callers re-append them separately. Returns [] for "none".
- */
-export function deriveToolNamesFromActive(
-  activeNames: readonly string[],
-): string[] {
-  const inferred = deriveToolPresetFromActive(activeNames);
-  return getToolNamesForPreset(inferred === "custom" ? "default" : inferred);
-}
