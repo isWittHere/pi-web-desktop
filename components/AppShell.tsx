@@ -1274,6 +1274,18 @@ export function AppShell() {
     }
   }, [projectTrustBusy, projectTrustCwd]);
 
+  // The restricted-mode banner and Settings › MCP's trust notice open the same dialog.
+  const openProjectTrustDialog = useCallback(() => {
+    setProjectTrustError(null);
+    setProjectTrustDialogOpen(true);
+  }, []);
+
+  // Settings › MCP added a project server (and maybe trusted a fresh folder): keep the
+  // banner and every mounted panel on the status the route answered with.
+  const handleProjectTrustChanged = useCallback((trustCwd: string, status: ProjectTrustStatus) => {
+    if (trustCwd === projectTrustCwd) setProjectTrust(status);
+  }, [projectTrustCwd]);
+
   const activeTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const settingsCwd = activeCwd ?? selectedSession?.cwd ?? newSessionCwd;
   const openSettings = useCallback((tab: SettingsTab) => {
@@ -1399,10 +1411,7 @@ export function AppShell() {
       {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
         <button
           type="button"
-          onClick={() => {
-            setProjectTrustError(null);
-            setProjectTrustDialogOpen(true);
-          }}
+          onClick={openProjectTrustDialog}
           title={t("desktop.projectResourcesRestricted")}
           aria-label={t("desktop.projectResourcesRestricted")}
           style={{
@@ -1650,6 +1659,9 @@ export function AppShell() {
         }}
         onModelsSavedAction={() => setModelsRefreshKey((k) => k + 1)}
         onSessionReloadedAction={() => setSessionKey((k) => k + 1)}
+        projectTrust={projectTrust}
+        onOpenTrustDialog={openProjectTrustDialog}
+        onProjectTrustChanged={handleProjectTrustChanged}
       />
     )}
     </div>

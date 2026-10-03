@@ -117,3 +117,24 @@ test("the settings nav gives the agents tab its own badge", () => {
   assert.match(source, /agents: countEffectiveSubagentProfiles\(all\)/);
   assert.doesNotMatch(source, /\/api\/subagents\/settings/);
 });
+
+// Regression: Settings › MCP was mounted without `embedded`, so the upstream
+// ConfigPanelShell rendered its own full-screen `role="dialog"` with a backdrop
+// (position: fixed; inset: 0; z-index: 1000) over the Settings modal, covering
+// the nav and closing Settings on a backdrop click; and the tab was missing
+// from MANAGER_TABS, so the pane gave a manager page the scrolling body. The
+// trust notice also had no Trust… button because its props were never wired.
+test("Settings › MCP mounts embedded, as a manager, with the page's trust", () => {
+  const source = readComponent("SettingsModal.tsx");
+  // mcp is a manager page: its own list+detail columns scroll independently.
+  assert.match(source, /const MANAGER_TABS: SettingsTab\[\] = \[[^\]]*"mcp"\]/);
+  // Embedded: no nested dialog, no backdrop, no second close button.
+  assert.match(source, /<McpConfig\s+embedded/);
+  assert.doesNotMatch(source, /<McpConfig cwd=\{cwd\} onClose=\{onCloseAction\} \/>/);
+  // AppShell owns trust; the dialog and the fresh-folder Add both flow through it.
+  assert.match(source, /onTrustProject=\{onOpenTrustDialog\}/);
+  assert.match(source, /trust=\{projectTrust\}/);
+  assert.match(source, /onProjectTrustChanged=\{onProjectTrustChanged\}/);
+  const appShell = readComponent("AppShell.tsx");
+  assert.match(appShell, /<SettingsModal[\s\S]*?projectTrust=\{projectTrust\}[\s\S]*?onOpenTrustDialog=\{openProjectTrustDialog\}[\s\S]*?onProjectTrustChanged=\{handleProjectTrustChanged\}[\s\S]*?\/>/);
+});
