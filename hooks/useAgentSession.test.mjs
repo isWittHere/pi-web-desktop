@@ -268,3 +268,36 @@ test("navigate_tree reports success before the session reloads", () => {
   assert.match(navigateSource, /if \(result\?\.cancelled \|\| sessionIdRef\.current !== sid\) return false/);
   assert.match(navigateSource, /return sessionIdRef\.current === sid/);
 });
+
+test("history edits move the branch only when sent, so cancel or reload keeps it", async () => {
+  const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
+  const sendSource = source.slice(
+    source.indexOf("const handleSend = useCallback"),
+    source.indexOf("const executeBash = useCallback"),
+  );
+
+  // MessageView no longer navigates on click — ChatWindow never wires onNavigate.
+  assert.doesNotMatch(chatWindowSource, /onNavigate=/);
+  // Clicking edit only prefills the composer and records the pending edit.
+  assert.match(source, /opts\.chatInputRef\?\.current\?\.replaceMessage\(message\);\s*setEdit\(entryId\)/);
+  assert.match(source, /const cancelEdit = useCallback\(\(\) => setEdit\(null\)/);
+  // Sending navigates first; a failed navigation restores the draft and edit state.
+  assert.match(sendSource, /setEdit\(null\);\s*if \(!\(await handleNavigateRef\.current\?\.\(entryId\)\)\) \{\s*setEdit\(entryId\);/);
+  // The pending edit is recorded per session and dropped when its draft is gone.
+  assert.match(source, /const pendingHistoryEdits = new Map<string, string>\(\)/);
+  assert.match(source, /if \(sid && !getDraft\(sid\)\) pendingHistoryEdits\.delete\(sid\)/);
+  // Queued messages never join the current run while an edit is pending.
+  const queueSource = source.slice(
+    source.indexOf("const handlePromptWithStreamingBehavior"),
+    source.indexOf("const handleFollowUp"),
+  );
+  assert.match(queueSource, /if \(editEntryId\) \{/);
+});
+
+test("ChatWindow gates editing while the session is busy and wires the edit state", async () => {
+  const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
+
+  assert.match(chatWindowSource, /onEditContent=\{agentRunning \? undefined : handleEditContent\}/);
+  assert.match(chatWindowSource, /onCancelEdit=\{cancelEdit\}/);
+  assert.match(chatWindowSource, /isEditing=\{editEntryId === entryIds\[idx\]\}/);
+});

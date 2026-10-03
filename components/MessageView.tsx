@@ -25,6 +25,7 @@ import { CopyIcon } from "@phosphor-icons/react/Copy";
 import { DatabaseIcon } from "@phosphor-icons/react/Database";
 import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
 import { GitForkIcon } from "@phosphor-icons/react/GitFork";
+import { XIcon } from "@phosphor-icons/react/X";
 import { useI18n } from "@/hooks/useI18n";
 import type {
   AgentMessage,
@@ -228,9 +229,9 @@ interface Props {
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
-  onNavigate?: (entryId: string) => Promise<boolean>;
-  prevAssistantEntryId?: string;
-  onEditContent?: (message: UserMessage) => void;
+  onEditContent?: (message: UserMessage, entryId: string) => void;
+  onCancelEdit?: () => void;
+  isEditing?: boolean;
   showTimestamp?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
@@ -266,9 +267,9 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, searchBlock }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onEditContent, onCancelEdit, isEditing, showTimestamp, prevTimestamp, sessionId, writtenFiles, searchBlock }: Props) {
   if (message.role === "user") {
-    return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
+    return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onEditContent={onEditContent} onCancelEdit={onCancelEdit} isEditing={isEditing} />;
   }
   if (message.role === "assistant") {
     return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} writtenFiles={writtenFiles} searchBlock={searchBlock} />;
@@ -298,9 +299,9 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.searchBlock === next.searchBlock
     && prev.onFork === next.onFork
     && prev.forking === next.forking
-    && prev.onNavigate === next.onNavigate
-    && prev.prevAssistantEntryId === next.prevAssistantEntryId
     && prev.onEditContent === next.onEditContent
+    && prev.onCancelEdit === next.onCancelEdit
+    && prev.isEditing === next.isEditing
     && prev.showTimestamp === next.showTimestamp
     && prev.prevTimestamp === next.prevTimestamp
     && prev.sessionId === next.sessionId
@@ -318,16 +319,16 @@ function haveSameWrittenFiles(previous: WrittenFile[] | undefined, next: Written
   });
 }
 
-function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent }: {
+function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onEditContent, onCancelEdit, isEditing }: {
   message: UserMessage;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
-  onNavigate?: (entryId: string) => Promise<boolean>;
-  prevAssistantEntryId?: string;
-  onEditContent?: (message: UserMessage) => void;
+  onEditContent?: (message: UserMessage, entryId: string) => void;
+  onCancelEdit?: () => void;
+  isEditing?: boolean;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
@@ -487,7 +488,8 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
 
   const time = formatTime(message.timestamp);
   const canFork = !!entryId && !!onFork;
-  const canNavigate = !!prevAssistantEntryId && !!onNavigate;
+  const canEdit = !!entryId && !!onEditContent;
+  const canCancelEdit = !!isEditing && !!onCancelEdit;
 
   const copyContent = () => {
     copyText(content).then(() => {
@@ -503,7 +505,15 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
       onMouseLeave={() => setHovered(false)}
     >
       <div className="chat-user-bubble-wrap">
-        <div className="chat-user-bubble">
+        <div
+          className="chat-user-bubble"
+          // Edited message highlight: inline so globals.css stays untouched
+          // (high-conflict desktop asset) while the edit state stays visible.
+          style={isEditing ? {
+            background: "color-mix(in srgb, var(--accent) 14%, var(--user-bg))",
+            boxShadow: "0 0 0 1px color-mix(in srgb, var(--accent) 62%, var(--user-bg)), 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent)",
+          } : undefined}
+        >
           {imageBlocks.length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: content ? 8 : 0 }}>
               {imageBlocks.map((img, i) => {
@@ -570,7 +580,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
       )}
 
       {/* Bottom row: action buttons + timestamp */}
-      {(time || canFork || canNavigate || true) && (
+      {(time || canFork || canEdit || canCancelEdit || true) && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "flex-end",
           gap: 6, marginTop: 3,
@@ -603,20 +613,20 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               )}
             </button>
           </div>
-          {(canFork || canNavigate) && (
+          {(canFork || canEdit || canCancelEdit) && (
             <div style={{
               display: "flex", gap: 3,
-              opacity: (hovered || forking) ? 1 : 0,
-              pointerEvents: (hovered || forking) ? "auto" : "none",
+              opacity: (hovered || forking || canCancelEdit) ? 1 : 0,
+              pointerEvents: (hovered || forking || canCancelEdit) ? "auto" : "none",
               transition: "opacity 0.12s",
             }}>
-              {canNavigate && (
+              {canEdit && !canCancelEdit && (
                 <button
-                  onClick={() => void onNavigate!(prevAssistantEntryId!).then((navigated) => {
-                    // Only enter edit mode once the target turn is actually active,
-                    // so an aborted/rerouted navigation cannot half-enter editing.
-                    if (navigated) onEditContent?.(editTarget);
-                  })}
+                  onClick={() => {
+                    // Editing only prefills the composer; the branch moves when
+                    // the edited message is sent (useAgentSession.handleSend).
+                    onEditContent!(editTarget, entryId!);
+                  }}
                   title={t("desktop.editFromHere")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
@@ -631,6 +641,27 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                   onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
                 >
                   <ArrowBendDownRightIcon size={11} />
+                </button>
+              )}
+              {canCancelEdit && (
+                <button
+                  type="button"
+                  onClick={onCancelEdit}
+                  title={t("desktop.cancel")}
+                  aria-label={t("desktop.cancel")}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 22, height: 22,
+                    background: "none", border: "none",
+                    borderRadius: 5,
+                    color: "var(--accent)",
+                    cursor: "pointer",
+                    transition: "color 0.12s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+                >
+                  <XIcon size={11} />
                 </button>
               )}
               {canFork && (

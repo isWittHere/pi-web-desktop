@@ -53,3 +53,20 @@ test("prepends the text when a message has no text block", () => {
   assert.equal(out.content[0].text, "/skill:review");
   assert.equal(out.content[1].type, "image");
 });
+
+test("the edited message highlights and offers cancel instead of edit", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("./MessageView.tsx", import.meta.url), "utf8");
+
+  // The edit button no longer navigates on click — it only prefills.
+  assert.doesNotMatch(source, /onNavigate/);
+  assert.match(source, /onEditContent!\(editTarget, entryId!\)/);
+  // Edited message: highlight bubble + cancel button visible without hover.
+  assert.match(source, /canCancelEdit = !!isEditing && !!onCancelEdit/);
+  assert.match(source, /canEdit && !canCancelEdit/);
+  assert.match(source, /onClick=\{onCancelEdit\}/);
+  assert.match(source, /color-mix\(in srgb, var\(--accent\) 14%, var\(--user-bg\)\)/);
+  // The memo comparator tracks both edit-state props so the highlight updates.
+  assert.match(source, /prev\.onCancelEdit === next\.onCancelEdit/);
+  assert.match(source, /prev\.isEditing === next\.isEditing/);
+});

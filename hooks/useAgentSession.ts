@@ -9,9 +9,11 @@ import type {
   SessionInfo,
   SessionTreeNode,
   ToolResultMessage,
+  UserMessage,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
+import { getDraft } from "@/lib/draft-store";
 import { getAllToolNamesForPreset, deriveToolPresetFromActive, type AllToolPreset, type ConcreteToolPreset, type InferredToolPreset, type ToolEntry } from "@/lib/tool-presets";
 import { getPreferredToolPreset, setPreferredToolPreset } from "@/lib/tool-preset-preference";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -204,6 +206,10 @@ const EVENT_STREAM_READY_TIMEOUT_MS = 60_000;
 const EVENT_STREAM_RECONNECT_DELAY_MS = 1_000;
 // Retry temporary model-list failures without requiring a page refresh.
 const MODELS_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
+
+// Session id -> user entry being edited. ChatWindow remounts per session, so a
+// pending edit lives here as long as that session's in-memory draft does.
+const pendingHistoryEdits = new Map<string, string>();
 const MAX_NOTICES = 5;
 const NOTICE_VISIBLE_MS = 5000;
 const NOTICE_EXIT_ANIMATION_MS = 180;
@@ -321,6 +327,8 @@ function readCompactResult(result: unknown, reason: string): CompactResultInfo |
 export interface ChatInputHandle {
   insertText: (text: string) => void;
   insertIfEmpty: (content: string) => void;
+  /** Restore a historical user message (text + images) into the composer. */
+  replaceMessage: (message: UserMessage) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
 }
@@ -422,6 +430,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [extensionWidgets, setExtensionWidgets] = useState<ExtensionWidgetItem[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>({ steering: [], followUp: [] });
 
+  // Editing a past message only prefills the composer; the branch moves when it is sent,
+  // so cancelling or reloading never hides the rest of the conversation.
+  const [editEntryId, setEditEntryId] = useState(() => {
+    const sid = session?.id;
+    if (sid && !getDraft(sid)) pendingHistoryEdits.delete(sid);
+    return (sid && pendingHistoryEdits.get(sid)) || null;
+  });
+  const setEdit = useCallback((entryId: string | null) => {
+    if (!session?.id) return;
+    if (entryId) pendingHistoryEdits.set(session.id, entryId);
+    else pendingHistoryEdits.delete(session.id);
+    setEditEntryId(entryId);
+  }, [session?.id]);
+  const handleEditContent = useCallback((message: UserMessage, entryId: string) => {
+    if (!session?.id) return;
+    opts.chatInputRef?.current?.replaceMessage(message);
+    setEdit(entryId);
+  }, [opts.chatInputRef, session?.id, setEdit]);
+  const cancelEdit = useCallback(() => setEdit(null), [setEdit]);
+
   const eventConnectionRef = useRef<AgentEventConnection | null>(null);
   const eventStreamGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eventStreamGraceGenerationRef = useRef(0);
@@ -473,6 +501,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [scrollContainerRef]);
   const ensuringNewSessionRef = useRef<Promise<string | null> | null>(null);
   const newSessionPromotedRef = useRef(false);
+  const handleNavigateRef = useRef<((entryId: string) => Promise<boolean>) | undefined>(undefined);
   const promptRunIdRef = useRef(0);
   const optimisticUserMessageKeyRef = useRef<string | null>(null);
   const newSessionModelOverrideRef = useRef<SelectedModel | null>(null);
@@ -1538,6 +1567,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const trimmedMessage = message.trim();
     if (!trimmedMessage && !images?.length) return;
     if (agentRunningRef.current || bashRunningRef.current) return;
+    if (editEntryId) {
+      // Navigation and prompt are two RPCs: a prompt rejected after navigating
+      // keeps the new leaf until the server can apply both atomically.
+      const entryId = editEntryId;
+      setEdit(null);
+      if (!(await handleNavigateRef.current?.(entryId))) {
+        setEdit(entryId);
+        if (trimmedMessage) opts.chatInputRef?.current?.insertIfEmpty(message);
+        if (images?.length) {
+          addNotice({ type: "error", message: "Message was not sent. Image attachments were not restored — please re-attach them." });
+        }
+        return;
+      }
+    }
     const isSlashCommandPrompt = !images?.length && trimmedMessage.startsWith("/");
     const promptRunId = promptRunIdRef.current + 1;
     cancelEventStreamGrace();
@@ -1666,7 +1709,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       dispatch({ type: "end" });
       restoreUnsentMessage();
     }
-  }, [isNew, bumpContent, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, opts.chatInputRef, resetStreamUpdates]);
+  }, [isNew, bumpContent, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, opts.chatInputRef, resetStreamUpdates, editEntryId, setEdit]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;
@@ -1738,6 +1781,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return false;
     }
   }, [loadContext]);
+  handleNavigateRef.current = handleNavigate;
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     setActiveLeafId(leafId);
@@ -1987,6 +2031,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     behavior: "steer" | "followUp",
     images?: AttachedImage[],
   ) => {
+    // A pending history edit must branch when sent, never join the current run.
+    if (editEntryId) {
+      if (message.trim()) opts.chatInputRef?.current?.insertIfEmpty(message);
+      if (images?.length) {
+        addNotice({ type: "error", message: "Message was not sent. Image attachments were not restored — please re-attach them." });
+      }
+      return;
+    }
     const sid = sessionIdRef.current;
     if (!sid) return;
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
@@ -2000,7 +2052,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to queue prompt:", e);
     }
-  }, []);
+  }, [editEntryId, opts.chatInputRef, addNotice]);
 
   const handleFollowUp = useCallback(async (message: string, images?: AttachedImage[]) => {
     const sid = sessionIdRef.current;
@@ -2226,6 +2278,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel, sessionStats, modelStatus,
     slashCommands, slashCommandsLoading, queuedMessages,
+    editEntryId,
     notices: noticeState.visible, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
@@ -2242,6 +2295,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
+    handleEditContent,
+    // Present only while a history edit is pending.
+    cancelEdit: editEntryId ? cancelEdit : undefined,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
     loadSystemInfo, loadSystemInfoOnDemand,
     handleLeafChange,
