@@ -163,7 +163,8 @@ export interface AgentSessionLike {
     images?: Array<{ type: "image"; data: string; mimeType: string }>;
     streamingBehavior?: "steer" | "followUp";
     source?: "interactive" | "rpc";
-    preflightResult?: (success: boolean) => void;
+    /** Called once the SDK accepts the input; a rejected prompt only rejects the returned promise. */
+    preflightResult?: (disposition: "handled" | "queued" | "started") => void;
   }): Promise<void>;
   abort(): Promise<void>;
   executeBash(command: string, onChunk?: (chunk: string) => void, options?: {
@@ -187,8 +188,8 @@ export interface AgentSessionLike {
   setSessionName(name: string): void;
   getSessionStats(): Omit<SessionStatsInfo, "sessionName">;
   getLastAssistantText(): string | undefined;
-  steer(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<void>;
-  followUp(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<void>;
+  steer(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<"handled" | "queued">;
+  followUp(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<"handled" | "queued">;
   readonly pendingMessageCount: number;
   getSteeringMessages(): readonly string[];
   getFollowUpMessages(): readonly string[];
