@@ -217,7 +217,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
     sessionIdRef, scrollContainerRef,
     lastUserMsgRef,
     contentRev, lastContentChangeRef,
-    handleSend, executeBash, handleAbort, handleFork, handleNavigate, handleModelChange,
+    handleSend, executeBash, handleAbort, handleFork, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
