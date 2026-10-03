@@ -5,6 +5,7 @@ export const enLocale = {
   id: "en",
   label: "English",
   messages: {
+    "i18n.unknown": "Unknown",
     "desktop.settings": "Settings",
     "desktop.settingsSections": "Settings sections",
     "desktop.settingsBreadcrumb": "Settings path",

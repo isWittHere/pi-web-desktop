@@ -5,6 +5,7 @@ export const zhCNLocale = {
   id: "zh-CN",
   label: "简体中文",
   messages: {
+    "i18n.unknown": "未知",
     "desktop.settings": "设置",
     "desktop.settingsSections": "设置分类",
     "desktop.settingsBreadcrumb": "设置路径",
