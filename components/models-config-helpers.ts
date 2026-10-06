@@ -60,6 +60,64 @@ export function readCompatFlag(compat: Record<string, unknown> | undefined, key:
 }
 
 /**
+ * The part of a models.json draft `renameProviderEntry` needs: providers keyed
+ * by id, each with its model list.
+ */
+export interface ProviderRenameDraft {
+  providers?: Record<string, { models?: { id: string }[] } | undefined>;
+}
+
+/** What the panel remembers between saves to tell renames from edits. */
+export interface ProviderRenameTracking {
+  /** Provider ids as models.json has them on disk. */
+  savedProviders: Set<string>;
+  /** Saved provider id -> where renames since the last save moved it. */
+  renames: Map<string, string>;
+  /** Saved model ids per provider, keyed by the provider's current id. */
+  slots: Map<string, (string | null)[]>;
+}
+
+/**
+ * Moves a provider to a new id, keeping its place in models.json, and records
+ * the move so the enabledModels entries can follow it on save.
+ *
+ * Returns null and records nothing when the provider is gone or the new id is
+ * already taken: models.json is keyed by id, so the move would silently
+ * replace the other provider.
+ */
+export function renameProviderEntry<T extends ProviderRenameDraft>(
+  config: T,
+  tracking: ProviderRenameTracking,
+  oldName: string,
+  newName: string,
+): T | null {
+  const providers = config.providers ?? {};
+  if (!Object.hasOwn(providers, oldName)) return null;
+  if (oldName === newName) return config;
+  if (Object.hasOwn(providers, newName)) return null;
+
+  const { renames, savedProviders, slots } = tracking;
+  let original = oldName;
+  for (const [from, to] of renames) {
+    if (to !== oldName) continue;
+    original = from;
+    break;
+  }
+  if (original === newName) renames.delete(original);
+  else if (savedProviders.has(original)) renames.set(original, newName);
+  const saved = slots.get(oldName);
+  if (saved) {
+    slots.delete(oldName);
+    slots.set(newName, saved);
+  }
+
+  const entries = Object.entries(providers);
+  const index = entries.findIndex(([name]) => name === oldName);
+  entries[index] = [newName, entries[index][1]];
+  return { ...config, providers: Object.fromEntries(entries) };
+}
+
+/**
  * Write a compat flag while keeping the three states distinct.
  *
  * `undefined` drops the model-level override so the provider value (or pi's

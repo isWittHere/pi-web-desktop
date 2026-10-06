@@ -33,10 +33,12 @@ import {
   hasModelCostDraftValue,
   modelCostToDraft,
   parseCompleteModelCost,
+  renameProviderEntry,
   resolveCompatFlag,
   writeCompatFlag,
   type ModelCostDraft,
   type ModelCostKey,
+  type ProviderRenameTracking,
 } from "./models-config-helpers";
 import {
   getProviderEmoji,
@@ -173,19 +175,18 @@ const groupHeaderStyle: React.CSSProperties = {
 
 // ── Provider detail ───────────────────────────────────────────────────────────
 
-function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddModels }: {
-  name: string; provider: ProviderEntry;
-  onChange: (p: ProviderEntry) => void; onRename: (n: string) => void; onDelete: () => void;
+function ProviderDetail({ name, editingName, provider, onChange, onEditingNameChange, onRename, onDelete, onAddModels }: {
+  name: string; editingName: string; provider: ProviderEntry;
+  onChange: (p: ProviderEntry) => void; onEditingNameChange: (n: string) => void;
+  onRename: (n: string) => void; onDelete: () => void;
   onAddModels: (models: DiscoveredModel[]) => void;
 }) {
   const t = useModelTranslation();
-  const [editingName, setEditingName] = useState(name);
   const [discoveryState, setDiscoveryState] = useState<ModelDiscoveryState>({ phase: "idle" });
   const [discoveryQuery, setDiscoveryQuery] = useState("");
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
   const discoveryRequestIdRef = useRef(0);
   const selectShownRef = useRef<HTMLInputElement>(null);
-  useEffect(() => setEditingName(name), [name]);
   const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) => onChange({ ...provider, [k]: v });
 
   useEffect(() => {
@@ -280,7 +281,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <SettingsField label={t("desktop.modelsProviderName")}>
-            <SettingsInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
+            <SettingsInput value={editingName} onChange={onEditingNameChange} placeholder="provider-name" mono />
             {editingName !== name && editingName.trim() && (
               <button onClick={() => onRename(editingName.trim())}
                 style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}>
@@ -1826,6 +1827,17 @@ export function ModelsConfig({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
+  /**
+   * The provider name field while it differs from the provider's id. Save
+   * applies it like every other visible edit; Rename applies it right away.
+   */
+  const [providerNameDraft, setProviderNameDraft] = useState<{ provider: string; name: string } | null>(null);
+  /** Rename bookkeeping, so a name typed then Renamed then Save lands once. */
+  const providerRenameTrackingRef = useRef<ProviderRenameTracking>({
+    savedProviders: new Set(),
+    renames: new Map(),
+    slots: new Map(),
+  });
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -1865,6 +1877,12 @@ export function ModelsConfig({
       .then((d: ModelsJson) => {
         const normalized = d.providers ? d : { ...d, providers: {} };
         setConfig(normalized);
+        setProviderNameDraft(null);
+        providerRenameTrackingRef.current = {
+          savedProviders: new Set(Object.keys(normalized.providers ?? {})),
+          renames: new Map(),
+          slots: new Map(),
+        };
         const keys = Object.keys(normalized.providers ?? {});
         if (keys.length > 0) setSelection({ type: "provider", name: keys[0] });
       })
@@ -1908,23 +1926,28 @@ export function ModelsConfig({
     });
   }, []);
 
-  const renameProvider = useCallback((oldName: string, newName: string) => {
-    setConfig((prev) => {
-      const entries = Object.entries(prev.providers ?? {});
-      const idx = entries.findIndex(([k]) => k === oldName);
-      if (idx === -1) return prev;
-      entries[idx] = [newName, entries[idx][1]];
-      return { ...prev, providers: Object.fromEntries(entries) };
-    });
+  /** Moves a provider in `draft`; returns the moved config, or null when the id is taken. */
+  const applyProviderRename = useCallback((draft: ModelsJson, oldName: string, newName: string): ModelsJson | null => {
+    const next = renameProviderEntry(draft, providerRenameTrackingRef.current, oldName, newName);
+    if (!next) return null;
+    setConfig(next);
+    setProviderNameDraft(null);
     setSelection((prev) => {
       if (!prev) return prev;
       if (prev.type === "provider" && prev.name === oldName) return { type: "provider", name: newName };
       if (prev.type === "model" && prev.providerName === oldName) return { ...prev, providerName: newName };
       return prev;
     });
+    return next;
   }, []);
 
+  const renameProvider = useCallback((oldName: string, newName: string) => {
+    if (applyProviderRename(config, oldName, newName)) setSaveError(null);
+    else setSaveError(t("desktop.modelsProviderNameTaken", { name: newName }));
+  }, [applyProviderRename, config, t]);
+
   const deleteProvider = useCallback((name: string) => {
+    setProviderNameDraft((prev) => prev?.provider === name ? null : prev);
     setConfig((prev) => {
       const providers = { ...(prev.providers ?? {}) };
       delete providers[name];
@@ -1975,16 +1998,36 @@ export function ModelsConfig({
     setSaveError(null);
     setSaveWarnings(null);
     setSavedOk(false);
+    // A provider name typed but not applied with Rename is still a visible
+    // edit: move the provider before writing, like every other field.
+    let draft = config;
+    const pendingName = providerNameDraft?.name.trim();
+    if (providerNameDraft && pendingName && config.providers?.[providerNameDraft.provider]) {
+      const renamed = applyProviderRename(config, providerNameDraft.provider, pendingName);
+      if (!renamed) {
+        setSaveError(t("desktop.modelsProviderNameTaken", { name: pendingName }));
+        setSaving(false);
+        return;
+      }
+      draft = renamed;
+    }
     try {
       const res = await fetch("/api/models-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+        body: JSON.stringify(draft),
       });
       const d = await res.json() as { success?: boolean; error?: string; warnings?: string[] };
       if (!res.ok || d.error) setSaveError(d.error ?? `HTTP ${res.status}`);
       else {
         setSavedOk(true);
+        // The written file is the new baseline: a later rename is judged
+        // against it, not against the pre-save ids.
+        providerRenameTrackingRef.current = {
+          savedProviders: new Set(Object.keys(draft.providers ?? {})),
+          renames: new Map(),
+          slots: new Map(),
+        };
         if (d.warnings?.length) {
           setSaveWarnings(d.warnings);
         }
@@ -2005,7 +2048,7 @@ export function ModelsConfig({
     } finally {
       setSaving(false);
     }
-  }, [config, onSavedAction, cwd, loadError]);
+  }, [applyProviderRename, config, onSavedAction, cwd, loadError, providerNameDraft, t]);
 
   const toggleProviderCollapse = useCallback((name: string) => {
     setCollapsedProviders((prev) => {
@@ -2039,8 +2082,10 @@ export function ModelsConfig({
         <ProviderDetail
           key={selection.name}
           name={selection.name}
+          editingName={providerNameDraft?.provider === selection.name ? providerNameDraft.name : selection.name}
           provider={provider}
           onChange={(p) => updateProvider(selection.name, p)}
+          onEditingNameChange={(n) => setProviderNameDraft(n.trim() === selection.name ? null : { provider: selection.name, name: n })}
           onRename={(n) => renameProvider(selection.name, n)}
           onDelete={() => deleteProvider(selection.name)}
           onAddModels={(models) => addDiscoveredModels(selection.name, models)}
