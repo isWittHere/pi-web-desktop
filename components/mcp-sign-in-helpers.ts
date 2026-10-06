@@ -59,11 +59,34 @@ export interface McpSignInRun {
   signedOut?: { removed: boolean };
   /** Counts the paste and cancel answers applied, so a poll sent before one cannot undo what it said. */
   version?: number;
+  /**
+   * The `configKey` of the server the panel pressed Sign in on, so a finished
+   * flow's outcome goes when that entry is edited (`mcpSignInRunFor()`). Not
+   * the flow's own: a flow joined from an entry of the same URL carries the
+   * starting entry's `configKey`, and that outcome still speaks for this one.
+   */
+  configKey?: string;
 }
 
 /** A flow the panel is waiting on: it has not ended and the server still knows it. */
 export function mcpSignInActive(run: McpSignInRun | undefined): boolean {
   return run?.flow !== undefined && !run.gone && !mcpSignInEnded(run.flow.phase);
+}
+
+/**
+ * A server's sign-in as its pane shows it.
+ *
+ * A finished flow — or a start that was refused — whose entry the listing no
+ * longer shows (`run.configKey`, the `configKey` of the server the panel
+ * pressed, moved: the entry was edited, or another took its name) is left out,
+ * as `mcpTestRunFor()` leaves out a test answer about other content: its
+ * outcome was about the old entry, and the reloaded listing now speaks for
+ * itself. A flow still running stays shown whatever the entry says now, so its
+ * phase and Cancel remain reachable. A run with no `configKey` passes through.
+ */
+export function mcpSignInRunFor(run: McpSignInRun | undefined, server: Pick<McpServerInfo, "configKey">): McpSignInRun | undefined {
+  if (!run || run.configKey === undefined || run.configKey === server.configKey) return run;
+  return mcpSignInActive(run) ? run : undefined;
 }
 
 /** The sign-in page as a link, only for an http(s) address: the page comes from the server's metadata. */
@@ -223,8 +246,9 @@ function withFlow(run: McpSignInRun, flow: McpSignInFlowInfo, now: number): McpS
 }
 
 /** After `POST /api/mcp/sign-in`: the flow it started or joined, or why it did not. */
-export function mcpSignInRunAfterStart(result: McpSignInRequestResult, now: number = Date.now()): McpSignInRun {
-  return result.ok ? withFlow({}, result.data, now) : { error: result.error };
+export function mcpSignInRunAfterStart(result: McpSignInRequestResult, now: number = Date.now(), configKey?: string): McpSignInRun {
+  const run = result.ok ? withFlow({}, result.data, now) : { error: result.error };
+  return configKey === undefined ? run : { ...run, configKey };
 }
 
 /** Whether a failure says the server no longer knows the flow. */

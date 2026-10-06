@@ -22,6 +22,7 @@ const {
   mcpSignInRunAfterPaste,
   mcpSignInRunAfterPoll,
   mcpSignInRunAfterStart,
+  mcpSignInRunFor,
   mcpSignInShared,
   mcpSignOutBlock,
   pasteMcpSignIn,
@@ -161,6 +162,9 @@ test("a run follows its flow's answers, and only its own flow's", () => {
   const started = mcpSignInRunAfterStart({ ok: true, data: flow("connecting") }, 1_000);
   assert.deepEqual(started, { flow: flow("connecting"), deadlineAt: 61_000, gone: false });
   assert.equal(mcpSignInActive(started), true);
+  // The server the panel pressed is recorded, so a finished flow's outcome can follow its edits.
+  assert.equal(mcpSignInRunAfterStart({ ok: true, data: flow("connecting") }, 1_000, "k").configKey, "k");
+  assert.equal(mcpSignInRunAfterStart({ ok: false, error: { error: "x" } }, 1_000, "k").configKey, "k");
   assert.deepEqual(mcpSignInRunAfterStart({ ok: false, error: { error: "x", reason: "mcp-off" } }), { error: { error: "x", reason: "mcp-off" } });
 
   const waiting = mcpSignInRunAfterPoll(started, "f1", { ok: true, data: flow("authorize", { expiresInMs: 30_000 }) }, 2_000);
@@ -195,6 +199,27 @@ test("a run follows its flow's answers, and only its own flow's", () => {
   assert.deepEqual([cancelled.cancelling, cancelled.flow.phase], [false, "cancelled"]);
   const failed = mcpSignInRunAfterCancel(cancelling, "f1", { ok: false, error: { error: "Failed to fetch" } });
   assert.deepEqual([failed.cancelling, failed.cancelError.error, mcpSignInActive(failed)], [false, "Failed to fetch", true]);
+});
+
+test("a finished sign-in's outcome goes when the entry it was started for is edited", () => {
+  const waiting = mcpSignInRunAfterStart({ ok: true, data: flow("authorize", { expiresInMs: 30_000 }) }, 1_000, "k");
+  // The entry the listing shows is the one it was started for: shown as it is.
+  assert.equal(mcpSignInRunFor(waiting, { configKey: "k" }), waiting);
+  // A run with no configKey (a Sign out line) is passed through.
+  const signedOut = { signedOut: { removed: true } };
+  assert.equal(mcpSignInRunFor(signedOut, { configKey: "k" }), signedOut);
+
+  // Edited since: a flow still running stays reachable, so its phase and Cancel remain.
+  assert.equal(mcpSignInRunFor(waiting, { configKey: "k2" }), waiting);
+  // A start that was refused was about the old entry too: it goes with it.
+  const refused = { error: { error: "x", reason: "server-invalid" }, configKey: "k" };
+  assert.equal(mcpSignInRunFor(refused, { configKey: "k" }), refused);
+  assert.equal(mcpSignInRunFor(refused, { configKey: "k2" }), undefined);
+
+  // Once it has ended, its outcome was about the old entry, so it goes; the reloaded listing speaks.
+  const ended = mcpSignInRunAfterPoll(waiting, "f1", { ok: true, data: flow("done", { expiresInMs: 0, result: connected }) });
+  assert.equal(mcpSignInRunFor(ended, { configKey: "k" }), ended);
+  assert.equal(mcpSignInRunFor(ended, { configKey: "k2" }), undefined);
 });
 
 test("the requests go to the sign-in routes as JSON, and refusals keep their reason", async () => {

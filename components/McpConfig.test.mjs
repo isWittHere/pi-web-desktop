@@ -1539,6 +1539,9 @@ test("the container starts, polls, pastes into and cancels a sign-in, and signs 
   assert.match(signOut, /if \(result\.ok\) \{\n\s*const now = Date\.now\(\);\n\s*setTests\(\(runs\) => \{\n\s*const next = mcpTestRunAfterSignOut\(runs\[key\], now\);/);
   assert.match(source, /\[key\]: \{ \.\.\.runs\[key\], running: true, startedAt: Date\.now\(\),/);
   assert.match(source, /signingOut=\{busy === `sign-out:\$\{key\}`\}/);
+  // A finished sign-in's outcome is filtered by the entry pressed, as a test answer is by mcpTestRunFor().
+  assert.match(source, /signIn=\{mcpSignInRunFor\(signIns\[mcpServerKey\(selectedServer\)\], selectedServer\)\}/);
+  assert.match(source, /signIn=\{addedServer \? mcpSignInRunFor\(signIns\[added\.key\], addedServer\) : undefined\}/);
   // Closing the panel lets sign-ins go, never cancels them: Sign in joins one again.
   const unmount = source.slice(source.indexOf("const testRequests = testRequestsRef.current;"), source.indexOf("}, []);", source.indexOf("const testRequests = testRequestsRef.current;")));
   assert.match(unmount, /mountedRef\.current = false;/);

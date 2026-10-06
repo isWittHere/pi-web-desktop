@@ -158,6 +158,7 @@ import {
   mcpSignInRunAfterPaste,
   mcpSignInRunAfterPoll,
   mcpSignInRunAfterStart,
+  mcpSignInRunFor,
   mcpSignOutBlock,
   pasteMcpSignIn,
   postMcpSignIn,
@@ -492,7 +493,7 @@ export function McpConfig({
     const signInCwd = listing.state === "loaded" && listing.data.project ? cwd : null;
     const result = await postMcpSignIn({ scope: server.scope, name: server.name }, signInCwd);
     if (!mountedRef.current) return;
-    setSignIns((runs) => ({ ...runs, [key]: mcpSignInRunAfterStart(result) }));
+    setSignIns((runs) => ({ ...runs, [key]: mcpSignInRunAfterStart(result, Date.now(), server.configKey) }));
     if (!result.ok && result.error.reason !== undefined && !result.error.timedOut) void refresh();
   }, [cwd, refresh]);
 
@@ -1027,7 +1028,7 @@ export function McpConfigView({
             cwd={cwd}
             server={addedServer}
             testing={tests[added.key]?.running === true}
-            signIn={signIns[added.key]}
+            signIn={addedServer ? mcpSignInRunFor(signIns[added.key], addedServer) : undefined}
             signingOut={busy === `sign-out:${added.key}`}
             signInBlock={addedServer ? mcpSignInBlock(addedServer, data) : undefined}
             onSignIn={onSignIn}
@@ -1123,7 +1124,7 @@ export function McpConfigView({
                 actionError={actionError?.key === mcpServerKey(selectedServer) ? actionError.failure : null}
                 test={mcpTestRunFor(tests[mcpServerKey(selectedServer)], selectedServer)}
                 testBlock={mcpTestBlock(selectedServer, data)}
-                signIn={signIns[mcpServerKey(selectedServer)]}
+                signIn={mcpSignInRunFor(signIns[mcpServerKey(selectedServer)], selectedServer)}
                 signInBlock={mcpSignInBlock(selectedServer, data)}
                 signOutBlock={mcpSignOutBlock(selectedServer, data)}
                 onSwitch={onServerSwitch}
