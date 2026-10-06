@@ -39,22 +39,22 @@ Keep upstream-comparison notes outside the public repository; `ref-repos/` is in
 
 | Category | Technology | Version |
 |----------|-----------|---------|
-| **Runtime** | Node.js / Next.js | Next 16.2.12 |
+| **Runtime** | Node.js / Next.js | Next 16.3.6 |
 | **UI Library** | React | ^19.2.4 |
 | **Language** | TypeScript | ^5 |
 | **Styling** | Tailwind CSS | ^4.2.2 |
 | **Markdown** | react-markdown + rehype/remark plugins | ^10.1.0 |
 | **Math** | KaTeX (rehype-katex) | ^0.16.47 |
-| **Diagrams** | Mermaid | ^11.14.0 |
+| **Diagrams** | Mermaid | ^11.16.1 |
 | **Syntax Highlight** | react-syntax-highlighter | ^16.1.1 |
 | **Document Preview** | mammoth (DOCX) | ^1.12.0 |
 | **Icons** | Phosphor Icons, LobeHub icons | |
 | **Fonts** | IA Writer Quattro, Lilex (mono) | |
 | **Desktop** | Electron + electron-builder | ^43.2.0 / ^26.15.3 |
 | **Linting** | ESLint (eslint-config-next) | ^9 |
-| **SDK** | @earendil-works/pi-coding-agent | 0.87.0 |
-| **SDK** | @earendil-works/pi-ai | 0.87.0 |
-| **SDK** | @earendil-works/pi-tui | 0.87.0 |
+| **SDK** | @earendil-works/pi-coding-agent | 1.0.0 |
+| **SDK** | @earendil-works/pi-ai | 1.0.0 |
+| **SDK** | @earendil-works/pi-tui | 1.0.0 |
 | **Package Manager** | npm (package-lock.json present) | |
 
 ---
@@ -85,6 +85,12 @@ pi-web-main/
 │   │   │   ├── log/route.ts          # GET bounded git log + per-commit files (git graph)
 │   │   │   └── status/route.ts       # GET working-tree status
 │   │   ├── home/route.ts             # GET user home directory
+│   │   ├── mcp/                      # Settings › MCP (files only) & server actions
+│   │   │   ├── route.ts              # GET overview | POST add/enable/disable/remove/undo/set-enabled/set-exposure/sign-out
+│   │   │   ├── test/route.ts         # POST test one server once
+│   │   │   └── sign-in/route.ts, sign-in/[flowId]/route.ts  # OAuth sign-in start/state/redirect/cancel
+│   │   ├── project-trust/route.ts    # GET trust + project .pi/mcp.json | POST trust
+│   │   ├── tools/settings/route.ts   # GET/PUT PowerShell (Windows), Code mode auto/always, codemode.*
 │   │   ├── models/route.ts           # GET available models, default model, thinking levels
 │   │   ├── models-config/route.ts    # GET/PUT read/write ~/.pi/agent/models.json
 │   │   ├── models-config/test/route.ts # POST test a configured model/provider
@@ -124,6 +130,12 @@ pi-web-main/
 │   ├── ChangesTabView.tsx        # Right-panel changes review tab (git status + diff drill-down)
 │   ├── GitGraphTab.tsx           # Right-panel git graph tab (SVG lanes, commit details)
 │   ├── tab-model.ts              # Right-panel Tab union + open/close/keep-alive pure logic
+│   ├── McpConfig.tsx             # Settings › MCP: servers, switches, Test, sign-in, Code mode, trust
+│   ├── McpAddServer.tsx          # Settings › MCP add pane (paste, preview, values, name, scope)
+│   ├── McpSignIn.tsx             # A server's sign-in row
+│   ├── OAuthPastePanel.tsx       # Paste box for a redirected address or code (Models, MCP)
+│   ├── ProjectTrustDialog.tsx    # Trust confirmation listing the project's MCP servers
+│   ├── CodemodeToolView.tsx      # Codemode card: the tool calls its script made
 │   ├── ModelsConfig.tsx          # Modal for editing models.json
 │   ├── PluginsConfig.tsx         # Modal for installed package plugins
 │   ├── SkillsConfig.tsx          # Modal for loaded/search/installable skills
@@ -161,6 +173,7 @@ pi-web-main/
 │   ├── file-fuzzy.ts             # Fuzzy file matching
 │   ├── file-links.ts             # File link resolution
 │   ├── file-paths.ts             # Client/server path encoding helpers
+│   ├── file-tree-visibility.ts   # Git-backed hide rules for the file tree (no fixed name list)
 │   ├── file-types.ts             # File type detection
 │   ├── file-upload.ts            # File upload handling
 │   ├── git-graph-lanes.ts        # Git graph lane state machine (pure, tested)
@@ -168,6 +181,24 @@ pi-web-main/
 │   ├── git-graph-palette.ts      # Theme-accent-derived lane palette (pure, tested)
 │   ├── git-graph.ts              # Server-side git log / commit-files helpers
 │   ├── markdown.ts               # Markdown/Mermaid/KaTeX plugin configuration
+│   ├── mcp-host.ts               # Per-session MCP host: registers mcp.json servers before prompts, statuses
+│   ├── mcp-transport.ts          # MCP transport factory; stdio env never carries PI_WEB_PASSWORD
+│   ├── mcp-read-only-policy.ts   # Read-only sessions block MCP tools without readOnlyHint (nested too)
+│   ├── mcp-command.ts            # Client-safe: who owns /mcp (built-in or another extension)
+│   ├── mcp-config-*.ts           # Canonical key, values/masking, reads, and the mcp.json writer
+│   ├── mcp-undo.ts               # Removed mcp.json entries kept 60 s for undo
+│   ├── mcp-status.ts             # Last known connection state per mcp.json entry
+│   ├── mcp-test.ts               # Settings › MCP Test: one bounded, masked SDK connection
+│   ├── mcp-entry-request.ts      # Route checks before connecting one entry (Test, sign-in)
+│   ├── mcp-sign-in.ts / mcp-sign-out.ts  # OAuth flows and the sign-out guard
+│   ├── mcp-secrets.ts            # Pure secret classification and masking
+│   ├── mcp-add.ts / mcp-import*.ts  # Add checks and the paste importer
+│   ├── mcp-server-display.ts / mcp-tool-display.ts  # Client-safe labels (escapes, tool names)
+│   ├── builtin-extensions.ts     # codemode / tool-search / mcp built-ins, sandbox self-test
+│   ├── codemode-settings.ts      # Code mode automatic/always + codemode.mode / inlineBudget
+│   ├── codemode-view.ts          # Display helpers for codemode cards
+│   ├── powershell-settings.ts    # PowerShell-on-Windows defaultTools switch
+│   ├── pi-sdk-internals.ts       # Loader for SDK modules the package does not export
 │   ├── message-display.ts        # Message display helpers
 │   ├── models-cache.ts           # Models configuration cache
 │   ├── normalize.ts              # normalizeToolCalls() — field name mismatch fix
@@ -478,9 +509,10 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - Removing a dirty worktree returns `409` with `{ dirty: true }` so the UI can ask before retrying with `force`.
 - Sessions whose cwd points at a removed worktree are inferred back into the main project instead of becoming a phantom project row.
 
-### File Access Allow-List
+### File Access Allow-List and Tree Visibility
 - `/api/files` is intentionally not a general filesystem browser. Allowed roots come from session cwds, their resolved project roots, `~/pi-cwd-*`, and roots explicitly added with `allowFileRoot()`.
 - `/api/cwd/validate`, `/api/default-cwd`, and `/api/worktrees` call `allowFileRoot()` when they make a new location browsable.
+- The file tree no longer hides a fixed name list. `lib/file-tree-visibility.ts` (`getFileTreeVisibility` / `isHiddenOutsideGit` / `readGitIgnoredNames`) asks Git — `git check-ignore --no-index --stdin` — so a **tracked** `build/` (or any other normally-ignored name) is browsable; only names no listing can resolve fall back to a static list. `/api/files/[...path]` filtering is async because of this, and `/api/file-index` uses `isHiddenOutsideGit` for its readdir fallback.
 
 ### Right Panel Multi-Kind Tabs
 - The right panel hosts a discriminated `Tab` union (`components/tab-model.ts`): `file` tabs (multi-instance, id `file:<absPath>`), plus workspace-singleton view tabs `changes` (ChangesTabView, git status + diff drill-down) and `git-graph` (GitGraphTab, lane state machine over a bounded `git log`; geometry is derived from parent links — no `--graph` needed).
@@ -490,15 +522,41 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 
 ### Plugins and Skills
 - `/api/plugins` uses pi's `SettingsManager` + `DefaultPackageManager` for global/project package install, remove, update, enable, and disable. Disabling writes empty `extensions/skills/prompts/themes` arrays for that package entry.
+- `POST /api/plugins { action, packages: [{ source, scope }] }` is the panel's bulk **Enable all** / **Disable all**; it writes once per scope and returns `{ results }`, one entry per package. A package that is not configured, or an enabled package with resource filters (disabling would drop them), is reported in `results` rather than fatal; the UI keeps it on and names it under the buttons.
 - `/api/skills` uses `DefaultResourceLoader` so settings paths, package skills, and project `.agents/skills` are listed the same way the runtime sees them.
-- Skill toggling edits only the `disable-model-invocation` frontmatter key on the target `SKILL.md`; keep that surgical so user formatting survives.
+- Skill toggling edits only the `disable-model-invocation` frontmatter key on the target `SKILL.md`; keep that surgical so user formatting survives. `PATCH /api/skills { filePaths: string[], disableModelInvocation }` is the bulk form: one result per file, so a refused file (non-`.md`, outside allowed roots, untrusted project) does not stop the rest.
 - `/api/skills/install` shells through `npx skills add ... --agent pi`; project installs run with the selected cwd.
 
 ### Auth and Model Config
 - `ModelsConfig` combines models from `~/.pi/agent/models.json` with provider auth status from pi's `AuthStorage`/`ModelRegistry`.
+- The provider-name field edits a draft owned by `ModelsConfig` (`providerNameDraft`), not local `ProviderDetail` state. **Save** applies a pending name through the same `renameProviderEntry()` path as the Rename button, so a typed name is never silently dropped; a name another provider already has is refused with a visible error. Rename bookkeeping lives in `providerRenameTrackingRef` and is reset on load and after each save.
 - OAuth/device-code/manual-code flows are streamed by `GET /api/auth/login/[provider]`; manual code responses POST back with a short-lived token stored in `globalThis.__piLoginCallbacks`.
 - API-key routes store and remove keys through `AuthStorage`. Status endpoints must **never** return the raw key.
 - The model test route is `app/api/models-config/test/route.ts`; `app/api/models/test/` is **not** a real route.
+
+### MCP and Code mode (v0.10.0 ports)
+
+Ported from upstream `0876cf4..6fcd7d4`. The full runtime, settings and import surface is documented in `docs/agents/mcp-{runtime,settings,test-sign-in,add}.md`; this section is the map plus the desktop adaptations.
+
+**Surfaces**
+- API: `app/api/mcp/route.ts` (GET Settings › MCP overview, files only; POST add/enable/disable/remove/undo/set-enabled/set-exposure/sign-out), `app/api/mcp/test/route.ts`, `app/api/mcp/sign-in/route.ts`, `app/api/mcp/sign-in/[flowId]/route.ts`, `app/api/project-trust/route.ts`, and the extended `app/api/tools/settings/route.ts` (PowerShell on Windows, Code mode automatic/always, `codemode.mode`/`inlineBudget`).
+- Server modules: `lib/mcp-host.ts` (per-session host: registers `mcp.json` servers before a prompt, reports states, idle release), `mcp-transport.ts` (stdio env is sanitized and never carries `PI_WEB_PASSWORD`), `mcp-read-only-policy.ts`, `mcp-status.ts`, `mcp-command.ts`, `mcp-config-*.ts`, `mcp-undo.ts`, `mcp-secrets.ts`, `mcp-server-display.ts`, `mcp-tool-display.ts`, `mcp-test.ts`, `mcp-entry-request.ts`, `mcp-sign-in.ts`, `mcp-sign-out.ts`, `mcp-add.ts`, `mcp-import*.ts`, `mcp-json-error.ts`, plus `pi-sdk-internals.ts` (loads SDK modules the package does not export).
+- Built-ins/tools: `lib/builtin-extensions.ts` (`codemode` / `tool-search` / `mcp`, sandbox self-test, `builtin:` switches), `lib/codemode-settings.ts`, `lib/codemode-view.ts`, `lib/powershell-settings.ts`, `lib/exact-system-prompt.ts`, MCP wiring in `lib/rpc-manager.ts`.
+- UI: `components/McpConfig.tsx` (Settings › MCP; `settings-nav` id `mcp`), `McpAddServer.tsx`, `McpSignIn.tsx`, `OAuthPastePanel.tsx`, `ProjectTrustDialog.tsx`, `CodemodeToolView.tsx`, with pure helpers in `mcp-config-helpers.ts` / `mcp-add-helpers.ts` / `mcp-sign-in-helpers.ts`. `/mcp` in the composer is handled by `hooks/useAgentSession.ts` (`MCP_EXTENSION_PATH = "builtin:mcp"`, `bareMcpOpensSettings`).
+
+**Desktop adaptations (deliberately not upstream-identical)**
+- The panel is rebuilt inside the local `settings-ui.tsx` / `SettingsModal` shell rather than porting upstream's ~2.1k-line `McpConfig.tsx` / `SettingsPanel.tsx`; keep the local `SettingsPane` conventions.
+- OAuth sign-in uses the server-side default `openUrl`. The MCP extension runs inside the Next.js server process, not Electron, so it cannot call `openExternal` directly.
+- MCP "open in explorer"-style actions use Electron IPC, not upstream's `/api/open-in-explorer` HTTP API; the `687af27` file-access change is ported as its 403 presentation side only (no `?type=allow-link` grant).
+
+**Environment variables** (`bin/pi-web-options.js`)
+- `PI_WEB_MCP_IDLE_MS` — idle MCP connection teardown, default 10 minutes; `0` keeps connections until the session closes.
+- `PI_WEB_DISABLE_MCP` — set to disable MCP for the whole server (any value but empty/`0`/`false`); the panel still lists servers but no session connects them.
+- `PI_WEB_SHUTDOWN_DEADLINE_MS` — how long to wait for extensions on shutdown, default 5 s.
+
+**Tests** — `lib/mcp-*.test.mjs` are pure/unit; `lib/mcp-{host,read-only-policy,sign-in,import}.integration.test.mjs` spawn real processes and need `--test-force-exit` on Windows (`rmWhenFree` retries the temp-dir cleanup because a killed stdio child releases its cwd late).
+
+**Not ported (deliberate, P3/P4)** — registry search, TOML/YAML paste, per-tool exposure, per-session switches, subagent MCP, and `app/api/cwd/browse`.
 
 ### Completion Sound
 - `hooks/useAudio.ts` stores the toggle in `localStorage` as `pi-sound-enabled` and reuses one `AudioContext`.
@@ -542,7 +600,7 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - **Plugin updates** (`lib/plugin-updates.ts`, `/api/plugins/check`): check-only route keeps CLI/network work server-side; `canCheckForUpdates` flags npm/git sources without pinned versions. Batch update reuses `POST /api/plugins { action: "update" }` with a project-trust guard when project-scope packages are configured. Uses the direct `semver` dependency (added with `@types/semver`).
 - **Mermaid preview**: completed diagrams default to preview (`MermaidBlock` in MarkdownBody, preview gated on `!isStreaming`); inline previews are height-bounded in `.mermaid-block`; SVG download goes through XMLSerializer (`downloadMermaidSvg`) because Mermaid's HTML serialization leaves void tags unclosed.
 - **File panel video preview**: `.webm` is video, not audio (`VIDEO_EXT_TO_MIME`); video streams through the Range-capable file route with a `VideoViewer` mirroring the local AudioViewer (no `watchEnabled` prop in this architecture).
-- **Subagents — full series (Phases 1–5 complete)** (`lib/subagents.ts`, `lib/subagent-runtime.ts`, `lib/subagent-extension.ts`, `lib/subagent-input.ts`, `lib/subagent-prompt.ts`, `lib/subagent-settings.ts`, `lib/subagent-profile-precedence.ts`, `app/api/subagents/*`, `components/AgentsConfig.tsx`): pure application-layer implementation on pi SDK 0.87.0. Profiles are markdown+YAML frontmatter files in four scopes — `builtin` (general-purpose/explore/plan), `global` (`getAgentDir()/agents`), `workspace` (`<cwd>/.agents/agents`, read-only), `project` (`<cwd>/.pi/agents`); higher scopes shadow lower ones (`listSubagentProfiles` dedupes by name, `isSubagentProfileOverridden` flags shadowed sources). Writable scopes are global/project only; project writes are guarded by `isExistingPathWithinRoots` (realpath-based, from `lib/path-security.ts`). `lib/frontmatter.ts` is the shared generic frontmatter parser (js-yaml); `lib/atomic-file.ts` `writePrivateFileAtomicSync` persists profiles. `isWindowsAbsolutePath` lives in `lib/paths.ts` (file-access re-exports it) so `path-security.ts` stays dependency-clean; route handlers keep the `guardRequest` pattern (`isApiRequestAllowed` on every method, `hasJsonContentType` on writes).
+- **Subagents — full series (Phases 1–5 complete)** (`lib/subagents.ts`, `lib/subagent-runtime.ts`, `lib/subagent-extension.ts`, `lib/subagent-input.ts`, `lib/subagent-prompt.ts`, `lib/subagent-settings.ts`, `lib/subagent-profile-precedence.ts`, `app/api/subagents/*`, `components/AgentsConfig.tsx`): pure application-layer implementation on pi SDK 1.0.0. Profiles are markdown+YAML frontmatter files in four scopes — `builtin` (general-purpose/explore/plan), `global` (`getAgentDir()/agents`), `workspace` (`<cwd>/.agents/agents`, read-only), `project` (`<cwd>/.pi/agents`); higher scopes shadow lower ones (`listSubagentProfiles` dedupes by name, `isSubagentProfileOverridden` flags shadowed sources). Writable scopes are global/project only; project writes are guarded by `isExistingPathWithinRoots` (realpath-based, from `lib/path-security.ts`). `lib/frontmatter.ts` is the shared generic frontmatter parser (js-yaml); `lib/atomic-file.ts` `writePrivateFileAtomicSync` persists profiles. `isWindowsAbsolutePath` lives in `lib/paths.ts` (file-access re-exports it) so `path-security.ts` stays dependency-clean; route handlers keep the `guardRequest` pattern (`isApiRequestAllowed` on every method, `hasJsonContentType` on writes).
   - **Runtime**: subagent sessions are created via `SessionManager.create(cwd, undefined, { parentSession: parent.sessionFile })` so the parent link rides the normal session-file header (same grouping semantics as forks/worktrees). Orchestration lives in `lib/subagent-runtime.ts` (concurrency slots, resource snapshots, background completion via `pi-web:subagent-notification` custom messages with `deliverAs: "followUp"`); `lib/rpc-manager.ts` keeps only thin wiring. Subagents share the parent's session registry, idle-timeout and running-SSE infrastructure — do not fork off separate lifecycle paths.
   - **Session data**: `pi-web:subagent` (task metadata) and `pi-web:subagent-result` (outcome) are plain `custom` entries in the subagent's own file; `entryToUiMessage` maps both to custom UI messages (unknown custom entry types stay dropped) so opening a subagent session shows its task and result. Relation info (`relation: { kind: "subagent", ... }` in `SessionInfo`) is read bounded (prefix + tail) by `readSessionRelationEntries`; deleting a parent cascades/reparents children.
   - **UI**: `AgentsConfig.tsx` is a `SettingsPane`-based manager page under Settings → Agents (`settings-nav` id `agents`, needs a workspace); the built-in subagents master toggle lives there and flags `reloadNeeded` when a live session needs `reload`. `CustomMessageView` in MessageView gives subagent custom messages friendly titles + status chips (customType strings are mirrored client-side, not imported — `lib/subagents.ts` is server-only). Subagent sessions appear in the sidebar's existing parentSession tree; no separate switcher panel was ported (deliberate scope decision). i18n uses the `agents.*` namespace (en/zh-CN only; no zh-TW).
@@ -557,5 +615,5 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 
 ---
 
-*Last Updated: 2026-09-06*
+*Last Updated: 2026-10-06*
 *Generated by: AGENTS-maker*
