@@ -4,14 +4,35 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { PlusIcon } from "@phosphor-icons/react";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane, settingsSidebarFooterStyle, sidebarGroupStyle } from "@/components/settings-ui";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane, SettingsSidebarBulkActions, settingsSidebarFooterStyle, settingsSidebarBulkErrorStyle, sidebarGroupStyle } from "@/components/settings-ui";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
   SkillSearchResult,
   SkillsResponse,
+  SkillToggleResult,
   SkillUpdateResult,
 } from "@/lib/api-types";
+
+/**
+ * The skills "Enable all" / "Disable all" would switch: every listed skill,
+ * across all scope groups, that is not already in that state.
+ */
+export function skillsToSwitch<T extends Pick<Skill, "disableModelInvocation">>(skills: T[], enabled: boolean): T[] {
+  return skills.filter((skill) => skill.disableModelInvocation === enabled);
+}
+
+/** Applies a bulk toggle's results; a skill whose file reported an error keeps its state. */
+export function applySkillToggleResults<T extends Pick<Skill, "filePath" | "disableModelInvocation">>(
+  skills: T[],
+  results: SkillToggleResult[],
+  disableModelInvocation: boolean,
+): T[] {
+  const changed = new Set(results.filter((result) => !result.error).map((result) => result.filePath));
+  return skills.map((skill) =>
+    changed.has(skill.filePath) ? { ...skill, disableModelInvocation } : skill,
+  );
+}
 
 function shortenPath(p: string): string {
   // Match common home dir patterns: /Users/xxx, /home/xxx
@@ -595,6 +616,7 @@ export function SkillsConfig({
   const [selected, setSelected] = useState<string | null>(null);
   const [toggling, setToggling] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
   const [addMode, setAddMode] = useState(false);
   const [updateStatuses, setUpdateStatuses] = useState<Record<string, SkillUpdateResult>>({});
   const [checkingUpdates, setCheckingUpdates] = useState<Set<string>>(new Set());
@@ -724,6 +746,7 @@ export function SkillsConfig({
     const next = !skill.disableModelInvocation;
     setToggling((s) => new Set(s).add(skill.filePath));
     setSaveError(null);
+    setBulkError(null);
     try {
       const res = await fetch("/api/skills", {
         method: "PATCH",
@@ -757,6 +780,46 @@ export function SkillsConfig({
     }
   }, [cwd]);
 
+  // One PATCH for the whole list: each file is edited on its own and reported
+  // separately, so the skills the route refuses keep their state and are named
+  // below the buttons while the rest switch.
+  const setAllSkills = useCallback(async (enabled: boolean) => {
+    const targets = skillsToSwitch(skills, enabled);
+    if (targets.length === 0) return;
+    const filePaths = targets.map((skill) => skill.filePath);
+    const disableModelInvocation = !enabled;
+    setToggling((current) => new Set([...current, ...filePaths]));
+    setSaveError(null);
+    setBulkError(null);
+    try {
+      const res = await fetch("/api/skills", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd, filePaths, disableModelInvocation }),
+      });
+      const d = (await res.json()) as { results?: SkillToggleResult[]; error?: string };
+      if (!res.ok || d.error || !d.results) throw new Error(d.error ?? `HTTP ${res.status}`);
+      const results = d.results;
+      setSkills((prev) => applySkillToggleResults(prev, results, disableModelInvocation));
+      const failures = results.filter((result) => result.error);
+      if (failures.length > 0) {
+        const names = new Map(targets.map((skill) => [skill.filePath, skill.name]));
+        setBulkError([
+          t("desktop.skillsBulkFailed").replace("{count}", String(failures.length)).replace("{total}", String(results.length)),
+          ...failures.map((failure) => `${names.get(failure.filePath) ?? failure.filePath}: ${failure.error}`),
+        ].join("\n"));
+      }
+    } catch (e) {
+      setBulkError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setToggling((current) => {
+        const next = new Set(current);
+        for (const filePath of filePaths) next.delete(filePath);
+        return next;
+      });
+    }
+  }, [cwd, skills, t]);
+
   const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
   const updateAvailableCount = Object.values(updateStatuses).filter(
     (status) => status.state === "update-available",
@@ -783,6 +846,30 @@ export function SkillsConfig({
         <SettingsPane
           sidebar={
             <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
+              {!error && skills.length > 0 && (
+                <SettingsSidebarBulkActions
+                  status={bulkError ? (
+                    <div role="alert" style={settingsSidebarBulkErrorStyle}>{bulkError}</div>
+                  ) : undefined}
+                >
+                  <SettingsButton
+                    size="sm"
+                    disabled={loading || toggling.size > 0 || skillsToSwitch(skills, true).length === 0}
+                    title={t("desktop.skillsEnableAllHint")}
+                    onClick={() => void setAllSkills(true)}
+                  >
+                    {t("desktop.enableAll")}
+                  </SettingsButton>
+                  <SettingsButton
+                    size="sm"
+                    disabled={loading || toggling.size > 0 || skillsToSwitch(skills, false).length === 0}
+                    title={t("desktop.skillsDisableAllHint")}
+                    onClick={() => void setAllSkills(false)}
+                  >
+                    {t("desktop.disableAll")}
+                  </SettingsButton>
+                </SettingsSidebarBulkActions>
+              )}
               <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div

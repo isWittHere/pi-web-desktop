@@ -143,6 +143,12 @@ export interface SkillsResponse {
   projectResourcesLoaded: boolean;
 }
 
+/** One file of a bulk `PATCH /api/skills`; `error` means it was left as it was. */
+export interface SkillToggleResult {
+  filePath: string;
+  error?: string;
+}
+
 export interface SkillInfo {
   name: string;
   description: string;
@@ -215,6 +221,17 @@ export interface PluginsResponse {
   totals: PluginResourceCounts;
   diagnostics: PluginDiagnostic[];
   projectResourcesLoaded: boolean;
+}
+
+/** One package of a bulk enable/disable; `error` means it was left as it was. */
+export interface PluginToggleResult {
+  source: string;
+  scope: PluginScope;
+  error?: string;
+}
+
+export interface PluginsBulkResponse extends PluginsResponse {
+  results: PluginToggleResult[];
 }
 
 // ---------------------------------------------------------------------------

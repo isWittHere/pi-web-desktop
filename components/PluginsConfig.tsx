@@ -5,13 +5,34 @@ import { PlusIcon } from "@phosphor-icons/react";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { useI18n } from "@/hooks/useI18n";
 import { Toggle } from "@/components/Toggle";
-import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane, settingsSidebarFooterStyle, sidebarGroupStyle } from "@/components/settings-ui";
-import type { PluginPackageInfo, PluginUpdateResult, PluginsResponse } from "@/lib/api-types";
+import { SettingsInput, SettingsButton, SettingsBadge, SegmentedControl, SettingsPane, SettingsSidebarBulkActions, settingsSidebarFooterStyle, settingsSidebarBulkErrorStyle, settingsSidebarBulkNoteStyle, sidebarGroupStyle } from "@/components/settings-ui";
+import type { PluginPackageInfo, PluginUpdateResult, PluginsBulkResponse, PluginsResponse } from "@/lib/api-types";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 
 type PluginScope = PluginPackageInfo["scope"];
 type PluginAction = "install" | "remove" | "update" | "disable" | "enable";
+
+/**
+ * The packages "Enable all" / "Disable all" would switch: every configured
+ * package, global and project, not already in that state. Standalone
+ * extensions have no switch here, so they are never included. "Disable all"
+ * also leaves out a filtered package: disabling empties its resource lists and
+ * nothing keeps the filters, so that stays a decision for its own switch.
+ */
+export function packagesToSwitch<T extends Pick<PluginPackageInfo, "disabled" | "filtered">>(
+  packages: T[],
+  enabled: boolean,
+): T[] {
+  return packages.filter((pkg) => pkg.disabled === enabled && (enabled || !pkg.filtered));
+}
+
+/** Enabled filtered packages, which "Disable all" leaves on. */
+export function filteredPackagesKeptOn<T extends Pick<PluginPackageInfo, "disabled" | "filtered">>(
+  packages: T[],
+): T[] {
+  return packages.filter((pkg) => !pkg.disabled && pkg.filtered);
+}
 
 function shortenPath(path: string): string {
   return path.replace(/^\/(?:Users|home)\/[^/]+/, "~");
@@ -363,7 +384,7 @@ function PackageDetail({
 }) {
   const { t } = useI18n();
   const key = packageKey(pkg);
-  const busy = busyKey?.endsWith(key) ?? false;
+  const busy = (busyKey?.endsWith(key) || busyKey?.startsWith("bulk:")) ?? false;
   const reloadBusy = busyKey === "reload";
   const enabled = !pkg.disabled;
   const canCheckForUpdates = pkg.canCheckForUpdates;
@@ -548,6 +569,8 @@ export function PluginsConfig({
   const [installSource, setInstallSource] = useState("");
   const [installScope, setInstallScope] = useState<PluginScope>("global");
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkNote, setBulkNote] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [updateStatuses, setUpdateStatuses] = useState<Record<string, PluginUpdateResult>>({});
@@ -568,6 +591,8 @@ export function PluginsConfig({
   const loadPlugins = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setBulkError(null);
+    setBulkNote(null);
     try {
       const res = await fetch(`/api/plugins?cwd=${encodeURIComponent(cwd)}`);
       const next = (await res.json()) as PluginsResponse & { error?: string };
@@ -663,6 +688,7 @@ export function PluginsConfig({
     setBusyKey(`${action}:${key}`);
     setActionError(null);
     setActionMessage(null);
+    setBulkError(null);
     try {
       const res = await fetch("/api/plugins", {
         method: "POST",
@@ -711,6 +737,7 @@ export function PluginsConfig({
     setBusyKey(`install:${key}`);
     setActionError(null);
     setActionMessage(null);
+    setBulkError(null);
     try {
       const res = await fetch("/api/plugins", {
         method: "POST",
@@ -749,6 +776,53 @@ export function PluginsConfig({
     }
   }, [loadPlugins, onReloadedAction, sessionId, t]);
 
+  // Behaves like the package switch, for every listed package at once: the
+  // confirmation appears in the package detail and the session is reloaded by
+  // hand. Packages the route refuses keep their state and are named below the
+  // buttons.
+  const setAllPackages = useCallback(async (enabled: boolean) => {
+    const targets = packagesToSwitch(packages, enabled);
+    if (targets.length === 0) return;
+    const keptOn = enabled ? 0 : filteredPackagesKeptOn(packages).length;
+    const action = enabled ? "enable" : "disable";
+    setBusyKey(`bulk:${action}`);
+    setActionError(null);
+    setActionMessage(null);
+    setBulkError(null);
+    setBulkNote(null);
+    try {
+      const res = await fetch("/api/plugins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          cwd,
+          packages: targets.map(({ source, scope }) => ({ source, scope })),
+        }),
+      });
+      const next = (await res.json()) as Partial<PluginsBulkResponse> & { error?: string };
+      if (!res.ok || next.error || !next.results) throw new Error(next.error ?? `HTTP ${res.status}`);
+      const { results, ...plugins } = next as PluginsBulkResponse;
+      setData(plugins);
+      const failures = results.filter((result) => result.error);
+      if (keptOn > 0) setBulkNote(t("desktop.pluginsBulkKeptFiltered").replace("{count}", String(keptOn)));
+      if (failures.length < results.length) {
+        const message = enabled ? t("desktop.pluginsBulkEnabled") : t("desktop.pluginsBulkDisabled");
+        setActionMessage(sessionId ? `${message} ${t("desktop.reloadCurrentSession")}` : message);
+      }
+      if (failures.length > 0) {
+        setBulkError([
+          t("desktop.pluginsBulkFailed").replace("{count}", String(failures.length)).replace("{total}", String(results.length)),
+          ...failures.map((failure) => `${failure.source} (${failure.scope}): ${failure.error}`),
+        ].join("\n"));
+      }
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyKey(null);
+    }
+  }, [cwd, packages, sessionId, t]);
+
   const addBusy = busyKey?.startsWith("install:") ?? false;
   const availableUpdateCount = Object.values(updateStatuses).filter(
     (status) => status.state === "update-available",
@@ -760,6 +834,33 @@ export function PluginsConfig({
     <SettingsPane
       sidebar={
         <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
+          {!error && packages.length > 0 && (
+            <SettingsSidebarBulkActions
+              status={(bulkError || bulkNote) ? (
+                <>
+                  {bulkNote && <div role="status" style={settingsSidebarBulkNoteStyle}>{bulkNote}</div>}
+                  {bulkError && <div role="alert" style={settingsSidebarBulkErrorStyle}>{bulkError}</div>}
+                </>
+              ) : undefined}
+            >
+              <SettingsButton
+                size="sm"
+                disabled={sidebarBusy || packagesToSwitch(packages, true).length === 0}
+                title={t("desktop.pluginsEnableAllHint")}
+                onClick={() => void setAllPackages(true)}
+              >
+                {t("desktop.enableAll")}
+              </SettingsButton>
+              <SettingsButton
+                size="sm"
+                disabled={sidebarBusy || packagesToSwitch(packages, false).length === 0}
+                title={t("desktop.pluginsDisableAllHint")}
+                onClick={() => void setAllPackages(false)}
+              >
+                {t("desktop.disableAll")}
+              </SettingsButton>
+            </SettingsSidebarBulkActions>
+          )}
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>

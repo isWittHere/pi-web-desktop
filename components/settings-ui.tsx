@@ -47,6 +47,47 @@ export const settingsSidebarFooterStyle: CSSProperties = {
   flexShrink: 0,
 };
 
+/** Bulk switches above a manager list, the counterpart of the add footer below it. */
+export const settingsSidebarBulkActionsStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  flexShrink: 0,
+  gap: 6,
+  padding: "8px 6px",
+  borderBottom: "1px solid var(--border)",
+};
+
+/** Error text under a bulk switch: three lines, then scroll. */
+export const settingsSidebarBulkErrorStyle: CSSProperties = {
+  maxHeight: "4.2em",
+  overflowY: "auto",
+  color: "var(--status-danger)",
+  fontSize: 11,
+  lineHeight: 1.4,
+  overflowWrap: "anywhere",
+  whiteSpace: "pre-wrap",
+  margin: 0,
+};
+
+/** Muted note under a bulk switch (what a bulk run deliberately left alone). */
+export const settingsSidebarBulkNoteStyle: CSSProperties = {
+  ...settingsSidebarBulkErrorStyle,
+  color: "var(--text-muted)",
+};
+
+/**
+ * "Enable all" / "Disable all" above a manager list, the counterpart of the
+ * add action in the footer below it. `status` reports the last bulk run.
+ */
+export function SettingsSidebarBulkActions({ children, status }: { children: ReactNode; status?: ReactNode }) {
+  return (
+    <div style={settingsSidebarBulkActionsStyle}>
+      <div style={{ display: "flex", gap: 6 }}>{children}</div>
+      {status}
+    </div>
+  );
+}
+
 /**
  * Settings section: title + description + controls as a flat full-width
  * block separated from the next section by a hairline divider. This is the
