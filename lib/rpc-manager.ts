@@ -6,6 +6,8 @@ import { existsSync, realpathSync, statSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
+import { findDeferredModel, rememberProviderModels } from "./deferred-provider-models";
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { resolveVisibleModels } from "./model-scope";
 import { resolveSessionModel, sameModel, type SessionModelState } from "./session-model";
 import {
@@ -1984,22 +1986,29 @@ export async function startRpcSession(
     const settingsDefault = defaultProvider && defaultModelId
       ? { provider: defaultProvider, modelId: defaultModelId }
       : null;
+    // A provider an extension registers only at session_start has no model in this
+    // runtime yet (lib/deferred-provider-models.ts): build on the default and switch
+    // once its extensions are bound, and never let the resolver refuse it for that.
+    const deferredInitialModel = initialModel && !services.modelRuntime.getModel(initialModel.provider, initialModel.modelId)
+      ? findDeferredModel(services.modelRuntime, initialModel.provider, initialModel.modelId)
+      : undefined;
+    const requestedModel = deferredInitialModel ? undefined : initialModel;
     // The single model decision point: recorded intent (session file) + explicit
     // request + the live registry/scope produce one explicit state. The SDK's own
     // silent fallback is unreachable from here — every branch passes an explicit
     // model or an explicit "nothing available".
     const resolution = resolveSessionModel({
       recorded: savedModel,
-      ...(initialModel ? { requested: initialModel } : {}),
+      ...(requestedModel ? { requested: requestedModel } : {}),
       runtime: services.modelRuntime,
       scope,
       ...(settingsDefault ? { settingsDefault } : {}),
     });
     // An explicit request for an unavailable model fails loudly; the API layer
     // maps this prefix to HTTP 400 (existing contract).
-    if (resolution.status === "missing" && initialModel) {
+    if (resolution.status === "missing" && requestedModel) {
       throw new Error(
-        `Model is not available in the enabled scope: ${initialModel.provider}/${initialModel.modelId}`,
+        `Model is not available in the enabled scope: ${requestedModel.provider}/${requestedModel.modelId}`,
       );
     }
     const startupModelRef = resolution.status === "active" ? resolution.model : resolution.suggestion;
@@ -2013,6 +2022,15 @@ export async function startRpcSession(
     const startupThinkingLevel = hasExistingMessages
       ? undefined
       : (thinkingLevel ?? (resolution.status === "active" ? resolution.thinkingLevel : undefined));
+    // The recorded model this runtime did restore, if any: an existing session runs on it.
+    // One it did not, but the catalog remembers, is a deferred provider: start on the
+    // fallback above and switch once the session's extensions have bound.
+    const restoredSavedModel = startupModel && savedModel && sameModel({ provider: startupModel.provider, modelId: startupModel.id }, savedModel) ? savedModel : undefined;
+    const deferredModel = hasExistingMessages
+      ? savedModel && !restoredSavedModel
+        ? findDeferredModel(services.modelRuntime, savedModel.provider, savedModel.modelId)
+        : undefined
+      : deferredInitialModel;
     const { session: inner } = await createAgentSessionFromServices({
       services,
       sessionManager,
@@ -2113,6 +2131,20 @@ export async function startRpcSession(
     registerRpcWrapper(wrapper);
     if (!subagentChatOnly) {
       wrapper.beginExtensionBinding({ forceEmptySystemPrompt: selectionIsEmpty });
+      if (deferredModel) {
+        // The provider only registers once the session's extensions are bound, so the
+        // switch has to wait for that. A failure is logged, not fatal: the session
+        // still runs on the fallback model it was built with.
+        void wrapper.waitUntilReady()
+          .then(() => wrapper.send({ type: "set_model", provider: deferredModel.provider, modelId: deferredModel.id }))
+          .catch((error: unknown) => {
+            console.error(`[pi-web] could not switch to ${deferredModel.provider}/${deferredModel.id}:`, error instanceof Error ? error.message : error);
+          });
+      }
+      // Bound extensions may have registered providers a later model listing will not see.
+      void wrapper.waitUntilReady()
+        .then(() => rememberProviderModels(inner.modelRuntime as unknown as ModelRuntime))
+        .catch(() => undefined);
     }
 
     return { session: wrapper, realSessionId };

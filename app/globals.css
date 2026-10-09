@@ -1289,6 +1289,9 @@ pre, code {
   font-size: calc(13px + var(--chat-font-size-offset, 0px));
 }
 .markdown-body th, .markdown-body td {
+  /* A long cell wraps instead of squeezing every other column narrower; the
+     table itself keeps its natural width and scrolls (`.markdown-table-wrap`). */
+  max-width: 240px;
   border: 0;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);

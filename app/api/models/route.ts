@@ -9,6 +9,7 @@ import {
 } from "@/lib/models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "@/lib/model-scope";
 import { projectTrustReloadOptions } from "@/lib/project-trust";
+import { rememberProviderModels, withDeferredProviderModels } from "@/lib/deferred-provider-models";
 import { buildThinkingProfile } from "@/lib/thinking-profile";
 import type { ModelThinkingProfile } from "@/lib/thinking-request-core";
 import { getThinkingLevelMemory } from "@/lib/thinking-level-memory";
@@ -41,8 +42,11 @@ async function loadModels(cwd: string): Promise<ModelsData> {
     ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
   });
   const settings: SettingsManager = services.settingsManager;
+  await rememberProviderModels(services.modelRuntime);
+  // `enabledModels` supports globs and fuzzy patterns, so resolve it the same
+  // way the CLI does instead of comparing pattern strings literally (#307).
   const scope = await resolveVisibleModels(
-    services.modelRuntime,
+    withDeferredProviderModels(services.modelRuntime),
     settings.getEnabledModels(),
   );
   const modelError = services.modelRuntime.getError();
