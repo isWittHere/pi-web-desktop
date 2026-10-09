@@ -2,7 +2,7 @@ import {
   SessionManager,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
-import { closeSync, fstatSync, openSync, readSync, statSync } from "fs";
+import { closeSync, existsSync, fstatSync, openSync, readSync, statSync } from "fs";
 import { normalize as normalizePath } from "path";
 import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext, SessionMark } from "./types";
 import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
@@ -260,11 +260,19 @@ function getPathToIdCache(): Map<string, string> {
 
 export async function resolveSessionPath(sessionId: string): Promise<string | null> {
   const cached = getPathCache().get(sessionId);
-  if (cached) return cached;
+  if (cached && existsSync(cached)) return cached;
 
-  // Cache miss: scan all sessions to populate cache, then retry
+  // A cached path can outlive its file: a session removed from disk, a fork
+  // that rewrote the file under another name, or a transient session whose
+  // first flush never happened. The cache has no TTL and every read route
+  // trusts it, so an unvalidated hit would turn into a permanent "not found"
+  // for an id that still exists. Drop the dead entry and rescan; the scan
+  // re-checks the cache generation, so a concurrent mutation is not served
+  // stale, and the final existence check rejects a path the fresh list kept.
+  if (cached) invalidateSessionPathCache(sessionId);
   await listAllSessions();
-  return getPathCache().get(sessionId) ?? null;
+  const resolved = getPathCache().get(sessionId) ?? null;
+  return resolved && existsSync(resolved) ? resolved : null;
 }
 
 export async function resolveSessionIdByPath(filePath: string): Promise<string | undefined> {
