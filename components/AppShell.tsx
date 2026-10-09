@@ -125,21 +125,33 @@ export function AppShell() {
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null);
   // Unsent "draft" sessions shown in the sidebar list (pure client-side, pi
   // knows nothing about them until the first message is sent).
-  const [draftSessions, setDraftSessions] = useState<DraftSession[]>(() => loadDraftSessions());
+  //
+  // They must NOT seed useState: a lazy initializer also runs during the
+  // hydration render, so the first client HTML would contain a draft row the
+  // server never rendered and React would report a hydration mismatch in the
+  // sidebar's session list (the draft row lands inside a time-group <div> the
+  // server did not emit). Start empty — matching the server — and restore
+  // after mount, like the explorer-open preference in the sidebar.
+  const [draftSessions, setDraftSessions] = useState<DraftSession[]>([]);
+  const [draftsRestored, setDraftsRestored] = useState(false);
   // The draft currently open in the composer (its id doubles as the ChatInput
   // draft key so typed text is keyed to the draft).
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const activeDraftIdRef = useRef<string | null>(null);
   useEffect(() => { activeDraftIdRef.current = activeDraftId; }, [activeDraftId]);
-  useEffect(() => { saveDraftSessions(draftSessions); }, [draftSessions]);
-
-  // An empty new session is not a meaningful draft. Drop drafts that never
-  // received any typed content on startup (they only clutter the list).
+  // Persisting has to wait for the restore: the mount pass would otherwise
+  // write the empty pre-restore list back and erase every stored draft.
   useEffect(() => {
-    setDraftSessions((prev) => {
-      const meaningful = prev.filter((d) => getDraft(d.id) !== null);
-      return meaningful.length === prev.length ? prev : meaningful;
-    });
+    if (!draftsRestored) return;
+    saveDraftSessions(draftSessions);
+  }, [draftSessions, draftsRestored]);
+
+  // Restore stored drafts once hydrated. An empty new session is not a
+  // meaningful draft, so drop drafts that never received any typed content on
+  // startup (they only clutter the list).
+  useEffect(() => {
+    setDraftSessions(loadDraftSessions().filter((d) => getDraft(d.id) !== null));
+    setDraftsRestored(true);
   }, []);
 
   // Drop the currently open draft when it never got any content (typed text
