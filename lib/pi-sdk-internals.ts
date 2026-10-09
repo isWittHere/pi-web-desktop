@@ -216,6 +216,8 @@ export interface McpSignInOptions {
   store: McpOAuthStateStore;
   settings: McpOAuthSettings;
   challenge?: McpOAuthChallenge;
+  /** Aborted when the flow ends, which stops the SDK at any step (pi 1.1). */
+  signal?: AbortSignal;
   prompt: McpSignInPrompt;
 }
 

@@ -60,7 +60,7 @@ const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }>
   huggingface: { Icon: HuggingFaceColorIcon, hasColor: true }, cerebras: { Icon: CerebrasColorIcon, hasColor: true }, openrouter: { Icon: OpenRouterIcon, hasColor: false },
   xai: { Icon: XAIIcon, hasColor: false }, "cloudflare-ai-gateway": { Icon: CloudflareColorIcon, hasColor: true }, "cloudflare-workers-ai": { Icon: CloudflareColorIcon, hasColor: true },
   "vercel-ai-gateway": { Icon: VercelIcon, hasColor: false }, "github-copilot": { Icon: GithubCopilotIcon, hasColor: false }, "amazon-bedrock": { Icon: AwsColorIcon, hasColor: true },
-  "azure-openai-responses": { Icon: AzureColorIcon, hasColor: true }, "kimi-coding": { Icon: KimiColorIcon, hasColor: true }, nvidia: { Icon: NvidiaColorIcon, hasColor: true },
+  "azure-openai-responses": { Icon: AzureColorIcon, hasColor: true }, azure: { Icon: AzureColorIcon, hasColor: true }, "kimi-coding": { Icon: KimiColorIcon, hasColor: true }, nvidia: { Icon: NvidiaColorIcon, hasColor: true },
   opencode: { Icon: OpenCodeIcon, hasColor: false }, "opencode-go": { Icon: OpenCodeIcon, hasColor: false }, qwen: { Icon: QwenColorIcon, hasColor: true },
   xiaomi: { Icon: XiaomiMiMoIcon, hasColor: false }, "xiaomi-token-plan-ams": { Icon: XiaomiMiMoIcon, hasColor: false }, "xiaomi-token-plan-cn": { Icon: XiaomiMiMoIcon, hasColor: false }, "xiaomi-token-plan-sgp": { Icon: XiaomiMiMoIcon, hasColor: false },
   zai: { Icon: ZAIIcon, hasColor: false }, "zai-coding-cn": { Icon: ZAIIcon, hasColor: false }, zhipu: { Icon: ZhipuColorIcon, hasColor: true },

@@ -1043,9 +1043,11 @@ export function AppShell() {
     };
   }, [t, selectedSession]);
 
-  const handleAgentEnd = useCallback((info: { model: { provider: string; modelId: string } | null; stats: SessionStatsInfo | null; contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null }) => {
+  const handleAgentEnd = useCallback((info: { model: { provider: string; modelId: string } | null; stats: SessionStatsInfo | null; contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null }, end: { aborted: boolean }) => {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
+    // A stopped run is not a completion: no screen-level notification.
+    if (end.aborted) return;
     // Screen-level completion notification — the main process suppresses it
     // only when this session is the one open in a visible+focused window.
     notifyDone(buildDonePayload(selectedSession, info.model, info.stats, info.contextUsage));

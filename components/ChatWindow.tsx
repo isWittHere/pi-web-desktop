@@ -46,7 +46,7 @@ interface Props {
   /** Fired when the agent finishes this session's run. Carries the model,
    *  computed stats and live context usage at completion so the shell can
    *  surface them in completion feedback without racing state updates. */
-  onAgentEnd?: (info: { model: { provider: string; modelId: string } | null; stats: SessionStatsInfo | null; contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null }) => void;
+  onAgentEnd?: (info: { model: { provider: string; modelId: string } | null; stats: SessionStatsInfo | null; contextUsage: { percent: number | null; contextWindow: number; tokens: number | null } | null }, end: { aborted: boolean }) => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
   modelsRefreshKey?: number;
@@ -186,8 +186,10 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
   // callback) can surface it at completion without re-creating itself.
   const modelRef = useRef<{ provider: string; modelId: string } | null>(null);
   const agentEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wrappedOnAgentEnd = useCallback(() => {
-    if (soundEnabledRef.current) {
+  const wrappedOnAgentEnd = useCallback((end: { aborted: boolean }) => {
+    // A stopped run (Esc, Stop, another client's abort) is not a completion:
+    // no done sound, and no screen-level notification (pi's agent_settled.aborted).
+    if (!end.aborted && soundEnabledRef.current) {
       playDoneSoundRef.current();
     }
     // onAgentEnd fires right after the session reload resolves — React has not
@@ -199,7 +201,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, sessi
         model: modelRef.current,
         stats: sessionStatsRef.current,
         contextUsage: contextUsageRef.current,
-      });
+      }, end);
     }, 120);
   }, [onAgentEnd]);
 

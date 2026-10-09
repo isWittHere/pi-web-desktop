@@ -90,11 +90,25 @@ test("prompt completion uses one settlement state machine", () => {
     source.indexOf("const executeBash = useCallback"),
   );
 
-  assert.match(promptDoneSource, /notifyPromptStage\(runId\)/);
+  assert.match(promptDoneSource, /notifyPromptStage\(runId, event\.aborted === true\)/);
   assert.match(promptDoneSource, /scheduleEventStreamClose\(sid\)/);
   assert.match(sendSource, /rpcPromptPendingRef\.current = true/);
   assert.match(sendSource, /if \(promptRequestStarted && sentSessionId\)/);
   assert.match(sendSource, /void waitForPromptSettlement\(sentSessionId, promptRunId\)/);
+});
+
+test("a stopped run is not a completion: no done sound, no notification", () => {
+  // pi's agent_settled.aborted (pi 1.1) reaches onAgentEnd, which is what the
+  // completion sound and the screen-level notification are wired to.
+  const agentSettledSource = source.slice(
+    source.indexOf('case "agent_settled"'),
+    source.indexOf('case "prompt_done"'),
+  );
+  assert.match(agentSettledSource, /onAgentEnd\?\.\(\{ aborted: event\.aborted === true \}\)/);
+  assert.match(source, /notifyPromptStage = useCallback\(\(runId: number, aborted = false\)/);
+  assert.match(source, /onAgentEnd\?\.\(\{ aborted \}\)/);
+  assert.match(source, /export interface AgentEndInfo \{/);
+  assert.match(source, /The run was stopped \(Esc, Stop, another client's abort\)/);
 });
 
 test("coalesces streaming message snapshots and drops stale queued updates", () => {

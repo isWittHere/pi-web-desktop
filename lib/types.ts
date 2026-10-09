@@ -75,6 +75,8 @@ export interface AssistantMessage {
   stopReason?: string;
   errorMessage?: string;
   timestamp?: number;
+  /** From `timestamp` until the response ended, measured by pi (pi 1.1); absent for older messages. */
+  durationMs?: number;
   usage?: AgentUsage;
 }
 
@@ -87,6 +89,8 @@ export interface ToolResultMessage {
   details?: unknown;
   usage?: AgentUsage;
   timestamp?: number;
+  /** How long the tool ran, measured by pi with a monotonic clock (pi 1.1); absent for older results. */
+  durationMs?: number;
 }
 
 export interface CustomMessage {

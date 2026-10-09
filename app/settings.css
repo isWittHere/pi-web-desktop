@@ -2073,6 +2073,19 @@
   max-width: 100%;
 }
 
+/* macOS draws the native arrow against the border, ignoring the padding: a chevron of
+   our own, in the theme's dim text color, as far from the right edge as the text is from the left. */
+select.mcp-add-input {
+  appearance: none;
+  padding-right: 30px;
+  background-image:
+    linear-gradient(45deg, transparent 40%, var(--text-dim) 40%, var(--text-dim) 60%, transparent 60%),
+    linear-gradient(-45deg, transparent 40%, var(--text-dim) 40%, var(--text-dim) 60%, transparent 60%);
+  background-size: 5px 5px;
+  background-position: right 15px center, right 10px center;
+  background-repeat: no-repeat;
+}
+
 /* The add pane (components/McpAddServer.tsx). Notes, fields and the failure
    wrap inside the narrow phone pane; inputs take the pane's width. */
 .mcp-add-input {
