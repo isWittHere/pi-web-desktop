@@ -26,6 +26,7 @@ import {
   MAX_UPLOAD_REQUEST_BYTES,
   MAX_UPLOAD_TOTAL_BYTES,
   parseUploadConflictStrategy,
+  replaceUploadFile,
   validateUploadFileNames,
 } from "@/lib/file-upload";
 import { parseFormDataWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
@@ -205,17 +206,14 @@ export async function POST(
         continue;
       }
 
-      if (conflictSet.has(file.name)) {
-        try {
-          fs.unlinkSync(destination);
-        } catch (error) {
-          errors.push({ name: file.name, error: error instanceof Error ? error.message : String(error) });
-          continue;
-        }
-      }
-
       try {
-        fs.writeFileSync(destination, bytes, { flag: "wx" });
+        // Replacing keeps the old entry until its complete replacement can be
+        // renamed over it, so a failed write cannot destroy the original.
+        if (conflictSet.has(file.name)) {
+          replaceUploadFile(destination, bytes);
+        } else {
+          fs.writeFileSync(destination, bytes, { flag: "wx" });
+        }
         uploaded.push(file.name);
       } catch (error) {
         errors.push({ name: file.name, error: error instanceof Error ? error.message : String(error) });

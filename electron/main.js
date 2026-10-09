@@ -6,6 +6,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const http = require("http");
+const { rotatePreviewSecrets, getRotationWarning } = require("../bin/rotate-preview-secrets");
 
 const PORT = process.env.PORT || 30141;
 
@@ -409,6 +410,16 @@ function startServer() {
   const args = IS_DEV
     ? ["dev", "-H", HOSTNAME, "-p", String(PORT), "--turbopack"]
     : ["start", "-H", HOSTNAME, "-p", String(PORT)];
+
+  // The published build's preview-mode secrets are baked into
+  // .next/prerender-manifest.json, and Next skips the proxy for a request
+  // whose x-prerender-revalidate header matches its previewModeId — which
+  // would bypass the password gate and the Host/Origin checks. This fork goes
+  // straight to `next start`, never through bin/pi-web.js, so the rotation
+  // that entry does has to happen here too. A failure is surfaced, never
+  // silent: a read-only install would otherwise stay exposed.
+  const rotation = rotatePreviewSecrets(path.join(pkgDir, ".next"));
+  if (!rotation.ok) console.warn(getRotationWarning(rotation.reason));
 
   // Desktop always serves only the local BrowserWindow. Do not forward an
   // ambient PI_WEB_PASSWORD into that process: doing so would require exposing

@@ -103,6 +103,7 @@
     "asar": false,
     "files": [
       "electron/**/*",
+      "bin/rotate-preview-secrets.js",
       "public/**/*",
       ".next/**/*",
       "node_modules/**/*",
