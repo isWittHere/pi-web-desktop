@@ -110,6 +110,10 @@ export function AppShell() {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
+  // Latest selection, readable from async callbacks whose captured state is stale
+  // (a delete that completes after the user navigated away).
+  const selectedSessionRef = useRef(selectedSession);
+  selectedSessionRef.current = selectedSession;
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const handleRunningSessionIdsChange = useCallback((ids: Set<string>) => {
     setRunningSessionIds((previous) => {
@@ -1149,8 +1153,12 @@ export function AppShell() {
 
   const handleSessionDeleted = useCallback((sessionId: string) => {
     setRefreshKey((k) => k + 1);
-    if (selectedSession?.id === sessionId) {
-      const session = selectedSession;
+    // The DELETE can outlive a session switch: this callback's captured
+    // selectedSession is the one from the delete click. Read the latest
+    // selection and only fall back to the empty composer when the user is
+    // still on the deleted session at the moment the removal completes.
+    const active = selectedSessionRef.current;
+    if (active?.id === sessionId) {
       setActiveDraftId(null);
       setSelectedSession(null);
       setSessionKey((k) => k + 1);
@@ -1158,9 +1166,9 @@ export function AppShell() {
       setActiveTopPanel(null);
       // Back to a fresh composer backed by a draft row, consistent with the
       // "+" flow, instead of a bare welcome page with no listed session.
-      openWelcomeDraft(session.cwd, workspaceKeyOf(session));
+      openWelcomeDraft(active.cwd, workspaceKeyOf(active));
     }
-  }, [selectedSession, openWelcomeDraft]);
+  }, [openWelcomeDraft]);
 
   const handleOpenFile = useCallback((filePath: string, fileName: string, sourceOrOptions?: string | null | { initialDisplayMode?: "diff" }, options?: { initialDisplayMode?: "diff" }) => {
     const sourceSessionId = typeof sourceOrOptions === "string" || sourceOrOptions === null ? sourceOrOptions : undefined;

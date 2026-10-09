@@ -37,6 +37,33 @@ function renderMarkdown(markdown, isStreaming = false) {
   );
 }
 
+test("renders emphasis next to CJK punctuation", () => {
+  // CommonMark leaves no space around CJK punctuation, so `**很好。**我们`
+  // would not parse as emphasis without remark-cjk-friendly.
+  const sentence = "今天天气很好。";
+  const html = renderMarkdown(`**${sentence}**我们去公园散步吧。`);
+  assert.ok(html.includes(`<strong>${sentence}</strong>我们去`));
+  assert.doesNotMatch(html, /\*\*/);
+  // Brackets next to prose, and nested emphasis, still work.
+  assert.match(renderMarkdown("这是**「重要」**内容。"), /这是<strong>「重要」<\/strong>内容。/);
+  assert.match(renderMarkdown("**outer *inner* text**"), /<strong>outer <em>inner<\/em> text<\/strong>/);
+  // Inside code and escaped text the markers stay literal.
+  const literal = "**需要。**即使";
+  for (const md of [`\`${literal}\``, "\\*\\*需要。\\*\\*即使"]) {
+    assert.doesNotMatch(renderMarkdown(md), /<strong>/);
+    assert.ok(renderMarkdown(md).includes("需要。"));
+  }
+});
+
+test("the CJK-friendly plugin is parse-only", async () => {
+  const source = await readFile(new URL("../lib/markdown.ts", import.meta.url), "utf8");
+  assert.match(source, /remarkCjkFriendly,/);
+  // Parse-only, so nothing in the document is rewritten.
+  assert.match(source, /remark-cjk-friendly\/parseOnly/);
+  const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.match(pkg.dependencies["remark-cjk-friendly"], /^\^2\./);
+});
+
 test("keeps single-tilde CJK numeric ranges literal instead of striking them", () => {
   const html = renderMarkdown("5~7U 保证金 × 100~200倍杠杆");
 

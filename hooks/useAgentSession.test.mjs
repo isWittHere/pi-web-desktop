@@ -111,6 +111,23 @@ test("a stopped run is not a completion: no done sound, no notification", () => 
   assert.match(source, /The run was stopped \(Esc, Stop, another client's abort\)/);
 });
 
+test("a context-usage read applies only when it is the newest, from this session and run", () => {
+  // The usage read races the session load and the running-state poll: a slow reply
+  // from an older run must never overwrite a newer one, and a failed newer read
+  // must never discard an older good one.
+  assert.match(source, /const contextUsageRequestIdRef = useRef\(0\);/);
+  assert.match(source, /const contextUsageAppliedIdRef = useRef\(0\);/);
+  assert.match(source, /requestId <= contextUsageAppliedIdRef\.current\) return;/);
+  assert.match(source, /promptRunIdRef\.current !== runId/);
+  assert.match(source, /sessionIdRef\.current !== sid/);
+  // Reads started before a remount are stale.
+  assert.match(source, /contextUsageAppliedIdRef\.current = startedUsageReads;/);
+  // One shared reader, so every path is guarded the same way.
+  assert.match(source, /const refreshContextUsage = useCallback\(async \(sid: string\) => \{/);
+  // Nothing writes the usage directly any more: the only write is the guarded one.
+  assert.deepEqual((source.match(/setContextUsage\(/g) ?? []).length, 1);
+});
+
 test("coalesces streaming message snapshots and drops stale queued updates", () => {
   const agentStartSource = source.slice(
     source.indexOf('case "agent_start"'),

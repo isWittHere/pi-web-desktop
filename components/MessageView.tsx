@@ -13,7 +13,7 @@ import type { MentionValidators } from "@/lib/mention-tokens";
 import { CompactionSummary } from "./CompactionSummary";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
-import { isEditToolName } from "@/lib/tool-names";
+import { isEditToolName, isWriteToolName } from "@/lib/tool-names";
 import { CODEMODE_TOOL_NAME, codemodeCalls, codemodeScript, codemodeScriptPreview, stripCodemodeHeader } from "@/lib/codemode-view";
 import { mcpToolLabel } from "@/lib/mcp-tool-display";
 import { CodemodeCallList } from "./CodemodeToolView";
@@ -1227,10 +1227,22 @@ function ThinkingContentBody({ block, sessionId, entryId, blockIndex, isStreamin
 // let the user opt into the full payload so expanding a 45K result stays snappy.
 const RESULT_PREVIEW_CHARS = 8000;
 
+const WRITE_VIEW_KEYS = new Set(["path", "file_path", "content"]);
+// A write's file text in place of its JSON. A streamed write arrives with an empty
+// `input` (this app has no client-side raw-input buffer), so `content` is absent and
+// the generic view is kept; any other argument (a mode, a title) would vanish from
+// this view, so those calls, and an empty file, keep it too.
+function getWrittenFileText(block: ToolCallContent): string | null {
+  if (!isWriteToolName(block.toolName)) return null;
+  const { content } = block.input;
+  if (typeof content !== "string" || content === "") return null;
+  return Object.keys(block.input).every((key) => WRITE_VIEW_KEYS.has(key)) ? content : null;
+}
+
 export const ToolCallBlock = memo(function ToolCallBlock({ block, result, duration, processStyle = false }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; processStyle?: boolean }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const inputStr = useMemo(() => JSON.stringify(block.input, null, 2), [block.input]);
+  const inputStr = useMemo(() => getWrittenFileText(block) ?? JSON.stringify(block.input, null, 2), [block]);
   const isEditTool = isEditToolName(block.toolName);
   const resultDiff = result && !result.isError ? getResultDiff(result) : null;
   // A script and the calls it made, instead of the input JSON. Streamed input keeps the generic view.

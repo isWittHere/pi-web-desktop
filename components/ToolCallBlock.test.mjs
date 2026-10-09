@@ -19,7 +19,7 @@ test("ToolCallBlock is memoized so stable props skip re-render during streaming"
 test("input args JSON serialization is memoized per block", () => {
   assert.match(
     source,
-    /const inputStr = useMemo\(\(\) => JSON\.stringify\(block\.input, null, 2\), \[block\.input\]\);/,
+    /const inputStr = useMemo\(\(\) => getWrittenFileText\(block\) \?\? JSON\.stringify\(block\.input, null, 2\), \[block\]\);/,
   );
 });
 

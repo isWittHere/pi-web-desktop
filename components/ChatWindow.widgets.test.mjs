@@ -20,9 +20,11 @@ test("the ANSI renderer is backed by the shared parser", () => {
 });
 
 test("the extension select dialog scrolls instead of overflowing", () => {
-  const dialogStart = source.indexOf('maxHeight: "min(760px, 100%)"');
+  // The dialog opens at the historical width and grows only when its own content
+  // cannot fit; "full" is the user's maximize override.
+  const dialogStart = source.indexOf('maxHeight: full ? "100%" : "min(760px, 100%)",');
   assert.notEqual(dialogStart, -1, "select dialog height cap not found");
-  const dialogBlock = source.slice(dialogStart, dialogStart + 3800);
+  const dialogBlock = source.slice(dialogStart, dialogStart + 5200);
   assert.match(dialogBlock, /flexDirection: "column"/);
   assert.match(dialogBlock, /flexShrink: 0/);
   assert.match(dialogBlock, /overflowY: "auto"/);

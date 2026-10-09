@@ -6,6 +6,7 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import remarkCjkFriendly from "remark-cjk-friendly/parseOnly";
 import { visit } from "unist-util-visit";
 
 /**
@@ -86,6 +87,9 @@ export const markdownRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [
   remarkMath,
   remarkFrontmatter,
   remarkFrontmatterToCode,
+  // Emphasis next to CJK punctuation: CommonMark leaves no space there, so
+  // `**很好。**我们` would not parse. Parse-only, so nothing is rewritten.
+  remarkCjkFriendly,
 ];
 
 export const markdownRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [

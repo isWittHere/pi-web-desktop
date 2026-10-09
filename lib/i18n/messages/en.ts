@@ -244,6 +244,8 @@ export const enLocale = {
     "desktop.extensionRequest": "extension request",
     "desktop.extensionExpiresIn": "closes in {seconds}s",
     "desktop.extensionCollapse": "Minimize",
+    "desktop.extensionMaximize": "Make this request fill the chat area",
+    "desktop.extensionRestoreSize": "Restore this request's size",
     "desktop.extensionExpand": "Show extension request",
     "desktop.extensionPanel": "Extension panel",
     "desktop.cancel": "Cancel",

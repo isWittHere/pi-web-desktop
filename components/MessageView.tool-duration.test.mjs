@@ -16,10 +16,16 @@ test("a tool's time reads like the pi CLI's \"Took\"", () => {
   assert.equal(formatToolDuration(3_725_000), "1h 2m 5s");
 });
 
+test("a write's file text is shown instead of its input JSON", () => {
+  const source = readFileSync(new URL("./MessageView.tsx", import.meta.url), "utf8");
+  assert.match(source, /getWrittenFileText\(block\) \?\? JSON\.stringify\(block\.input, null, 2\)/);
+  assert.match(source, /const WRITE_VIEW_KEYS = new Set\(\["path", "file_path", "content"\]\);/);
+  assert.match(source, /if \(!isWriteToolName\(block\.toolName\)\) return null;/);
+  // Only a plain path + content write: another argument would vanish from the view.
+  assert.match(source, /Object\.keys\(block\.input\)\.every\(\(key\) => WRITE_VIEW_KEYS\.has\(key\)\)/);
+});
+
 test("the duration a card shows comes from what pi recorded, not a timestamp difference", () => {
-  // pi 1.1 records durationMs on each tool result with a monotonic clock; an older
-  // result only has timestamps, and the result's minus the message's counts the
-  // model's generation too. Below 100ms a card shows no time at all.
   const source = readFileSync(new URL("./MessageView.tsx", import.meta.url), "utf8");
   assert.match(source, /const ms = recordedDurationMs\(result\.durationMs\)/);
   assert.match(source, /ms >= TOOL_DURATION_MIN_MS/);

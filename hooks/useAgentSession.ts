@@ -609,6 +609,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [bumpContent, setData, setActiveLeafId, setMessages, setEntryIds, setCurrentModelOverride, setError, setThinkingLevel]);
 
+  // Highest request id whose reply was applied. A reply applies only when it
+  // is newer, so a failed newer read never discards an older good one, and a
+  // read from an older run or another session never lands at all.
+  const contextUsageRequestIdRef = useRef(0);
+  const contextUsageAppliedIdRef = useRef(0);
+  const applyContextUsage = useCallback((state: AgentStateResponse | undefined, sid: string, runId: number, requestId: number) => {
+    if (!sessionHookMountedRef.current || sessionIdRef.current !== sid
+      || promptRunIdRef.current !== runId || requestId <= contextUsageAppliedIdRef.current) return;
+    contextUsageAppliedIdRef.current = requestId;
+    if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
+  }, []);
+
   // Fetch the in-process agent state for a session (running flag + live
   // state). Shared by the full load path and the cache fast path.
   const loadAgentState = useCallback(async (sid: string) => {
@@ -620,7 +632,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
       const liveState = agentState.state;
       if (liveState) {
-        if (liveState.contextUsage !== undefined) setContextUsage(liveState.contextUsage ?? null);
+        applyContextUsage(liveState, sid, promptRunIdRef.current, ++contextUsageRequestIdRef.current);
         if (liveState.systemPrompt !== undefined) setSystemPrompt(liveState.systemPrompt ?? null);
         if (liveState.thinkingLevel !== undefined) setThinkingLevel((liveState.thinkingLevel as ThinkingLevelOption) ?? "auto");
         if (liveState.extensionStatuses !== undefined) setExtensionStatuses(liveState.extensionStatuses ?? []);
@@ -640,7 +652,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       console.error("Failed to load agent state:", e);
       return null;
     }
-  }, []);
+  }, [applyContextUsage]);
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false, opts?: { alignToBottom?: boolean; followBottom?: boolean }) => {
     let messagesLoaded = false;
@@ -1135,6 +1147,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return true;
   }, [onAgentEnd]);
 
+  const refreshContextUsage = useCallback(async (sid: string) => {
+    const runId = promptRunIdRef.current;
+    const requestId = ++contextUsageRequestIdRef.current;
+    try {
+      const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
+      if (!res.ok) return;
+      const data = await res.json() as { state?: AgentStateResponse };
+      applyContextUsage(data.state, sid, runId, requestId);
+    } catch {
+      // A later message or the running-state poll retries the usage read.
+    }
+  }, [applyContextUsage]);
+
   const scheduleEventStreamClose = useCallback((sid: string) => {
     cancelEventStreamGrace();
     eventStreamGraceActiveRef.current = true;
@@ -1265,7 +1290,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         && (state.isStreaming || state.isPromptRunning || state.isBashRunning || state.isCompacting);
       if (busy || !agentRunningRef.current) return;
       if (state) {
-        if (state.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
+        applyContextUsage(state, sid, runId, ++contextUsageRequestIdRef.current);
         if (state.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
         if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
         if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
@@ -1277,7 +1302,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch {
       // Network still down — the next poll / visibility / online tick retries.
     }
-  }, [finishPromptWithoutStream]);
+  }, [applyContextUsage, finishPromptWithoutStream]);
 
   // Recovery net for missed SSE events: while the agent is running, verify
   // against the server periodically and whenever the tab returns to the
@@ -1358,17 +1383,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const sid = sessionIdRef.current;
         if (sid) {
           void loadSession(sid);
-          void fetch(`/api/agent/${encodeURIComponent(sid)}`)
-            .then((response) => response.ok ? response.json() as Promise<{ state?: AgentStateResponse }> : undefined)
-            .then((data) => {
-              const state = data?.state;
-              if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
-              if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
-              if (state?.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
-              if (state?.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
-              setQueuedMessages(normalizeQueuedMessages(state?.queuedMessages));
-            })
-            .catch(() => {});
+          void refreshContextUsage(sid);
         }
         break;
       }
@@ -1574,6 +1589,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     loadSession,
     notifyPromptStage,
     onAgentEnd,
+    refreshContextUsage,
     scheduleEventStreamClose,
     settleUiStage,
     queueStreamUpdate,
@@ -2220,7 +2236,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         if (agentState?.state) {
           if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
-          if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
+          applyContextUsage(agentState.state, session.id, promptRunIdRef.current, ++contextUsageRequestIdRef.current);
           if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
           if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
           if (agentState.state.extensionStatuses !== undefined) setExtensionStatuses(agentState.state.extensionStatuses ?? []);
@@ -2229,11 +2245,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
       });
     }
+    // Usage reads started before a remount are stale. The ref's value is captured
+    // when the effect runs, not when the cleanup does.
+    const startedUsageReads = contextUsageRequestIdRef.current;
     return () => {
       // Do not destroy here: React Strict Mode intentionally runs effect
       // cleanup once during development before mounting the real effect.
       // Resetting still prevents an unmounted session from committing stale UI.
       sessionHookMountedRef.current = false;
+      contextUsageAppliedIdRef.current = startedUsageReads;
       resetStreamUpdates();
       cancelEventStreamGrace();
       closeEvents();

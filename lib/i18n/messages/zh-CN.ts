@@ -244,6 +244,8 @@ export const zhCNLocale = {
     "desktop.extensionRequest": "扩展请求",
     "desktop.extensionExpiresIn": "{seconds} 秒后关闭",
     "desktop.extensionCollapse": "收起",
+    "desktop.extensionMaximize": "让此请求填满聊天区域",
+    "desktop.extensionRestoreSize": "恢复此请求的尺寸",
     "desktop.extensionExpand": "展开扩展请求",
     "desktop.extensionPanel": "扩展面板",
     "desktop.cancel": "取消",
