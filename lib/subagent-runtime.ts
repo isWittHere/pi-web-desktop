@@ -9,6 +9,7 @@ import {
   type ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import type { AgentSessionLike } from "./pi-types";
+import { createSubagentSkillsBinding } from "./subagent-skills";
 import {
   subagentNotificationText,
   subagentToolDetails,
@@ -25,6 +26,7 @@ import {
   SUBAGENT_STATUS_TYPE,
   SUBAGENT_RESULT_TYPE,
   selectSubagentExtensionTools,
+  subagentExtensionLoaderOptions,
   withSubagentExtensionTools,
   type SubagentMetadata,
   type SubagentResultMetadata,
@@ -32,7 +34,6 @@ import {
 } from "./subagents";
 import type { SessionEntry } from "./types";
 import { buildSubagentPromptPlan } from "./subagent-prompt";
-import { createExactSystemPromptExtension } from "./exact-system-prompt";
 import { appendSubagentInputFiles, loadSubagentInputFiles } from "./subagent-input";
 import { projectTrustReloadOptions } from "./project-trust";
 import { resolveShellTools } from "./powershell-settings";
@@ -54,7 +55,7 @@ export interface SubagentRuntimeDependencies {
   getSession(sessionId: string): HostSession | undefined;
   registerSession(
     inner: AgentSessionLike,
-    options?: { exactSystemPrompt?: string; chatOnly?: boolean },
+    options?: { exactSystemPrompt?: string | (() => string); chatOnly?: boolean },
   ): void;
   reopenSession(sessionId: string, sessionFile: string): Promise<HostSession>;
   resolveSessionPath(sessionId: string): Promise<string | null>;
@@ -254,28 +255,29 @@ export function createSubagentController(
       });
       const { chatOnly, appendSystemPrompt, delegatedTask } = promptPlan;
       if (!chatOnly) initTheme();
+      const skillsBinding = createSubagentSkillsBinding({
+        loadSkills: profile.loadSkills,
+        skills: profile.skills,
+        exactSystemPrompt: promptPlan.exactSystemPrompt,
+      });
       const services = await createAgentSessionServices({
         cwd: childCwd,
         agentDir,
         modelRuntime: parentModelRuntime,
         settingsManager,
         resourceLoaderOptions: {
-          noExtensions: !profile.loadExtensions,
-          noSkills: !profile.loadSkills,
+          ...subagentExtensionLoaderOptions(profile),
+          ...skillsBinding.loaderOptions,
           noPromptTemplates: true,
           noThemes: true,
           noContextFiles: true,
-          ...(chatOnly || promptPlan.exactSystemPrompt !== undefined
+          ...(chatOnly
             ? {
                 systemPrompt: " ",
                 systemPromptOverride: () => undefined,
               }
             : {}),
           appendSystemPrompt,
-          // The exact prompt is sent through before_agent_start; see lib/exact-system-prompt.ts.
-          ...(promptPlan.exactSystemPrompt !== undefined
-            ? { extensionFactories: [createExactSystemPromptExtension(() => promptPlan.exactSystemPrompt)] }
-            : {}),
         },
         ...((profile.loadExtensions || profile.loadSkills)
           ? { resourceLoaderReloadOptions: projectTrustReloadOptions(childCwd, agentDir) }
@@ -311,8 +313,10 @@ export function createSubagentController(
           appendSystemPrompt: [...appendSystemPrompt],
           tools: [...activeTools],
           loadSkills: profile.loadSkills,
-        loadExtensions: profile.loadExtensions,
-        ...(promptPlan.exactSystemPrompt !== undefined ? { exactSystemPrompt: promptPlan.exactSystemPrompt } : {}),
+          loadExtensions: profile.loadExtensions,
+          ...(profile.skills !== undefined ? { skills: [...profile.skills] } : {}),
+          ...(profile.extensions !== undefined ? { extensions: [...profile.extensions] } : {}),
+          ...(promptPlan.exactSystemPrompt !== undefined ? { exactSystemPrompt: promptPlan.exactSystemPrompt } : {}),
         },
         ...(isolatedWorktree ? { worktreePath: isolatedWorktree.path, worktreeBranch: isolatedWorktree.branch } : {}),
       };
@@ -330,11 +334,12 @@ export function createSubagentController(
         excludeTools: [...SUBAGENT_CONTROL_TOOL_NAMES],
       });
       dependencies.registerSession(inner, {
-        ...(promptPlan.exactSystemPrompt !== undefined
-          ? { exactSystemPrompt: promptPlan.exactSystemPrompt }
+        ...(skillsBinding.getExactSystemPrompt !== undefined
+          ? { exactSystemPrompt: skillsBinding.getExactSystemPrompt }
           : {}),
         chatOnly,
       });
+      skillsBinding.setActiveToolsGetter(() => inner.getActiveToolNames());
 
       const initialRun: SubagentRunInfo = {
         sessionId: inner.sessionId,

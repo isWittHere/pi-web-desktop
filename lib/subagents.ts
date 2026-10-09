@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, type LoadExtensionsResult } from "@earendil-works/pi-coding-agent";
 import { dump as stringifyYaml } from "js-yaml";
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from "fs";
 import { basename, dirname, join, resolve } from "path";
@@ -26,6 +26,10 @@ export interface SubagentProfile {
   systemPrompt: string;
   tools: string[];
   extensionTools?: string[];
+  /** Omitted = SDK on-demand discovery; [] = explicitly no selected skills. */
+  skills?: string[];
+  /** Omitted = every enabled extension; [] = none. Names only, resolved like `ext:` selectors. */
+  extensions?: string[];
   loadSkills: boolean;
   loadExtensions: boolean;
   model?: string;
@@ -59,6 +63,8 @@ export interface SubagentMetadata {
 
 export interface SubagentResourceSnapshot {
   version: 1;
+  skills?: string[];
+  extensions?: string[];
   appendSystemPrompt: string[];
   tools: string[];
   loadSkills: boolean;
@@ -67,6 +73,8 @@ export interface SubagentResourceSnapshot {
 }
 
 export interface SubagentSessionResources {
+  skills?: string[];
+  extensions?: string[];
   appendSystemPrompt: string[];
   tools: string[];
   loadSkills: boolean;
@@ -201,6 +209,43 @@ function booleanValue(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+/**
+ * Skill or extension names from a list or a comma-separated string, trimmed and
+ * deduplicated. Empty and non-string items are dropped, as pi-subagents does: a stray
+ * comma must not make the whole profile unreadable.
+ */
+export function subagentNameList(value: unknown): string[] {
+  const items: unknown[] = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return [...new Set(items
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean))];
+}
+
+/**
+ * The names a profile lists in `skills:` or `extensions:`. `undefined` means no list: the
+ * key is absent or empty, or holds a switch spelling (`true`, `all`, `none`, ...) that
+ * `load_skills` / `load_extensions` fall back to and a save keeps in step with them.
+ */
+function profileNameList(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) return subagentNameList(value);
+  if (typeof value !== "string" || OWNED_ALIAS_VALUES.has(value.trim().toLowerCase())) return undefined;
+  const names = subagentNameList(value);
+  return names.length > 0 ? names : undefined;
+}
+
+/** An `extensions:` list; `*` in it loads every extension, as in pi-subagents. */
+function profileExtensions(value: unknown): string[] | undefined {
+  const names = profileNameList(value);
+  return names?.includes("*") ? undefined : names;
+}
+
+/** `load_skills` / `load_extensions`, else the alias, where `none` and `false` switch it off. */
+function profileResourceSwitch(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "string" && ["none", "false"].includes(value.trim().toLowerCase())) return false;
+  return resourceBoolean(value, fallback);
+}
+
 function resourceBoolean(value: unknown, fallback: boolean): boolean {
   if (typeof value === "boolean") return value;
   return Array.isArray(value) || typeof value === "string" ? true : fallback;
@@ -287,6 +332,8 @@ function parseProfileFile(filePath: string, scope: SubagentScope): SubagentProfi
     const thinkingValue = stringValue(data?.thinking) as ThinkingLevel | undefined;
     const maxTurnsValue = typeof data?.max_turns === "number" ? Math.floor(data.max_turns) : undefined;
     const tools = parseTools(data?.tools, DEFAULT_TOOLS);
+    const skills = profileNameList(data?.skills);
+    const extensions = profileExtensions(data?.extensions);
     const disallowedTools = new Set(parseTools(data?.disallowed_tools, []));
     const disallowedExtensionTools = new Set(parseExtensionToolSelectors(data?.disallowed_tools).map((tool) => tool.toLowerCase()));
     const extensionTools = parseExtensionToolSelectors(data?.tools)
@@ -298,8 +345,10 @@ function parseProfileFile(filePath: string, scope: SubagentScope): SubagentProfi
       systemPrompt: rest.trim(),
       tools: tools.filter((tool) => !disallowedTools.has(tool)),
       ...(extensionTools.length > 0 ? { extensionTools } : {}),
-      loadSkills: resourceBoolean(data?.load_skills ?? data?.skills, false),
-      loadExtensions: resourceBoolean(data?.load_extensions ?? data?.extensions, extensionTools.length > 0),
+      ...(skills !== undefined ? { skills } : {}),
+      ...(extensions !== undefined ? { extensions } : {}),
+      loadSkills: profileResourceSwitch(data?.load_skills ?? data?.skills, false),
+      loadExtensions: profileResourceSwitch(data?.load_extensions ?? data?.extensions, extensionTools.length > 0),
       ...(stringValue(data?.model) ? { model: stringValue(data?.model) } : {}),
       ...(thinkingValue && THINKING_LEVELS.has(thinkingValue) ? { thinking: thinkingValue } : {}),
       ...(maxTurnsValue && maxTurnsValue > 0 ? { maxTurns: maxTurnsValue } : {}),
@@ -448,9 +497,24 @@ export function saveSubagentProfile(
     run_in_background: profile.runInBackground,
     prompt_mode: promptMode,
   };
-  syncFlagAlias(managed, "skills", stored.skills, loadSkills);
-  syncFlagAlias(managed, "extensions", stored.extensions, loadExtensions);
-  if (model) managed.model = model;
+  const skills = profile.skills === undefined ? profileNameList(stored.skills) : subagentNameList(profile.skills);
+  if (skills !== undefined) {
+    const storedSkills = profileNameList(stored.skills);
+    managed.skills = storedSkills !== undefined && JSON.stringify(storedSkills) === JSON.stringify(skills)
+      ? stored.skills
+      : skills;
+  } else {
+    syncFlagAlias(managed, "skills", stored.skills, loadSkills);
+  }
+  const extensions = profile.extensions === undefined ? profileExtensions(stored.extensions) : subagentNameList(profile.extensions);
+  if (extensions !== undefined) {
+    const storedExtensions = profileNameList(stored.extensions);
+    managed.extensions = storedExtensions !== undefined && JSON.stringify(storedExtensions) === JSON.stringify(extensions)
+      ? stored.extensions
+      : extensions;
+  } else {
+    syncFlagAlias(managed, "extensions", stored.extensions, loadExtensions);
+  }
   if (profile.thinking) managed.thinking = profile.thinking;
   if (maxTurns) managed.max_turns = maxTurns;
   if (profile.color?.trim()) managed.color = profile.color.trim();
@@ -473,6 +537,8 @@ export function saveSubagentProfile(
     ...(extensionTools.length > 0 ? { extensionTools } : {}),
     loadSkills,
     loadExtensions,
+    ...(skills !== undefined ? { skills } : {}),
+    ...(extensions !== undefined ? { extensions } : {}),
     ...(model ? { model } : { model: undefined }),
     ...(maxTurns ? { maxTurns } : { maxTurns: undefined }),
     promptMode,
@@ -536,6 +602,12 @@ export function readSubagentSessionResources(
       tools: [...new Set(snapshot.tools)],
       loadSkills,
       loadExtensions,
+      ...(isRecord(snapshot) && Array.isArray(snapshot.skills) && snapshot.skills.every((item) => typeof item === "string")
+        ? { skills: [...new Set(snapshot.skills)] }
+        : {}),
+      ...(isRecord(snapshot) && Array.isArray(snapshot.extensions) && snapshot.extensions.every((item) => typeof item === "string")
+        ? { extensions: [...new Set(snapshot.extensions)] }
+        : {}),
       ...(typeof snapshot.exactSystemPrompt === "string" ? { exactSystemPrompt: snapshot.exactSystemPrompt } : {}),
     };
   }
@@ -552,15 +624,27 @@ export function withSubagentExtensionTools(
   ])];
 }
 
+type SubagentLoadedExtension = LoadExtensionsResult["extensions"][number];
+/** Kept for the loader's own signature: an override receives what the SDK loaded. */
+export type { SubagentLoadedExtension };
+
+/** The names an `ext:` selector or an `extensions:` list may address one extension by. */
+export function extensionAddressableNames(extension: {
+  path: string;
+  sourceInfo?: { source?: string };
+}): string[] {
+  const pathName = extension.path.replaceAll("\\", "/").split("/").at(-2) ?? extension.path;
+  const sourceName = (extension.sourceInfo?.source ?? "").replace(/^npm:/, "");
+  return [...new Set([pathName.toLowerCase(), sourceName.toLowerCase()].filter(Boolean))];
+}
+
 export function selectSubagentExtensionTools(
   extensions: Iterable<{ path: string; sourceInfo?: { source?: string }; tools: Map<string, unknown> }>,
   selectors: readonly string[],
 ): string[] {
   const wanted = selectors.map((selector) => selector.slice(4).toLowerCase());
   return [...extensions].flatMap((extension) => {
-    const pathName = extension.path.replaceAll("\\", "/").split("/").at(-2) ?? extension.path;
-    const sourceName = (extension.sourceInfo?.source ?? "").replace(/^npm:/, "");
-    const extensionNames = new Set([pathName.toLowerCase(), sourceName.toLowerCase()]);
+    const extensionNames = new Set(extensionAddressableNames(extension));
     const selected = wanted.some((selector) => {
       if (selector === "*") return true;
       const [extensionName, toolName] = selector.split("/", 2);
@@ -573,6 +657,51 @@ export function selectSubagentExtensionTools(
       return extensionNames.has(extensionName) && (!selectedTool || selectedTool === toolName);
     }));
   });
+}
+
+/**
+ * An `extensionsOverride` that keeps only the extensions a profile's `extensions:` list
+ * names, as pi-subagents does. Names resolve the way `ext:` selectors do (directory, file
+ * or package name, case-insensitive); a name two sources claim keeps neither, and
+ * pi-web's own `<inline:...>` extensions always stay. Dropping an extension also drops
+ * the provider, native provider and virtual model registrations its factory queued,
+ * which would otherwise still reach the model runtime. This is a scope, not a sandbox:
+ * a dropped extension's factory has already run once, so it binds no handlers, tools or
+ * commands, but its module-level side effects have happened.
+ */
+export function scopeSubagentExtensions(names: readonly string[]) {
+  const wanted = new Set(names.map((name) => name.trim().toLowerCase()).filter(Boolean));
+  return (base: LoadExtensionsResult): LoadExtensionsResult => {
+    const kept = new Set<string>();
+    const extensions = base.extensions.filter((extension) => {
+      const addressable = extensionAddressableNames(extension).filter((name) => wanted.has(name));
+      // A name two sources claim is not addressable, as for `ext:` selectors.
+      const claimed = addressable.filter((name) =>
+        base.extensions.filter((other) => extensionAddressableNames(other).includes(name)).length === 1
+      );
+      const keep = extension.path.startsWith("<inline:") || claimed.length > 0;
+      if (keep) kept.add(extension.path);
+      return keep;
+    });
+    const runtime = base.runtime as unknown as Record<string, readonly { extensionPath?: string }[]>;
+    if (runtime) {
+      for (const key of ["pendingProviderRegistrations", "pendingNativeProviderRegistrations", "pendingVirtualModelRegistrations"]) {
+        const queued = runtime[key];
+        if (Array.isArray(queued)) runtime[key] = queued.filter((item) => item.extensionPath === undefined || kept.has(item.extensionPath));
+      }
+    }
+    return { ...base, extensions };
+  };
+}
+
+/** The extension half of a child's resource loader options, shared by spawn and reopen. */
+export function subagentExtensionLoaderOptions(resources: { loadExtensions: boolean; extensions?: readonly string[] }) {
+  return {
+    noExtensions: !resources.loadExtensions,
+    ...(resources.loadExtensions && resources.extensions !== undefined
+      ? { extensionsOverride: scopeSubagentExtensions(resources.extensions) }
+      : {}),
+  };
 }
 
 export function readSubagentRun(entries: readonly SessionEntry[], sessionId: string, sessionPath: string): SubagentRunInfo | null {

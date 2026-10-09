@@ -28,7 +28,7 @@ import {
 } from "./subagent-extension";
 import { createSubagentController } from "./subagent-runtime";
 import { isBuiltInSubagentsEnabled } from "./subagent-settings";
-import { listSubagentProfiles, readSubagentRun, readSubagentSessionResources, SUBAGENT_CONTROL_TOOL_NAMES } from "./subagents";
+import { listSubagentProfiles, readSubagentRun, readSubagentSessionResources, subagentExtensionLoaderOptions, SUBAGENT_CONTROL_TOOL_NAMES } from "./subagents";
 import { cacheSessionPath, getRecordedSessionModel, invalidateSessionListCache, resolveSessionPath } from "./session-reader";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
 import { createExactSystemPromptExtension } from "./exact-system-prompt";
@@ -1786,8 +1786,12 @@ const SUBAGENT_CONTROLLER = createSubagentController({
   getSession: (sessionId) => getRpcSession(sessionId),
   registerSession: (inner, options) => {
     const wrapper = new AgentSessionWrapper(inner, inner.sessionManager.getCwd());
+    // Kept lazy: a child's exact prompt may only be known once its skills have
+    // been discovered, which happens after the session is registered.
     const exactSystemPrompt = options?.exactSystemPrompt;
-    if (exactSystemPrompt !== undefined) wrapper.setExactSystemPrompt(() => exactSystemPrompt);
+    if (exactSystemPrompt !== undefined) {
+      wrapper.setExactSystemPrompt(typeof exactSystemPrompt === "function" ? exactSystemPrompt : () => exactSystemPrompt);
+    }
     registerRpcWrapper(wrapper);
     wrapper.start();
     // Chat-only subagents load no extensions; dispatching session_start to an
@@ -1918,7 +1922,9 @@ export async function startRpcSession(
       settingsManager,
       resourceLoaderOptions: subagentResources
         ? {
-            noExtensions: !subagentResources.loadExtensions,
+            // The extension half comes from the snapshot, so a resumed child
+            // keeps the same `extensions:` scope it was spawned with.
+            ...subagentExtensionLoaderOptions(subagentResources),
             noSkills: !subagentResources.loadSkills,
             noPromptTemplates: true,
             noThemes: true,
