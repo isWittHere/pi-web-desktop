@@ -558,6 +558,8 @@ Ported from upstream `0876cf4..6fcd7d4`. The full runtime, settings and import s
 
 **Not ported (deliberate, P3/P4)** — registry search, TOML/YAML paste, per-tool exposure, per-session switches, subagent MCP, and `app/api/cwd/browse`.
 
+**Project overrides of global servers** (pi 1.0.1, ported in the v0.11.0 batch): a project `.pi/mcp.json` entry without `command`, `url` or `type` changes only `enabled`, `exposure` and `toolExposure` of the global server of its name. `lib/mcp-override.ts` holds the SDK's rules (`MCP_OVERRIDE_KEYS`, `isMcpOverrideEntry()`, `mcpOverrideRefusal()`); the listing describes such a row as the global entry with those keys (`McpServerInfo.override` / `overriddenByProject`), and `lib/mcp-entry-request.ts` `readMcpServerConfig()` is the one place Test, sign-in and sign-out take the config from, so an override connects as the server it changes. Writes keep `enabled: true` and `exposure: "codemode"` written in an override, since they replace the global values; `setMcpServerEnabledInProject()` is `/mcp`'s "Enable / Disable in this project" (`set-in-project`).
+
 ### Completion Sound
 - `hooks/useAudio.ts` stores the toggle in `localStorage` as `pi-sound-enabled` and reuses one `AudioContext`.
 - Browser autoplay policy means sound must be unlocked from a user gesture; `ChatInput` calls the unlock hook from interactive controls, and `ChatWindow` plays the tone from `onAgentEnd`.
