@@ -1,6 +1,6 @@
 {
   "name": "@iswitthere/pi-web-desktop",
-  "version": "0.9.2-f",
+  "version": "0.10.0-f",
   "description": "Electron desktop app for the pi coding agent",
   "homepage": "https://github.com/isWittHere/pi-web-desktop#readme",
   "repository": {
@@ -46,10 +46,10 @@
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "1.0.0",
-    "@earendil-works/pi-ai": "1.0.0",
-    "@earendil-works/pi-coding-agent": "1.0.0",
-    "@earendil-works/pi-tui": "1.0.0",
+    "@earendil-works/pi-agent-core": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0",
     "@fontsource/ia-writer-quattro": "^5.3.0",
     "@fontsource/lilex": "^5.3.0",
     "@lobehub/icons": "^5.6.0",
@@ -59,7 +59,7 @@
     "katex": "^0.16.47",
     "mammoth": "^1.12.0",
     "mermaid": "^11.16.1",
-    "next": "16.3.6",
+    "next": "16.3.8",
     "proper-lockfile": "4.1.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -87,7 +87,7 @@
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
-    "eslint-config-next": "16.3.6",
+    "eslint-config-next": "16.3.8",
     "jiti": "^2.7.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.2.2",
